@@ -8,7 +8,7 @@ use tokio::sync::Notify;
 
 use super::album::{CatalogAlbumSummary, bridge_album_summary};
 use super::artist::{CatalogArtistSummary, bridge_artist_summary};
-use super::{authentication::native_qq_music_provider, with_native_provider};
+use super::with_native_provider;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LibraryPlaylistOwnership {
@@ -62,7 +62,7 @@ pub(super) fn bridge_playlist_summary(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QqMusicUserPlaylistLoadFailure {
+pub enum UserPlaylistLoadFailure {
     CoreUnavailable,
     AuthenticationRequired,
     CredentialRejected,
@@ -75,16 +75,16 @@ pub enum QqMusicUserPlaylistLoadFailure {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct QqMusicUserPlaylistLoad {
+pub struct UserPlaylistLoad {
     pub playlists: Vec<LibraryPlaylistSummary>,
     pub omitted_playlist_count: u32,
-    pub failure: Option<QqMusicUserPlaylistLoadFailure>,
+    pub failure: Option<UserPlaylistLoadFailure>,
 }
 
-impl fmt::Debug for QqMusicUserPlaylistLoad {
+impl fmt::Debug for UserPlaylistLoad {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicUserPlaylistLoad")
+            .debug_struct("UserPlaylistLoad")
             .field("playlist_count", &self.playlists.len())
             .field("omitted_playlist_count", &self.omitted_playlist_count)
             .field("failure", &self.failure)
@@ -95,30 +95,30 @@ impl fmt::Debug for QqMusicUserPlaylistLoad {
 /// One cancellable, single-use user-library load. The handle contains no
 /// credential or QQ Music protocol identifier.
 #[flutter_rust_bridge::frb(opaque)]
-pub struct QqMusicUserPlaylistLoadHandle {
+pub struct UserPlaylistLoadHandle {
     provider_id: String,
     active: AtomicBool,
     running: AtomicBool,
     cancelled: Notify,
 }
 
-impl fmt::Debug for QqMusicUserPlaylistLoadHandle {
+impl fmt::Debug for UserPlaylistLoadHandle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicUserPlaylistLoadHandle")
+            .debug_struct("UserPlaylistLoadHandle")
             .field("active", &self.is_active())
             .field("running", &self.running.load(Ordering::SeqCst))
             .finish()
     }
 }
 
-impl QqMusicUserPlaylistLoadHandle {
-    pub async fn run(&self) -> QqMusicUserPlaylistLoad {
+impl UserPlaylistLoadHandle {
+    pub async fn run(&self) -> UserPlaylistLoad {
         if !self.active.load(Ordering::SeqCst) {
-            return failed_load(QqMusicUserPlaylistLoadFailure::Cancelled);
+            return failed_load(UserPlaylistLoadFailure::Cancelled);
         }
         if self.running.swap(true, Ordering::SeqCst) {
-            return failed_load(QqMusicUserPlaylistLoadFailure::AlreadyRunning);
+            return failed_load(UserPlaylistLoadFailure::AlreadyRunning);
         }
 
         let outcome = with_native_provider!(
@@ -126,18 +126,18 @@ impl QqMusicUserPlaylistLoadHandle {
             |provider| {
                 tokio::select! {
                     () = self.cancelled.notified() => {
-                        failed_load(QqMusicUserPlaylistLoadFailure::Cancelled)
+                        failed_load(UserPlaylistLoadFailure::Cancelled)
                     }
                     result = provider.user_playlists() => {
                         if self.active.load(Ordering::SeqCst) {
                             map_load(result)
                         } else {
-                            failed_load(QqMusicUserPlaylistLoadFailure::Cancelled)
+                            failed_load(UserPlaylistLoadFailure::Cancelled)
                         }
                     }
                 }
             },
-            failed_load(QqMusicUserPlaylistLoadFailure::CoreUnavailable)
+            failed_load(UserPlaylistLoadFailure::CoreUnavailable)
         );
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
@@ -160,8 +160,8 @@ impl QqMusicUserPlaylistLoadHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_user_playlist_load(provider_id: String) -> QqMusicUserPlaylistLoadHandle {
-    QqMusicUserPlaylistLoadHandle {
+pub fn begin_user_playlist_load(provider_id: String) -> UserPlaylistLoadHandle {
+    UserPlaylistLoadHandle {
         provider_id,
         active: AtomicBool::new(true),
         running: AtomicBool::new(false),
@@ -171,9 +171,9 @@ pub fn begin_qq_music_user_playlist_load(provider_id: String) -> QqMusicUserPlay
 
 fn map_load(
     result: Result<music_domain::UserPlaylistsCollection, UserLibraryError>,
-) -> QqMusicUserPlaylistLoad {
+) -> UserPlaylistLoad {
     match result {
-        Ok(collection) => QqMusicUserPlaylistLoad {
+        Ok(collection) => UserPlaylistLoad {
             playlists: collection
                 .playlists()
                 .iter()
@@ -186,24 +186,22 @@ fn map_load(
     }
 }
 
-const fn failed_load(failure: QqMusicUserPlaylistLoadFailure) -> QqMusicUserPlaylistLoad {
-    QqMusicUserPlaylistLoad {
+const fn failed_load(failure: UserPlaylistLoadFailure) -> UserPlaylistLoad {
+    UserPlaylistLoad {
         playlists: Vec::new(),
         omitted_playlist_count: 0,
         failure: Some(failure),
     }
 }
 
-const fn map_error(error: UserLibraryError) -> QqMusicUserPlaylistLoadFailure {
+const fn map_error(error: UserLibraryError) -> UserPlaylistLoadFailure {
     match error {
-        UserLibraryError::AuthenticationRequired => {
-            QqMusicUserPlaylistLoadFailure::AuthenticationRequired
-        }
-        UserLibraryError::CredentialRejected => QqMusicUserPlaylistLoadFailure::CredentialRejected,
-        UserLibraryError::Network => QqMusicUserPlaylistLoadFailure::Network,
-        UserLibraryError::ServiceUnavailable => QqMusicUserPlaylistLoadFailure::ServiceUnavailable,
-        UserLibraryError::InvalidResponse => QqMusicUserPlaylistLoadFailure::InvalidResponse,
-        UserLibraryError::Replaced => QqMusicUserPlaylistLoadFailure::Replaced,
+        UserLibraryError::AuthenticationRequired => UserPlaylistLoadFailure::AuthenticationRequired,
+        UserLibraryError::CredentialRejected => UserPlaylistLoadFailure::CredentialRejected,
+        UserLibraryError::Network => UserPlaylistLoadFailure::Network,
+        UserLibraryError::ServiceUnavailable => UserPlaylistLoadFailure::ServiceUnavailable,
+        UserLibraryError::InvalidResponse => UserPlaylistLoadFailure::InvalidResponse,
+        UserLibraryError::Replaced => UserPlaylistLoadFailure::Replaced,
     }
 }
 
@@ -240,7 +238,7 @@ impl fmt::Debug for LibraryTrackSummary {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QqMusicPlaylistTrackPageLoadFailure {
+pub enum PlaylistTrackPageLoadFailure {
     CoreUnavailable,
     AuthenticationRequired,
     CredentialRejected,
@@ -253,7 +251,7 @@ pub enum QqMusicPlaylistTrackPageLoadFailure {
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct QqMusicPlaylistTrackPageLoad {
+pub struct PlaylistTrackPageLoad {
     pub offset: u32,
     pub next_offset: u32,
     pub total: u32,
@@ -261,13 +259,13 @@ pub struct QqMusicPlaylistTrackPageLoad {
     pub has_more: bool,
     pub omitted_track_count: u32,
     pub tracks: Vec<LibraryTrackSummary>,
-    pub failure: Option<QqMusicPlaylistTrackPageLoadFailure>,
+    pub failure: Option<PlaylistTrackPageLoadFailure>,
 }
 
-impl fmt::Debug for QqMusicPlaylistTrackPageLoad {
+impl fmt::Debug for PlaylistTrackPageLoad {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicPlaylistTrackPageLoad")
+            .debug_struct("PlaylistTrackPageLoad")
             .field("offset", &self.offset)
             .field("next_offset", &self.next_offset)
             .field("total", &self.total)
@@ -283,7 +281,7 @@ impl fmt::Debug for QqMusicPlaylistTrackPageLoad {
 /// One cancellable, single-use playlist-track page load. Provider identity is
 /// carried for routing but remains opaque to this Bridge lifecycle.
 #[flutter_rust_bridge::frb(opaque)]
-pub struct QqMusicPlaylistTrackPageLoadHandle {
+pub struct PlaylistTrackPageLoadHandle {
     provider_id: String,
     opaque_playlist_id: String,
     offset: u32,
@@ -293,10 +291,10 @@ pub struct QqMusicPlaylistTrackPageLoadHandle {
     cancelled: Notify,
 }
 
-impl fmt::Debug for QqMusicPlaylistTrackPageLoadHandle {
+impl fmt::Debug for PlaylistTrackPageLoadHandle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicPlaylistTrackPageLoadHandle")
+            .debug_struct("PlaylistTrackPageLoadHandle")
             .field("provider_id", &self.provider_id)
             .field("opaque_playlist_id", &"[REDACTED]")
             .field("offset", &self.offset)
@@ -307,13 +305,13 @@ impl fmt::Debug for QqMusicPlaylistTrackPageLoadHandle {
     }
 }
 
-impl QqMusicPlaylistTrackPageLoadHandle {
-    pub async fn run(&self) -> QqMusicPlaylistTrackPageLoad {
+impl PlaylistTrackPageLoadHandle {
+    pub async fn run(&self) -> PlaylistTrackPageLoad {
         if !self.active.load(Ordering::SeqCst) {
-            return failed_track_page(QqMusicPlaylistTrackPageLoadFailure::Cancelled);
+            return failed_track_page(PlaylistTrackPageLoadFailure::Cancelled);
         }
         if self.running.swap(true, Ordering::SeqCst) {
-            return failed_track_page(QqMusicPlaylistTrackPageLoadFailure::AlreadyRunning);
+            return failed_track_page(PlaylistTrackPageLoadFailure::AlreadyRunning);
         }
 
         let outcome = match domain_playlist_id(&self.provider_id, &self.opaque_playlist_id) {
@@ -322,20 +320,20 @@ impl QqMusicPlaylistTrackPageLoadHandle {
                 |provider| {
                     tokio::select! {
                         () = self.cancelled.notified() => {
-                            failed_track_page(QqMusicPlaylistTrackPageLoadFailure::Cancelled)
+                            failed_track_page(PlaylistTrackPageLoadFailure::Cancelled)
                         }
                         result = provider.playlist_tracks_page(playlist_id, self.offset, self.size) => {
                             if self.active.load(Ordering::SeqCst) {
                                 map_track_page_load(result)
                             } else {
-                                failed_track_page(QqMusicPlaylistTrackPageLoadFailure::Cancelled)
+                                failed_track_page(PlaylistTrackPageLoadFailure::Cancelled)
                             }
                         }
                     }
                 },
-                failed_track_page(QqMusicPlaylistTrackPageLoadFailure::CoreUnavailable)
+                failed_track_page(PlaylistTrackPageLoadFailure::CoreUnavailable)
             ),
-            Err(()) => failed_track_page(QqMusicPlaylistTrackPageLoadFailure::InvalidResponse),
+            Err(()) => failed_track_page(PlaylistTrackPageLoadFailure::InvalidResponse),
         };
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
@@ -358,13 +356,13 @@ impl QqMusicPlaylistTrackPageLoadHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_playlist_track_page_load(
+pub fn begin_playlist_track_page_load(
     provider_id: String,
     opaque_playlist_id: String,
     offset: u32,
     size: u32,
-) -> QqMusicPlaylistTrackPageLoadHandle {
-    QqMusicPlaylistTrackPageLoadHandle {
+) -> PlaylistTrackPageLoadHandle {
+    PlaylistTrackPageLoadHandle {
         provider_id,
         opaque_playlist_id,
         offset,
@@ -375,10 +373,11 @@ pub fn begin_qq_music_playlist_track_page_load(
     }
 }
 
-/// One cancellable, single-use account recent-history page load. QQ request
-/// details and credentials remain behind the Provider boundary.
+/// One cancellable, single-use account recent-history page load. Source
+/// request details and credentials remain behind the Provider boundary.
 #[flutter_rust_bridge::frb(opaque)]
-pub struct QqMusicRecentTrackPageLoadHandle {
+pub struct RecentTrackPageLoadHandle {
+    provider_id: String,
     offset: u32,
     size: u32,
     active: AtomicBool,
@@ -386,10 +385,11 @@ pub struct QqMusicRecentTrackPageLoadHandle {
     cancelled: Notify,
 }
 
-impl fmt::Debug for QqMusicRecentTrackPageLoadHandle {
+impl fmt::Debug for RecentTrackPageLoadHandle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicRecentTrackPageLoadHandle")
+            .debug_struct("RecentTrackPageLoadHandle")
+            .field("provider_id", &self.provider_id)
             .field("offset", &self.offset)
             .field("size", &self.size)
             .field("active", &self.is_active())
@@ -398,32 +398,33 @@ impl fmt::Debug for QqMusicRecentTrackPageLoadHandle {
     }
 }
 
-impl QqMusicRecentTrackPageLoadHandle {
-    pub async fn run(&self) -> QqMusicPlaylistTrackPageLoad {
+impl RecentTrackPageLoadHandle {
+    pub async fn run(&self) -> PlaylistTrackPageLoad {
         if !self.active.load(Ordering::SeqCst) {
-            return failed_track_page(QqMusicPlaylistTrackPageLoadFailure::Cancelled);
+            return failed_track_page(PlaylistTrackPageLoadFailure::Cancelled);
         }
         if self.running.swap(true, Ordering::SeqCst) {
-            return failed_track_page(QqMusicPlaylistTrackPageLoadFailure::AlreadyRunning);
+            return failed_track_page(PlaylistTrackPageLoadFailure::AlreadyRunning);
         }
 
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
+        let outcome = with_native_provider!(
+            &self.provider_id,
+            |provider| {
                 tokio::select! {
                     () = self.cancelled.notified() => {
-                        failed_track_page(QqMusicPlaylistTrackPageLoadFailure::Cancelled)
+                        failed_track_page(PlaylistTrackPageLoadFailure::Cancelled)
                     }
                     result = provider.recent_tracks_page(self.offset, self.size) => {
                         if self.active.load(Ordering::SeqCst) {
                             map_track_page_load(result)
                         } else {
-                            failed_track_page(QqMusicPlaylistTrackPageLoadFailure::Cancelled)
+                            failed_track_page(PlaylistTrackPageLoadFailure::Cancelled)
                         }
                     }
                 }
-            }
-            Err(()) => failed_track_page(QqMusicPlaylistTrackPageLoadFailure::CoreUnavailable),
-        };
+            },
+            failed_track_page(PlaylistTrackPageLoadFailure::CoreUnavailable)
+        );
         self.running.store(false, Ordering::SeqCst);
         self.active.store(false, Ordering::SeqCst);
         outcome
@@ -445,11 +446,13 @@ impl QqMusicRecentTrackPageLoadHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_recent_track_page_load(
+pub fn begin_recent_track_page_load(
+    provider_id: String,
     offset: u32,
     size: u32,
-) -> QqMusicRecentTrackPageLoadHandle {
-    QqMusicRecentTrackPageLoadHandle {
+) -> RecentTrackPageLoadHandle {
+    RecentTrackPageLoadHandle {
+        provider_id,
         offset,
         size,
         active: AtomicBool::new(true),
@@ -468,9 +471,9 @@ fn domain_playlist_id(
 
 fn map_track_page_load(
     result: Result<music_domain::PlaylistTracksPage, UserLibraryError>,
-) -> QqMusicPlaylistTrackPageLoad {
+) -> PlaylistTrackPageLoad {
     match result {
-        Ok(page) => QqMusicPlaylistTrackPageLoad {
+        Ok(page) => PlaylistTrackPageLoad {
             offset: page.offset(),
             next_offset: page.next_offset(),
             total: page.total(),
@@ -551,10 +554,8 @@ fn domain_album_summary(album: CatalogAlbumSummary) -> Result<music_domain::Albu
         .map_err(|_| ())
 }
 
-const fn failed_track_page(
-    failure: QqMusicPlaylistTrackPageLoadFailure,
-) -> QqMusicPlaylistTrackPageLoad {
-    QqMusicPlaylistTrackPageLoad {
+const fn failed_track_page(failure: PlaylistTrackPageLoadFailure) -> PlaylistTrackPageLoad {
+    PlaylistTrackPageLoad {
         offset: 0,
         next_offset: 0,
         total: 0,
@@ -566,20 +567,16 @@ const fn failed_track_page(
     }
 }
 
-const fn map_track_page_error(error: UserLibraryError) -> QqMusicPlaylistTrackPageLoadFailure {
+const fn map_track_page_error(error: UserLibraryError) -> PlaylistTrackPageLoadFailure {
     match error {
         UserLibraryError::AuthenticationRequired => {
-            QqMusicPlaylistTrackPageLoadFailure::AuthenticationRequired
+            PlaylistTrackPageLoadFailure::AuthenticationRequired
         }
-        UserLibraryError::CredentialRejected => {
-            QqMusicPlaylistTrackPageLoadFailure::CredentialRejected
-        }
-        UserLibraryError::Network => QqMusicPlaylistTrackPageLoadFailure::Network,
-        UserLibraryError::ServiceUnavailable => {
-            QqMusicPlaylistTrackPageLoadFailure::ServiceUnavailable
-        }
-        UserLibraryError::InvalidResponse => QqMusicPlaylistTrackPageLoadFailure::InvalidResponse,
-        UserLibraryError::Replaced => QqMusicPlaylistTrackPageLoadFailure::Replaced,
+        UserLibraryError::CredentialRejected => PlaylistTrackPageLoadFailure::CredentialRejected,
+        UserLibraryError::Network => PlaylistTrackPageLoadFailure::Network,
+        UserLibraryError::ServiceUnavailable => PlaylistTrackPageLoadFailure::ServiceUnavailable,
+        UserLibraryError::InvalidResponse => PlaylistTrackPageLoadFailure::InvalidResponse,
+        UserLibraryError::Replaced => PlaylistTrackPageLoadFailure::Replaced,
     }
 }
 
@@ -593,10 +590,9 @@ mod tests {
     use provider_api::UserLibraryError;
 
     use super::{
-        QqMusicPlaylistTrackPageLoadFailure, QqMusicUserPlaylistLoadFailure,
-        begin_qq_music_playlist_track_page_load, begin_qq_music_recent_track_page_load,
-        begin_qq_music_user_playlist_load, map_error, map_load, map_track_page_error,
-        map_track_page_load,
+        PlaylistTrackPageLoadFailure, UserPlaylistLoadFailure, begin_playlist_track_page_load,
+        begin_recent_track_page_load, begin_user_playlist_load, map_error, map_load,
+        map_track_page_error, map_track_page_load,
     };
 
     #[test]
@@ -648,30 +644,27 @@ mod tests {
     fn maps_each_provider_failure_precisely() {
         assert_eq!(
             map_error(UserLibraryError::CredentialRejected),
-            QqMusicUserPlaylistLoadFailure::CredentialRejected
+            UserPlaylistLoadFailure::CredentialRejected
         );
         assert_eq!(
             map_error(UserLibraryError::ServiceUnavailable),
-            QqMusicUserPlaylistLoadFailure::ServiceUnavailable
+            UserPlaylistLoadFailure::ServiceUnavailable
         );
         assert_eq!(
             map_error(UserLibraryError::Replaced),
-            QqMusicUserPlaylistLoadFailure::Replaced
+            UserPlaylistLoadFailure::Replaced
         );
     }
 
     #[tokio::test]
     async fn cancellation_is_exact_and_terminal() {
-        let handle = begin_qq_music_user_playlist_load("qq-music".into());
+        let handle = begin_user_playlist_load("qq-music".into());
 
         assert!(handle.is_active());
         assert!(handle.cancel());
         assert!(!handle.cancel());
         let outcome = handle.run().await;
-        assert_eq!(
-            outcome.failure,
-            Some(QqMusicUserPlaylistLoadFailure::Cancelled)
-        );
+        assert_eq!(outcome.failure, Some(UserPlaylistLoadFailure::Cancelled));
     }
 
     #[test]
@@ -757,26 +750,22 @@ mod tests {
     fn maps_track_page_failures_precisely() {
         assert_eq!(
             map_track_page_error(UserLibraryError::CredentialRejected),
-            QqMusicPlaylistTrackPageLoadFailure::CredentialRejected
+            PlaylistTrackPageLoadFailure::CredentialRejected
         );
         assert_eq!(
             map_track_page_error(UserLibraryError::ServiceUnavailable),
-            QqMusicPlaylistTrackPageLoadFailure::ServiceUnavailable
+            PlaylistTrackPageLoadFailure::ServiceUnavailable
         );
         assert_eq!(
             map_track_page_error(UserLibraryError::Replaced),
-            QqMusicPlaylistTrackPageLoadFailure::Replaced
+            PlaylistTrackPageLoadFailure::Replaced
         );
     }
 
     #[tokio::test]
     async fn track_page_cancellation_is_exact_and_terminal() {
-        let handle = begin_qq_music_playlist_track_page_load(
-            "qq-music".into(),
-            "favorite:8001".into(),
-            0,
-            100,
-        );
+        let handle =
+            begin_playlist_track_page_load("qq-music".into(), "favorite:8001".into(), 0, 100);
 
         assert!(handle.is_active());
         assert!(handle.cancel());
@@ -784,14 +773,14 @@ mod tests {
         let outcome = handle.run().await;
         assert_eq!(
             outcome.failure,
-            Some(QqMusicPlaylistTrackPageLoadFailure::Cancelled)
+            Some(PlaylistTrackPageLoadFailure::Cancelled)
         );
         assert!(!format!("{handle:?}").contains("8001"));
     }
 
     #[tokio::test]
     async fn recent_page_cancellation_is_exact_and_terminal() {
-        let handle = begin_qq_music_recent_track_page_load(100, 100);
+        let handle = begin_recent_track_page_load("qq-music".into(), 100, 100);
 
         assert!(handle.is_active());
         assert!(handle.cancel());
@@ -799,7 +788,7 @@ mod tests {
         let outcome = handle.run().await;
         assert_eq!(
             outcome.failure,
-            Some(QqMusicPlaylistTrackPageLoadFailure::Cancelled)
+            Some(PlaylistTrackPageLoadFailure::Cancelled)
         );
         assert!(!handle.is_active());
     }

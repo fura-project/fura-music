@@ -5,7 +5,8 @@ import 'package:flutterustmusic/src/rust/api/library.dart' as bridge;
 
 /// Account-scoped cloud history. No playlist identity or local recommendation
 /// seed is a substitute for this source. A production adapter requires verified
-/// QQ read/continuation semantics and credential-generation isolation in Core.
+/// Provider read/continuation semantics and credential-generation isolation in
+/// Core. `totalIsExact` remains false for bounded upstream snapshots.
 abstract interface class RecentPlaysGateway {
   PlaylistTrackPageLoadOperation beginLoad({
     required int offset,
@@ -14,10 +15,15 @@ abstract interface class RecentPlaysGateway {
 }
 
 typedef RecentTrackPageLoadOperationFactory =
-    PlaylistTrackPageLoadOperation Function(int offset, int size);
+    PlaylistTrackPageLoadOperation Function(
+      String providerId,
+      int offset,
+      int size,
+    );
 
 class RustRecentPlaysGateway implements RecentPlaysGateway {
   RustRecentPlaysGateway({
+    required this.providerId,
     CredentialVault? credentialVault,
     RecentTrackPageLoadOperationFactory? operationFactory,
   }) : _operationFactory = operationFactory ?? _beginRustLoad,
@@ -26,6 +32,7 @@ class RustRecentPlaysGateway implements RecentPlaysGateway {
        );
 
   final CredentialVault _credentialVault;
+  final String providerId;
   final RecentTrackPageLoadOperationFactory _operationFactory;
 
   @override
@@ -33,21 +40,28 @@ class RustRecentPlaysGateway implements RecentPlaysGateway {
     required int offset,
     required int size,
   }) => _VaultCleaningRecentTrackPageLoadOperation(
-    _operationFactory(offset, size),
+    _operationFactory(providerId, offset, size),
     _credentialVault,
   );
 }
 
-PlaylistTrackPageLoadOperation _beginRustLoad(int offset, int size) =>
-    _RustRecentTrackPageLoadOperation(
-      bridge.beginQqMusicRecentTrackPageLoad(offset: offset, size: size),
-    );
+PlaylistTrackPageLoadOperation _beginRustLoad(
+  String providerId,
+  int offset,
+  int size,
+) => _RustRecentTrackPageLoadOperation(
+  bridge.beginRecentTrackPageLoad(
+    providerId: providerId,
+    offset: offset,
+    size: size,
+  ),
+);
 
 class _RustRecentTrackPageLoadOperation
     implements PlaylistTrackPageLoadOperation {
   const _RustRecentTrackPageLoadOperation(this._handle);
 
-  final bridge.QqMusicRecentTrackPageLoadHandle _handle;
+  final bridge.RecentTrackPageLoadHandle _handle;
 
   @override
   bool cancel() => _handle.cancel();
@@ -113,24 +127,21 @@ class _VaultCleaningRecentTrackPageLoadOperation
 }
 
 UserLibraryFailure _mapFailure(
-  bridge.QqMusicPlaylistTrackPageLoadFailure failure,
+  bridge.PlaylistTrackPageLoadFailure failure,
 ) => switch (failure) {
-  bridge.QqMusicPlaylistTrackPageLoadFailure.coreUnavailable =>
+  bridge.PlaylistTrackPageLoadFailure.coreUnavailable =>
     UserLibraryFailure.coreUnavailable,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.authenticationRequired =>
+  bridge.PlaylistTrackPageLoadFailure.authenticationRequired =>
     UserLibraryFailure.authenticationRequired,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.credentialRejected =>
+  bridge.PlaylistTrackPageLoadFailure.credentialRejected =>
     UserLibraryFailure.credentialRejected,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.network =>
-    UserLibraryFailure.network,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.serviceUnavailable =>
+  bridge.PlaylistTrackPageLoadFailure.network => UserLibraryFailure.network,
+  bridge.PlaylistTrackPageLoadFailure.serviceUnavailable =>
     UserLibraryFailure.serviceUnavailable,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.invalidResponse =>
+  bridge.PlaylistTrackPageLoadFailure.invalidResponse =>
     UserLibraryFailure.invalidResponse,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.replaced =>
-    UserLibraryFailure.replaced,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.cancelled =>
-    UserLibraryFailure.cancelled,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.alreadyRunning =>
+  bridge.PlaylistTrackPageLoadFailure.replaced => UserLibraryFailure.replaced,
+  bridge.PlaylistTrackPageLoadFailure.cancelled => UserLibraryFailure.cancelled,
+  bridge.PlaylistTrackPageLoadFailure.alreadyRunning =>
     UserLibraryFailure.alreadyRunning,
 };

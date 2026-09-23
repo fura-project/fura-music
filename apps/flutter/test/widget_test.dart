@@ -54,6 +54,8 @@ import 'package:flutter/material.dart'
         SegmentedButton,
         Semantics,
         SingleChildScrollView,
+        SnackBar,
+        SnackBarBehavior,
         SizedBox,
         State,
         StatefulWidget,
@@ -106,10 +108,15 @@ import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
+import 'package:flutterustmusic/library/album_favorite_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/playlist_creation_gateway.dart';
+import 'package:flutterustmusic/library/playlist_deletion_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/playlist_track_gateway.dart';
 import 'package:flutterustmusic/library/recent_plays_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
+import 'package:flutterustmusic/library/track_like_gateway.dart';
 import 'package:flutterustmusic/l10n/app_locale.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
@@ -6743,6 +6750,448 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'creates by keyboard and deletes only an owned non-Liked playlist',
+    (tester) async {
+      const captureReviewImages = bool.fromEnvironment(
+        'PERSONAL_LIBRARY_VISUAL_REVIEW',
+      );
+      await _loadRecentReviewFonts(tester, enabled: captureReviewImages);
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const liked = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'liked:42:100',
+        title: 'Liked Songs',
+        isLikedSongs: true,
+        ownership: UserPlaylistOwnership.owned,
+      );
+      const owned = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'owned:42:101',
+        title: 'Owned fixture',
+        ownership: UserPlaylistOwnership.owned,
+      );
+      const saved = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'saved:42:102',
+        title: 'Saved fixture',
+        ownership: UserPlaylistOwnership.saved,
+      );
+      const created = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'owned:42:103',
+        title: 'Keyboard fixture',
+        ownership: UserPlaylistOwnership.owned,
+      );
+      final library = _WidgetLibraryGateway([
+        const UserLibraryResult(playlists: [liked, owned, saved]),
+        const UserLibraryResult(playlists: [liked, owned, saved, created]),
+        const UserLibraryResult(playlists: [liked, saved, created]),
+      ]);
+      final creation = _WidgetPlaylistCreationGateway(
+        const PlaylistCreationResult(createdPlaylist: created),
+      );
+      final deletion = _WidgetPlaylistDeletionGateway(
+        const PlaylistDeletionResult(deleted: true),
+      );
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: library,
+          playlistCreationGateway: creation,
+          playlistDeletionGateway: deletion,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('sidebar-create-playlist')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('create-playlist-dialog')),
+        findsOneWidget,
+      );
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-library-create-playlist-dialog-desktop.png'),
+          ),
+        );
+      }
+      await tester.enterText(
+        find.byKey(const ValueKey('create-playlist-name')),
+        '  Keyboard fixture  ',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(creation.names, ['Keyboard fixture']);
+      expect(find.text('Keyboard fixture'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('sidebar-playlist-saved:42:102')),
+        buttons: kSecondaryButton,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('sidebar-delete-playlist')),
+        findsNothing,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('sidebar-playlist-owned:42:101')),
+        buttons: kSecondaryButton,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pumpAndSettle();
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-library-playlist-menu-desktop.png'),
+          ),
+        );
+      }
+      await tester.tap(find.byKey(const ValueKey('sidebar-delete-playlist')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Owned fixture'), findsWidgets);
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-library-delete-playlist-dialog-desktop.png'),
+          ),
+        );
+      }
+      await tester.tap(find.byKey(const ValueKey('delete-playlist-cancel')));
+      await tester.pumpAndSettle();
+      expect(deletion.identities, isEmpty);
+
+      await tester.tap(
+        find.byKey(const ValueKey('sidebar-playlist-owned:42:101')),
+        buttons: kSecondaryButton,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('sidebar-delete-playlist')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('delete-playlist-confirm')));
+      await tester.pumpAndSettle();
+      expect(deletion.identities, [('qq-music', 'owned:42:101')]);
+      expect(find.text('Owned fixture'), findsNothing);
+      expect(find.text('Saved fixture'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'compact playlist management exposes owned overflow but not saved or Liked',
+    (tester) async {
+      const captureReviewImages = bool.fromEnvironment(
+        'PERSONAL_LIBRARY_VISUAL_REVIEW',
+      );
+      await _loadRecentReviewFonts(tester, enabled: captureReviewImages);
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const liked = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'liked:42:200',
+        title: 'Liked fixture',
+        isLikedSongs: true,
+        ownership: UserPlaylistOwnership.owned,
+      );
+      const owned = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'owned:42:201',
+        title: 'Compact owned fixture',
+        ownership: UserPlaylistOwnership.owned,
+      );
+      const saved = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'saved:42:202',
+        title: 'Compact saved fixture',
+        ownership: UserPlaylistOwnership.saved,
+      );
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([
+            const UserLibraryResult(playlists: [liked, owned, saved]),
+          ]),
+          playlistDetailGateway: _WidgetDetailGateway([
+            const PlaylistTrackPageResult(total: 0),
+          ]),
+          playlistDeletionGateway: _WidgetPlaylistDeletionGateway(
+            const PlaylistDeletionResult(deleted: true),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openPlaylists(tester);
+
+      expect(
+        find.byKey(const ValueKey('liked-playlist-overflow-owned:42:201')),
+        findsOneWidget,
+      );
+      await tester.longPress(find.text('Compact owned fixture'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('liked-playlist-compact-delete')),
+        findsOneWidget,
+      );
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-library-playlist-actions-compact.png'),
+          ),
+        );
+      }
+      await tester.tap(
+        find.byKey(const ValueKey('liked-playlist-compact-delete')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('delete-playlist-dialog')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('delete-playlist-cancel')));
+      await tester.pumpAndSettle();
+
+      final savedCardInk = tester.widget<InkWell>(
+        find
+            .ancestor(
+              of: find.text('Compact saved fixture'),
+              matching: find.byType(InkWell),
+            )
+            .first,
+      );
+      expect(savedCardInk.onLongPress, isNull);
+      expect(
+        find.byKey(const ValueKey('liked-playlist-compact-delete')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('liked-playlist-liked:42:200')),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'compact Liked actions share one mutation owner and never change Queue',
+    (tester) async {
+      const captureReviewImages = bool.fromEnvironment(
+        'PERSONAL_LIBRARY_VISUAL_REVIEW',
+      );
+      await _loadRecentReviewFonts(tester, enabled: captureReviewImages);
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const liked = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'liked:42:300',
+        title: 'Liked action fixture',
+        isLikedSongs: true,
+        ownership: UserPlaylistOwnership.owned,
+      );
+      const owned = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'owned:42:301',
+        title: 'Action target',
+        ownership: UserPlaylistOwnership.owned,
+      );
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:liked-action',
+        title: 'Mutable Track',
+        artistNames: ['Fixture Artist'],
+      );
+      const populated = PlaylistTrackPageResult(total: 1, tracks: [track]);
+      const empty = PlaylistTrackPageResult(total: 0);
+      final details = _WidgetDetailGateway([
+        populated,
+        populated,
+        empty,
+        empty,
+      ]);
+      final likes = _WidgetTrackLikeGateway();
+      final playlistTracks = _WidgetPlaylistTrackGateway();
+      final queue = _WidgetPlaybackQueueGateway();
+      queue.replace(tracks: const [track], currentIndex: 0);
+      queue.replacements.clear();
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([
+            const UserLibraryResult(playlists: [liked, owned]),
+          ]),
+          playlistDetailGateway: details,
+          trackLikeGateway: likes,
+          playlistTrackGateway: playlistTracks,
+          playbackQueueGateway: queue,
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openLibrary(tester);
+      expect(find.byKey(const ValueKey('liked-track-row-1')), findsOneWidget);
+
+      await tester.tap(find.byTooltip(_en.commonMoreActions).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(_en.libraryAddTrackToPlaylist));
+      await tester.pumpAndSettle();
+      expect(find.text(_en.libraryChoosePlaylist), findsOneWidget);
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-library-add-track-picker-compact.png'),
+          ),
+        );
+      }
+      await tester.tap(find.text('Action target'));
+      await tester.pumpAndSettle();
+      expect(playlistTracks.requests, [
+        (
+          'qq-music',
+          'owned:42:301',
+          'track:liked-action',
+          PlaylistTrackState.present,
+        ),
+      ]);
+      final mutationSnackBar = tester.widget<SnackBar>(find.byType(SnackBar));
+      expect(mutationSnackBar.behavior, SnackBarBehavior.floating);
+      expect(
+        mutationSnackBar.margin,
+        const EdgeInsets.fromLTRB(16, 0, 16, 152),
+      );
+      final mutationMessage = tester.getRect(
+        find.text(_en.libraryMutationSuccess),
+      );
+      final compactPlayer = tester.getRect(
+        find.byKey(const ValueKey('now-playing-present')),
+      );
+      expect(
+        mutationMessage.bottom,
+        lessThanOrEqualTo(compactPlayer.top),
+        reason: 'library feedback must not cover compact playback controls',
+      );
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-library-mutation-feedback-compact.png'),
+          ),
+        );
+      }
+      expect(queue.pushed, isEmpty);
+      expect(queue.replacements, isEmpty);
+
+      await tester.tap(find.byTooltip(_en.commonMoreActions).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('liked-track-unlike-action')));
+      await tester.pumpAndSettle();
+      expect(likes.requests, [
+        ('qq-music', 'track:liked-action', TrackLikeState.notLiked),
+      ]);
+      expect(find.byKey(const ValueKey('liked-track-row-1')), findsNothing);
+      expect(queue.pushed, isEmpty);
+      expect(queue.replacements, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Album detail resolves the authoritative favorite state before mutation',
+    (tester) async {
+      const captureReviewImages = bool.fromEnvironment(
+        'PERSONAL_LIBRARY_VISUAL_REVIEW',
+      );
+      await _loadRecentReviewFonts(tester, enabled: captureReviewImages);
+      tester.view.physicalSize = const Size(1200, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const album = AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:favorite-action',
+        title: 'Favorite action fixture',
+      );
+      final mutations = _WidgetAlbumFavoriteGateway();
+      final queue = _WidgetPlaybackQueueGateway();
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(
+            _WaitingSession(),
+            authenticated: true,
+          ),
+          libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
+          favoriteAlbumGateway: _WidgetFavoriteAlbumGateway(
+            const FavoriteAlbumPageResult(total: 1, albums: [album]),
+          ),
+          albumTrackGateway: _WidgetAlbumGateway(const AlbumTrackPageResult()),
+          albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
+          albumFavoriteGateway: mutations,
+          playbackQueueGateway: queue,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openLibrary(tester);
+      await _selectLibrarySection(tester, 'albums');
+      await tester.tap(
+        find.byKey(const ValueKey('favorite-album-album:favorite-action')),
+      );
+      await tester.pumpAndSettle();
+
+      final favoriteAction = find.byKey(
+        const ValueKey('album-favorite-expanded-action'),
+      );
+      expect(favoriteAction, findsOneWidget);
+      expect(find.text(_en.libraryUnfavoriteAlbum), findsOneWidget);
+      if (captureReviewImages) {
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('/tmp/fura-library-album-favorite-desktop.png'),
+          ),
+        );
+      }
+      await tester.tap(favoriteAction);
+      await tester.pumpAndSettle();
+      expect(mutations.requests, [
+        ('qq-music', 'album:favorite-action', AlbumFavoriteState.notFavorite),
+      ]);
+      expect(queue.pushed, isEmpty);
+      expect(queue.replacements, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('keeps the desktop shell while opening a playlist detail', (
     tester,
   ) async {
@@ -10038,7 +10487,7 @@ void main() {
       expect(find.text('Daily tracks'), findsWidgets);
       expect(find.text('NetEase Personal FM Track'), findsWidgets);
       expect(find.byKey(const ValueKey('open-liked-songs')), findsOneWidget);
-      expect(find.byKey(const ValueKey('open-recent-plays')), findsNothing);
+      expect(find.byKey(const ValueKey('open-recent-plays')), findsOneWidget);
       expect(find.text('QQ Queue Survivor'), findsOneWidget);
       if (captureReviewImages) {
         await tester.tap(find.byKey(const ValueKey('open-liked-songs')));
@@ -11057,6 +11506,8 @@ MusicProviderDependencies _providerFixture({
       ]),
       playlistDetailGateway: _WidgetDetailGateway([
         const PlaylistTrackPageResult(),
+        const PlaylistTrackPageResult(),
+        const PlaylistTrackPageResult(),
       ]),
       albumTrackGateway: _WidgetAlbumGateway(const AlbumTrackPageResult()),
       albumDetailsGateway: const _WidgetAlbumDetailsGateway(),
@@ -11497,6 +11948,141 @@ class _WidgetLibraryOperation implements UserLibraryLoadOperation {
 
   @override
   Future<UserLibraryResult> run() async => result;
+}
+
+class _WidgetPlaylistCreationGateway implements PlaylistCreationGateway {
+  _WidgetPlaylistCreationGateway(this.result);
+
+  final PlaylistCreationResult result;
+  final List<String> names = [];
+
+  @override
+  PlaylistCreationOperation beginCreation({required String name}) {
+    names.add(name);
+    return _WidgetPlaylistCreationOperation(result);
+  }
+}
+
+class _WidgetPlaylistCreationOperation implements PlaylistCreationOperation {
+  const _WidgetPlaylistCreationOperation(this.result);
+
+  final PlaylistCreationResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PlaylistCreationResult> run() async => result;
+}
+
+class _WidgetPlaylistDeletionGateway implements PlaylistDeletionGateway {
+  _WidgetPlaylistDeletionGateway(this.result);
+
+  final PlaylistDeletionResult result;
+  final List<(String, String)> identities = [];
+
+  @override
+  PlaylistDeletionOperation beginDeletion({
+    required String providerId,
+    required String opaquePlaylistId,
+  }) {
+    identities.add((providerId, opaquePlaylistId));
+    return _WidgetPlaylistDeletionOperation(result);
+  }
+}
+
+class _WidgetPlaylistDeletionOperation implements PlaylistDeletionOperation {
+  const _WidgetPlaylistDeletionOperation(this.result);
+
+  final PlaylistDeletionResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PlaylistDeletionResult> run() async => result;
+}
+
+class _WidgetTrackLikeGateway implements TrackLikeGateway {
+  final List<(String, String, TrackLikeState)> requests = [];
+
+  @override
+  TrackLikeMutationOperation beginMutation({
+    required String providerId,
+    required String opaqueTrackId,
+    required TrackLikeState desiredState,
+  }) {
+    requests.add((providerId, opaqueTrackId, desiredState));
+    return _WidgetTrackLikeOperation(desiredState);
+  }
+}
+
+class _WidgetTrackLikeOperation implements TrackLikeMutationOperation {
+  const _WidgetTrackLikeOperation(this.desiredState);
+
+  final TrackLikeState desiredState;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<TrackLikeMutationResult> run() async =>
+      TrackLikeMutationResult(confirmedState: desiredState);
+}
+
+class _WidgetPlaylistTrackGateway implements PlaylistTrackGateway {
+  final List<(String, String, String, PlaylistTrackState)> requests = [];
+
+  @override
+  PlaylistTrackMutationOperation beginMutation({
+    required String providerId,
+    required String opaquePlaylistId,
+    required String opaqueTrackId,
+    required PlaylistTrackState desiredState,
+  }) {
+    requests.add((providerId, opaquePlaylistId, opaqueTrackId, desiredState));
+    return _WidgetPlaylistTrackOperation(desiredState);
+  }
+}
+
+class _WidgetPlaylistTrackOperation implements PlaylistTrackMutationOperation {
+  const _WidgetPlaylistTrackOperation(this.desiredState);
+
+  final PlaylistTrackState desiredState;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PlaylistTrackMutationResult> run() async =>
+      PlaylistTrackMutationResult(confirmedState: desiredState);
+}
+
+class _WidgetAlbumFavoriteGateway implements AlbumFavoriteGateway {
+  final List<(String, String, AlbumFavoriteState)> requests = [];
+
+  @override
+  AlbumFavoriteMutationOperation beginMutation({
+    required String providerId,
+    required String opaqueAlbumId,
+    required AlbumFavoriteState desiredState,
+  }) {
+    requests.add((providerId, opaqueAlbumId, desiredState));
+    return _WidgetAlbumFavoriteOperation(desiredState);
+  }
+}
+
+class _WidgetAlbumFavoriteOperation implements AlbumFavoriteMutationOperation {
+  const _WidgetAlbumFavoriteOperation(this.desiredState);
+
+  final AlbumFavoriteState desiredState;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<AlbumFavoriteMutationResult> run() async =>
+      AlbumFavoriteMutationResult(confirmedState: desiredState);
 }
 
 class _UnusedSearchGateway implements TrackSearchGateway {

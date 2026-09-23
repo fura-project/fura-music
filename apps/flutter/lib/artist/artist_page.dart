@@ -857,6 +857,9 @@ class _ArtistTracksState extends State<_ArtistTracks> {
 
   Future<void> _showActions(PlaylistTrackSummary track, int index) async {
     final canOpenAlbum = widget.onOpenAlbum != null && track.album != null;
+    final likeAction = await resolveMusicTrackLikeAction(context, track);
+    if (!mounted) return;
+    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
     final action = await showModalBottomSheet<MusicTrackAction>(
       context: context,
       showDragHandle: true,
@@ -870,6 +873,27 @@ class _ArtistTracksState extends State<_ArtistTracks> {
               title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, MusicTrackAction.play),
             ),
+            if (canAddToPlaylist)
+              ListTile(
+                leading: const Icon(Icons.playlist_add_rounded),
+                title: Text(context.l10n.libraryAddTrackToPlaylist),
+                onTap: () =>
+                    Navigator.pop(context, MusicTrackAction.addToPlaylist),
+              ),
+            if (likeAction != null)
+              ListTile(
+                leading: Icon(
+                  likeAction == MusicTrackAction.like
+                      ? Icons.favorite_border_rounded
+                      : Icons.favorite_rounded,
+                ),
+                title: Text(
+                  likeAction == MusicTrackAction.like
+                      ? context.l10n.libraryLikeTrack
+                      : context.l10n.libraryUnlikeTrack,
+                ),
+                onTap: () => Navigator.pop(context, likeAction),
+              ),
             ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
               title: Text(context.l10n.commonAddToQueue),
@@ -886,13 +910,18 @@ class _ArtistTracksState extends State<_ArtistTracks> {
         ),
       ),
     );
+    if (!mounted) return;
     switch (action) {
       case MusicTrackAction.play:
         widget.onPlay(index);
       case MusicTrackAction.addToQueue:
         widget.onQueue(track);
+      case MusicTrackAction.addToPlaylist:
+        await showAddTrackToPlaylist(context: context, track: track);
       case MusicTrackAction.openAlbum:
         widget.onOpenAlbum!(track.album!);
+      case MusicTrackAction.like || MusicTrackAction.unlike:
+        await runMusicTrackLikeAction(context, track, action!);
       case MusicTrackAction.openArtist:
       case null:
         return;

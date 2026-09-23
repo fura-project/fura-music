@@ -3216,6 +3216,59 @@ class AppLocalizationsZh extends AppLocalizations {
   String get playbackQualitySummaryLossless => 'SQ 无损音质';
 
   @override
+  String get libraryCreatePlaylist => '新建歌单';
+
+  @override
+  String get libraryCreatePlaylistTitle => '新建歌单';
+
+  @override
+  String get libraryPlaylistNameLabel => '歌单名称';
+
+  @override
+  String get libraryDeletePlaylist => '删除歌单';
+
+  @override
+  String get libraryDeletePlaylistTitle => '删除歌单？';
+
+  @override
+  String libraryDeletePlaylistDetail(String name) {
+    return '要从音乐库删除“$name”吗？此操作无法撤销。';
+  }
+
+  @override
+  String get libraryRemoveTrackFromPlaylist => '从此歌单移除';
+
+  @override
+  String get libraryAddTrackToPlaylist => '添加到歌单';
+
+  @override
+  String get libraryChoosePlaylist => '选择歌单';
+
+  @override
+  String get libraryLikeTrack => '喜欢';
+
+  @override
+  String get libraryUnlikeTrack => '取消喜欢';
+
+  @override
+  String get libraryFavoriteAlbum => '收藏专辑';
+
+  @override
+  String get libraryUnfavoriteAlbum => '取消收藏专辑';
+
+  @override
+  String get libraryMutationSuccess => '音乐库已更新。';
+
+  @override
+  String get libraryMutationFailure => '无法更新音乐库，未自动重试。';
+
+  @override
+  String get libraryMutationOutcomeUnknown => '服务可能已应用该更改，正在刷新以确认当前状态。';
+
+  @override
+  String get libraryMutationPending => '正在更新音乐库……';
+
+  @override
   String get commonLocateCurrentTrack => '定位当前歌曲';
 
   @override

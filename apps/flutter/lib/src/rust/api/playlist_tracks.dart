@@ -10,30 +10,28 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `failed_mutation`, `map_error`, `map_mutation`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
 
-QqMusicPlaylistTrackMutationHandle beginQqMusicPlaylistTrackMutation({
+PlaylistTrackMutationHandle beginPlaylistTrackMutation({
   required String providerId,
   required String opaquePlaylistId,
   required String opaqueTrackId,
-  required QqMusicPlaylistTrackState desiredState,
-}) => RustLib.instance.api
-    .crateApiPlaylistTracksBeginQqMusicPlaylistTrackMutation(
-      providerId: providerId,
-      opaquePlaylistId: opaquePlaylistId,
-      opaqueTrackId: opaqueTrackId,
-      desiredState: desiredState,
-    );
+  required PlaylistTrackState desiredState,
+}) => RustLib.instance.api.crateApiPlaylistTracksBeginPlaylistTrackMutation(
+  providerId: providerId,
+  opaquePlaylistId: opaquePlaylistId,
+  opaqueTrackId: opaqueTrackId,
+  desiredState: desiredState,
+);
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicPlaylistTrackMutationHandle>>
-abstract class QqMusicPlaylistTrackMutationHandle
-    implements RustOpaqueInterface {
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PlaylistTrackMutationHandle>>
+abstract class PlaylistTrackMutationHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
 
-  Future<QqMusicPlaylistTrackMutationResult> run();
+  Future<PlaylistTrackMutationResult> run();
 }
 
-enum QqMusicPlaylistTrackMutationFailure {
+enum PlaylistTrackMutationFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,
@@ -43,17 +41,17 @@ enum QqMusicPlaylistTrackMutationFailure {
   invalidResponseOutcomeUnknown,
   replacedOutcomeUnknown,
 
-  /// Cancelling the local wait cannot recall a write already sent to QQ
-  /// Music, so presentation must refresh instead of assuming failure.
+  /// Cancelling the local wait cannot recall a write already sent to the
+  /// Provider, so presentation must refresh instead of assuming failure.
   cancelledOutcomeUnknown,
   alreadyRunning,
 }
 
-class QqMusicPlaylistTrackMutationResult {
-  final QqMusicPlaylistTrackState? confirmedState;
-  final QqMusicPlaylistTrackMutationFailure? failure;
+class PlaylistTrackMutationResult {
+  final PlaylistTrackState? confirmedState;
+  final PlaylistTrackMutationFailure? failure;
 
-  const QqMusicPlaylistTrackMutationResult({this.confirmedState, this.failure});
+  const PlaylistTrackMutationResult({this.confirmedState, this.failure});
 
   @override
   int get hashCode => confirmedState.hashCode ^ failure.hashCode;
@@ -61,10 +59,10 @@ class QqMusicPlaylistTrackMutationResult {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is QqMusicPlaylistTrackMutationResult &&
+      other is PlaylistTrackMutationResult &&
           runtimeType == other.runtimeType &&
           confirmedState == other.confirmedState &&
           failure == other.failure;
 }
 
-enum QqMusicPlaylistTrackState { present, absent }
+enum PlaylistTrackState { present, absent }

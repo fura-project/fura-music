@@ -101,7 +101,7 @@ PlaylistTrackPageLoadOperation _beginRustLoad(
   int offset,
   int size,
 ) => _RustTrackPageLoadOperation(
-  bridge.beginQqMusicPlaylistTrackPageLoad(
+  bridge.beginPlaylistTrackPageLoad(
     providerId: playlist.providerId,
     opaquePlaylistId: playlist.opaqueId,
     offset: offset,
@@ -112,7 +112,7 @@ PlaylistTrackPageLoadOperation _beginRustLoad(
 class _RustTrackPageLoadOperation implements PlaylistTrackPageLoadOperation {
   const _RustTrackPageLoadOperation(this._handle);
 
-  final bridge.QqMusicPlaylistTrackPageLoadHandle _handle;
+  final bridge.PlaylistTrackPageLoadHandle _handle;
 
   @override
   bool cancel() => _handle.cancel();
@@ -259,24 +259,21 @@ class _VaultCleaningTrackPageLoadOperation
 }
 
 UserLibraryFailure _mapFailure(
-  bridge.QqMusicPlaylistTrackPageLoadFailure failure,
+  bridge.PlaylistTrackPageLoadFailure failure,
 ) => switch (failure) {
-  bridge.QqMusicPlaylistTrackPageLoadFailure.coreUnavailable =>
+  bridge.PlaylistTrackPageLoadFailure.coreUnavailable =>
     UserLibraryFailure.coreUnavailable,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.authenticationRequired =>
+  bridge.PlaylistTrackPageLoadFailure.authenticationRequired =>
     UserLibraryFailure.authenticationRequired,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.credentialRejected =>
+  bridge.PlaylistTrackPageLoadFailure.credentialRejected =>
     UserLibraryFailure.credentialRejected,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.network =>
-    UserLibraryFailure.network,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.serviceUnavailable =>
+  bridge.PlaylistTrackPageLoadFailure.network => UserLibraryFailure.network,
+  bridge.PlaylistTrackPageLoadFailure.serviceUnavailable =>
     UserLibraryFailure.serviceUnavailable,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.invalidResponse =>
+  bridge.PlaylistTrackPageLoadFailure.invalidResponse =>
     UserLibraryFailure.invalidResponse,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.replaced =>
-    UserLibraryFailure.replaced,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.cancelled =>
-    UserLibraryFailure.cancelled,
-  bridge.QqMusicPlaylistTrackPageLoadFailure.alreadyRunning =>
+  bridge.PlaylistTrackPageLoadFailure.replaced => UserLibraryFailure.replaced,
+  bridge.PlaylistTrackPageLoadFailure.cancelled => UserLibraryFailure.cancelled,
+  bridge.PlaylistTrackPageLoadFailure.alreadyRunning =>
     UserLibraryFailure.alreadyRunning,
 };

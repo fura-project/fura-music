@@ -2,12 +2,12 @@ use std::fmt;
 
 use provider_api::{LibraryMutationError, PlaylistCreationProvider};
 
-use super::authentication::native_qq_music_provider;
 use super::library::{LibraryPlaylistSummary, bridge_playlist_summary};
 use super::remote_mutation::{RemoteMutationLifecycle, RemoteMutationStart};
+use super::with_native_provider;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QqMusicPlaylistCreationFailure {
+pub enum PlaylistCreationFailure {
     CoreUnavailable,
     AuthenticationRequired,
     CredentialRejected,
@@ -17,21 +17,21 @@ pub enum QqMusicPlaylistCreationFailure {
     InvalidResponseOutcomeUnknown,
     ReplacedOutcomeUnknown,
     /// Cancelling the local wait cannot recall a create request already sent
-    /// to QQ Music, so presentation must refresh instead of assuming failure.
+    /// to the Provider, so presentation must refresh instead of assuming failure.
     CancelledOutcomeUnknown,
     AlreadyRunning,
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub struct QqMusicPlaylistCreationResult {
+pub struct PlaylistCreationResult {
     pub created_playlist: Option<LibraryPlaylistSummary>,
-    pub failure: Option<QqMusicPlaylistCreationFailure>,
+    pub failure: Option<PlaylistCreationFailure>,
 }
 
-impl fmt::Debug for QqMusicPlaylistCreationResult {
+impl fmt::Debug for PlaylistCreationResult {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicPlaylistCreationResult")
+            .debug_struct("PlaylistCreationResult")
             .field("has_created_playlist", &self.created_playlist.is_some())
             .field("failure", &self.failure)
             .finish()
@@ -41,15 +41,17 @@ impl fmt::Debug for QqMusicPlaylistCreationResult {
 /// One cancellable, single-use playlist creation. The requested name is
 /// redacted from diagnostics and remains inside the Provider call boundary.
 #[flutter_rust_bridge::frb(opaque)]
-pub struct QqMusicPlaylistCreationHandle {
+pub struct PlaylistCreationHandle {
+    provider_id: String,
     name: String,
     lifecycle: RemoteMutationLifecycle,
 }
 
-impl fmt::Debug for QqMusicPlaylistCreationHandle {
+impl fmt::Debug for PlaylistCreationHandle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicPlaylistCreationHandle")
+            .debug_struct("PlaylistCreationHandle")
+            .field("provider_id", &self.provider_id)
             .field("name", &"[REDACTED]")
             .field("active", &self.is_active())
             .field("running", &self.lifecycle.is_running())
@@ -57,23 +59,24 @@ impl fmt::Debug for QqMusicPlaylistCreationHandle {
     }
 }
 
-impl QqMusicPlaylistCreationHandle {
-    pub async fn run(&self) -> QqMusicPlaylistCreationResult {
+impl PlaylistCreationHandle {
+    pub async fn run(&self) -> PlaylistCreationResult {
         match self.lifecycle.try_start() {
             RemoteMutationStart::Started => {}
             RemoteMutationStart::Cancelled => {
-                return failed_creation(QqMusicPlaylistCreationFailure::CancelledOutcomeUnknown);
+                return failed_creation(PlaylistCreationFailure::CancelledOutcomeUnknown);
             }
             RemoteMutationStart::AlreadyRunning => {
-                return failed_creation(QqMusicPlaylistCreationFailure::AlreadyRunning);
+                return failed_creation(PlaylistCreationFailure::AlreadyRunning);
             }
         }
-        let outcome = match native_qq_music_provider() {
-            Ok(provider) => {
+        let outcome = with_native_provider!(
+            &self.provider_id,
+            |provider| {
                 tokio::select! {
                     () = self.lifecycle.cancelled() => {
                         failed_creation(
-                            QqMusicPlaylistCreationFailure::CancelledOutcomeUnknown,
+                            PlaylistCreationFailure::CancelledOutcomeUnknown,
                         )
                     }
                     result = provider.create_playlist(self.name.clone()) => {
@@ -81,14 +84,14 @@ impl QqMusicPlaylistCreationHandle {
                             map_creation(result)
                         } else {
                             failed_creation(
-                                QqMusicPlaylistCreationFailure::CancelledOutcomeUnknown,
+                                PlaylistCreationFailure::CancelledOutcomeUnknown,
                             )
                         }
                     }
                 }
-            }
-            Err(()) => failed_creation(QqMusicPlaylistCreationFailure::CoreUnavailable),
-        };
+            },
+            failed_creation(PlaylistCreationFailure::CoreUnavailable)
+        );
         self.lifecycle.finish();
         outcome
     }
@@ -105,8 +108,9 @@ impl QqMusicPlaylistCreationHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_playlist_creation(name: String) -> QqMusicPlaylistCreationHandle {
-    QqMusicPlaylistCreationHandle {
+pub fn begin_playlist_creation(provider_id: String, name: String) -> PlaylistCreationHandle {
+    PlaylistCreationHandle {
+        provider_id,
         name,
         lifecycle: RemoteMutationLifecycle::new(),
     }
@@ -114,9 +118,9 @@ pub fn begin_qq_music_playlist_creation(name: String) -> QqMusicPlaylistCreation
 
 fn map_creation(
     result: Result<music_domain::PlaylistSummary, LibraryMutationError>,
-) -> QqMusicPlaylistCreationResult {
+) -> PlaylistCreationResult {
     match result {
-        Ok(playlist) => QqMusicPlaylistCreationResult {
+        Ok(playlist) => PlaylistCreationResult {
             created_playlist: Some(bridge_playlist_summary(&playlist)),
             failure: None,
         },
@@ -124,32 +128,28 @@ fn map_creation(
     }
 }
 
-const fn failed_creation(failure: QqMusicPlaylistCreationFailure) -> QqMusicPlaylistCreationResult {
-    QqMusicPlaylistCreationResult {
+const fn failed_creation(failure: PlaylistCreationFailure) -> PlaylistCreationResult {
+    PlaylistCreationResult {
         created_playlist: None,
         failure: Some(failure),
     }
 }
 
-const fn map_error(error: LibraryMutationError) -> QqMusicPlaylistCreationFailure {
+const fn map_error(error: LibraryMutationError) -> PlaylistCreationFailure {
     match error {
         LibraryMutationError::AuthenticationRequired => {
-            QqMusicPlaylistCreationFailure::AuthenticationRequired
+            PlaylistCreationFailure::AuthenticationRequired
         }
-        LibraryMutationError::CredentialRejected => {
-            QqMusicPlaylistCreationFailure::CredentialRejected
-        }
+        LibraryMutationError::CredentialRejected => PlaylistCreationFailure::CredentialRejected,
         LibraryMutationError::NetworkOutcomeUnknown => {
-            QqMusicPlaylistCreationFailure::NetworkOutcomeUnknown
+            PlaylistCreationFailure::NetworkOutcomeUnknown
         }
-        LibraryMutationError::ServiceUnavailable => {
-            QqMusicPlaylistCreationFailure::ServiceUnavailable
-        }
-        LibraryMutationError::InvalidRequest => QqMusicPlaylistCreationFailure::InvalidRequest,
+        LibraryMutationError::ServiceUnavailable => PlaylistCreationFailure::ServiceUnavailable,
+        LibraryMutationError::InvalidRequest => PlaylistCreationFailure::InvalidRequest,
         LibraryMutationError::InvalidResponseOutcomeUnknown => {
-            QqMusicPlaylistCreationFailure::InvalidResponseOutcomeUnknown
+            PlaylistCreationFailure::InvalidResponseOutcomeUnknown
         }
-        LibraryMutationError::Replaced => QqMusicPlaylistCreationFailure::ReplacedOutcomeUnknown,
+        LibraryMutationError::Replaced => PlaylistCreationFailure::ReplacedOutcomeUnknown,
     }
 }
 
@@ -158,9 +158,7 @@ mod tests {
     use music_domain::{PlaylistId, PlaylistSummary, ProviderId};
     use provider_api::LibraryMutationError;
 
-    use super::{
-        QqMusicPlaylistCreationFailure, begin_qq_music_playlist_creation, map_creation, map_error,
-    };
+    use super::{PlaylistCreationFailure, begin_playlist_creation, map_creation, map_error};
 
     #[test]
     fn maps_created_playlist_and_all_failures() {
@@ -183,31 +181,31 @@ mod tests {
         let cases = [
             (
                 LibraryMutationError::AuthenticationRequired,
-                QqMusicPlaylistCreationFailure::AuthenticationRequired,
+                PlaylistCreationFailure::AuthenticationRequired,
             ),
             (
                 LibraryMutationError::CredentialRejected,
-                QqMusicPlaylistCreationFailure::CredentialRejected,
+                PlaylistCreationFailure::CredentialRejected,
             ),
             (
                 LibraryMutationError::NetworkOutcomeUnknown,
-                QqMusicPlaylistCreationFailure::NetworkOutcomeUnknown,
+                PlaylistCreationFailure::NetworkOutcomeUnknown,
             ),
             (
                 LibraryMutationError::ServiceUnavailable,
-                QqMusicPlaylistCreationFailure::ServiceUnavailable,
+                PlaylistCreationFailure::ServiceUnavailable,
             ),
             (
                 LibraryMutationError::InvalidRequest,
-                QqMusicPlaylistCreationFailure::InvalidRequest,
+                PlaylistCreationFailure::InvalidRequest,
             ),
             (
                 LibraryMutationError::InvalidResponseOutcomeUnknown,
-                QqMusicPlaylistCreationFailure::InvalidResponseOutcomeUnknown,
+                PlaylistCreationFailure::InvalidResponseOutcomeUnknown,
             ),
             (
                 LibraryMutationError::Replaced,
-                QqMusicPlaylistCreationFailure::ReplacedOutcomeUnknown,
+                PlaylistCreationFailure::ReplacedOutcomeUnknown,
             ),
         ];
         for (input, expected) in cases {
@@ -217,7 +215,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_terminal_and_name_is_redacted() {
-        let handle = begin_qq_music_playlist_creation("Private playlist".into());
+        let handle = begin_playlist_creation("qq-music".into(), "Private playlist".into());
         let debug = format!("{handle:?}");
         assert!(!debug.contains("Private playlist"));
         assert!(handle.cancel());
@@ -227,7 +225,7 @@ mod tests {
         assert_eq!(result.created_playlist, None);
         assert_eq!(
             result.failure,
-            Some(QqMusicPlaylistCreationFailure::CancelledOutcomeUnknown)
+            Some(PlaylistCreationFailure::CancelledOutcomeUnknown)
         );
     }
 }

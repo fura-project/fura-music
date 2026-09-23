@@ -26,9 +26,14 @@ import 'package:flutterustmusic/home/recent_listening_gateway.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
+import 'package:flutterustmusic/library/album_favorite_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/playlist_creation_gateway.dart';
+import 'package:flutterustmusic/library/playlist_deletion_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/playlist_track_gateway.dart';
 import 'package:flutterustmusic/library/recent_plays_gateway.dart';
+import 'package:flutterustmusic/library/track_like_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
@@ -253,8 +258,23 @@ MusicProviderDependencies _buildProviderDependencies({
         providerId: providerId,
         credentialVault: credentialVault,
       ),
-      recentPlaysGateway: qqMusic
-          ? RustRecentPlaysGateway(credentialVault: credentialVault)
+      recentPlaysGateway: RustRecentPlaysGateway(
+        providerId: providerId,
+        credentialVault: credentialVault,
+      ),
+      trackLikeGateway: RustTrackLikeGateway(credentialVault: credentialVault),
+      albumFavoriteGateway: qqMusic
+          ? RustAlbumFavoriteGateway(credentialVault: credentialVault)
+          : null,
+      playlistTrackGateway: RustPlaylistTrackGateway(
+        credentialVault: credentialVault,
+      ),
+      playlistCreationGateway: RustPlaylistCreationGateway(
+        providerId: providerId,
+        credentialVault: credentialVault,
+      ),
+      playlistDeletionGateway: qqMusic
+          ? RustPlaylistDeletionGateway(credentialVault: credentialVault)
           : null,
     ),
     discovery: AuthenticatedDiscoveryDependencies(

@@ -10,28 +10,26 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `failed_mutation`, `map_error`, `map_mutation`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
 
-QqMusicAlbumFavoriteMutationHandle beginQqMusicAlbumFavoriteMutation({
+AlbumFavoriteMutationHandle beginAlbumFavoriteMutation({
   required String providerId,
   required String opaqueAlbumId,
-  required QqMusicAlbumFavoriteState desiredState,
-}) => RustLib.instance.api
-    .crateApiAlbumFavoritesBeginQqMusicAlbumFavoriteMutation(
-      providerId: providerId,
-      opaqueAlbumId: opaqueAlbumId,
-      desiredState: desiredState,
-    );
+  required AlbumFavoriteState desiredState,
+}) => RustLib.instance.api.crateApiAlbumFavoritesBeginAlbumFavoriteMutation(
+  providerId: providerId,
+  opaqueAlbumId: opaqueAlbumId,
+  desiredState: desiredState,
+);
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicAlbumFavoriteMutationHandle>>
-abstract class QqMusicAlbumFavoriteMutationHandle
-    implements RustOpaqueInterface {
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<AlbumFavoriteMutationHandle>>
+abstract class AlbumFavoriteMutationHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
 
-  Future<QqMusicAlbumFavoriteMutationResult> run();
+  Future<AlbumFavoriteMutationResult> run();
 }
 
-enum QqMusicAlbumFavoriteMutationFailure {
+enum AlbumFavoriteMutationFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,
@@ -41,17 +39,17 @@ enum QqMusicAlbumFavoriteMutationFailure {
   invalidResponseOutcomeUnknown,
   replacedOutcomeUnknown,
 
-  /// Cancelling the local wait cannot recall a write already sent to QQ
-  /// Music, so presentation must refresh instead of assuming failure.
+  /// Cancelling the local wait cannot recall a write already sent to the
+  /// Provider, so presentation must refresh instead of assuming failure.
   cancelledOutcomeUnknown,
   alreadyRunning,
 }
 
-class QqMusicAlbumFavoriteMutationResult {
-  final QqMusicAlbumFavoriteState? confirmedState;
-  final QqMusicAlbumFavoriteMutationFailure? failure;
+class AlbumFavoriteMutationResult {
+  final AlbumFavoriteState? confirmedState;
+  final AlbumFavoriteMutationFailure? failure;
 
-  const QqMusicAlbumFavoriteMutationResult({this.confirmedState, this.failure});
+  const AlbumFavoriteMutationResult({this.confirmedState, this.failure});
 
   @override
   int get hashCode => confirmedState.hashCode ^ failure.hashCode;
@@ -59,10 +57,10 @@ class QqMusicAlbumFavoriteMutationResult {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is QqMusicAlbumFavoriteMutationResult &&
+      other is AlbumFavoriteMutationResult &&
           runtimeType == other.runtimeType &&
           confirmedState == other.confirmedState &&
           failure == other.failure;
 }
 
-enum QqMusicAlbumFavoriteState { favorite, notFavorite }
+enum AlbumFavoriteState { favorite, notFavorite }

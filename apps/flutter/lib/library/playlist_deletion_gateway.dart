@@ -67,7 +67,7 @@ PlaylistDeletionOperation _beginRustDeletion(
   String providerId,
   String opaquePlaylistId,
 ) => _RustPlaylistDeletionOperation(
-  bridge.beginQqMusicPlaylistDeletion(
+  bridge.beginPlaylistDeletion(
     providerId: providerId,
     opaquePlaylistId: opaquePlaylistId,
   ),
@@ -76,7 +76,7 @@ PlaylistDeletionOperation _beginRustDeletion(
 class _RustPlaylistDeletionOperation implements PlaylistDeletionOperation {
   const _RustPlaylistDeletionOperation(this._handle);
 
-  final bridge.QqMusicPlaylistDeletionHandle _handle;
+  final bridge.PlaylistDeletionHandle _handle;
 
   @override
   bool cancel() => _handle.cancel();
@@ -123,7 +123,7 @@ class _VaultCleaningPlaylistDeletionOperation
 
 @visibleForTesting
 PlaylistDeletionResult mapBridgePlaylistDeletion(
-  bridge.QqMusicPlaylistDeletionResult result,
+  bridge.PlaylistDeletionResult result,
 ) {
   final failure = result.failure;
   if (result.deleted == (failure != null)) {
@@ -141,26 +141,26 @@ PlaylistDeletionResult mapBridgePlaylistDeletion(
 
 @visibleForTesting
 PlaylistDeletionFailure mapBridgePlaylistDeletionFailure(
-  bridge.QqMusicPlaylistDeletionFailure failure,
+  bridge.PlaylistDeletionFailure failure,
 ) => switch (failure) {
-  bridge.QqMusicPlaylistDeletionFailure.coreUnavailable =>
+  bridge.PlaylistDeletionFailure.coreUnavailable =>
     PlaylistDeletionFailure.coreUnavailable,
-  bridge.QqMusicPlaylistDeletionFailure.authenticationRequired =>
+  bridge.PlaylistDeletionFailure.authenticationRequired =>
     PlaylistDeletionFailure.authenticationRequired,
-  bridge.QqMusicPlaylistDeletionFailure.credentialRejected =>
+  bridge.PlaylistDeletionFailure.credentialRejected =>
     PlaylistDeletionFailure.credentialRejected,
-  bridge.QqMusicPlaylistDeletionFailure.networkOutcomeUnknown =>
+  bridge.PlaylistDeletionFailure.networkOutcomeUnknown =>
     PlaylistDeletionFailure.networkOutcomeUnknown,
-  bridge.QqMusicPlaylistDeletionFailure.serviceUnavailable =>
+  bridge.PlaylistDeletionFailure.serviceUnavailable =>
     PlaylistDeletionFailure.serviceUnavailable,
-  bridge.QqMusicPlaylistDeletionFailure.invalidRequest =>
+  bridge.PlaylistDeletionFailure.invalidRequest =>
     PlaylistDeletionFailure.invalidRequest,
-  bridge.QqMusicPlaylistDeletionFailure.invalidResponseOutcomeUnknown =>
+  bridge.PlaylistDeletionFailure.invalidResponseOutcomeUnknown =>
     PlaylistDeletionFailure.invalidResponseOutcomeUnknown,
-  bridge.QqMusicPlaylistDeletionFailure.replacedOutcomeUnknown =>
+  bridge.PlaylistDeletionFailure.replacedOutcomeUnknown =>
     PlaylistDeletionFailure.replacedOutcomeUnknown,
-  bridge.QqMusicPlaylistDeletionFailure.cancelledOutcomeUnknown =>
+  bridge.PlaylistDeletionFailure.cancelledOutcomeUnknown =>
     PlaylistDeletionFailure.cancelledOutcomeUnknown,
-  bridge.QqMusicPlaylistDeletionFailure.alreadyRunning =>
+  bridge.PlaylistDeletionFailure.alreadyRunning =>
     PlaylistDeletionFailure.alreadyRunning,
 };

@@ -10,7 +10,7 @@ import 'package:flutterustmusic/src/rust/api/playlist_creation.dart' as bridge;
 void main() {
   test('maps one confirmed created playlist', () {
     final result = mapBridgePlaylistCreation(
-      const bridge.QqMusicPlaylistCreationResult(
+      const bridge.PlaylistCreationResult(
         createdPlaylist: library_bridge.LibraryPlaylistSummary(
           isLikedSongs: false,
           providerId: 'qq-music',
@@ -31,45 +31,45 @@ void main() {
 
   test('maps every typed failure and rejects contradictory results', () {
     final failures = {
-      bridge.QqMusicPlaylistCreationFailure.coreUnavailable:
+      bridge.PlaylistCreationFailure.coreUnavailable:
           PlaylistCreationFailure.coreUnavailable,
-      bridge.QqMusicPlaylistCreationFailure.authenticationRequired:
+      bridge.PlaylistCreationFailure.authenticationRequired:
           PlaylistCreationFailure.authenticationRequired,
-      bridge.QqMusicPlaylistCreationFailure.credentialRejected:
+      bridge.PlaylistCreationFailure.credentialRejected:
           PlaylistCreationFailure.credentialRejected,
-      bridge.QqMusicPlaylistCreationFailure.networkOutcomeUnknown:
+      bridge.PlaylistCreationFailure.networkOutcomeUnknown:
           PlaylistCreationFailure.networkOutcomeUnknown,
-      bridge.QqMusicPlaylistCreationFailure.serviceUnavailable:
+      bridge.PlaylistCreationFailure.serviceUnavailable:
           PlaylistCreationFailure.serviceUnavailable,
-      bridge.QqMusicPlaylistCreationFailure.invalidRequest:
+      bridge.PlaylistCreationFailure.invalidRequest:
           PlaylistCreationFailure.invalidRequest,
-      bridge.QqMusicPlaylistCreationFailure.invalidResponseOutcomeUnknown:
+      bridge.PlaylistCreationFailure.invalidResponseOutcomeUnknown:
           PlaylistCreationFailure.invalidResponseOutcomeUnknown,
-      bridge.QqMusicPlaylistCreationFailure.replacedOutcomeUnknown:
+      bridge.PlaylistCreationFailure.replacedOutcomeUnknown:
           PlaylistCreationFailure.replacedOutcomeUnknown,
-      bridge.QqMusicPlaylistCreationFailure.cancelledOutcomeUnknown:
+      bridge.PlaylistCreationFailure.cancelledOutcomeUnknown:
           PlaylistCreationFailure.cancelledOutcomeUnknown,
-      bridge.QqMusicPlaylistCreationFailure.alreadyRunning:
+      bridge.PlaylistCreationFailure.alreadyRunning:
           PlaylistCreationFailure.alreadyRunning,
     };
     for (final MapEntry(key: input, value: expected) in failures.entries) {
       final result = mapBridgePlaylistCreation(
-        bridge.QqMusicPlaylistCreationResult(failure: input),
+        bridge.PlaylistCreationResult(failure: input),
       );
       expect(result.createdPlaylist, isNull);
       expect(result.failure, expected);
     }
 
     for (final result in [
-      const bridge.QqMusicPlaylistCreationResult(),
-      const bridge.QqMusicPlaylistCreationResult(
+      const bridge.PlaylistCreationResult(),
+      const bridge.PlaylistCreationResult(
         createdPlaylist: library_bridge.LibraryPlaylistSummary(
           isLikedSongs: false,
           providerId: 'qq-music',
           opaqueId: 'owned:7002:902',
           title: 'Server playlist',
         ),
-        failure: bridge.QqMusicPlaylistCreationFailure.serviceUnavailable,
+        failure: bridge.PlaylistCreationFailure.serviceUnavailable,
       ),
     ]) {
       expect(
@@ -80,10 +80,13 @@ void main() {
   });
 
   test('forwards requested name and confirmed result', () async {
+    late String requestedProviderId;
     late String requestedName;
     final gateway = RustPlaylistCreationGateway(
+      providerId: 'netease-cloud-music',
       credentialVault: _Vault(),
-      operationFactory: (name) {
+      operationFactory: (providerId, name) {
+        requestedProviderId = providerId;
         requestedName = name;
         return _Operation(
           PlaylistCreationResult(
@@ -101,6 +104,7 @@ void main() {
         .beginCreation(name: 'Requested playlist')
         .run();
 
+    expect(requestedProviderId, 'netease-cloud-music');
     expect(requestedName, 'Requested playlist');
     expect(result.createdPlaylist?.title, 'Server playlist');
   });
@@ -109,7 +113,7 @@ void main() {
     final deleted = _Vault();
     final rejected = RustPlaylistCreationGateway(
       credentialVault: deleted,
-      operationFactory: (_) => const _Operation(
+      operationFactory: (_, _) => const _Operation(
         PlaylistCreationResult(
           failure: PlaylistCreationFailure.credentialRejected,
         ),
@@ -123,7 +127,7 @@ void main() {
 
     final cleanupFailure = RustPlaylistCreationGateway(
       credentialVault: _Vault(failDelete: true),
-      operationFactory: (_) => const _Operation(
+      operationFactory: (_, _) => const _Operation(
         PlaylistCreationResult(
           failure: PlaylistCreationFailure.credentialRejected,
         ),

@@ -35,11 +35,13 @@ abstract interface class PlaylistCreationOperation {
 }
 
 typedef PlaylistCreationOperationFactory = PlaylistCreationOperation Function(
+  String providerId,
   String name,
 );
 
 class RustPlaylistCreationGateway implements PlaylistCreationGateway {
   RustPlaylistCreationGateway({
+    this.providerId = 'qq-music',
     CredentialVault? credentialVault,
     PlaylistCreationOperationFactory? operationFactory,
   }) : _operationFactory = operationFactory ?? _beginRustCreation,
@@ -48,25 +50,26 @@ class RustPlaylistCreationGateway implements PlaylistCreationGateway {
        );
 
   final CredentialVault _credentialVault;
+  final String providerId;
   final PlaylistCreationOperationFactory _operationFactory;
 
   @override
   PlaylistCreationOperation beginCreation({required String name}) =>
       _VaultCleaningPlaylistCreationOperation(
-        _operationFactory(name),
+        _operationFactory(providerId, name),
         _credentialVault,
       );
 }
 
-PlaylistCreationOperation _beginRustCreation(String name) =>
+PlaylistCreationOperation _beginRustCreation(String providerId, String name) =>
     _RustPlaylistCreationOperation(
-      bridge.beginQqMusicPlaylistCreation(name: name),
+      bridge.beginPlaylistCreation(providerId: providerId, name: name),
     );
 
 class _RustPlaylistCreationOperation implements PlaylistCreationOperation {
   const _RustPlaylistCreationOperation(this._handle);
 
-  final bridge.QqMusicPlaylistCreationHandle _handle;
+  final bridge.PlaylistCreationHandle _handle;
 
   @override
   bool cancel() => _handle.cancel();
@@ -113,7 +116,7 @@ class _VaultCleaningPlaylistCreationOperation
 
 @visibleForTesting
 PlaylistCreationResult mapBridgePlaylistCreation(
-  bridge.QqMusicPlaylistCreationResult result,
+  bridge.PlaylistCreationResult result,
 ) {
   final failure = result.failure;
   final created = result.createdPlaylist;
@@ -141,26 +144,26 @@ PlaylistCreationResult mapBridgePlaylistCreation(
 
 @visibleForTesting
 PlaylistCreationFailure mapBridgePlaylistCreationFailure(
-  bridge.QqMusicPlaylistCreationFailure failure,
+  bridge.PlaylistCreationFailure failure,
 ) => switch (failure) {
-  bridge.QqMusicPlaylistCreationFailure.coreUnavailable =>
+  bridge.PlaylistCreationFailure.coreUnavailable =>
     PlaylistCreationFailure.coreUnavailable,
-  bridge.QqMusicPlaylistCreationFailure.authenticationRequired =>
+  bridge.PlaylistCreationFailure.authenticationRequired =>
     PlaylistCreationFailure.authenticationRequired,
-  bridge.QqMusicPlaylistCreationFailure.credentialRejected =>
+  bridge.PlaylistCreationFailure.credentialRejected =>
     PlaylistCreationFailure.credentialRejected,
-  bridge.QqMusicPlaylistCreationFailure.networkOutcomeUnknown =>
+  bridge.PlaylistCreationFailure.networkOutcomeUnknown =>
     PlaylistCreationFailure.networkOutcomeUnknown,
-  bridge.QqMusicPlaylistCreationFailure.serviceUnavailable =>
+  bridge.PlaylistCreationFailure.serviceUnavailable =>
     PlaylistCreationFailure.serviceUnavailable,
-  bridge.QqMusicPlaylistCreationFailure.invalidRequest =>
+  bridge.PlaylistCreationFailure.invalidRequest =>
     PlaylistCreationFailure.invalidRequest,
-  bridge.QqMusicPlaylistCreationFailure.invalidResponseOutcomeUnknown =>
+  bridge.PlaylistCreationFailure.invalidResponseOutcomeUnknown =>
     PlaylistCreationFailure.invalidResponseOutcomeUnknown,
-  bridge.QqMusicPlaylistCreationFailure.replacedOutcomeUnknown =>
+  bridge.PlaylistCreationFailure.replacedOutcomeUnknown =>
     PlaylistCreationFailure.replacedOutcomeUnknown,
-  bridge.QqMusicPlaylistCreationFailure.cancelledOutcomeUnknown =>
+  bridge.PlaylistCreationFailure.cancelledOutcomeUnknown =>
     PlaylistCreationFailure.cancelledOutcomeUnknown,
-  bridge.QqMusicPlaylistCreationFailure.alreadyRunning =>
+  bridge.PlaylistCreationFailure.alreadyRunning =>
     PlaylistCreationFailure.alreadyRunning,
 };

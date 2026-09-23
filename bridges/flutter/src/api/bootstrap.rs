@@ -68,6 +68,11 @@ mod tests {
                 "Authentication",
                 "UserLibrary",
                 "RecentHistoryRead",
+                "TrackLikeMutation",
+                "AlbumFavoriteMutation",
+                "PlaylistTrackMutation",
+                "PlaylistCreation",
+                "PlaylistDeletion",
                 "PlaylistMutation",
                 "Lyrics",
                 "Comments",
@@ -85,6 +90,10 @@ mod tests {
                 "Lyrics",
                 "Authentication",
                 "UserLibrary",
+                "RecentHistoryRead",
+                "TrackLikeMutation",
+                "PlaylistTrackMutation",
+                "PlaylistCreation",
                 "Comments",
                 "MusicVideo"
             ]

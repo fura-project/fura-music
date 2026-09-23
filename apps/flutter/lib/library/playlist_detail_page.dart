@@ -6,6 +6,8 @@ import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/library_mutation_coordinator.dart';
+import 'package:flutterustmusic/library/library_mutation_feedback.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
@@ -28,6 +30,9 @@ class PlaylistDetailPage extends StatefulWidget {
     this.onOpenArtist,
     this.onHeaderCollapsedChanged,
     this.onShellActionChanged,
+    this.mutationCoordinator,
+    this.canRemoveTracks = false,
+    this.onDeletePlaylist,
     this.embedded = false,
     super.key,
   });
@@ -42,6 +47,9 @@ class PlaylistDetailPage extends StatefulWidget {
   final ValueChanged<bool>? onHeaderCollapsedChanged;
   final ValueChanged<CollectionDetailActions?>? onShellActionChanged;
   final bool embedded;
+  final LibraryMutationCoordinator? mutationCoordinator;
+  final bool canRemoveTracks;
+  final Future<void> Function()? onDeletePlaylist;
 
   @override
   State<PlaylistDetailPage> createState() => _PlaylistDetailPageState();
@@ -134,6 +142,13 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
             icon: const Icon(Icons.refresh_rounded),
           ),
         ),
+        if (widget.onDeletePlaylist != null)
+          IconButton(
+            key: const ValueKey('playlist-detail-delete'),
+            tooltip: l10n.libraryDeletePlaylist,
+            onPressed: widget.onDeletePlaylist,
+            icon: const Icon(Icons.delete_outline_rounded),
+          ),
         const SizedBox(width: 8),
       ],
     );
@@ -157,6 +172,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
             onPlayAll: _controller.tracks.isEmpty ? null : _playAll,
             onRefresh: _controller.isLoading ? null : _controller.refresh,
             refreshing: _controller.isRefreshing,
+            onDeletePlaylist: widget.onDeletePlaylist,
           ),
           bodyBuilder: (context, desktop) => Column(
             children: [
@@ -237,6 +253,10 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           onTrackQueued: _addToQueue,
           onOpenAlbum: widget.onOpenAlbum,
           onOpenArtist: widget.onOpenArtist,
+          onRemoveFromPlaylist:
+              widget.canRemoveTracks && widget.mutationCoordinator != null
+              ? _removeFromPlaylist
+              : null,
           desktop: desktop,
           current: widget.queuePlaybackController.current,
         ),
@@ -297,6 +317,19 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       ..showSnackBar(SnackBar(content: Text(message)));
     unawaited(playbackStart);
   }
+
+  Future<void> _removeFromPlaylist(PlaylistTrackSummary track) async {
+    final coordinator = widget.mutationCoordinator;
+    if (coordinator == null) return;
+    final outcome = await coordinator.setPlaylistTrack(
+      playlist: widget.playlist,
+      track: track,
+      present: false,
+      refreshAuthoritativeState: _controller.refresh,
+    );
+    if (!mounted) return;
+    showLibraryMutationFeedback(context, outcome.status);
+  }
 }
 
 class _PlaylistHeader extends StatelessWidget {
@@ -310,6 +343,7 @@ class _PlaylistHeader extends StatelessWidget {
     required this.onPlayAll,
     required this.onRefresh,
     required this.refreshing,
+    required this.onDeletePlaylist,
   });
 
   final UserPlaylistSummary playlist;
@@ -321,6 +355,7 @@ class _PlaylistHeader extends StatelessWidget {
   final VoidCallback? onPlayAll;
   final VoidCallback? onRefresh;
   final bool refreshing;
+  final Future<void> Function()? onDeletePlaylist;
 
   @override
   Widget build(BuildContext context) {
@@ -349,6 +384,15 @@ class _PlaylistHeader extends StatelessWidget {
         onRefresh: onRefresh,
         refreshing: refreshing,
       ),
+      expandedDetails: [
+        if (embedded && onDeletePlaylist != null)
+          TextButton.icon(
+            key: const ValueKey('playlist-detail-delete'),
+            onPressed: onDeletePlaylist,
+            icon: const Icon(Icons.delete_outline_rounded),
+            label: Text(l10n.libraryDeletePlaylist),
+          ),
+      ],
     );
   }
 }
@@ -370,6 +414,7 @@ class _TrackCollection extends StatefulWidget {
     required this.onOpenArtist,
     required this.desktop,
     required this.current,
+    required this.onRemoveFromPlaylist,
   });
 
   final List<PlaylistTrackSummary> tracks;
@@ -387,6 +432,7 @@ class _TrackCollection extends StatefulWidget {
   final ValueChanged<ArtistSummary>? onOpenArtist;
   final bool desktop;
   final PlaylistTrackSummary? current;
+  final ValueChanged<PlaylistTrackSummary>? onRemoveFromPlaylist;
 
   @override
   State<_TrackCollection> createState() => _TrackCollectionState();
@@ -549,6 +595,9 @@ class _TrackCollectionState extends State<_TrackCollection> {
                         ? null
                         : () => widget.onOpenAlbum!(track.album!),
                     onOpenArtist: widget.onOpenArtist,
+                    onRemoveFromPlaylist: widget.onRemoveFromPlaylist == null
+                        ? null
+                        : () => widget.onRemoveFromPlaylist!(track),
                   );
                 },
               ),
@@ -577,6 +626,7 @@ class _TrackRow extends StatefulWidget {
     required this.onAddToQueue,
     required this.onOpenAlbum,
     required this.onOpenArtist,
+    required this.onRemoveFromPlaylist,
   });
 
   final int index;
@@ -589,6 +639,7 @@ class _TrackRow extends StatefulWidget {
   final VoidCallback onAddToQueue;
   final VoidCallback? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
+  final VoidCallback? onRemoveFromPlaylist;
 
   @override
   State<_TrackRow> createState() => _TrackRowState();
@@ -645,6 +696,9 @@ class _TrackRowState extends State<_TrackRow> {
   ) async {
     final overlay = Overlay.of(context).context.findRenderObject();
     if (overlay is! RenderBox) return;
+    final likeAction = await resolveMusicTrackLikeAction(context, widget.track);
+    if (!context.mounted) return;
+    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
     final action = await showMenu<_TrackAction>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -661,6 +715,24 @@ class _TrackRowState extends State<_TrackRow> {
             title: Text(context.l10n.commonPlayFromHere),
           ),
         ),
+        if (likeAction != null)
+          PopupMenuItem(
+            value: likeAction == MusicTrackAction.like
+                ? _TrackAction.like
+                : _TrackAction.unlike,
+            child: ListTile(
+              leading: Icon(
+                likeAction == MusicTrackAction.like
+                    ? Icons.favorite_border_rounded
+                    : Icons.favorite_rounded,
+              ),
+              title: Text(
+                likeAction == MusicTrackAction.like
+                    ? context.l10n.libraryLikeTrack
+                    : context.l10n.libraryUnlikeTrack,
+              ),
+            ),
+          ),
         PopupMenuItem(
           value: _TrackAction.addToQueue,
           child: ListTile(
@@ -668,6 +740,14 @@ class _TrackRowState extends State<_TrackRow> {
             title: Text(context.l10n.commonAddToQueue),
           ),
         ),
+        if (canAddToPlaylist)
+          PopupMenuItem(
+            value: _TrackAction.addToPlaylist,
+            child: ListTile(
+              leading: const Icon(Icons.playlist_add_rounded),
+              title: Text(context.l10n.libraryAddTrackToPlaylist),
+            ),
+          ),
         if (widget.onOpenAlbum != null)
           PopupMenuItem(
             key: ValueKey('playlist-track-open-album-action'),
@@ -686,12 +766,24 @@ class _TrackRowState extends State<_TrackRow> {
               title: Text(context.l10n.commonOpenArtist),
             ),
           ),
+        if (widget.onRemoveFromPlaylist != null)
+          PopupMenuItem(
+            key: const ValueKey('playlist-track-remove-action'),
+            value: _TrackAction.removeFromPlaylist,
+            child: ListTile(
+              leading: const Icon(Icons.playlist_remove_rounded),
+              title: Text(context.l10n.libraryRemoveTrackFromPlaylist),
+            ),
+          ),
       ],
     );
-    _runAction(action);
+    await _runAction(action);
   }
 
   Future<void> _showMobileActions(BuildContext context) async {
+    final likeAction = await resolveMusicTrackLikeAction(context, widget.track);
+    if (!context.mounted) return;
+    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
     final action = await showModalBottomSheet<_TrackAction>(
       context: context,
       showDragHandle: true,
@@ -705,11 +797,36 @@ class _TrackRowState extends State<_TrackRow> {
               title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, _TrackAction.playFromHere),
             ),
+            if (likeAction != null)
+              ListTile(
+                leading: Icon(
+                  likeAction == MusicTrackAction.like
+                      ? Icons.favorite_border_rounded
+                      : Icons.favorite_rounded,
+                ),
+                title: Text(
+                  likeAction == MusicTrackAction.like
+                      ? context.l10n.libraryLikeTrack
+                      : context.l10n.libraryUnlikeTrack,
+                ),
+                onTap: () => Navigator.pop(
+                  context,
+                  likeAction == MusicTrackAction.like
+                      ? _TrackAction.like
+                      : _TrackAction.unlike,
+                ),
+              ),
             ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
               title: Text(context.l10n.commonAddToQueue),
               onTap: () => Navigator.pop(context, _TrackAction.addToQueue),
             ),
+            if (canAddToPlaylist)
+              ListTile(
+                leading: const Icon(Icons.playlist_add_rounded),
+                title: Text(context.l10n.libraryAddTrackToPlaylist),
+                onTap: () => Navigator.pop(context, _TrackAction.addToPlaylist),
+              ),
             if (widget.onOpenAlbum != null)
               ListTile(
                 key: const ValueKey('playlist-track-open-album-action'),
@@ -724,15 +841,23 @@ class _TrackRowState extends State<_TrackRow> {
                 title: Text(context.l10n.commonOpenArtist),
                 onTap: () => Navigator.pop(context, _TrackAction.openArtist),
               ),
+            if (widget.onRemoveFromPlaylist != null)
+              ListTile(
+                key: const ValueKey('playlist-track-remove-action'),
+                leading: const Icon(Icons.playlist_remove_rounded),
+                title: Text(context.l10n.libraryRemoveTrackFromPlaylist),
+                onTap: () =>
+                    Navigator.pop(context, _TrackAction.removeFromPlaylist),
+              ),
             const SizedBox(height: 8),
           ],
         ),
       ),
     );
-    _runAction(action);
+    await _runAction(action);
   }
 
-  void _runAction(_TrackAction? action) {
+  Future<void> _runAction(_TrackAction? action) async {
     switch (action) {
       case _TrackAction.playFromHere:
         widget.onTap();
@@ -740,11 +865,31 @@ class _TrackRowState extends State<_TrackRow> {
       case _TrackAction.addToQueue:
         widget.onAddToQueue();
         return;
+      case _TrackAction.addToPlaylist:
+        await showAddTrackToPlaylist(context: context, track: widget.track);
+        return;
       case _TrackAction.openAlbum:
         widget.onOpenAlbum?.call();
         return;
       case _TrackAction.openArtist:
         unawaited(_openArtist());
+        return;
+      case _TrackAction.removeFromPlaylist:
+        widget.onRemoveFromPlaylist?.call();
+        return;
+      case _TrackAction.like:
+        await runMusicTrackLikeAction(
+          context,
+          widget.track,
+          MusicTrackAction.like,
+        );
+        return;
+      case _TrackAction.unlike:
+        await runMusicTrackLikeAction(
+          context,
+          widget.track,
+          MusicTrackAction.unlike,
+        );
         return;
       case null:
         return;
@@ -761,7 +906,16 @@ class _TrackRowState extends State<_TrackRow> {
   }
 }
 
-enum _TrackAction { playFromHere, addToQueue, openAlbum, openArtist }
+enum _TrackAction {
+  playFromHere,
+  addToQueue,
+  addToPlaylist,
+  openAlbum,
+  openArtist,
+  removeFromPlaylist,
+  like,
+  unlike,
+}
 
 class _Artwork extends StatelessWidget {
   const _Artwork({this.uri, this.playlist = false});

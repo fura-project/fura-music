@@ -17,18 +17,19 @@ void main() {
         hasMore: true,
       ),
     );
-    late (int, int) request;
+    late (String, int, int) request;
     final gateway = RustRecentPlaysGateway(
+      providerId: 'netease-cloud-music',
       credentialVault: _Vault(),
-      operationFactory: (offset, size) {
-        request = (offset, size);
+      operationFactory: (providerId, offset, size) {
+        request = (providerId, offset, size);
         return operation;
       },
     );
 
     final result = await gateway.beginLoad(offset: 100, size: 100).run();
 
-    expect(request, (100, 100));
+    expect(request, ('netease-cloud-music', 100, 100));
     expect(result.offset, 100);
     expect(result.nextOffset, 101);
     expect(result.totalIsExact, isFalse);
@@ -38,8 +39,9 @@ void main() {
   test('credential rejection clears persisted account material', () async {
     final vault = _Vault();
     final gateway = RustRecentPlaysGateway(
+      providerId: 'qq-music',
       credentialVault: vault,
-      operationFactory: (_, _) => _Operation(
+      operationFactory: (_, _, _) => _Operation(
         const PlaylistTrackPageResult(
           failure: UserLibraryFailure.credentialRejected,
         ),
@@ -55,8 +57,9 @@ void main() {
   test('non-auth failures retain persisted account material', () async {
     final vault = _Vault();
     final gateway = RustRecentPlaysGateway(
+      providerId: 'qq-music',
       credentialVault: vault,
-      operationFactory: (_, _) => _Operation(
+      operationFactory: (_, _, _) => _Operation(
         const PlaylistTrackPageResult(failure: UserLibraryFailure.network),
       ),
     );

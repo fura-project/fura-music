@@ -2,18 +2,18 @@ use std::fmt;
 
 use provider_api::{AlbumFavoriteMutationProvider, LibraryMutationError};
 
-use super::authentication::native_qq_music_provider;
 use super::domain_album_id;
 use super::remote_mutation::{RemoteMutationLifecycle, RemoteMutationStart};
+use super::{authentication::native_qq_music_provider, built_in_provider};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QqMusicAlbumFavoriteState {
+pub enum AlbumFavoriteState {
     Favorite,
     NotFavorite,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QqMusicAlbumFavoriteMutationFailure {
+pub enum AlbumFavoriteMutationFailure {
     CoreUnavailable,
     AuthenticationRequired,
     CredentialRejected,
@@ -22,32 +22,32 @@ pub enum QqMusicAlbumFavoriteMutationFailure {
     InvalidRequest,
     InvalidResponseOutcomeUnknown,
     ReplacedOutcomeUnknown,
-    /// Cancelling the local wait cannot recall a write already sent to QQ
-    /// Music, so presentation must refresh instead of assuming failure.
+    /// Cancelling the local wait cannot recall a write already sent to the
+    /// Provider, so presentation must refresh instead of assuming failure.
     CancelledOutcomeUnknown,
     AlreadyRunning,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct QqMusicAlbumFavoriteMutationResult {
-    pub confirmed_state: Option<QqMusicAlbumFavoriteState>,
-    pub failure: Option<QqMusicAlbumFavoriteMutationFailure>,
+pub struct AlbumFavoriteMutationResult {
+    pub confirmed_state: Option<AlbumFavoriteState>,
+    pub failure: Option<AlbumFavoriteMutationFailure>,
 }
 
 /// One cancellable, single-use desired Album-favorite mutation. Album identity
 /// is retained only for Provider routing and redacted from diagnostics.
 #[flutter_rust_bridge::frb(opaque)]
-pub struct QqMusicAlbumFavoriteMutationHandle {
+pub struct AlbumFavoriteMutationHandle {
     provider_id: String,
     opaque_album_id: String,
-    desired_state: QqMusicAlbumFavoriteState,
+    desired_state: AlbumFavoriteState,
     lifecycle: RemoteMutationLifecycle,
 }
 
-impl fmt::Debug for QqMusicAlbumFavoriteMutationHandle {
+impl fmt::Debug for AlbumFavoriteMutationHandle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicAlbumFavoriteMutationHandle")
+            .debug_struct("AlbumFavoriteMutationHandle")
             .field("provider_id", &self.provider_id)
             .field("opaque_album_id", &"[REDACTED]")
             .field("desired_state", &self.desired_state)
@@ -57,43 +57,46 @@ impl fmt::Debug for QqMusicAlbumFavoriteMutationHandle {
     }
 }
 
-impl QqMusicAlbumFavoriteMutationHandle {
-    pub async fn run(&self) -> QqMusicAlbumFavoriteMutationResult {
+impl AlbumFavoriteMutationHandle {
+    pub async fn run(&self) -> AlbumFavoriteMutationResult {
         match self.lifecycle.try_start() {
             RemoteMutationStart::Started => {}
             RemoteMutationStart::Cancelled => {
-                return failed_mutation(
-                    QqMusicAlbumFavoriteMutationFailure::CancelledOutcomeUnknown,
-                );
+                return failed_mutation(AlbumFavoriteMutationFailure::CancelledOutcomeUnknown);
             }
             RemoteMutationStart::AlreadyRunning => {
-                return failed_mutation(QqMusicAlbumFavoriteMutationFailure::AlreadyRunning);
+                return failed_mutation(AlbumFavoriteMutationFailure::AlreadyRunning);
             }
         }
         let outcome = match domain_album_id(&self.provider_id, &self.opaque_album_id) {
-            Ok(album_id) => match native_qq_music_provider() {
-                Ok(provider) => {
-                    let favorite = self.desired_state == QqMusicAlbumFavoriteState::Favorite;
-                    tokio::select! {
-                        () = self.lifecycle.cancelled() => {
-                            failed_mutation(
-                                QqMusicAlbumFavoriteMutationFailure::CancelledOutcomeUnknown,
-                            )
-                        }
-                        result = provider.set_album_favorite(album_id, favorite) => {
-                            if self.lifecycle.is_active() {
-                                map_mutation(result, self.desired_state)
-                            } else {
+            Ok(album_id) => match built_in_provider(&self.provider_id) {
+                Ok(provider_api::BuiltInProvider::QQMusic) => match native_qq_music_provider() {
+                    Ok(provider) => {
+                        let favorite = self.desired_state == AlbumFavoriteState::Favorite;
+                        tokio::select! {
+                            () = self.lifecycle.cancelled() => {
                                 failed_mutation(
-                                    QqMusicAlbumFavoriteMutationFailure::CancelledOutcomeUnknown,
+                                    AlbumFavoriteMutationFailure::CancelledOutcomeUnknown,
                                 )
+                            }
+                            result = provider.set_album_favorite(album_id, favorite) => {
+                                if self.lifecycle.is_active() {
+                                    map_mutation(result, self.desired_state)
+                                } else {
+                                    failed_mutation(
+                                        AlbumFavoriteMutationFailure::CancelledOutcomeUnknown,
+                                    )
+                                }
                             }
                         }
                     }
+                    Err(()) => failed_mutation(AlbumFavoriteMutationFailure::CoreUnavailable),
+                },
+                Ok(provider_api::BuiltInProvider::NetEaseCloudMusic) | Err(()) => {
+                    failed_mutation(AlbumFavoriteMutationFailure::InvalidRequest)
                 }
-                Err(()) => failed_mutation(QqMusicAlbumFavoriteMutationFailure::CoreUnavailable),
             },
-            Err(()) => failed_mutation(QqMusicAlbumFavoriteMutationFailure::InvalidRequest),
+            Err(()) => failed_mutation(AlbumFavoriteMutationFailure::InvalidRequest),
         };
         self.lifecycle.finish();
         outcome
@@ -111,12 +114,12 @@ impl QqMusicAlbumFavoriteMutationHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_album_favorite_mutation(
+pub fn begin_album_favorite_mutation(
     provider_id: String,
     opaque_album_id: String,
-    desired_state: QqMusicAlbumFavoriteState,
-) -> QqMusicAlbumFavoriteMutationHandle {
-    QqMusicAlbumFavoriteMutationHandle {
+    desired_state: AlbumFavoriteState,
+) -> AlbumFavoriteMutationHandle {
+    AlbumFavoriteMutationHandle {
         provider_id,
         opaque_album_id,
         desired_state,
@@ -126,10 +129,10 @@ pub fn begin_qq_music_album_favorite_mutation(
 
 fn map_mutation(
     result: Result<(), LibraryMutationError>,
-    desired_state: QqMusicAlbumFavoriteState,
-) -> QqMusicAlbumFavoriteMutationResult {
+    desired_state: AlbumFavoriteState,
+) -> AlbumFavoriteMutationResult {
     match result {
-        Ok(()) => QqMusicAlbumFavoriteMutationResult {
+        Ok(()) => AlbumFavoriteMutationResult {
             confirmed_state: Some(desired_state),
             failure: None,
         },
@@ -137,36 +140,32 @@ fn map_mutation(
     }
 }
 
-const fn failed_mutation(
-    failure: QqMusicAlbumFavoriteMutationFailure,
-) -> QqMusicAlbumFavoriteMutationResult {
-    QqMusicAlbumFavoriteMutationResult {
+const fn failed_mutation(failure: AlbumFavoriteMutationFailure) -> AlbumFavoriteMutationResult {
+    AlbumFavoriteMutationResult {
         confirmed_state: None,
         failure: Some(failure),
     }
 }
 
-const fn map_error(error: LibraryMutationError) -> QqMusicAlbumFavoriteMutationFailure {
+const fn map_error(error: LibraryMutationError) -> AlbumFavoriteMutationFailure {
     match error {
         LibraryMutationError::AuthenticationRequired => {
-            QqMusicAlbumFavoriteMutationFailure::AuthenticationRequired
+            AlbumFavoriteMutationFailure::AuthenticationRequired
         }
         LibraryMutationError::CredentialRejected => {
-            QqMusicAlbumFavoriteMutationFailure::CredentialRejected
+            AlbumFavoriteMutationFailure::CredentialRejected
         }
         LibraryMutationError::NetworkOutcomeUnknown => {
-            QqMusicAlbumFavoriteMutationFailure::NetworkOutcomeUnknown
+            AlbumFavoriteMutationFailure::NetworkOutcomeUnknown
         }
         LibraryMutationError::ServiceUnavailable => {
-            QqMusicAlbumFavoriteMutationFailure::ServiceUnavailable
+            AlbumFavoriteMutationFailure::ServiceUnavailable
         }
-        LibraryMutationError::InvalidRequest => QqMusicAlbumFavoriteMutationFailure::InvalidRequest,
+        LibraryMutationError::InvalidRequest => AlbumFavoriteMutationFailure::InvalidRequest,
         LibraryMutationError::InvalidResponseOutcomeUnknown => {
-            QqMusicAlbumFavoriteMutationFailure::InvalidResponseOutcomeUnknown
+            AlbumFavoriteMutationFailure::InvalidResponseOutcomeUnknown
         }
-        LibraryMutationError::Replaced => {
-            QqMusicAlbumFavoriteMutationFailure::ReplacedOutcomeUnknown
-        }
+        LibraryMutationError::Replaced => AlbumFavoriteMutationFailure::ReplacedOutcomeUnknown,
     }
 }
 
@@ -175,47 +174,44 @@ mod tests {
     use provider_api::LibraryMutationError;
 
     use super::{
-        QqMusicAlbumFavoriteMutationFailure, QqMusicAlbumFavoriteState,
-        begin_qq_music_album_favorite_mutation, map_error, map_mutation,
+        AlbumFavoriteMutationFailure, AlbumFavoriteState, begin_album_favorite_mutation, map_error,
+        map_mutation,
     };
 
     #[test]
     fn maps_confirmed_state_and_all_failures() {
-        let success = map_mutation(Ok(()), QqMusicAlbumFavoriteState::Favorite);
-        assert_eq!(
-            success.confirmed_state,
-            Some(QqMusicAlbumFavoriteState::Favorite)
-        );
+        let success = map_mutation(Ok(()), AlbumFavoriteState::Favorite);
+        assert_eq!(success.confirmed_state, Some(AlbumFavoriteState::Favorite));
         assert_eq!(success.failure, None);
 
         let cases = [
             (
                 LibraryMutationError::AuthenticationRequired,
-                QqMusicAlbumFavoriteMutationFailure::AuthenticationRequired,
+                AlbumFavoriteMutationFailure::AuthenticationRequired,
             ),
             (
                 LibraryMutationError::CredentialRejected,
-                QqMusicAlbumFavoriteMutationFailure::CredentialRejected,
+                AlbumFavoriteMutationFailure::CredentialRejected,
             ),
             (
                 LibraryMutationError::NetworkOutcomeUnknown,
-                QqMusicAlbumFavoriteMutationFailure::NetworkOutcomeUnknown,
+                AlbumFavoriteMutationFailure::NetworkOutcomeUnknown,
             ),
             (
                 LibraryMutationError::ServiceUnavailable,
-                QqMusicAlbumFavoriteMutationFailure::ServiceUnavailable,
+                AlbumFavoriteMutationFailure::ServiceUnavailable,
             ),
             (
                 LibraryMutationError::InvalidRequest,
-                QqMusicAlbumFavoriteMutationFailure::InvalidRequest,
+                AlbumFavoriteMutationFailure::InvalidRequest,
             ),
             (
                 LibraryMutationError::InvalidResponseOutcomeUnknown,
-                QqMusicAlbumFavoriteMutationFailure::InvalidResponseOutcomeUnknown,
+                AlbumFavoriteMutationFailure::InvalidResponseOutcomeUnknown,
             ),
             (
                 LibraryMutationError::Replaced,
-                QqMusicAlbumFavoriteMutationFailure::ReplacedOutcomeUnknown,
+                AlbumFavoriteMutationFailure::ReplacedOutcomeUnknown,
             ),
         ];
         for (input, expected) in cases {
@@ -225,10 +221,10 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_terminal_and_identity_is_redacted() {
-        let handle = begin_qq_music_album_favorite_mutation(
+        let handle = begin_album_favorite_mutation(
             "qq-music".into(),
             "album:43001:privateAlbumMid".into(),
-            QqMusicAlbumFavoriteState::NotFavorite,
+            AlbumFavoriteState::NotFavorite,
         );
         let debug = format!("{handle:?}");
         assert!(!debug.contains("43001"));
@@ -240,7 +236,7 @@ mod tests {
         assert_eq!(result.confirmed_state, None);
         assert_eq!(
             result.failure,
-            Some(QqMusicAlbumFavoriteMutationFailure::CancelledOutcomeUnknown)
+            Some(AlbumFavoriteMutationFailure::CancelledOutcomeUnknown)
         );
     }
 }

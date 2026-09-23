@@ -8,7 +8,7 @@ import 'package:flutterustmusic/src/rust/api/playlist_deletion.dart' as bridge;
 void main() {
   test('maps only one confirmed deletion', () {
     final result = mapBridgePlaylistDeletion(
-      const bridge.QqMusicPlaylistDeletionResult(deleted: true),
+      const bridge.PlaylistDeletionResult(deleted: true),
     );
 
     expect(result.deleted, isTrue);
@@ -17,40 +17,40 @@ void main() {
 
   test('maps every typed failure and rejects contradictory results', () {
     final failures = {
-      bridge.QqMusicPlaylistDeletionFailure.coreUnavailable:
+      bridge.PlaylistDeletionFailure.coreUnavailable:
           PlaylistDeletionFailure.coreUnavailable,
-      bridge.QqMusicPlaylistDeletionFailure.authenticationRequired:
+      bridge.PlaylistDeletionFailure.authenticationRequired:
           PlaylistDeletionFailure.authenticationRequired,
-      bridge.QqMusicPlaylistDeletionFailure.credentialRejected:
+      bridge.PlaylistDeletionFailure.credentialRejected:
           PlaylistDeletionFailure.credentialRejected,
-      bridge.QqMusicPlaylistDeletionFailure.networkOutcomeUnknown:
+      bridge.PlaylistDeletionFailure.networkOutcomeUnknown:
           PlaylistDeletionFailure.networkOutcomeUnknown,
-      bridge.QqMusicPlaylistDeletionFailure.serviceUnavailable:
+      bridge.PlaylistDeletionFailure.serviceUnavailable:
           PlaylistDeletionFailure.serviceUnavailable,
-      bridge.QqMusicPlaylistDeletionFailure.invalidRequest:
+      bridge.PlaylistDeletionFailure.invalidRequest:
           PlaylistDeletionFailure.invalidRequest,
-      bridge.QqMusicPlaylistDeletionFailure.invalidResponseOutcomeUnknown:
+      bridge.PlaylistDeletionFailure.invalidResponseOutcomeUnknown:
           PlaylistDeletionFailure.invalidResponseOutcomeUnknown,
-      bridge.QqMusicPlaylistDeletionFailure.replacedOutcomeUnknown:
+      bridge.PlaylistDeletionFailure.replacedOutcomeUnknown:
           PlaylistDeletionFailure.replacedOutcomeUnknown,
-      bridge.QqMusicPlaylistDeletionFailure.cancelledOutcomeUnknown:
+      bridge.PlaylistDeletionFailure.cancelledOutcomeUnknown:
           PlaylistDeletionFailure.cancelledOutcomeUnknown,
-      bridge.QqMusicPlaylistDeletionFailure.alreadyRunning:
+      bridge.PlaylistDeletionFailure.alreadyRunning:
           PlaylistDeletionFailure.alreadyRunning,
     };
     for (final MapEntry(key: input, value: expected) in failures.entries) {
       final result = mapBridgePlaylistDeletion(
-        bridge.QqMusicPlaylistDeletionResult(deleted: false, failure: input),
+        bridge.PlaylistDeletionResult(deleted: false, failure: input),
       );
       expect(result.deleted, isFalse);
       expect(result.failure, expected);
     }
 
     for (final result in [
-      const bridge.QqMusicPlaylistDeletionResult(deleted: false),
-      const bridge.QqMusicPlaylistDeletionResult(
+      const bridge.PlaylistDeletionResult(deleted: false),
+      const bridge.PlaylistDeletionResult(
         deleted: true,
-        failure: bridge.QqMusicPlaylistDeletionFailure.serviceUnavailable,
+        failure: bridge.PlaylistDeletionFailure.serviceUnavailable,
       ),
     ]) {
       final mapped = mapBridgePlaylistDeletion(result);

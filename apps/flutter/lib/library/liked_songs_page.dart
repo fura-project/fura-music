@@ -2,18 +2,22 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/library_mutation_coordinator.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_scroll_prefetch.dart';
 import 'package:flutterustmusic/library/playlist_track_search_index.dart';
+import 'package:flutterustmusic/library/track_like_presentation_controller.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
@@ -31,12 +35,16 @@ class LikedSongsPage extends StatefulWidget {
     required this.onSignInAgain,
     this.lastOpenedPlaylist,
     this.playlistReturnFocusNode,
+    this.onDeletePlaylist,
     this.onOpenAlbum,
     this.onOpenFavoriteAlbum,
     this.onOpenArtist,
     this.onHeaderCollapsedChanged,
     this.collapsedHeaderActions,
     this.providerDisplayName = 'QQ Music',
+    this.mutationCoordinator,
+    this.canMutateTrackLikes = false,
+    this.canMutateAlbumFavorites = false,
     super.key,
   });
 
@@ -49,12 +57,16 @@ class LikedSongsPage extends StatefulWidget {
   final VoidCallback onSignInAgain;
   final UserPlaylistSummary? lastOpenedPlaylist;
   final FocusNode? playlistReturnFocusNode;
+  final ValueChanged<UserPlaylistSummary>? onDeletePlaylist;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<AlbumSummary>? onOpenFavoriteAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
   final ValueChanged<bool>? onHeaderCollapsedChanged;
   final Widget? collapsedHeaderActions;
   final String providerDisplayName;
+  final LibraryMutationCoordinator? mutationCoordinator;
+  final bool canMutateTrackLikes;
+  final bool canMutateAlbumFavorites;
 
   @override
   State<LikedSongsPage> createState() => _LikedSongsPageState();
@@ -88,7 +100,10 @@ class _LikedSongsPageState extends State<LikedSongsPage>
     _controller = playlist == null
         ? null
         : PlaylistDetailController(playlist, widget.gateway);
-    _pageListenable = Listenable.merge([?_controller]);
+    _pageListenable = Listenable.merge([
+      ?_controller,
+      ?widget.mutationCoordinator,
+    ]);
     _searchController.addListener(_updateQuery);
     final controller = _controller;
     if (controller != null) {
@@ -338,6 +353,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                           lastOpenedPlaylist: widget.lastOpenedPlaylist,
                           returnFocusNode: widget.playlistReturnFocusNode,
                           providerDisplayName: widget.providerDisplayName,
+                          onDeletePlaylist: widget.onDeletePlaylist,
                         ),
                       ),
                       _RetainedLikedSection(
@@ -357,6 +373,9 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                                 showHeader: false,
                                 filterQuery: _query,
                                 providerDisplayName: widget.providerDisplayName,
+                                mutationCoordinator: widget.mutationCoordinator,
+                                canMutateFavorites:
+                                    widget.canMutateAlbumFavorites,
                               )
                             : const SizedBox.shrink(),
                       ),
@@ -451,6 +470,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
               onTrackQueued: _addToQueue,
               onOpenAlbum: widget.onOpenAlbum,
               onOpenArtist: widget.onOpenArtist,
+              onUnlike: widget.canMutateTrackLikes ? _unlikeTrack : null,
             ),
           ),
         ),
@@ -555,6 +575,17 @@ class _LikedSongsPageState extends State<LikedSongsPage>
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
     unawaited(playbackStart);
+  }
+
+  Future<void> _unlikeTrack(PlaylistTrackSummary track) async {
+    final controller = _controller;
+    if (controller == null) return;
+    await performTrackLikeAction(
+      context: context,
+      track: track,
+      liked: false,
+      refreshAdditionalState: controller.refresh,
+    );
   }
 }
 
@@ -822,6 +853,7 @@ class _LikedPlaylistsCollection extends StatelessWidget {
     required this.lastOpenedPlaylist,
     required this.returnFocusNode,
     required this.providerDisplayName,
+    required this.onDeletePlaylist,
   });
 
   final List<UserPlaylistSummary> playlists;
@@ -830,6 +862,7 @@ class _LikedPlaylistsCollection extends StatelessWidget {
   final UserPlaylistSummary? lastOpenedPlaylist;
   final FocusNode? returnFocusNode;
   final String providerDisplayName;
+  final ValueChanged<UserPlaylistSummary>? onDeletePlaylist;
 
   @override
   Widget build(BuildContext context) {
@@ -936,6 +969,11 @@ class _LikedPlaylistsCollection extends StatelessWidget {
                       lastOpenedPlaylist?.opaqueId == playlists[index].opaqueId
                   ? returnFocusNode
                   : null,
+              onDelete:
+                  playlists[index].ownership == UserPlaylistOwnership.owned &&
+                      !playlists[index].isLikedSongs
+                  ? onDeletePlaylist
+                  : null,
             ),
             childCount: playlists.length,
           ),
@@ -945,20 +983,65 @@ class _LikedPlaylistsCollection extends StatelessWidget {
   }
 }
 
-class _LikedPlaylistCard extends StatelessWidget {
+class _LikedPlaylistCard extends StatefulWidget {
   const _LikedPlaylistCard({
     required this.playlist,
     required this.onTap,
     required this.focusNode,
+    required this.onDelete,
   });
 
   final UserPlaylistSummary playlist;
   final VoidCallback onTap;
   final FocusNode? focusNode;
+  final ValueChanged<UserPlaylistSummary>? onDelete;
+
+  @override
+  State<_LikedPlaylistCard> createState() => _LikedPlaylistCardState();
+}
+
+class _LikedPlaylistCardState extends State<_LikedPlaylistCard> {
+  final MenuController _menuController = MenuController();
+
+  void _openMenu() {
+    if (widget.onDelete == null) return;
+    if (MediaQuery.sizeOf(context).width < 760) {
+      unawaited(_openCompactMenu());
+    } else if (!_menuController.isOpen) {
+      _menuController.open();
+    }
+  }
+
+  Future<void> _openCompactMenu() async {
+    final delete = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const ValueKey('liked-playlist-compact-delete'),
+              leading: const Icon(Icons.delete_outline_rounded),
+              title: Text(context.l10n.libraryDeletePlaylist),
+              onTap: () => Navigator.of(context).pop(true),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (delete == true && mounted) {
+      widget.onDelete?.call(widget.playlist);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final playlist = widget.playlist;
+    final compact = MediaQuery.sizeOf(context).width < 760;
     final artwork = ColoredBox(
       color: colors.secondaryContainer,
       child: Icon(
@@ -967,59 +1050,109 @@ class _LikedPlaylistCard extends StatelessWidget {
         color: colors.onSecondaryContainer,
       ),
     );
-    return Semantics(
+    final card = Semantics(
       label: context.l10n.likedPlaylistSemantics(playlist.title),
       button: true,
       excludeSemantics: true,
-      onTap: onTap,
-      child: InkWell(
-        key: ValueKey('liked-playlist-${playlist.opaqueId}'),
-        focusNode: focusNode,
-        onTap: onTap,
-        borderRadius: MusicRadii.artwork,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: MusicRadii.artwork,
-                child: SizedBox.expand(
-                  child: playlist.artworkUri == null
-                      ? artwork
-                      : Image.network(
-                          playlist.artworkUri!,
-                          headers: musicArtworkRequestHeaders(
-                            playlist.artworkUri!,
+      onTap: widget.onTap,
+      onLongPress: widget.onDelete == null ? null : _openMenu,
+      customSemanticsActions: widget.onDelete == null
+          ? const {}
+          : {
+              CustomSemanticsAction(label: context.l10n.libraryDeletePlaylist):
+                  _openMenu,
+            },
+      child: CallbackShortcuts(
+        bindings: widget.onDelete == null
+            ? const <ShortcutActivator, VoidCallback>{}
+            : <ShortcutActivator, VoidCallback>{
+                const SingleActivator(LogicalKeyboardKey.contextMenu):
+                    _openMenu,
+                const SingleActivator(LogicalKeyboardKey.f10, shift: true):
+                    _openMenu,
+              },
+        child: InkWell(
+          key: ValueKey('liked-playlist-${playlist.opaqueId}'),
+          focusNode: widget.focusNode,
+          onTap: widget.onTap,
+          onLongPress: widget.onDelete == null ? null : _openMenu,
+          onSecondaryTap: widget.onDelete == null ? null : _openMenu,
+          borderRadius: MusicRadii.artwork,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: MusicRadii.artwork,
+                      child: SizedBox.expand(
+                        child: playlist.artworkUri == null
+                            ? artwork
+                            : Image.network(
+                                playlist.artworkUri!,
+                                headers: musicArtworkRequestHeaders(
+                                  playlist.artworkUri!,
+                                ),
+                                fit: BoxFit.cover,
+                                errorBuilder: musicArtworkErrorBuilder(
+                                  playlist.artworkUri!,
+                                  artwork,
+                                ),
+                              ),
+                      ),
+                    ),
+                    if (compact && widget.onDelete != null)
+                      PositionedDirectional(
+                        top: 6,
+                        end: 6,
+                        child: IconButton.filledTonal(
+                          key: ValueKey(
+                            'liked-playlist-overflow-${playlist.opaqueId}',
                           ),
-                          fit: BoxFit.cover,
-                          errorBuilder: musicArtworkErrorBuilder(
-                            playlist.artworkUri!,
-                            artwork,
-                          ),
+                          tooltip: context.l10n.commonMoreActions,
+                          onPressed: _openMenu,
+                          icon: const Icon(Icons.more_vert_rounded),
                         ),
+                      ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              playlist.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            if (playlist.trackCount case final count?) ...[
-              const SizedBox(height: 3),
+              const SizedBox(height: 10),
               Text(
-                context.l10n.likedTrackCount(count),
-                maxLines: 1,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: colors.onSurfaceVariant),
+                playlist.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
               ),
+              if (playlist.trackCount case final count?) ...[
+                const SizedBox(height: 3),
+                Text(
+                  context.l10n.likedTrackCount(count),
+                  maxLines: 1,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: colors.onSurfaceVariant),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
+    );
+    if (widget.onDelete == null) return card;
+    return MenuAnchor(
+      controller: _menuController,
+      menuChildren: [
+        MenuItemButton(
+          key: const ValueKey('liked-playlist-delete-menu-item'),
+          leadingIcon: const Icon(Icons.delete_outline_rounded),
+          onPressed: () => widget.onDelete?.call(playlist),
+          child: Text(context.l10n.libraryDeletePlaylist),
+        ),
+      ],
+      builder: (context, controller, child) => card,
     );
   }
 }
@@ -1226,6 +1359,7 @@ class _LikedTrackCollection extends StatefulWidget {
     required this.onTrackQueued,
     required this.onOpenAlbum,
     required this.onOpenArtist,
+    required this.onUnlike,
   });
 
   final List<PlaylistTrackSummary> tracks;
@@ -1248,6 +1382,7 @@ class _LikedTrackCollection extends StatefulWidget {
   final ValueChanged<PlaylistTrackSummary> onTrackQueued;
   final ValueChanged<AlbumSummary>? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
+  final ValueChanged<PlaylistTrackSummary>? onUnlike;
 
   @override
   State<_LikedTrackCollection> createState() => _LikedTrackCollectionState();
@@ -1364,6 +1499,9 @@ class _LikedTrackCollectionState extends State<_LikedTrackCollection> {
                         ? null
                         : () => widget.onOpenAlbum!(track.album!),
                     onOpenArtist: widget.onOpenArtist,
+                    onUnlike: widget.onUnlike == null
+                        ? null
+                        : () => widget.onUnlike!(track),
                   );
                 },
               ),
@@ -1400,6 +1538,7 @@ class _LikedTrackRow extends StatefulWidget {
     required this.onAddToQueue,
     required this.onOpenAlbum,
     required this.onOpenArtist,
+    required this.onUnlike,
     super.key,
   });
 
@@ -1413,6 +1552,7 @@ class _LikedTrackRow extends StatefulWidget {
   final VoidCallback onAddToQueue;
   final VoidCallback? onOpenAlbum;
   final ValueChanged<ArtistSummary>? onOpenArtist;
+  final VoidCallback? onUnlike;
 
   @override
   State<_LikedTrackRow> createState() => _LikedTrackRowState();
@@ -1514,6 +1654,7 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
   Future<void> _showDesktopMenu(BuildContext context, Offset position) async {
     final overlay = Overlay.of(context).context.findRenderObject();
     if (overlay is! RenderBox) return;
+    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
     final action = await showMenu<_LikedTrackAction>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -1522,12 +1663,13 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
         overlay.size.width - position.dx,
         overlay.size.height - position.dy,
       ),
-      items: _menuItems(),
+      items: _menuItems(canAddToPlaylist),
     );
     _runAction(action);
   }
 
   Future<void> _showCompactMenu(BuildContext context) async {
+    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
     final action = await showModalBottomSheet<_LikedTrackAction>(
       context: context,
       showDragHandle: true,
@@ -1541,6 +1683,13 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
               title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, _LikedTrackAction.play),
             ),
+            if (canAddToPlaylist)
+              ListTile(
+                leading: const Icon(Icons.playlist_add_rounded),
+                title: Text(context.l10n.libraryAddTrackToPlaylist),
+                onTap: () =>
+                    Navigator.pop(context, _LikedTrackAction.addToPlaylist),
+              ),
             ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
               title: Text(context.l10n.commonAddToQueue),
@@ -1560,6 +1709,13 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
                 onTap: () =>
                     Navigator.pop(context, _LikedTrackAction.openArtist),
               ),
+            if (widget.onUnlike != null)
+              ListTile(
+                key: const ValueKey('liked-track-unlike-action'),
+                leading: const Icon(Icons.heart_broken_outlined),
+                title: Text(context.l10n.libraryUnlikeTrack),
+                onTap: () => Navigator.pop(context, _LikedTrackAction.unlike),
+              ),
             const SizedBox(height: 8),
           ],
         ),
@@ -1568,7 +1724,7 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
     _runAction(action);
   }
 
-  List<PopupMenuEntry<_LikedTrackAction>> _menuItems() => [
+  List<PopupMenuEntry<_LikedTrackAction>> _menuItems(bool canAddToPlaylist) => [
     PopupMenuItem(
       value: _LikedTrackAction.play,
       child: ListTile(
@@ -1576,6 +1732,14 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
         title: Text(context.l10n.commonPlayFromHere),
       ),
     ),
+    if (canAddToPlaylist)
+      PopupMenuItem(
+        value: _LikedTrackAction.addToPlaylist,
+        child: ListTile(
+          leading: const Icon(Icons.playlist_add_rounded),
+          title: Text(context.l10n.libraryAddTrackToPlaylist),
+        ),
+      ),
     PopupMenuItem(
       value: _LikedTrackAction.addToQueue,
       child: ListTile(
@@ -1599,6 +1763,15 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
           title: Text(context.l10n.commonOpenArtist),
         ),
       ),
+    if (widget.onUnlike != null)
+      PopupMenuItem(
+        key: const ValueKey('liked-track-unlike-action'),
+        value: _LikedTrackAction.unlike,
+        child: ListTile(
+          leading: const Icon(Icons.heart_broken_outlined),
+          title: Text(context.l10n.libraryUnlikeTrack),
+        ),
+      ),
   ];
 
   void _runAction(_LikedTrackAction? action) {
@@ -1607,10 +1780,16 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
         widget.onPlay();
       case _LikedTrackAction.addToQueue:
         widget.onAddToQueue();
+      case _LikedTrackAction.addToPlaylist:
+        unawaited(
+          showAddTrackToPlaylist(context: context, track: widget.track),
+        );
       case _LikedTrackAction.openAlbum:
         widget.onOpenAlbum?.call();
       case _LikedTrackAction.openArtist:
         _openArtist();
+      case _LikedTrackAction.unlike:
+        widget.onUnlike?.call();
       case null:
         return;
     }
@@ -1631,7 +1810,14 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
   }
 }
 
-enum _LikedTrackAction { play, addToQueue, openAlbum, openArtist }
+enum _LikedTrackAction {
+  play,
+  addToQueue,
+  addToPlaylist,
+  openAlbum,
+  openArtist,
+  unlike,
+}
 
 class _LikedTrackFooter extends StatelessWidget {
   const _LikedTrackFooter({

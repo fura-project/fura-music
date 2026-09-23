@@ -31,6 +31,15 @@ pub enum ProviderCapability {
     UserLibrary,
     RecentHistoryRead,
     RecentHistoryWrite,
+    TrackLikeMutation,
+    AlbumFavoriteMutation,
+    ArtistFavoriteMutation,
+    PlaylistSaveMutation,
+    PlaylistTrackMutation,
+    PlaylistCreation,
+    PlaylistDeletion,
+    /// Legacy aggregate retained for descriptor compatibility. New UI gating
+    /// must use the operation-specific capabilities above.
     PlaylistMutation,
     Lyrics,
     Comments,
@@ -900,7 +909,7 @@ impl std::error::Error for UserLibraryError {}
 pub enum LibraryMutationError {
     AuthenticationRequired,
     CredentialRejected,
-    /// The request may have reached QQ Music, so the desired remote state must
+    /// The request may have reached the remote Provider, so the desired state must
     /// be refreshed before presenting a definitive result.
     NetworkOutcomeUnknown,
     ServiceUnavailable,

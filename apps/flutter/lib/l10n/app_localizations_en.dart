@@ -3520,6 +3520,61 @@ class AppLocalizationsEn extends AppLocalizations {
   String get playbackQualitySummaryLossless => 'SQ lossless quality';
 
   @override
+  String get libraryCreatePlaylist => 'Create playlist';
+
+  @override
+  String get libraryCreatePlaylistTitle => 'Create a playlist';
+
+  @override
+  String get libraryPlaylistNameLabel => 'Playlist name';
+
+  @override
+  String get libraryDeletePlaylist => 'Delete playlist';
+
+  @override
+  String get libraryDeletePlaylistTitle => 'Delete playlist?';
+
+  @override
+  String libraryDeletePlaylistDetail(String name) {
+    return 'Delete \"$name\" from your library? This cannot be undone.';
+  }
+
+  @override
+  String get libraryRemoveTrackFromPlaylist => 'Remove from this playlist';
+
+  @override
+  String get libraryAddTrackToPlaylist => 'Add to playlist';
+
+  @override
+  String get libraryChoosePlaylist => 'Choose a playlist';
+
+  @override
+  String get libraryLikeTrack => 'Like';
+
+  @override
+  String get libraryUnlikeTrack => 'Unlike';
+
+  @override
+  String get libraryFavoriteAlbum => 'Favorite album';
+
+  @override
+  String get libraryUnfavoriteAlbum => 'Unfavorite album';
+
+  @override
+  String get libraryMutationSuccess => 'Your library was updated.';
+
+  @override
+  String get libraryMutationFailure =>
+      'Couldn’t update your library. Nothing was retried.';
+
+  @override
+  String get libraryMutationOutcomeUnknown =>
+      'The service may have applied that change. Refreshing to confirm its current state.';
+
+  @override
+  String get libraryMutationPending => 'Updating your library…';
+
+  @override
   String get commonLocateCurrentTrack => 'Locate current track';
 
   @override

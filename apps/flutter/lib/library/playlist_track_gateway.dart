@@ -83,13 +83,13 @@ PlaylistTrackMutationOperation _beginRustMutation(
   String opaqueTrackId,
   PlaylistTrackState desiredState,
 ) => _RustPlaylistTrackMutationOperation(
-  bridge.beginQqMusicPlaylistTrackMutation(
+  bridge.beginPlaylistTrackMutation(
     providerId: providerId,
     opaquePlaylistId: opaquePlaylistId,
     opaqueTrackId: opaqueTrackId,
     desiredState: switch (desiredState) {
-      PlaylistTrackState.present => bridge.QqMusicPlaylistTrackState.present,
-      PlaylistTrackState.absent => bridge.QqMusicPlaylistTrackState.absent,
+      PlaylistTrackState.present => bridge.PlaylistTrackState.present,
+      PlaylistTrackState.absent => bridge.PlaylistTrackState.absent,
     },
   ),
 );
@@ -98,7 +98,7 @@ class _RustPlaylistTrackMutationOperation
     implements PlaylistTrackMutationOperation {
   const _RustPlaylistTrackMutationOperation(this._handle);
 
-  final bridge.QqMusicPlaylistTrackMutationHandle _handle;
+  final bridge.PlaylistTrackMutationHandle _handle;
 
   @override
   bool cancel() => _handle.cancel();
@@ -146,7 +146,7 @@ class _VaultCleaningPlaylistTrackMutationOperation
 
 @visibleForTesting
 PlaylistTrackMutationResult mapBridgePlaylistTrackMutation(
-  bridge.QqMusicPlaylistTrackMutationResult result,
+  bridge.PlaylistTrackMutationResult result,
 ) {
   final failure = result.failure;
   final confirmedState = result.confirmedState;
@@ -162,34 +162,34 @@ PlaylistTrackMutationResult mapBridgePlaylistTrackMutation(
   }
   return PlaylistTrackMutationResult(
     confirmedState: switch (confirmedState!) {
-      bridge.QqMusicPlaylistTrackState.present => PlaylistTrackState.present,
-      bridge.QqMusicPlaylistTrackState.absent => PlaylistTrackState.absent,
+      bridge.PlaylistTrackState.present => PlaylistTrackState.present,
+      bridge.PlaylistTrackState.absent => PlaylistTrackState.absent,
     },
   );
 }
 
 @visibleForTesting
 PlaylistTrackMutationFailure mapBridgePlaylistTrackMutationFailure(
-  bridge.QqMusicPlaylistTrackMutationFailure failure,
+  bridge.PlaylistTrackMutationFailure failure,
 ) => switch (failure) {
-  bridge.QqMusicPlaylistTrackMutationFailure.coreUnavailable =>
+  bridge.PlaylistTrackMutationFailure.coreUnavailable =>
     PlaylistTrackMutationFailure.coreUnavailable,
-  bridge.QqMusicPlaylistTrackMutationFailure.authenticationRequired =>
+  bridge.PlaylistTrackMutationFailure.authenticationRequired =>
     PlaylistTrackMutationFailure.authenticationRequired,
-  bridge.QqMusicPlaylistTrackMutationFailure.credentialRejected =>
+  bridge.PlaylistTrackMutationFailure.credentialRejected =>
     PlaylistTrackMutationFailure.credentialRejected,
-  bridge.QqMusicPlaylistTrackMutationFailure.networkOutcomeUnknown =>
+  bridge.PlaylistTrackMutationFailure.networkOutcomeUnknown =>
     PlaylistTrackMutationFailure.networkOutcomeUnknown,
-  bridge.QqMusicPlaylistTrackMutationFailure.serviceUnavailable =>
+  bridge.PlaylistTrackMutationFailure.serviceUnavailable =>
     PlaylistTrackMutationFailure.serviceUnavailable,
-  bridge.QqMusicPlaylistTrackMutationFailure.invalidRequest =>
+  bridge.PlaylistTrackMutationFailure.invalidRequest =>
     PlaylistTrackMutationFailure.invalidRequest,
-  bridge.QqMusicPlaylistTrackMutationFailure.invalidResponseOutcomeUnknown =>
+  bridge.PlaylistTrackMutationFailure.invalidResponseOutcomeUnknown =>
     PlaylistTrackMutationFailure.invalidResponseOutcomeUnknown,
-  bridge.QqMusicPlaylistTrackMutationFailure.replacedOutcomeUnknown =>
+  bridge.PlaylistTrackMutationFailure.replacedOutcomeUnknown =>
     PlaylistTrackMutationFailure.replacedOutcomeUnknown,
-  bridge.QqMusicPlaylistTrackMutationFailure.cancelledOutcomeUnknown =>
+  bridge.PlaylistTrackMutationFailure.cancelledOutcomeUnknown =>
     PlaylistTrackMutationFailure.cancelledOutcomeUnknown,
-  bridge.QqMusicPlaylistTrackMutationFailure.alreadyRunning =>
+  bridge.PlaylistTrackMutationFailure.alreadyRunning =>
     PlaylistTrackMutationFailure.alreadyRunning,
 };

@@ -11,6 +11,7 @@ import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
+import 'package:flutterustmusic/library/album_favorite_presentation_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
@@ -125,6 +126,7 @@ class _AlbumPageState extends State<AlbumPage> {
             icon: const Icon(Icons.play_arrow_rounded),
           ),
         ),
+        _AlbumFavoriteButton(album: widget.album),
         const SizedBox(width: 8),
       ],
     );
@@ -418,6 +420,7 @@ class _AlbumHeader extends StatelessWidget {
       ),
       expandedHeight: desktop ? 244 : 248,
       expandedDetails: [
+        if (embedded) _AlbumFavoriteButton(album: album, labeled: true),
         if (descriptors.isNotEmpty) ...[
           const SizedBox(height: 5),
           Text(
@@ -507,6 +510,115 @@ class _AlbumHeader extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _AlbumFavoriteButton extends StatefulWidget {
+  const _AlbumFavoriteButton({required this.album, this.labeled = false});
+
+  final AlbumSummary album;
+  final bool labeled;
+
+  @override
+  State<_AlbumFavoriteButton> createState() => _AlbumFavoriteButtonState();
+}
+
+class _AlbumFavoriteButtonState extends State<_AlbumFavoriteButton> {
+  AlbumFavoritePresentationController? _controller;
+  String? _scheduledIdentity;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final controller = AlbumFavoriteActionScope.maybeOf(context);
+    if (!identical(_controller, controller)) {
+      _controller?.removeListener(_changed);
+      _controller = controller;
+      _scheduledIdentity = null;
+      controller?.addListener(_changed);
+    }
+    _scheduleResolve(controller);
+  }
+
+  @override
+  void didUpdateWidget(_AlbumFavoriteButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.album.providerId != widget.album.providerId ||
+        oldWidget.album.opaqueId != widget.album.opaqueId) {
+      _scheduleResolve(_controller);
+    }
+  }
+
+  void _scheduleResolve(AlbumFavoritePresentationController? controller) {
+    if (controller == null) return;
+    final identity = '${widget.album.providerId}\u0000${widget.album.opaqueId}';
+    if (_scheduledIdentity == identity) return;
+    _scheduledIdentity = identity;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && identical(_controller, controller)) {
+        unawaited(controller.resolve(widget.album));
+      }
+    });
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    if (controller == null) return const SizedBox.shrink();
+    final state = controller.stateFor(widget.album);
+    if (state == AuthoritativeAlbumFavoriteState.unavailable) {
+      return const SizedBox.shrink();
+    }
+    final favorite = state == AuthoritativeAlbumFavoriteState.favorite;
+    final pending =
+        state == AuthoritativeAlbumFavoriteState.loading ||
+        controller.mutations.isAlbumPending(widget.album);
+    final actionable =
+        !pending && state != AuthoritativeAlbumFavoriteState.unknown;
+    final label = favorite
+        ? context.l10n.libraryUnfavoriteAlbum
+        : context.l10n.libraryFavoriteAlbum;
+    final icon = pending
+        ? const SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2.25),
+          )
+        : Icon(
+            favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          );
+    final action = !actionable
+        ? null
+        : () => unawaited(
+            performAlbumFavoriteAction(
+              context: context,
+              album: widget.album,
+              favorite: !favorite,
+            ),
+          );
+    if (widget.labeled) {
+      return TextButton.icon(
+        key: const ValueKey('album-favorite-expanded-action'),
+        onPressed: action,
+        icon: icon,
+        label: Text(label),
+      );
+    }
+    return IconButton(
+      key: const ValueKey('album-favorite-appbar-action'),
+      tooltip: label,
+      onPressed: action,
+      icon: icon,
     );
   }
 }
@@ -761,6 +873,9 @@ class _AlbumTracksState extends State<_AlbumTracks> {
   }
 
   Future<void> _showActions(PlaylistTrackSummary track, int index) async {
+    final likeAction = await resolveMusicTrackLikeAction(context, track);
+    if (!mounted) return;
+    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
     final action = await showModalBottomSheet<MusicTrackAction>(
       context: context,
       showDragHandle: true,
@@ -774,6 +889,27 @@ class _AlbumTracksState extends State<_AlbumTracks> {
               title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, MusicTrackAction.play),
             ),
+            if (canAddToPlaylist)
+              ListTile(
+                leading: const Icon(Icons.playlist_add_rounded),
+                title: Text(context.l10n.libraryAddTrackToPlaylist),
+                onTap: () =>
+                    Navigator.pop(context, MusicTrackAction.addToPlaylist),
+              ),
+            if (likeAction != null)
+              ListTile(
+                leading: Icon(
+                  likeAction == MusicTrackAction.like
+                      ? Icons.favorite_border_rounded
+                      : Icons.favorite_rounded,
+                ),
+                title: Text(
+                  likeAction == MusicTrackAction.like
+                      ? context.l10n.libraryLikeTrack
+                      : context.l10n.libraryUnlikeTrack,
+                ),
+                onTap: () => Navigator.pop(context, likeAction),
+              ),
             ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
               title: Text(context.l10n.commonAddToQueue),
@@ -795,13 +931,18 @@ class _AlbumTracksState extends State<_AlbumTracks> {
         ),
       ),
     );
+    if (!mounted) return;
     switch (action) {
       case MusicTrackAction.play:
         widget.onPlay(index);
       case MusicTrackAction.addToQueue:
         widget.onQueue(track);
+      case MusicTrackAction.addToPlaylist:
+        await showAddTrackToPlaylist(context: context, track: track);
       case MusicTrackAction.openArtist:
         _openArtist(track);
+      case MusicTrackAction.like || MusicTrackAction.unlike:
+        await runMusicTrackLikeAction(context, track, action!);
       case MusicTrackAction.openAlbum:
       case null:
         return;

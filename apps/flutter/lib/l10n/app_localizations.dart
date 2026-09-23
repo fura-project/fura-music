@@ -5649,6 +5649,108 @@ abstract class AppLocalizations {
   /// **'SQ lossless quality'**
   String get playbackQualitySummaryLossless;
 
+  /// No description provided for @libraryCreatePlaylist.
+  ///
+  /// In en, this message translates to:
+  /// **'Create playlist'**
+  String get libraryCreatePlaylist;
+
+  /// No description provided for @libraryCreatePlaylistTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a playlist'**
+  String get libraryCreatePlaylistTitle;
+
+  /// No description provided for @libraryPlaylistNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Playlist name'**
+  String get libraryPlaylistNameLabel;
+
+  /// No description provided for @libraryDeletePlaylist.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete playlist'**
+  String get libraryDeletePlaylist;
+
+  /// No description provided for @libraryDeletePlaylistTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete playlist?'**
+  String get libraryDeletePlaylistTitle;
+
+  /// Destructive owned-playlist deletion confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{name}\" from your library? This cannot be undone.'**
+  String libraryDeletePlaylistDetail(String name);
+
+  /// No description provided for @libraryRemoveTrackFromPlaylist.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from this playlist'**
+  String get libraryRemoveTrackFromPlaylist;
+
+  /// No description provided for @libraryAddTrackToPlaylist.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to playlist'**
+  String get libraryAddTrackToPlaylist;
+
+  /// No description provided for @libraryChoosePlaylist.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a playlist'**
+  String get libraryChoosePlaylist;
+
+  /// No description provided for @libraryLikeTrack.
+  ///
+  /// In en, this message translates to:
+  /// **'Like'**
+  String get libraryLikeTrack;
+
+  /// No description provided for @libraryUnlikeTrack.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlike'**
+  String get libraryUnlikeTrack;
+
+  /// No description provided for @libraryFavoriteAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite album'**
+  String get libraryFavoriteAlbum;
+
+  /// No description provided for @libraryUnfavoriteAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfavorite album'**
+  String get libraryUnfavoriteAlbum;
+
+  /// No description provided for @libraryMutationSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Your library was updated.'**
+  String get libraryMutationSuccess;
+
+  /// No description provided for @libraryMutationFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t update your library. Nothing was retried.'**
+  String get libraryMutationFailure;
+
+  /// No description provided for @libraryMutationOutcomeUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'The service may have applied that change. Refreshing to confirm its current state.'**
+  String get libraryMutationOutcomeUnknown;
+
+  /// No description provided for @libraryMutationPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating your library…'**
+  String get libraryMutationPending;
+
   /// Tooltip for returning a scrolled music list to its currently playing row.
   ///
   /// In en, this message translates to:

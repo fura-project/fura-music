@@ -939,6 +939,10 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
       SliverFillRemaining(hasScrollBody: false, child: message);
 
   Future<void> _showTrackActions(PlaylistTrackSummary track) async {
+    final likeAction = await resolveMusicTrackLikeAction(context, track);
+    if (!mounted) return;
+    final pageContext = context;
+    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
     Widget actions(BuildContext context) => SafeArea(
       child: SingleChildScrollView(
         child: Column(
@@ -951,6 +955,25 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (likeAction != null)
+              ListTile(
+                leading: Icon(
+                  likeAction == MusicTrackAction.like
+                      ? Icons.favorite_border_rounded
+                      : Icons.favorite_rounded,
+                ),
+                title: Text(
+                  likeAction == MusicTrackAction.like
+                      ? context.l10n.libraryLikeTrack
+                      : context.l10n.libraryUnlikeTrack,
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  unawaited(
+                    runMusicTrackLikeAction(pageContext, track, likeAction),
+                  );
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.queue_music_rounded),
               title: Text(context.l10n.recentAddToQueue),
@@ -959,6 +982,17 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                 unawaited(widget.playback.push(track));
               },
             ),
+            if (canAddToPlaylist)
+              ListTile(
+                leading: const Icon(Icons.playlist_add_rounded),
+                title: Text(context.l10n.libraryAddTrackToPlaylist),
+                onTap: () {
+                  Navigator.pop(context);
+                  unawaited(
+                    showAddTrackToPlaylist(context: pageContext, track: track),
+                  );
+                },
+              ),
             if (track.album != null && widget.onOpenAlbum != null)
               ListTile(
                 leading: const Icon(Icons.album_outlined),

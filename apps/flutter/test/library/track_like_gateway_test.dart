@@ -8,41 +8,41 @@ import 'package:flutterustmusic/src/rust/api/track_likes.dart' as bridge;
 void main() {
   test('maps confirmed states and every typed failure', () {
     for (final pair in [
-      (bridge.QqMusicTrackLikeState.liked, TrackLikeState.liked),
-      (bridge.QqMusicTrackLikeState.notLiked, TrackLikeState.notLiked),
+      (bridge.TrackLikeState.liked, TrackLikeState.liked),
+      (bridge.TrackLikeState.notLiked, TrackLikeState.notLiked),
     ]) {
       final result = mapBridgeTrackLikeMutation(
-        bridge.QqMusicTrackLikeMutationResult(confirmedState: pair.$1),
+        bridge.TrackLikeMutationResult(confirmedState: pair.$1),
       );
       expect(result.confirmedState, pair.$2);
       expect(result.failure, isNull);
     }
 
     final failures = {
-      bridge.QqMusicTrackLikeMutationFailure.coreUnavailable:
+      bridge.TrackLikeMutationFailure.coreUnavailable:
           TrackLikeMutationFailure.coreUnavailable,
-      bridge.QqMusicTrackLikeMutationFailure.authenticationRequired:
+      bridge.TrackLikeMutationFailure.authenticationRequired:
           TrackLikeMutationFailure.authenticationRequired,
-      bridge.QqMusicTrackLikeMutationFailure.credentialRejected:
+      bridge.TrackLikeMutationFailure.credentialRejected:
           TrackLikeMutationFailure.credentialRejected,
-      bridge.QqMusicTrackLikeMutationFailure.networkOutcomeUnknown:
+      bridge.TrackLikeMutationFailure.networkOutcomeUnknown:
           TrackLikeMutationFailure.networkOutcomeUnknown,
-      bridge.QqMusicTrackLikeMutationFailure.serviceUnavailable:
+      bridge.TrackLikeMutationFailure.serviceUnavailable:
           TrackLikeMutationFailure.serviceUnavailable,
-      bridge.QqMusicTrackLikeMutationFailure.invalidRequest:
+      bridge.TrackLikeMutationFailure.invalidRequest:
           TrackLikeMutationFailure.invalidRequest,
-      bridge.QqMusicTrackLikeMutationFailure.invalidResponseOutcomeUnknown:
+      bridge.TrackLikeMutationFailure.invalidResponseOutcomeUnknown:
           TrackLikeMutationFailure.invalidResponseOutcomeUnknown,
-      bridge.QqMusicTrackLikeMutationFailure.replacedOutcomeUnknown:
+      bridge.TrackLikeMutationFailure.replacedOutcomeUnknown:
           TrackLikeMutationFailure.replacedOutcomeUnknown,
-      bridge.QqMusicTrackLikeMutationFailure.cancelledOutcomeUnknown:
+      bridge.TrackLikeMutationFailure.cancelledOutcomeUnknown:
           TrackLikeMutationFailure.cancelledOutcomeUnknown,
-      bridge.QqMusicTrackLikeMutationFailure.alreadyRunning:
+      bridge.TrackLikeMutationFailure.alreadyRunning:
           TrackLikeMutationFailure.alreadyRunning,
     };
     for (final MapEntry(key: input, value: expected) in failures.entries) {
       final result = mapBridgeTrackLikeMutation(
-        bridge.QqMusicTrackLikeMutationResult(failure: input),
+        bridge.TrackLikeMutationResult(failure: input),
       );
       expect(result.confirmedState, isNull);
       expect(result.failure, expected);
@@ -51,10 +51,10 @@ void main() {
 
   test('rejects contradictory or empty bridge results', () {
     for (final result in [
-      const bridge.QqMusicTrackLikeMutationResult(),
-      const bridge.QqMusicTrackLikeMutationResult(
-        confirmedState: bridge.QqMusicTrackLikeState.liked,
-        failure: bridge.QqMusicTrackLikeMutationFailure.serviceUnavailable,
+      const bridge.TrackLikeMutationResult(),
+      const bridge.TrackLikeMutationResult(
+        confirmedState: bridge.TrackLikeState.liked,
+        failure: bridge.TrackLikeMutationFailure.serviceUnavailable,
       ),
     ]) {
       expect(

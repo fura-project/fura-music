@@ -104,8 +104,8 @@ No HD-027 item remains `REMAINING_AUTONOMOUS_WORK`. The correct stop remains
 | New Songs | DONE | Bounded whole response, no fake cursor. Latest(All), Western, Japan and Korea map exactly; narrower Chinese-region values reject before transport. Anonymous gate passed. |
 | New Album Releases | DONE | Real offset/limit/total pages for Western/Korea/Japan. Incompatible existing region values reject before transport; raw publish time is retained client-side but no timezone/display date is fabricated. Anonymous gate passed. |
 | Track-associated MV | DONE | Exact Track detail `mv` to MV detail to one requested-1080 source; exact 0/1 semantics, actual returned profile, HTTPS/authority validation and redaction. No media body fetch. Anonymous gate passed. |
-| Provider capability advertisement | DONE | `Comments` and `MusicVideo` are advertised only after complete trait mapping/tests. Existing Catalog/Recommendations cover the other three reads. `RecentHistoryRead` remains absent. |
-| Recent History research | EXTERNAL_BLOCKED | Current references expose `play-record/song/list` with only a limit and `pc/recent/listen/list` with no input. Clear ordinary-session paging/continuation evidence is absent; no QQ semantics, write route or device impersonation is reused. |
+| Provider capability advertisement | DONE | `Comments` and `MusicVideo` remain advertised after complete trait mapping/tests. The 2026-09-23 evidence-backed extension also advertises `RecentHistoryRead`, `TrackLikeMutation`, `PlaylistTrackMutation`, and `PlaylistCreation`; unsupported write capabilities remain absent. |
+| Recent History research | HUMAN_EVIDENCE_REQUIRED | Superseded 2026-09-23: two fixed current implementations corroborate one ordinary-session `play-record/song/list` request with `limit` and no continuation. Fura therefore implements a bounded maximum-100 snapshot, local raw-offset traversal, and `totalIsExact=false`; official-client ordering/visibility remains a Human comparison. |
 
 ## Validation
 
@@ -146,7 +146,9 @@ No HD-027 item remains `REMAINING_AUTONOMOUS_WORK`. The correct stop remains
 4. Native validation: **maximum available local evidence complete**; unavailable hosts remain environment-gated.
 5. Large collection boundary: **explicit and evidence-backed**; no silent 1,000-row truncation.
 6. Comments, related Tracks, new songs, new Albums and MV autonomous work: **none remaining** under current contracts.
-7. Recent history autonomous implementation: **none justified** without external pagination evidence.
+7. Recent history autonomous implementation: **bounded snapshot implemented**;
+   no server continuation or complete-history claim is justified, and the
+   real-account comparison remains Human-gated.
 8. Task-caused test/build failures: **none** after final reruns.
 9. Documentation drift: **none known**; protected pre-existing working-tree edits remain intentionally uncommitted.
 10. Additional provider-neutral mapping: **none supported by current evidence and authority**.

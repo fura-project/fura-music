@@ -43,6 +43,11 @@ void main() {
       'Authentication',
       'UserLibrary',
       'RecentHistoryRead',
+      'TrackLikeMutation',
+      'AlbumFavoriteMutation',
+      'PlaylistTrackMutation',
+      'PlaylistCreation',
+      'PlaylistDeletion',
       'PlaylistMutation',
       'Lyrics',
       'Comments',
@@ -71,17 +76,12 @@ void main() {
     expect(cancelQqMusicWechatQrLoginStart(attemptId: unusedStart), isFalse);
     final unusedQrStart = reserveQqMusicQrLoginStart();
     expect(cancelQqMusicQrLoginStart(attemptId: unusedQrStart), isFalse);
-    final unusedLibraryLoad = beginQqMusicUserPlaylistLoad(
-      providerId: 'qq-music',
-    );
+    final unusedLibraryLoad = beginUserPlaylistLoad(providerId: 'qq-music');
     expect(unusedLibraryLoad.isActive, isTrue);
     expect(unusedLibraryLoad.cancel(), isTrue);
     final cancelledLibraryLoad = await unusedLibraryLoad.run();
-    expect(
-      cancelledLibraryLoad.failure,
-      QqMusicUserPlaylistLoadFailure.cancelled,
-    );
-    final unusedTrackPageLoad = beginQqMusicPlaylistTrackPageLoad(
+    expect(cancelledLibraryLoad.failure, UserPlaylistLoadFailure.cancelled);
+    final unusedTrackPageLoad = beginPlaylistTrackPageLoad(
       providerId: 'qq-music',
       opaquePlaylistId: 'favorite:8001',
       offset: 0,
@@ -92,7 +92,7 @@ void main() {
     final cancelledTrackPageLoad = await unusedTrackPageLoad.run();
     expect(
       cancelledTrackPageLoad.failure,
-      QqMusicPlaylistTrackPageLoadFailure.cancelled,
+      PlaylistTrackPageLoadFailure.cancelled,
     );
     final unusedSearchLoad = beginQqMusicTrackSearchPageLoad(
       providerId: 'qq-music',
@@ -322,32 +322,33 @@ void main() {
     );
     final unsupportedMediaResult = await unsupportedMediaResolution.run();
     expect(unsupportedMediaResult.failure, MediaResolutionFailure.unavailable);
-    final unusedTrackLike = beginQqMusicTrackLikeMutation(
+    final unusedTrackLike = beginTrackLikeMutation(
       providerId: 'qq-music',
       opaqueTrackId: 'track:41001:0:fixtureTrackMid:fixtureFileMid',
-      desiredState: QqMusicTrackLikeState.liked,
+      desiredState: TrackLikeState.liked,
     );
     expect(unusedTrackLike.isActive, isTrue);
     expect(unusedTrackLike.cancel(), isTrue);
     final cancelledTrackLike = await unusedTrackLike.run();
     expect(
       cancelledTrackLike.failure,
-      QqMusicTrackLikeMutationFailure.cancelledOutcomeUnknown,
+      TrackLikeMutationFailure.cancelledOutcomeUnknown,
     );
-    final unusedPlaylistTrack = beginQqMusicPlaylistTrackMutation(
+    final unusedPlaylistTrack = beginPlaylistTrackMutation(
       providerId: 'qq-music',
       opaquePlaylistId: 'owned:7002:902',
       opaqueTrackId: 'track:41001:0:fixtureTrackMid:fixtureFileMid',
-      desiredState: QqMusicPlaylistTrackState.present,
+      desiredState: PlaylistTrackState.present,
     );
     expect(unusedPlaylistTrack.isActive, isTrue);
     expect(unusedPlaylistTrack.cancel(), isTrue);
     final cancelledPlaylistTrack = await unusedPlaylistTrack.run();
     expect(
       cancelledPlaylistTrack.failure,
-      QqMusicPlaylistTrackMutationFailure.cancelledOutcomeUnknown,
+      PlaylistTrackMutationFailure.cancelledOutcomeUnknown,
     );
-    final unusedPlaylistCreation = beginQqMusicPlaylistCreation(
+    final unusedPlaylistCreation = beginPlaylistCreation(
+      providerId: 'qq-music',
       name: 'synthetic playlist',
     );
     expect(unusedPlaylistCreation.isActive, isTrue);
@@ -355,9 +356,9 @@ void main() {
     final cancelledPlaylistCreation = await unusedPlaylistCreation.run();
     expect(
       cancelledPlaylistCreation.failure,
-      QqMusicPlaylistCreationFailure.cancelledOutcomeUnknown,
+      PlaylistCreationFailure.cancelledOutcomeUnknown,
     );
-    final unusedPlaylistDeletion = beginQqMusicPlaylistDeletion(
+    final unusedPlaylistDeletion = beginPlaylistDeletion(
       providerId: 'qq-music',
       opaquePlaylistId: 'owned:7002:902',
     );
@@ -367,19 +368,19 @@ void main() {
     expect(cancelledPlaylistDeletion.deleted, isFalse);
     expect(
       cancelledPlaylistDeletion.failure,
-      QqMusicPlaylistDeletionFailure.cancelledOutcomeUnknown,
+      PlaylistDeletionFailure.cancelledOutcomeUnknown,
     );
-    final unusedAlbumFavorite = beginQqMusicAlbumFavoriteMutation(
+    final unusedAlbumFavorite = beginAlbumFavoriteMutation(
       providerId: 'qq-music',
       opaqueAlbumId: 'album:43001:fixtureAlbumMid',
-      desiredState: QqMusicAlbumFavoriteState.favorite,
+      desiredState: AlbumFavoriteState.favorite,
     );
     expect(unusedAlbumFavorite.isActive, isTrue);
     expect(unusedAlbumFavorite.cancel(), isTrue);
     final cancelledAlbumFavorite = await unusedAlbumFavorite.run();
     expect(
       cancelledAlbumFavorite.failure,
-      QqMusicAlbumFavoriteMutationFailure.cancelledOutcomeUnknown,
+      AlbumFavoriteMutationFailure.cancelledOutcomeUnknown,
     );
     final unusedLyricLoad = beginQqMusicLyricLoad(
       providerId: 'qq-music',

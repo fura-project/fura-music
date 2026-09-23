@@ -1,13 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/favorite_album_controller.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
+import 'package:flutterustmusic/library/album_favorite_presentation_controller.dart';
 import 'package:flutterustmusic/library/library_collection_header.dart';
+import 'package:flutterustmusic/library/library_mutation_coordinator.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
@@ -26,6 +29,8 @@ class FavoriteAlbumsPage extends StatefulWidget {
     this.embedded = false,
     this.showHeader = true,
     this.filterQuery = '',
+    this.mutationCoordinator,
+    this.canMutateFavorites = false,
     super.key,
   });
 
@@ -38,6 +43,8 @@ class FavoriteAlbumsPage extends StatefulWidget {
   final bool embedded;
   final bool showHeader;
   final String filterQuery;
+  final LibraryMutationCoordinator? mutationCoordinator;
+  final bool canMutateFavorites;
 
   @override
   State<FavoriteAlbumsPage> createState() => _FavoriteAlbumsPageState();
@@ -45,11 +52,16 @@ class FavoriteAlbumsPage extends StatefulWidget {
 
 class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
   late final FavoriteAlbumController _controller;
+  late final Listenable _pageListenable;
 
   @override
   void initState() {
     super.initState();
     _controller = FavoriteAlbumController(widget.gateway);
+    _pageListenable = Listenable.merge([
+      _controller,
+      ?widget.mutationCoordinator,
+    ]);
     unawaited(_controller.load());
   }
 
@@ -63,7 +75,7 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
   Widget build(BuildContext context) {
     final content = SafeArea(
       child: AnimatedBuilder(
-        animation: _controller,
+        animation: _pageListenable,
         builder: (context, _) {
           final body = AnimatedSwitcher(
             duration: const Duration(milliseconds: 240),
@@ -176,6 +188,10 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
       onLoadMore: _controller.loadMore,
       onRetryMore: _controller.retryMore,
       providerDisplayName: widget.providerDisplayName,
+      onUnfavorite:
+          widget.canMutateFavorites && widget.mutationCoordinator != null
+          ? _unfavorite
+          : null,
     ),
     FavoriteAlbumStage.error => MusicContentStatePanel(
       key: const ValueKey('favorite-albums-error'),
@@ -227,6 +243,15 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
       liveRegion: true,
     ),
   };
+
+  Future<void> _unfavorite(AlbumSummary album) async {
+    await performAlbumFavoriteAction(
+      context: context,
+      album: album,
+      favorite: false,
+      refreshAdditionalState: _controller.load,
+    );
+  }
 }
 
 class _AlbumCollection extends StatelessWidget {
@@ -242,6 +267,7 @@ class _AlbumCollection extends StatelessWidget {
     required this.onLoadMore,
     required this.onRetryMore,
     required this.providerDisplayName,
+    required this.onUnfavorite,
     super.key,
   });
 
@@ -256,6 +282,7 @@ class _AlbumCollection extends StatelessWidget {
   final VoidCallback onLoadMore;
   final VoidCallback onRetryMore;
   final String providerDisplayName;
+  final ValueChanged<AlbumSummary>? onUnfavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -310,6 +337,9 @@ class _AlbumCollection extends StatelessWidget {
                               : _AlbumGridItem(
                                   album: albums[index],
                                   onTap: () => onOpenAlbum(albums[index]),
+                                  onUnfavorite: onUnfavorite == null
+                                      ? null
+                                      : () => onUnfavorite!(albums[index]),
                                 ),
                         )
                       : ListView.separated(
@@ -324,6 +354,9 @@ class _AlbumCollection extends StatelessWidget {
                               : _AlbumListItem(
                                   album: albums[index],
                                   onTap: () => onOpenAlbum(albums[index]),
+                                  onUnfavorite: onUnfavorite == null
+                                      ? null
+                                      : () => onUnfavorite!(albums[index]),
                                 ),
                         ),
                 ),
@@ -337,38 +370,46 @@ class _AlbumCollection extends StatelessWidget {
 }
 
 class _AlbumGridItem extends StatelessWidget {
-  const _AlbumGridItem({required this.album, required this.onTap});
+  const _AlbumGridItem({
+    required this.album,
+    required this.onTap,
+    required this.onUnfavorite,
+  });
 
   final AlbumSummary album;
   final VoidCallback onTap;
+  final VoidCallback? onUnfavorite;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Semantics(
-      label: context.l10n.favoriteAlbumSemantics(album.title),
-      button: true,
-      excludeSemantics: true,
-      onTap: onTap,
-      child: InkWell(
-        key: ValueKey('favorite-album-${album.opaqueId}'),
-        borderRadius: BorderRadius.circular(20),
+    return _FavoriteAlbumItemMenu(
+      onUnfavorite: onUnfavorite,
+      child: Semantics(
+        label: context.l10n.favoriteAlbumSemantics(album.title),
+        button: true,
+        excludeSemantics: true,
         onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _AlbumArtwork(album: album)),
-            const SizedBox(height: 12),
-            Text(
-              album.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                height: 1.2,
+        child: InkWell(
+          key: ValueKey('favorite-album-${album.opaqueId}'),
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _AlbumArtwork(album: album)),
+              const SizedBox(height: 12),
+              Text(
+                album.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -376,45 +417,104 @@ class _AlbumGridItem extends StatelessWidget {
 }
 
 class _AlbumListItem extends StatelessWidget {
-  const _AlbumListItem({required this.album, required this.onTap});
+  const _AlbumListItem({
+    required this.album,
+    required this.onTap,
+    required this.onUnfavorite,
+  });
 
   final AlbumSummary album;
   final VoidCallback onTap;
+  final VoidCallback? onUnfavorite;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Semantics(
-      label: context.l10n.favoriteAlbumSemantics(album.title),
-      button: true,
-      excludeSemantics: true,
-      onTap: onTap,
-      child: InkWell(
-        key: ValueKey('favorite-album-${album.opaqueId}'),
-        borderRadius: BorderRadius.circular(18),
+    return _FavoriteAlbumItemMenu(
+      onUnfavorite: onUnfavorite,
+      child: Semantics(
+        label: context.l10n.favoriteAlbumSemantics(album.title),
+        button: true,
+        excludeSemantics: true,
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(
-            children: [
-              SizedBox.square(
-                dimension: 72,
-                child: _AlbumArtwork(album: album),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  album.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+        child: InkWell(
+          key: ValueKey('favorite-album-${album.opaqueId}'),
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                SizedBox.square(
+                  dimension: 72,
+                  child: _AlbumArtwork(album: album),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    album.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              const Icon(Icons.chevron_right_rounded),
-            ],
+                const Icon(Icons.chevron_right_rounded),
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FavoriteAlbumItemMenu extends StatefulWidget {
+  const _FavoriteAlbumItemMenu({
+    required this.child,
+    required this.onUnfavorite,
+  });
+
+  final Widget child;
+  final VoidCallback? onUnfavorite;
+
+  @override
+  State<_FavoriteAlbumItemMenu> createState() => _FavoriteAlbumItemMenuState();
+}
+
+class _FavoriteAlbumItemMenuState extends State<_FavoriteAlbumItemMenu> {
+  final MenuController _controller = MenuController();
+
+  void _open() {
+    if (widget.onUnfavorite != null && !_controller.isOpen) {
+      _controller.open();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.onUnfavorite == null) return widget.child;
+    return MenuAnchor(
+      controller: _controller,
+      menuChildren: [
+        MenuItemButton(
+          key: const ValueKey('unfavorite-album-menu-item'),
+          leadingIcon: const Icon(Icons.heart_broken_outlined),
+          onPressed: widget.onUnfavorite,
+          child: Text(context.l10n.libraryUnfavoriteAlbum),
+        ),
+      ],
+      builder: (context, controller, child) => CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.contextMenu): _open,
+          const SingleActivator(LogicalKeyboardKey.f10, shift: true): _open,
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onLongPress: _open,
+          onSecondaryTap: _open,
+          child: widget.child,
         ),
       ),
     );

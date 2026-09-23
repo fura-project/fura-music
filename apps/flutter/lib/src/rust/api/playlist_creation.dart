@@ -11,22 +11,24 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `failed_creation`, `map_creation`, `map_error`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
 
-QqMusicPlaylistCreationHandle beginQqMusicPlaylistCreation({
+PlaylistCreationHandle beginPlaylistCreation({
+  required String providerId,
   required String name,
-}) => RustLib.instance.api.crateApiPlaylistCreationBeginQqMusicPlaylistCreation(
+}) => RustLib.instance.api.crateApiPlaylistCreationBeginPlaylistCreation(
+  providerId: providerId,
   name: name,
 );
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicPlaylistCreationHandle>>
-abstract class QqMusicPlaylistCreationHandle implements RustOpaqueInterface {
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PlaylistCreationHandle>>
+abstract class PlaylistCreationHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
 
-  Future<QqMusicPlaylistCreationResult> run();
+  Future<PlaylistCreationResult> run();
 }
 
-enum QqMusicPlaylistCreationFailure {
+enum PlaylistCreationFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,
@@ -37,16 +39,16 @@ enum QqMusicPlaylistCreationFailure {
   replacedOutcomeUnknown,
 
   /// Cancelling the local wait cannot recall a create request already sent
-  /// to QQ Music, so presentation must refresh instead of assuming failure.
+  /// to the Provider, so presentation must refresh instead of assuming failure.
   cancelledOutcomeUnknown,
   alreadyRunning,
 }
 
-class QqMusicPlaylistCreationResult {
+class PlaylistCreationResult {
   final LibraryPlaylistSummary? createdPlaylist;
-  final QqMusicPlaylistCreationFailure? failure;
+  final PlaylistCreationFailure? failure;
 
-  const QqMusicPlaylistCreationResult({this.createdPlaylist, this.failure});
+  const PlaylistCreationResult({this.createdPlaylist, this.failure});
 
   @override
   int get hashCode => createdPlaylist.hashCode ^ failure.hashCode;
@@ -54,7 +56,7 @@ class QqMusicPlaylistCreationResult {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is QqMusicPlaylistCreationResult &&
+      other is PlaylistCreationResult &&
           runtimeType == other.runtimeType &&
           createdPlaylist == other.createdPlaylist &&
           failure == other.failure;

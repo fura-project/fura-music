@@ -1896,6 +1896,9 @@ class _DiscoverTrackRow extends StatelessWidget {
   Future<void> _showDesktopMenu(BuildContext context, Offset position) async {
     final overlay = Overlay.of(context).context.findRenderObject();
     if (overlay is! RenderBox) return;
+    final likeAction = await resolveMusicTrackLikeAction(context, track);
+    if (!context.mounted) return;
+    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
     final action = await showMenu<MusicTrackAction>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -1904,13 +1907,16 @@ class _DiscoverTrackRow extends StatelessWidget {
         overlay.size.width - position.dx,
         overlay.size.height - position.dy,
       ),
-      items: _menuItems(context),
+      items: _menuItems(context, likeAction, canAddToPlaylist),
     );
     if (!context.mounted) return;
-    _runAction(context, action);
+    await _runAction(context, action);
   }
 
   Future<void> _showCompactMenu(BuildContext context) async {
+    final likeAction = await resolveMusicTrackLikeAction(context, track);
+    if (!context.mounted) return;
+    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
     final action = await showModalBottomSheet<MusicTrackAction>(
       context: context,
       showDragHandle: true,
@@ -1924,11 +1930,32 @@ class _DiscoverTrackRow extends StatelessWidget {
               title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, MusicTrackAction.play),
             ),
+            if (likeAction != null)
+              ListTile(
+                leading: Icon(
+                  likeAction == MusicTrackAction.like
+                      ? Icons.favorite_border_rounded
+                      : Icons.favorite_rounded,
+                ),
+                title: Text(
+                  likeAction == MusicTrackAction.like
+                      ? context.l10n.libraryLikeTrack
+                      : context.l10n.libraryUnlikeTrack,
+                ),
+                onTap: () => Navigator.pop(context, likeAction),
+              ),
             ListTile(
               leading: const Icon(Icons.playlist_add_rounded),
               title: Text(context.l10n.commonAddToQueue),
               onTap: () => Navigator.pop(context, MusicTrackAction.addToQueue),
             ),
+            if (canAddToPlaylist)
+              ListTile(
+                leading: const Icon(Icons.playlist_add_rounded),
+                title: Text(context.l10n.libraryAddTrackToPlaylist),
+                onTap: () =>
+                    Navigator.pop(context, MusicTrackAction.addToPlaylist),
+              ),
             if (onOpenAlbum != null)
               ListTile(
                 key: const ValueKey('track-context-album'),
@@ -1950,10 +1977,14 @@ class _DiscoverTrackRow extends StatelessWidget {
       ),
     );
     if (!context.mounted) return;
-    _runAction(context, action);
+    await _runAction(context, action);
   }
 
-  List<PopupMenuEntry<MusicTrackAction>> _menuItems(BuildContext context) => [
+  List<PopupMenuEntry<MusicTrackAction>> _menuItems(
+    BuildContext context,
+    MusicTrackAction? likeAction,
+    bool canAddToPlaylist,
+  ) => [
     PopupMenuItem(
       value: MusicTrackAction.play,
       child: ListTile(
@@ -1961,6 +1992,22 @@ class _DiscoverTrackRow extends StatelessWidget {
         title: Text(context.l10n.commonPlayFromHere),
       ),
     ),
+    if (likeAction != null)
+      PopupMenuItem(
+        value: likeAction,
+        child: ListTile(
+          leading: Icon(
+            likeAction == MusicTrackAction.like
+                ? Icons.favorite_border_rounded
+                : Icons.favorite_rounded,
+          ),
+          title: Text(
+            likeAction == MusicTrackAction.like
+                ? context.l10n.libraryLikeTrack
+                : context.l10n.libraryUnlikeTrack,
+          ),
+        ),
+      ),
     PopupMenuItem(
       value: MusicTrackAction.addToQueue,
       child: ListTile(
@@ -1968,6 +2015,14 @@ class _DiscoverTrackRow extends StatelessWidget {
         title: Text(context.l10n.commonAddToQueue),
       ),
     ),
+    if (canAddToPlaylist)
+      PopupMenuItem(
+        value: MusicTrackAction.addToPlaylist,
+        child: ListTile(
+          leading: const Icon(Icons.playlist_add_rounded),
+          title: Text(context.l10n.libraryAddTrackToPlaylist),
+        ),
+      ),
     if (onOpenAlbum != null)
       PopupMenuItem(
         value: MusicTrackAction.openAlbum,
@@ -1986,16 +2041,23 @@ class _DiscoverTrackRow extends StatelessWidget {
       ),
   ];
 
-  void _runAction(BuildContext context, MusicTrackAction? action) {
+  Future<void> _runAction(
+    BuildContext context,
+    MusicTrackAction? action,
+  ) async {
     switch (action) {
       case MusicTrackAction.play:
         onPlay();
       case MusicTrackAction.addToQueue:
         onAddToQueue();
+      case MusicTrackAction.addToPlaylist:
+        await showAddTrackToPlaylist(context: context, track: track);
       case MusicTrackAction.openAlbum:
         onOpenAlbum?.call();
       case MusicTrackAction.openArtist:
         _openArtist(context);
+      case MusicTrackAction.like || MusicTrackAction.unlike:
+        await runMusicTrackLikeAction(context, track, action!);
       case null:
         return;
     }

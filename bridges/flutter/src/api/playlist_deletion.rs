@@ -3,11 +3,12 @@ use std::fmt;
 use provider_api::{LibraryMutationError, PlaylistDeletionProvider};
 
 use super::authentication::native_qq_music_provider;
+use super::built_in_provider;
 use super::domain_playlist_id;
 use super::remote_mutation::{RemoteMutationLifecycle, RemoteMutationStart};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QqMusicPlaylistDeletionFailure {
+pub enum PlaylistDeletionFailure {
     CoreUnavailable,
     AuthenticationRequired,
     CredentialRejected,
@@ -17,30 +18,30 @@ pub enum QqMusicPlaylistDeletionFailure {
     InvalidResponseOutcomeUnknown,
     ReplacedOutcomeUnknown,
     /// Cancelling the local wait cannot recall a delete request already sent
-    /// to QQ Music, so presentation must refresh instead of assuming failure.
+    /// to the Provider, so presentation must refresh instead of assuming failure.
     CancelledOutcomeUnknown,
     AlreadyRunning,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct QqMusicPlaylistDeletionResult {
+pub struct PlaylistDeletionResult {
     pub deleted: bool,
-    pub failure: Option<QqMusicPlaylistDeletionFailure>,
+    pub failure: Option<PlaylistDeletionFailure>,
 }
 
 /// One cancellable, single-use owned-playlist deletion. Opaque identity stays
 /// redacted and source-specific parsing remains inside the Provider.
 #[flutter_rust_bridge::frb(opaque)]
-pub struct QqMusicPlaylistDeletionHandle {
+pub struct PlaylistDeletionHandle {
     provider_id: String,
     opaque_playlist_id: String,
     lifecycle: RemoteMutationLifecycle,
 }
 
-impl fmt::Debug for QqMusicPlaylistDeletionHandle {
+impl fmt::Debug for PlaylistDeletionHandle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicPlaylistDeletionHandle")
+            .debug_struct("PlaylistDeletionHandle")
             .field("provider_id", &"[REDACTED]")
             .field("opaque_playlist_id", &"[REDACTED]")
             .field("active", &self.is_active())
@@ -49,24 +50,28 @@ impl fmt::Debug for QqMusicPlaylistDeletionHandle {
     }
 }
 
-impl QqMusicPlaylistDeletionHandle {
-    pub async fn run(&self) -> QqMusicPlaylistDeletionResult {
+impl PlaylistDeletionHandle {
+    pub async fn run(&self) -> PlaylistDeletionResult {
         match self.lifecycle.try_start() {
             RemoteMutationStart::Started => {}
             RemoteMutationStart::Cancelled => {
-                return failed_deletion(QqMusicPlaylistDeletionFailure::CancelledOutcomeUnknown);
+                return failed_deletion(PlaylistDeletionFailure::CancelledOutcomeUnknown);
             }
             RemoteMutationStart::AlreadyRunning => {
-                return failed_deletion(QqMusicPlaylistDeletionFailure::AlreadyRunning);
+                return failed_deletion(PlaylistDeletionFailure::AlreadyRunning);
             }
         }
         let target = domain_playlist_id(&self.provider_id, &self.opaque_playlist_id);
-        let outcome = match (native_qq_music_provider(), target) {
-            (Ok(provider), Ok(playlist_id)) => {
+        let outcome = match (built_in_provider(&self.provider_id), target) {
+            (Ok(provider_api::BuiltInProvider::QQMusic), Ok(playlist_id)) => {
+                let Ok(provider) = native_qq_music_provider() else {
+                    self.lifecycle.finish();
+                    return failed_deletion(PlaylistDeletionFailure::CoreUnavailable);
+                };
                 tokio::select! {
                     () = self.lifecycle.cancelled() => {
                         failed_deletion(
-                            QqMusicPlaylistDeletionFailure::CancelledOutcomeUnknown,
+                            PlaylistDeletionFailure::CancelledOutcomeUnknown,
                         )
                     }
                     result = provider.delete_playlist(playlist_id) => {
@@ -74,14 +79,16 @@ impl QqMusicPlaylistDeletionHandle {
                             map_deletion(result)
                         } else {
                             failed_deletion(
-                                QqMusicPlaylistDeletionFailure::CancelledOutcomeUnknown,
+                                PlaylistDeletionFailure::CancelledOutcomeUnknown,
                             )
                         }
                     }
                 }
             }
-            (Err(()), _) => failed_deletion(QqMusicPlaylistDeletionFailure::CoreUnavailable),
-            (_, Err(())) => failed_deletion(QqMusicPlaylistDeletionFailure::InvalidRequest),
+            (Ok(provider_api::BuiltInProvider::NetEaseCloudMusic), _) | (Err(()), _) => {
+                failed_deletion(PlaylistDeletionFailure::InvalidRequest)
+            }
+            (_, Err(())) => failed_deletion(PlaylistDeletionFailure::InvalidRequest),
         };
         self.lifecycle.finish();
         outcome
@@ -99,20 +106,20 @@ impl QqMusicPlaylistDeletionHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_playlist_deletion(
+pub fn begin_playlist_deletion(
     provider_id: String,
     opaque_playlist_id: String,
-) -> QqMusicPlaylistDeletionHandle {
-    QqMusicPlaylistDeletionHandle {
+) -> PlaylistDeletionHandle {
+    PlaylistDeletionHandle {
         provider_id,
         opaque_playlist_id,
         lifecycle: RemoteMutationLifecycle::new(),
     }
 }
 
-fn map_deletion(result: Result<(), LibraryMutationError>) -> QqMusicPlaylistDeletionResult {
+fn map_deletion(result: Result<(), LibraryMutationError>) -> PlaylistDeletionResult {
     match result {
-        Ok(()) => QqMusicPlaylistDeletionResult {
+        Ok(()) => PlaylistDeletionResult {
             deleted: true,
             failure: None,
         },
@@ -120,32 +127,28 @@ fn map_deletion(result: Result<(), LibraryMutationError>) -> QqMusicPlaylistDele
     }
 }
 
-const fn failed_deletion(failure: QqMusicPlaylistDeletionFailure) -> QqMusicPlaylistDeletionResult {
-    QqMusicPlaylistDeletionResult {
+const fn failed_deletion(failure: PlaylistDeletionFailure) -> PlaylistDeletionResult {
+    PlaylistDeletionResult {
         deleted: false,
         failure: Some(failure),
     }
 }
 
-const fn map_error(error: LibraryMutationError) -> QqMusicPlaylistDeletionFailure {
+const fn map_error(error: LibraryMutationError) -> PlaylistDeletionFailure {
     match error {
         LibraryMutationError::AuthenticationRequired => {
-            QqMusicPlaylistDeletionFailure::AuthenticationRequired
+            PlaylistDeletionFailure::AuthenticationRequired
         }
-        LibraryMutationError::CredentialRejected => {
-            QqMusicPlaylistDeletionFailure::CredentialRejected
-        }
+        LibraryMutationError::CredentialRejected => PlaylistDeletionFailure::CredentialRejected,
         LibraryMutationError::NetworkOutcomeUnknown => {
-            QqMusicPlaylistDeletionFailure::NetworkOutcomeUnknown
+            PlaylistDeletionFailure::NetworkOutcomeUnknown
         }
-        LibraryMutationError::ServiceUnavailable => {
-            QqMusicPlaylistDeletionFailure::ServiceUnavailable
-        }
-        LibraryMutationError::InvalidRequest => QqMusicPlaylistDeletionFailure::InvalidRequest,
+        LibraryMutationError::ServiceUnavailable => PlaylistDeletionFailure::ServiceUnavailable,
+        LibraryMutationError::InvalidRequest => PlaylistDeletionFailure::InvalidRequest,
         LibraryMutationError::InvalidResponseOutcomeUnknown => {
-            QqMusicPlaylistDeletionFailure::InvalidResponseOutcomeUnknown
+            PlaylistDeletionFailure::InvalidResponseOutcomeUnknown
         }
-        LibraryMutationError::Replaced => QqMusicPlaylistDeletionFailure::ReplacedOutcomeUnknown,
+        LibraryMutationError::Replaced => PlaylistDeletionFailure::ReplacedOutcomeUnknown,
     }
 }
 
@@ -153,9 +156,7 @@ const fn map_error(error: LibraryMutationError) -> QqMusicPlaylistDeletionFailur
 mod tests {
     use provider_api::LibraryMutationError;
 
-    use super::{
-        QqMusicPlaylistDeletionFailure, begin_qq_music_playlist_deletion, map_deletion, map_error,
-    };
+    use super::{PlaylistDeletionFailure, begin_playlist_deletion, map_deletion, map_error};
 
     #[test]
     fn maps_confirmed_deletion_and_all_failures() {
@@ -166,31 +167,31 @@ mod tests {
         let cases = [
             (
                 LibraryMutationError::AuthenticationRequired,
-                QqMusicPlaylistDeletionFailure::AuthenticationRequired,
+                PlaylistDeletionFailure::AuthenticationRequired,
             ),
             (
                 LibraryMutationError::CredentialRejected,
-                QqMusicPlaylistDeletionFailure::CredentialRejected,
+                PlaylistDeletionFailure::CredentialRejected,
             ),
             (
                 LibraryMutationError::NetworkOutcomeUnknown,
-                QqMusicPlaylistDeletionFailure::NetworkOutcomeUnknown,
+                PlaylistDeletionFailure::NetworkOutcomeUnknown,
             ),
             (
                 LibraryMutationError::ServiceUnavailable,
-                QqMusicPlaylistDeletionFailure::ServiceUnavailable,
+                PlaylistDeletionFailure::ServiceUnavailable,
             ),
             (
                 LibraryMutationError::InvalidRequest,
-                QqMusicPlaylistDeletionFailure::InvalidRequest,
+                PlaylistDeletionFailure::InvalidRequest,
             ),
             (
                 LibraryMutationError::InvalidResponseOutcomeUnknown,
-                QqMusicPlaylistDeletionFailure::InvalidResponseOutcomeUnknown,
+                PlaylistDeletionFailure::InvalidResponseOutcomeUnknown,
             ),
             (
                 LibraryMutationError::Replaced,
-                QqMusicPlaylistDeletionFailure::ReplacedOutcomeUnknown,
+                PlaylistDeletionFailure::ReplacedOutcomeUnknown,
             ),
         ];
         for (input, expected) in cases {
@@ -200,10 +201,8 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_terminal_and_identity_is_redacted() {
-        let handle = begin_qq_music_playlist_deletion(
-            "qq-music".into(),
-            "owned:7002:private-directory".into(),
-        );
+        let handle =
+            begin_playlist_deletion("qq-music".into(), "owned:7002:private-directory".into());
         let debug = format!("{handle:?}");
         assert!(!debug.contains("qq-music"));
         assert!(!debug.contains("private-directory"));
@@ -214,7 +213,7 @@ mod tests {
         assert!(!result.deleted);
         assert_eq!(
             result.failure,
-            Some(QqMusicPlaylistDeletionFailure::CancelledOutcomeUnknown)
+            Some(PlaylistDeletionFailure::CancelledOutcomeUnknown)
         );
     }
 }

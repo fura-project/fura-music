@@ -506,6 +506,19 @@ pub struct PersonalizedPlaylists {
     pub items: Vec<Playlist>,
     pub omitted: u32,
 }
+
+/// One upstream-bounded recent-song window. `rows` deliberately retains
+/// malformed slots so local paging can advance by the raw response cursor
+/// without silently moving later records forward.
+pub struct RecentSongsSnapshot {
+    pub rows: Vec<Option<Song>>,
+    pub upstream_total: u32,
+}
+
+pub struct CreatedPlaylist {
+    pub id: u64,
+    pub name: String,
+}
 impl<T: Transport> NeteaseClient<T> {
     async fn mobile_login_request(
         &self,
@@ -868,6 +881,175 @@ impl<T: Transport> NeteaseClient<T> {
         }
         Ok(ids)
     }
+
+    /// Reads the service's bounded recent-song window. The endpoint exposes a
+    /// limit but no offset/cursor, so callers must not infer cloud
+    /// continuation from `upstream_total`.
+    ///
+    /// # Errors
+    /// Rejects an invalid bound, malformed envelope or oversized response.
+    pub async fn recent_songs(
+        &self,
+        credential: &Credential,
+        limit: u32,
+    ) -> Result<RecentSongsSnapshot, Error> {
+        if !(1..=100).contains(&limit) {
+            return Err(Error::InputBound);
+        }
+        let (value, _) = self
+            .request(
+                "/api/play-record/song/list",
+                json!({"limit":limit}),
+                false,
+                Some(&credential.cookie()),
+            )
+            .await?;
+        let data = value.get("data").ok_or(Error::ResponseShapeMismatch)?;
+        let upstream_total: u32 = decode(
+            data.get("total")
+                .cloned()
+                .ok_or(Error::ResponseShapeMismatch)?,
+        )?;
+        let rows = data
+            .get("list")
+            .and_then(Value::as_array)
+            .ok_or(Error::ResponseShapeMismatch)?;
+        let visible_count = u32::try_from(rows.len()).map_err(|_| Error::ResponseBound)?;
+        if rows.len() > limit as usize || upstream_total < visible_count {
+            return Err(Error::ResponseShapeMismatch);
+        }
+        let rows = rows
+            .iter()
+            .map(|row| {
+                let resource_type = row.get("resourceType").and_then(Value::as_str)?;
+                let played_at = row.get("playTime").and_then(Value::as_u64)?;
+                if resource_type != "SONG" || played_at == 0 {
+                    return None;
+                }
+                let song = crate::catalog::collection_song(row.get("data")?).ok()?;
+                let resource_id = row.get("resourceId").and_then(|value| {
+                    value
+                        .as_u64()
+                        .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+                })?;
+                (resource_id == song.id).then_some(song)
+            })
+            .collect();
+        Ok(RecentSongsSnapshot {
+            rows,
+            upstream_total,
+        })
+    }
+
+    /// Sets the desired liked-song state in one request. There is no retry or
+    /// toggle interpretation in this client.
+    ///
+    /// # Errors
+    /// Authentication, transport, explicit service and indeterminate response
+    /// outcomes remain distinct for the Provider to classify.
+    pub async fn set_track_liked(
+        &self,
+        credential: &Credential,
+        user: u64,
+        track: u64,
+        liked: bool,
+    ) -> Result<(), Error> {
+        id(user)?;
+        id(track)?;
+        let (value, _) = self
+            .raw_request(
+                "/api/song/like",
+                json!({"trackId":track,"userid":user,"like":liked}),
+                true,
+                Some(&credential.cookie()),
+            )
+            .await?;
+        mutation_success(&value)
+    }
+
+    /// Creates exactly one normal, public owned playlist.
+    ///
+    /// # Errors
+    /// Invalid names stop before transport. Any malformed success response is
+    /// indeterminate because the server may already have created the playlist.
+    pub async fn create_playlist(
+        &self,
+        credential: &Credential,
+        name: &str,
+    ) -> Result<CreatedPlaylist, Error> {
+        let name = name.trim();
+        if name.is_empty() || name.len() > 256 {
+            return Err(Error::InputBound);
+        }
+        let (value, _) = self
+            .raw_request(
+                "/api/playlist/create",
+                json!({"name":name,"privacy":"0","type":"NORMAL"}),
+                false,
+                Some(&credential.cookie()),
+            )
+            .await?;
+        mutation_success(&value)?;
+        let playlist = value
+            .get("playlist")
+            .and_then(Value::as_object)
+            .ok_or(Error::ResponseShapeMismatch)?;
+        let playlist_id = playlist
+            .get("id")
+            .and_then(Value::as_u64)
+            .ok_or(Error::ResponseShapeMismatch)?;
+        id(playlist_id)?;
+        let returned_name = playlist
+            .get("name")
+            .and_then(Value::as_str)
+            .ok_or(Error::ResponseShapeMismatch)?;
+        text(returned_name)?;
+        Ok(CreatedPlaylist {
+            id: playlist_id,
+            name: returned_name.into(),
+        })
+    }
+
+    /// Sets one Track's desired membership in one owned playlist. Code 502 is
+    /// accepted only for add because the independent direct implementation
+    /// identifies it as the already-present state. No compatibility retry is
+    /// issued for any response.
+    ///
+    /// # Errors
+    /// Invalid identities stop before transport; all other outcomes are
+    /// returned without retry.
+    pub async fn set_playlist_track_membership(
+        &self,
+        credential: &Credential,
+        playlist: u64,
+        track: u64,
+        present: bool,
+    ) -> Result<(), Error> {
+        id(playlist)?;
+        id(track)?;
+        let operation = if present { "add" } else { "del" };
+        let track_ids = serde_json::to_string(&[track]).map_err(|_| Error::InputBound)?;
+        let (value, _) = self
+            .raw_request(
+                "/api/playlist/manipulate/tracks",
+                json!({
+                    "op":operation,
+                    "pid":playlist,
+                    "trackIds":track_ids,
+                    "imme":"true"
+                }),
+                false,
+                Some(&credential.cookie()),
+            )
+            .await?;
+        let code = response_code(&value)?;
+        match code {
+            200 => Ok(()),
+            502 if present => Ok(()),
+            301 => Err(Error::CredentialRejected),
+            _ => Err(Error::UpstreamUnknown),
+        }
+    }
     /// # Errors
     /// Bounded authenticated daily songs; there is no invented playlist identity.
     pub async fn daily_tracks(&self, credential: &Credential) -> Result<DailyTracks, Error> {
@@ -900,6 +1082,14 @@ impl<T: Transport> NeteaseClient<T> {
         let (items, omitted) =
             decode_song_rows(v.get("data").ok_or(Error::ResponseShapeMismatch)?, 10)?;
         Ok(PersonalFmTracks { items, omitted })
+    }
+}
+
+fn mutation_success(value: &Value) -> Result<(), Error> {
+    match response_code(value)? {
+        200 => Ok(()),
+        301 => Err(Error::CredentialRejected),
+        _ => Err(Error::UpstreamUnknown),
     }
 }
 

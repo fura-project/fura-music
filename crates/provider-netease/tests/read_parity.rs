@@ -96,9 +96,34 @@ fn descriptor_advertises_only_completed_read_capabilities() {
             .contains(&ProviderCapability::MusicVideo)
     );
     assert!(
-        !descriptor
+        descriptor
             .capabilities
             .contains(&ProviderCapability::RecentHistoryRead)
+    );
+    assert!(
+        descriptor
+            .capabilities
+            .contains(&ProviderCapability::TrackLikeMutation)
+    );
+    assert!(
+        descriptor
+            .capabilities
+            .contains(&ProviderCapability::PlaylistTrackMutation)
+    );
+    assert!(
+        descriptor
+            .capabilities
+            .contains(&ProviderCapability::PlaylistCreation)
+    );
+    assert!(
+        !descriptor
+            .capabilities
+            .contains(&ProviderCapability::AlbumFavoriteMutation)
+    );
+    assert!(
+        !descriptor
+            .capabilities
+            .contains(&ProviderCapability::PlaylistDeletion)
     );
 }
 

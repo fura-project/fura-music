@@ -2,18 +2,17 @@ use std::fmt;
 
 use provider_api::{LibraryMutationError, PlaylistTrackMutationProvider};
 
-use super::authentication::native_qq_music_provider;
 use super::remote_mutation::{RemoteMutationLifecycle, RemoteMutationStart};
-use super::{domain_playlist_id, domain_track_id};
+use super::{domain_playlist_id, domain_track_id, with_native_provider};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QqMusicPlaylistTrackState {
+pub enum PlaylistTrackState {
     Present,
     Absent,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QqMusicPlaylistTrackMutationFailure {
+pub enum PlaylistTrackMutationFailure {
     CoreUnavailable,
     AuthenticationRequired,
     CredentialRejected,
@@ -22,34 +21,34 @@ pub enum QqMusicPlaylistTrackMutationFailure {
     InvalidRequest,
     InvalidResponseOutcomeUnknown,
     ReplacedOutcomeUnknown,
-    /// Cancelling the local wait cannot recall a write already sent to QQ
-    /// Music, so presentation must refresh instead of assuming failure.
+    /// Cancelling the local wait cannot recall a write already sent to the
+    /// Provider, so presentation must refresh instead of assuming failure.
     CancelledOutcomeUnknown,
     AlreadyRunning,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct QqMusicPlaylistTrackMutationResult {
-    pub confirmed_state: Option<QqMusicPlaylistTrackState>,
-    pub failure: Option<QqMusicPlaylistTrackMutationFailure>,
+pub struct PlaylistTrackMutationResult {
+    pub confirmed_state: Option<PlaylistTrackState>,
+    pub failure: Option<PlaylistTrackMutationFailure>,
 }
 
 /// One cancellable, single-use desired Track membership mutation. Playlist
 /// and Track identities are retained only for Provider routing and redacted
 /// from diagnostics.
 #[flutter_rust_bridge::frb(opaque)]
-pub struct QqMusicPlaylistTrackMutationHandle {
+pub struct PlaylistTrackMutationHandle {
     provider_id: String,
     opaque_playlist_id: String,
     opaque_track_id: String,
-    desired_state: QqMusicPlaylistTrackState,
+    desired_state: PlaylistTrackState,
     lifecycle: RemoteMutationLifecycle,
 }
 
-impl fmt::Debug for QqMusicPlaylistTrackMutationHandle {
+impl fmt::Debug for PlaylistTrackMutationHandle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicPlaylistTrackMutationHandle")
+            .debug_struct("PlaylistTrackMutationHandle")
             .field("provider_id", &self.provider_id)
             .field("opaque_playlist_id", &"[REDACTED]")
             .field("opaque_track_id", &"[REDACTED]")
@@ -60,30 +59,29 @@ impl fmt::Debug for QqMusicPlaylistTrackMutationHandle {
     }
 }
 
-impl QqMusicPlaylistTrackMutationHandle {
-    pub async fn run(&self) -> QqMusicPlaylistTrackMutationResult {
+impl PlaylistTrackMutationHandle {
+    pub async fn run(&self) -> PlaylistTrackMutationResult {
         match self.lifecycle.try_start() {
             RemoteMutationStart::Started => {}
             RemoteMutationStart::Cancelled => {
-                return failed_mutation(
-                    QqMusicPlaylistTrackMutationFailure::CancelledOutcomeUnknown,
-                );
+                return failed_mutation(PlaylistTrackMutationFailure::CancelledOutcomeUnknown);
             }
             RemoteMutationStart::AlreadyRunning => {
-                return failed_mutation(QqMusicPlaylistTrackMutationFailure::AlreadyRunning);
+                return failed_mutation(PlaylistTrackMutationFailure::AlreadyRunning);
             }
         }
         let outcome = match (
             domain_playlist_id(&self.provider_id, &self.opaque_playlist_id),
             domain_track_id(&self.provider_id, &self.opaque_track_id),
         ) {
-            (Ok(playlist_id), Ok(track_id)) => match native_qq_music_provider() {
-                Ok(provider) => {
-                    let present = self.desired_state == QqMusicPlaylistTrackState::Present;
+            (Ok(playlist_id), Ok(track_id)) => with_native_provider!(
+                &self.provider_id,
+                |provider| {
+                    let present = self.desired_state == PlaylistTrackState::Present;
                     tokio::select! {
                         () = self.lifecycle.cancelled() => {
                             failed_mutation(
-                                QqMusicPlaylistTrackMutationFailure::CancelledOutcomeUnknown,
+                                PlaylistTrackMutationFailure::CancelledOutcomeUnknown,
                             )
                         }
                         result = provider.set_playlist_track_membership(
@@ -95,15 +93,15 @@ impl QqMusicPlaylistTrackMutationHandle {
                                 map_mutation(result, self.desired_state)
                             } else {
                                 failed_mutation(
-                                    QqMusicPlaylistTrackMutationFailure::CancelledOutcomeUnknown,
+                                    PlaylistTrackMutationFailure::CancelledOutcomeUnknown,
                                 )
                             }
                         }
                     }
-                }
-                Err(()) => failed_mutation(QqMusicPlaylistTrackMutationFailure::CoreUnavailable),
-            },
-            _ => failed_mutation(QqMusicPlaylistTrackMutationFailure::InvalidRequest),
+                },
+                failed_mutation(PlaylistTrackMutationFailure::CoreUnavailable)
+            ),
+            _ => failed_mutation(PlaylistTrackMutationFailure::InvalidRequest),
         };
         self.lifecycle.finish();
         outcome
@@ -121,13 +119,13 @@ impl QqMusicPlaylistTrackMutationHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_playlist_track_mutation(
+pub fn begin_playlist_track_mutation(
     provider_id: String,
     opaque_playlist_id: String,
     opaque_track_id: String,
-    desired_state: QqMusicPlaylistTrackState,
-) -> QqMusicPlaylistTrackMutationHandle {
-    QqMusicPlaylistTrackMutationHandle {
+    desired_state: PlaylistTrackState,
+) -> PlaylistTrackMutationHandle {
+    PlaylistTrackMutationHandle {
         provider_id,
         opaque_playlist_id,
         opaque_track_id,
@@ -138,10 +136,10 @@ pub fn begin_qq_music_playlist_track_mutation(
 
 fn map_mutation(
     result: Result<(), LibraryMutationError>,
-    desired_state: QqMusicPlaylistTrackState,
-) -> QqMusicPlaylistTrackMutationResult {
+    desired_state: PlaylistTrackState,
+) -> PlaylistTrackMutationResult {
     match result {
-        Ok(()) => QqMusicPlaylistTrackMutationResult {
+        Ok(()) => PlaylistTrackMutationResult {
             confirmed_state: Some(desired_state),
             failure: None,
         },
@@ -149,36 +147,32 @@ fn map_mutation(
     }
 }
 
-const fn failed_mutation(
-    failure: QqMusicPlaylistTrackMutationFailure,
-) -> QqMusicPlaylistTrackMutationResult {
-    QqMusicPlaylistTrackMutationResult {
+const fn failed_mutation(failure: PlaylistTrackMutationFailure) -> PlaylistTrackMutationResult {
+    PlaylistTrackMutationResult {
         confirmed_state: None,
         failure: Some(failure),
     }
 }
 
-const fn map_error(error: LibraryMutationError) -> QqMusicPlaylistTrackMutationFailure {
+const fn map_error(error: LibraryMutationError) -> PlaylistTrackMutationFailure {
     match error {
         LibraryMutationError::AuthenticationRequired => {
-            QqMusicPlaylistTrackMutationFailure::AuthenticationRequired
+            PlaylistTrackMutationFailure::AuthenticationRequired
         }
         LibraryMutationError::CredentialRejected => {
-            QqMusicPlaylistTrackMutationFailure::CredentialRejected
+            PlaylistTrackMutationFailure::CredentialRejected
         }
         LibraryMutationError::NetworkOutcomeUnknown => {
-            QqMusicPlaylistTrackMutationFailure::NetworkOutcomeUnknown
+            PlaylistTrackMutationFailure::NetworkOutcomeUnknown
         }
         LibraryMutationError::ServiceUnavailable => {
-            QqMusicPlaylistTrackMutationFailure::ServiceUnavailable
+            PlaylistTrackMutationFailure::ServiceUnavailable
         }
-        LibraryMutationError::InvalidRequest => QqMusicPlaylistTrackMutationFailure::InvalidRequest,
+        LibraryMutationError::InvalidRequest => PlaylistTrackMutationFailure::InvalidRequest,
         LibraryMutationError::InvalidResponseOutcomeUnknown => {
-            QqMusicPlaylistTrackMutationFailure::InvalidResponseOutcomeUnknown
+            PlaylistTrackMutationFailure::InvalidResponseOutcomeUnknown
         }
-        LibraryMutationError::Replaced => {
-            QqMusicPlaylistTrackMutationFailure::ReplacedOutcomeUnknown
-        }
+        LibraryMutationError::Replaced => PlaylistTrackMutationFailure::ReplacedOutcomeUnknown,
     }
 }
 
@@ -187,47 +181,44 @@ mod tests {
     use provider_api::LibraryMutationError;
 
     use super::{
-        QqMusicPlaylistTrackMutationFailure, QqMusicPlaylistTrackState,
-        begin_qq_music_playlist_track_mutation, map_error, map_mutation,
+        PlaylistTrackMutationFailure, PlaylistTrackState, begin_playlist_track_mutation, map_error,
+        map_mutation,
     };
 
     #[test]
     fn maps_confirmed_state_and_all_failures() {
-        let success = map_mutation(Ok(()), QqMusicPlaylistTrackState::Present);
-        assert_eq!(
-            success.confirmed_state,
-            Some(QqMusicPlaylistTrackState::Present)
-        );
+        let success = map_mutation(Ok(()), PlaylistTrackState::Present);
+        assert_eq!(success.confirmed_state, Some(PlaylistTrackState::Present));
         assert_eq!(success.failure, None);
 
         let cases = [
             (
                 LibraryMutationError::AuthenticationRequired,
-                QqMusicPlaylistTrackMutationFailure::AuthenticationRequired,
+                PlaylistTrackMutationFailure::AuthenticationRequired,
             ),
             (
                 LibraryMutationError::CredentialRejected,
-                QqMusicPlaylistTrackMutationFailure::CredentialRejected,
+                PlaylistTrackMutationFailure::CredentialRejected,
             ),
             (
                 LibraryMutationError::NetworkOutcomeUnknown,
-                QqMusicPlaylistTrackMutationFailure::NetworkOutcomeUnknown,
+                PlaylistTrackMutationFailure::NetworkOutcomeUnknown,
             ),
             (
                 LibraryMutationError::ServiceUnavailable,
-                QqMusicPlaylistTrackMutationFailure::ServiceUnavailable,
+                PlaylistTrackMutationFailure::ServiceUnavailable,
             ),
             (
                 LibraryMutationError::InvalidRequest,
-                QqMusicPlaylistTrackMutationFailure::InvalidRequest,
+                PlaylistTrackMutationFailure::InvalidRequest,
             ),
             (
                 LibraryMutationError::InvalidResponseOutcomeUnknown,
-                QqMusicPlaylistTrackMutationFailure::InvalidResponseOutcomeUnknown,
+                PlaylistTrackMutationFailure::InvalidResponseOutcomeUnknown,
             ),
             (
                 LibraryMutationError::Replaced,
-                QqMusicPlaylistTrackMutationFailure::ReplacedOutcomeUnknown,
+                PlaylistTrackMutationFailure::ReplacedOutcomeUnknown,
             ),
         ];
         for (input, expected) in cases {
@@ -237,11 +228,11 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_terminal_and_identities_are_redacted() {
-        let handle = begin_qq_music_playlist_track_mutation(
+        let handle = begin_playlist_track_mutation(
             "qq-music".into(),
             "owned:7002:902".into(),
             "track:41001:0:privateTrackMid:privateFileMid".into(),
-            QqMusicPlaylistTrackState::Absent,
+            PlaylistTrackState::Absent,
         );
         let debug = format!("{handle:?}");
         assert!(!debug.contains("7002"));
@@ -254,7 +245,7 @@ mod tests {
         assert_eq!(result.confirmed_state, None);
         assert_eq!(
             result.failure,
-            Some(QqMusicPlaylistTrackMutationFailure::CancelledOutcomeUnknown)
+            Some(PlaylistTrackMutationFailure::CancelledOutcomeUnknown)
         );
     }
 }

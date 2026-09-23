@@ -3,7 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/track_like_presentation_controller.dart';
+import 'package:flutterustmusic/library/playlist_track_presentation_controller.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
+
+export 'package:flutterustmusic/library/playlist_track_presentation_controller.dart'
+    show showAddTrackToPlaylist;
 
 typedef MusicTrackRowContentBuilder = Widget Function(
   BuildContext context,
@@ -22,7 +27,46 @@ double musicTrackRowExtent({
     (desktop ? musicTrackDesktopRowExtent : musicTrackCompactRowExtent) +
     (includesSeparator ? musicTrackRowSeparatorExtent : 0);
 
-enum MusicTrackAction { play, addToQueue, openAlbum, openArtist }
+enum MusicTrackAction {
+  play,
+  addToQueue,
+  addToPlaylist,
+  openAlbum,
+  openArtist,
+  like,
+  unlike,
+}
+
+bool canAddMusicTrackToPlaylist(BuildContext context) =>
+    PlaylistTrackActionScope.maybeOf(context)?.ownedPlaylists.isNotEmpty ??
+    false;
+
+Future<MusicTrackAction?> resolveMusicTrackLikeAction(
+  BuildContext context,
+  PlaylistTrackSummary track,
+) async {
+  final controller = TrackLikeActionScope.maybeOf(context);
+  if (controller == null) return null;
+  final state = await controller.resolve(track);
+  if (!context.mounted) return null;
+  return switch (state) {
+    AuthoritativeTrackLikeState.liked => MusicTrackAction.unlike,
+    AuthoritativeTrackLikeState.notLiked => MusicTrackAction.like,
+    AuthoritativeTrackLikeState.unavailable ||
+    AuthoritativeTrackLikeState.unknown ||
+    AuthoritativeTrackLikeState.loading => null,
+  };
+}
+
+Future<void> runMusicTrackLikeAction(
+  BuildContext context,
+  PlaylistTrackSummary track,
+  MusicTrackAction action,
+) => performTrackLikeAction(
+  context: context,
+  track: track,
+  liked: action == MusicTrackAction.like,
+);
 
 Future<void> openMusicTrackArtists({
   required BuildContext context,

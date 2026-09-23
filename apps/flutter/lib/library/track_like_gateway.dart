@@ -73,12 +73,12 @@ TrackLikeMutationOperation _beginRustMutation(
   String opaqueTrackId,
   TrackLikeState desiredState,
 ) => _RustTrackLikeMutationOperation(
-  bridge.beginQqMusicTrackLikeMutation(
+  bridge.beginTrackLikeMutation(
     providerId: providerId,
     opaqueTrackId: opaqueTrackId,
     desiredState: switch (desiredState) {
-      TrackLikeState.liked => bridge.QqMusicTrackLikeState.liked,
-      TrackLikeState.notLiked => bridge.QqMusicTrackLikeState.notLiked,
+      TrackLikeState.liked => bridge.TrackLikeState.liked,
+      TrackLikeState.notLiked => bridge.TrackLikeState.notLiked,
     },
   ),
 );
@@ -86,7 +86,7 @@ TrackLikeMutationOperation _beginRustMutation(
 class _RustTrackLikeMutationOperation implements TrackLikeMutationOperation {
   const _RustTrackLikeMutationOperation(this._handle);
 
-  final bridge.QqMusicTrackLikeMutationHandle _handle;
+  final bridge.TrackLikeMutationHandle _handle;
 
   @override
   bool cancel() => _handle.cancel();
@@ -134,7 +134,7 @@ class _VaultCleaningTrackLikeMutationOperation
 
 @visibleForTesting
 TrackLikeMutationResult mapBridgeTrackLikeMutation(
-  bridge.QqMusicTrackLikeMutationResult result,
+  bridge.TrackLikeMutationResult result,
 ) {
   final failure = result.failure;
   final confirmedState = result.confirmedState;
@@ -150,34 +150,34 @@ TrackLikeMutationResult mapBridgeTrackLikeMutation(
   }
   return TrackLikeMutationResult(
     confirmedState: switch (confirmedState!) {
-      bridge.QqMusicTrackLikeState.liked => TrackLikeState.liked,
-      bridge.QqMusicTrackLikeState.notLiked => TrackLikeState.notLiked,
+      bridge.TrackLikeState.liked => TrackLikeState.liked,
+      bridge.TrackLikeState.notLiked => TrackLikeState.notLiked,
     },
   );
 }
 
 @visibleForTesting
 TrackLikeMutationFailure mapBridgeTrackLikeMutationFailure(
-  bridge.QqMusicTrackLikeMutationFailure failure,
+  bridge.TrackLikeMutationFailure failure,
 ) => switch (failure) {
-  bridge.QqMusicTrackLikeMutationFailure.coreUnavailable =>
+  bridge.TrackLikeMutationFailure.coreUnavailable =>
     TrackLikeMutationFailure.coreUnavailable,
-  bridge.QqMusicTrackLikeMutationFailure.authenticationRequired =>
+  bridge.TrackLikeMutationFailure.authenticationRequired =>
     TrackLikeMutationFailure.authenticationRequired,
-  bridge.QqMusicTrackLikeMutationFailure.credentialRejected =>
+  bridge.TrackLikeMutationFailure.credentialRejected =>
     TrackLikeMutationFailure.credentialRejected,
-  bridge.QqMusicTrackLikeMutationFailure.networkOutcomeUnknown =>
+  bridge.TrackLikeMutationFailure.networkOutcomeUnknown =>
     TrackLikeMutationFailure.networkOutcomeUnknown,
-  bridge.QqMusicTrackLikeMutationFailure.serviceUnavailable =>
+  bridge.TrackLikeMutationFailure.serviceUnavailable =>
     TrackLikeMutationFailure.serviceUnavailable,
-  bridge.QqMusicTrackLikeMutationFailure.invalidRequest =>
+  bridge.TrackLikeMutationFailure.invalidRequest =>
     TrackLikeMutationFailure.invalidRequest,
-  bridge.QqMusicTrackLikeMutationFailure.invalidResponseOutcomeUnknown =>
+  bridge.TrackLikeMutationFailure.invalidResponseOutcomeUnknown =>
     TrackLikeMutationFailure.invalidResponseOutcomeUnknown,
-  bridge.QqMusicTrackLikeMutationFailure.replacedOutcomeUnknown =>
+  bridge.TrackLikeMutationFailure.replacedOutcomeUnknown =>
     TrackLikeMutationFailure.replacedOutcomeUnknown,
-  bridge.QqMusicTrackLikeMutationFailure.cancelledOutcomeUnknown =>
+  bridge.TrackLikeMutationFailure.cancelledOutcomeUnknown =>
     TrackLikeMutationFailure.cancelledOutcomeUnknown,
-  bridge.QqMusicTrackLikeMutationFailure.alreadyRunning =>
+  bridge.TrackLikeMutationFailure.alreadyRunning =>
     TrackLikeMutationFailure.alreadyRunning,
 };

@@ -8,6 +8,7 @@ class LibraryCollectionHeader extends StatelessWidget {
     this.refreshKey,
     this.refreshTooltip,
     this.onRefresh,
+    this.actions = const [],
     super.key,
   });
 
@@ -16,6 +17,7 @@ class LibraryCollectionHeader extends StatelessWidget {
   final Key? refreshKey;
   final String? refreshTooltip;
   final VoidCallback? onRefresh;
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -63,6 +65,7 @@ class LibraryCollectionHeader extends StatelessWidget {
                 icon: const Icon(Icons.refresh_rounded),
               ),
             ],
+            ...actions,
           ],
         ),
       );

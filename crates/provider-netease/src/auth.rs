@@ -2,17 +2,20 @@ use super::{NeteaseProvider, playlist, provider_id, song};
 use music_domain::{
     AccountSummary, DailyTracksCollection, OwnedPlaylistsCollection,
     PersonalizedPlaylistsCollection, PersonalizedTracksCollection, PlaylistId, PlaylistOwnership,
-    PlaylistPurpose, PlaylistSummary, PlaylistTracksPage, UserPlaylistsCollection,
+    PlaylistPurpose, PlaylistSummary, PlaylistTracksPage, TrackId, TrackSummary,
+    UserPlaylistsCollection,
 };
 use netease_client::{
     Credential, Error, MediaQuality, NeteaseClient, QrKey, QrPoll, SmsLoginChallenge, Transport,
 };
 use provider_api::{
     AccountSummaryError, AccountSummaryProvider, AuthenticationError, DailyRecommendationError,
-    DailyTracksProvider, OwnedPlaylistsProvider, PersonalizedTracksError,
-    PersonalizedTracksProvider, QrAuthenticationChallenge, QrAuthenticationChannel,
-    QrAuthenticationProgress, QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat,
-    SmsAuthenticationError, SmsAuthenticationProvider, UserLibraryError, UserPlaylistsProvider,
+    DailyTracksProvider, LibraryMutationError, OwnedPlaylistsProvider, PersonalizedTracksError,
+    PersonalizedTracksProvider, PlaylistCreationProvider, PlaylistTrackMutationProvider,
+    QrAuthenticationChallenge, QrAuthenticationChannel, QrAuthenticationProgress,
+    QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, RecentHistoryProvider,
+    SmsAuthenticationError, SmsAuthenticationProvider, TrackLikeMutationProvider, UserLibraryError,
+    UserPlaylistsProvider,
 };
 use std::{
     future::Future,
@@ -31,6 +34,12 @@ struct State {
     pending: Option<Credential>,
     sms: Option<SmsLoginChallenge>,
     liked_playlist: Option<u64>,
+    recent_request: Option<Arc<()>>,
+    recent_snapshot: Option<RecentHistorySnapshot>,
+}
+
+struct RecentHistorySnapshot {
+    rows: Vec<Option<TrackSummary>>,
 }
 pub(super) struct AuthOwner {
     state: Mutex<State>,
@@ -65,6 +74,8 @@ impl AuthOwner {
             .checked_add(1)
             .expect("session generation exhausted");
         self.changed.send_replace(state.generation);
+        state.recent_request = None;
+        state.recent_snapshot = None;
     }
     pub(super) fn generation(&self) -> u64 {
         self.lock().generation
@@ -126,6 +137,32 @@ impl AuthOwner {
         s.liked_playlist = None;
         self.bump(&mut s);
         Ok(())
+    }
+}
+
+fn mutation_error(failure: Failure) -> LibraryMutationError {
+    match failure {
+        Failure::Replaced => LibraryMutationError::Replaced,
+        Failure::Client(error) => match error {
+            Error::AuthenticationRequired => LibraryMutationError::AuthenticationRequired,
+            Error::CredentialRejected => LibraryMutationError::CredentialRejected,
+            Error::TemporaryNetworkFailure => LibraryMutationError::NetworkOutcomeUnknown,
+            Error::InputBound => LibraryMutationError::InvalidRequest,
+            Error::ResponseShapeMismatch | Error::ResponseBound => {
+                LibraryMutationError::InvalidResponseOutcomeUnknown
+            }
+            Error::RateLimited
+            | Error::SecurityVerificationRequired
+            | Error::SecondaryVerificationRequired
+            | Error::VerificationRejected
+            | Error::AccountRestricted
+            | Error::EntitlementDenied
+            | Error::CopyrightRestricted
+            | Error::RegionRestricted
+            | Error::TrackUnavailable
+            | Error::ProtocolUnavailable
+            | Error::UpstreamUnknown => LibraryMutationError::ServiceUnavailable,
+        },
     }
 }
 fn account_error(f: Failure) -> AccountSummaryError {
@@ -713,6 +750,191 @@ impl<T: Transport> OwnedPlaylistsProvider for NeteaseProvider<T> {
                 .collect(),
             collection.omitted_playlist_count(),
         ))
+    }
+}
+
+impl RecentHistorySnapshot {
+    fn page(&self, offset: u32, size: u32) -> Result<PlaylistTracksPage, UserLibraryError> {
+        if !(1..=100).contains(&size) {
+            return Err(UserLibraryError::InvalidResponse);
+        }
+        let total =
+            u32::try_from(self.rows.len()).map_err(|_| UserLibraryError::InvalidResponse)?;
+        if offset > total {
+            return Err(UserLibraryError::InvalidResponse);
+        }
+        let next = offset.saturating_add(size).min(total);
+        let window = &self.rows[offset as usize..next as usize];
+        let omitted = u32::try_from(window.iter().filter(|row| row.is_none()).count())
+            .map_err(|_| UserLibraryError::InvalidResponse)?;
+        let tracks = window.iter().flatten().cloned().collect();
+        Ok(PlaylistTracksPage::new_with_cursor_and_total_certainty(
+            offset,
+            next,
+            total,
+            false,
+            next < total,
+            omitted,
+            tracks,
+        ))
+    }
+}
+
+impl<T: Transport> RecentHistoryProvider for NeteaseProvider<T> {
+    type Error = UserLibraryError;
+
+    async fn recent_tracks_page(
+        &self,
+        offset: u32,
+        size: u32,
+    ) -> Result<PlaylistTracksPage, Self::Error> {
+        if !(1..=100).contains(&size) {
+            return Err(UserLibraryError::InvalidResponse);
+        }
+        let (generation, credential, request) = {
+            let mut state = self.auth.lock();
+            let Some((credential, _)) = &state.active else {
+                return Err(UserLibraryError::AuthenticationRequired);
+            };
+            let credential = credential.clone();
+            if offset != 0
+                && let Some(snapshot) = &state.recent_snapshot
+            {
+                return snapshot.page(offset, size);
+            }
+            let request = Arc::new(());
+            state.recent_request = Some(Arc::clone(&request));
+            state.recent_snapshot = None;
+            (state.generation, credential, request)
+        };
+        let source = self
+            .auth
+            .run(generation, self.client.recent_songs(&credential, 100))
+            .await
+            .map_err(library_error)?;
+        let mut rows = Vec::with_capacity(source.rows.len());
+        for row in source.rows {
+            rows.push(match row {
+                Some(song) => super::collection_song(song).ok(),
+                None => None,
+            });
+        }
+        let snapshot = RecentHistorySnapshot { rows };
+        let page = snapshot.page(offset, size)?;
+        let mut state = self.auth.lock();
+        if state.generation != generation
+            || !state
+                .recent_request
+                .as_ref()
+                .is_some_and(|active| Arc::ptr_eq(active, &request))
+        {
+            return Err(UserLibraryError::Replaced);
+        }
+        state.recent_snapshot = Some(snapshot);
+        Ok(page)
+    }
+}
+
+fn user_library_mutation_error(error: UserLibraryError) -> LibraryMutationError {
+    match error {
+        UserLibraryError::AuthenticationRequired => LibraryMutationError::AuthenticationRequired,
+        UserLibraryError::CredentialRejected => LibraryMutationError::CredentialRejected,
+        UserLibraryError::Network => LibraryMutationError::NetworkOutcomeUnknown,
+        UserLibraryError::ServiceUnavailable => LibraryMutationError::ServiceUnavailable,
+        UserLibraryError::InvalidResponse => LibraryMutationError::InvalidResponseOutcomeUnknown,
+        UserLibraryError::Replaced => LibraryMutationError::Replaced,
+    }
+}
+
+impl<T: Transport> NeteaseProvider<T> {
+    async fn owned_playlist_write_context(
+        &self,
+        playlist_id: &PlaylistId,
+    ) -> Result<(u64, Credential, u64, u64), LibraryMutationError> {
+        let expected_generation = self.auth.snapshot().map_err(mutation_error)?.0;
+        let collection = self
+            .user_playlists()
+            .await
+            .map_err(user_library_mutation_error)?;
+        let owned = collection.playlists().iter().any(|playlist| {
+            playlist.id() == playlist_id
+                && playlist.ownership() == PlaylistOwnership::Owned
+                && playlist.purpose() != PlaylistPurpose::LikedSongs
+        });
+        if !owned {
+            return Err(LibraryMutationError::InvalidRequest);
+        }
+        let numeric_id = super::catalog::identity(playlist_id.provider(), playlist_id.opaque())
+            .map_err(|_| LibraryMutationError::InvalidRequest)?;
+        let (generation, credential, user) = self.auth.snapshot().map_err(mutation_error)?;
+        if generation != expected_generation {
+            return Err(LibraryMutationError::Replaced);
+        }
+        Ok((generation, credential, user, numeric_id))
+    }
+}
+
+impl<T: Transport> TrackLikeMutationProvider for NeteaseProvider<T> {
+    type Error = LibraryMutationError;
+
+    async fn set_track_liked(&self, track_id: TrackId, liked: bool) -> Result<(), Self::Error> {
+        let numeric_track = super::catalog::identity(track_id.provider(), track_id.opaque())
+            .map_err(|_| LibraryMutationError::InvalidRequest)?;
+        let (generation, credential, user) = self.auth.snapshot().map_err(mutation_error)?;
+        self.auth
+            .run(
+                generation,
+                self.client
+                    .set_track_liked(&credential, user, numeric_track, liked),
+            )
+            .await
+            .map_err(mutation_error)
+    }
+}
+
+impl<T: Transport> PlaylistCreationProvider for NeteaseProvider<T> {
+    type Error = LibraryMutationError;
+
+    async fn create_playlist(&self, name: String) -> Result<PlaylistSummary, Self::Error> {
+        let (generation, credential, _) = self.auth.snapshot().map_err(mutation_error)?;
+        let created = self
+            .auth
+            .run(generation, self.client.create_playlist(&credential, &name))
+            .await
+            .map_err(mutation_error)?;
+        let id = PlaylistId::new(provider_id(), created.id.to_string())
+            .map_err(|_| LibraryMutationError::InvalidResponseOutcomeUnknown)?;
+        PlaylistSummary::new(id, created.name)
+            .map(|playlist| playlist.with_ownership(PlaylistOwnership::Owned))
+            .map_err(|_| LibraryMutationError::InvalidResponseOutcomeUnknown)
+    }
+}
+
+impl<T: Transport> PlaylistTrackMutationProvider for NeteaseProvider<T> {
+    type Error = LibraryMutationError;
+
+    async fn set_playlist_track_membership(
+        &self,
+        playlist_id: PlaylistId,
+        track_id: TrackId,
+        present: bool,
+    ) -> Result<(), Self::Error> {
+        let numeric_track = super::catalog::identity(track_id.provider(), track_id.opaque())
+            .map_err(|_| LibraryMutationError::InvalidRequest)?;
+        let (generation, credential, _, numeric_playlist) =
+            self.owned_playlist_write_context(&playlist_id).await?;
+        self.auth
+            .run(
+                generation,
+                self.client.set_playlist_track_membership(
+                    &credential,
+                    numeric_playlist,
+                    numeric_track,
+                    present,
+                ),
+            )
+            .await
+            .map_err(mutation_error)
     }
 }
 impl<T: Transport> NeteaseProvider<T> {

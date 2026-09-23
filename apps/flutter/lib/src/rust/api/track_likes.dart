@@ -10,26 +10,26 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `failed_mutation`, `map_error`, `map_mutation`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
 
-QqMusicTrackLikeMutationHandle beginQqMusicTrackLikeMutation({
+TrackLikeMutationHandle beginTrackLikeMutation({
   required String providerId,
   required String opaqueTrackId,
-  required QqMusicTrackLikeState desiredState,
-}) => RustLib.instance.api.crateApiTrackLikesBeginQqMusicTrackLikeMutation(
+  required TrackLikeState desiredState,
+}) => RustLib.instance.api.crateApiTrackLikesBeginTrackLikeMutation(
   providerId: providerId,
   opaqueTrackId: opaqueTrackId,
   desiredState: desiredState,
 );
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicTrackLikeMutationHandle>>
-abstract class QqMusicTrackLikeMutationHandle implements RustOpaqueInterface {
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TrackLikeMutationHandle>>
+abstract class TrackLikeMutationHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
 
-  Future<QqMusicTrackLikeMutationResult> run();
+  Future<TrackLikeMutationResult> run();
 }
 
-enum QqMusicTrackLikeMutationFailure {
+enum TrackLikeMutationFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,
@@ -39,17 +39,17 @@ enum QqMusicTrackLikeMutationFailure {
   invalidResponseOutcomeUnknown,
   replacedOutcomeUnknown,
 
-  /// Cancelling the local wait cannot recall a write already sent to QQ
-  /// Music, so presentation must refresh instead of assuming failure.
+  /// Cancelling the local wait cannot recall a write already sent to the
+  /// Provider, so presentation must refresh instead of assuming failure.
   cancelledOutcomeUnknown,
   alreadyRunning,
 }
 
-class QqMusicTrackLikeMutationResult {
-  final QqMusicTrackLikeState? confirmedState;
-  final QqMusicTrackLikeMutationFailure? failure;
+class TrackLikeMutationResult {
+  final TrackLikeState? confirmedState;
+  final TrackLikeMutationFailure? failure;
 
-  const QqMusicTrackLikeMutationResult({this.confirmedState, this.failure});
+  const TrackLikeMutationResult({this.confirmedState, this.failure});
 
   @override
   int get hashCode => confirmedState.hashCode ^ failure.hashCode;
@@ -57,10 +57,10 @@ class QqMusicTrackLikeMutationResult {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is QqMusicTrackLikeMutationResult &&
+      other is TrackLikeMutationResult &&
           runtimeType == other.runtimeType &&
           confirmedState == other.confirmedState &&
           failure == other.failure;
 }
 
-enum QqMusicTrackLikeState { liked, notLiked }
+enum TrackLikeState { liked, notLiked }

@@ -1444,6 +1444,9 @@ class _SearchTrackRowState extends State<_SearchTrackRow> {
   Future<void> _showDesktopActions(Offset position) async {
     final overlay = Overlay.of(context).context.findRenderObject();
     if (overlay is! RenderBox) return;
+    final likeAction = await resolveMusicTrackLikeAction(context, widget.track);
+    if (!mounted) return;
+    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
     final action = await showMenu<MusicTrackAction>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -1452,12 +1455,15 @@ class _SearchTrackRowState extends State<_SearchTrackRow> {
         overlay.size.width - position.dx,
         overlay.size.height - position.dy,
       ),
-      items: _menuItems(),
+      items: _menuItems(likeAction, canAddToPlaylist),
     );
-    _runAction(action);
+    await _runAction(action);
   }
 
   Future<void> _showCompactActions() async {
+    final likeAction = await resolveMusicTrackLikeAction(context, widget.track);
+    if (!mounted) return;
+    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
     final action = await showModalBottomSheet<MusicTrackAction>(
       context: context,
       showDragHandle: true,
@@ -1472,12 +1478,33 @@ class _SearchTrackRowState extends State<_SearchTrackRow> {
               title: Text(context.l10n.commonPlayFromHere),
               onTap: () => Navigator.pop(context, MusicTrackAction.play),
             ),
+            if (likeAction != null)
+              ListTile(
+                leading: Icon(
+                  likeAction == MusicTrackAction.like
+                      ? Icons.favorite_border_rounded
+                      : Icons.favorite_rounded,
+                ),
+                title: Text(
+                  likeAction == MusicTrackAction.like
+                      ? context.l10n.libraryLikeTrack
+                      : context.l10n.libraryUnlikeTrack,
+                ),
+                onTap: () => Navigator.pop(context, likeAction),
+              ),
             ListTile(
               key: ValueKey('track-search-add-to-queue-${widget.index}'),
               leading: const Icon(Icons.playlist_add_rounded),
               title: Text(context.l10n.commonAddToQueue),
               onTap: () => Navigator.pop(context, MusicTrackAction.addToQueue),
             ),
+            if (canAddToPlaylist)
+              ListTile(
+                leading: const Icon(Icons.playlist_add_rounded),
+                title: Text(context.l10n.libraryAddTrackToPlaylist),
+                onTap: () =>
+                    Navigator.pop(context, MusicTrackAction.addToPlaylist),
+              ),
             if (widget.album != null)
               ListTile(
                 key: ValueKey('track-search-album-${widget.index}'),
@@ -1498,10 +1525,13 @@ class _SearchTrackRowState extends State<_SearchTrackRow> {
         ),
       ),
     );
-    _runAction(action);
+    await _runAction(action);
   }
 
-  List<PopupMenuEntry<MusicTrackAction>> _menuItems() => [
+  List<PopupMenuEntry<MusicTrackAction>> _menuItems(
+    MusicTrackAction? likeAction,
+    bool canAddToPlaylist,
+  ) => [
     PopupMenuItem(
       value: MusicTrackAction.play,
       child: ListTile(
@@ -1509,6 +1539,22 @@ class _SearchTrackRowState extends State<_SearchTrackRow> {
         title: Text(context.l10n.commonPlayFromHere),
       ),
     ),
+    if (likeAction != null)
+      PopupMenuItem(
+        value: likeAction,
+        child: ListTile(
+          leading: Icon(
+            likeAction == MusicTrackAction.like
+                ? Icons.favorite_border_rounded
+                : Icons.favorite_rounded,
+          ),
+          title: Text(
+            likeAction == MusicTrackAction.like
+                ? context.l10n.libraryLikeTrack
+                : context.l10n.libraryUnlikeTrack,
+          ),
+        ),
+      ),
     PopupMenuItem(
       value: MusicTrackAction.addToQueue,
       child: ListTile(
@@ -1516,6 +1562,14 @@ class _SearchTrackRowState extends State<_SearchTrackRow> {
         title: Text(context.l10n.commonAddToQueue),
       ),
     ),
+    if (canAddToPlaylist)
+      PopupMenuItem(
+        value: MusicTrackAction.addToPlaylist,
+        child: ListTile(
+          leading: const Icon(Icons.playlist_add_rounded),
+          title: Text(context.l10n.libraryAddTrackToPlaylist),
+        ),
+      ),
     if (widget.album != null)
       PopupMenuItem(
         value: MusicTrackAction.openAlbum,
@@ -1534,16 +1588,20 @@ class _SearchTrackRowState extends State<_SearchTrackRow> {
       ),
   ];
 
-  void _runAction(MusicTrackAction? action) {
+  Future<void> _runAction(MusicTrackAction? action) async {
     switch (action) {
       case MusicTrackAction.play:
         widget.onPlay();
       case MusicTrackAction.addToQueue:
         widget.onQueue();
+      case MusicTrackAction.addToPlaylist:
+        await showAddTrackToPlaylist(context: context, track: widget.track);
       case MusicTrackAction.openAlbum:
         widget.onOpenAlbum?.call();
       case MusicTrackAction.openArtist:
         unawaited(_openArtist());
+      case MusicTrackAction.like || MusicTrackAction.unlike:
+        await runMusicTrackLikeAction(context, widget.track, action!);
       case null:
         return;
     }

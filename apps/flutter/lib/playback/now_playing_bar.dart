@@ -6,6 +6,7 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/track_like_presentation_controller.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
@@ -264,6 +265,7 @@ class _CompactNowPlayingBar extends StatelessWidget {
                     },
                   ),
                 ),
+                _TrackLikeButton(track: track, dimension: controlExtent),
                 _CompactControlHitRegion(
                   child: IconButton(
                     key: const ValueKey('now-playing-previous'),
@@ -378,6 +380,111 @@ class _CompactControlHitRegion extends StatelessWidget {
   );
 }
 
+class _TrackLikeButton extends StatefulWidget {
+  const _TrackLikeButton({required this.track, this.dimension = 40});
+
+  final PlaylistTrackSummary track;
+  final double dimension;
+
+  @override
+  State<_TrackLikeButton> createState() => _TrackLikeButtonState();
+}
+
+class _TrackLikeButtonState extends State<_TrackLikeButton> {
+  TrackLikePresentationController? _controller;
+  String? _scheduledIdentity;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final controller = TrackLikeActionScope.maybeOf(context);
+    if (!identical(_controller, controller)) {
+      _controller?.removeListener(_changed);
+      _controller = controller;
+      _scheduledIdentity = null;
+      controller?.addListener(_changed);
+    }
+    _scheduleResolve(controller);
+  }
+
+  @override
+  void didUpdateWidget(_TrackLikeButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.track.providerId != widget.track.providerId ||
+        oldWidget.track.opaqueId != widget.track.opaqueId) {
+      _scheduleResolve(_controller);
+    }
+  }
+
+  void _scheduleResolve(TrackLikePresentationController? controller) {
+    if (controller == null) return;
+    final identity = '${widget.track.providerId}\u0000${widget.track.opaqueId}';
+    if (_scheduledIdentity == identity) return;
+    _scheduledIdentity = identity;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && identical(_controller, controller)) {
+        unawaited(controller.resolve(widget.track));
+      }
+    });
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    if (controller == null) return const SizedBox.shrink();
+    final state = controller.stateFor(widget.track);
+    if (state == AuthoritativeTrackLikeState.unavailable) {
+      return const SizedBox.shrink();
+    }
+    final liked = state == AuthoritativeTrackLikeState.liked;
+    final pending =
+        state == AuthoritativeTrackLikeState.loading ||
+        controller.mutations.isTrackPending(widget.track);
+    final actionable = !pending && state != AuthoritativeTrackLikeState.unknown;
+    return IconButton(
+      key: const ValueKey('now-playing-track-like'),
+      tooltip: liked
+          ? context.l10n.libraryUnlikeTrack
+          : context.l10n.libraryLikeTrack,
+      onPressed: !actionable
+          ? null
+          : () => unawaited(
+              performTrackLikeAction(
+                context: context,
+                track: widget.track,
+                liked: !liked,
+              ),
+            ),
+      constraints: BoxConstraints.tightFor(
+        width: widget.dimension,
+        height: widget.dimension,
+      ),
+      padding: EdgeInsets.zero,
+      icon: pending
+          ? SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.25,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            )
+          : Icon(
+              liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            ),
+    );
+  }
+}
+
 class _DesktopNowPlayingLayout extends StatelessWidget {
   const _DesktopNowPlayingLayout({
     required this.controller,
@@ -483,6 +590,7 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
                       actualQuality: playback.resolvedQuality,
                       onChanged: onChanged,
                     ),
+                _TrackLikeButton(track: track),
                 _VolumeButton(controller: controller),
                 _QueueButton(controller: controller),
               ],
@@ -537,22 +645,29 @@ class _ExpandedPlaybackControls extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsetsDirectional.only(start: 16, end: 12),
-                child: Semantics(
-                  container: true,
-                  liveRegion: true,
-                  label: status,
-                  excludeSemantics: true,
-                  child: Text(
-                    status,
-                    key: const ValueKey('now-playing-status'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: error
-                          ? theme.colorScheme.error
-                          : theme.colorScheme.onSurfaceVariant,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Semantics(
+                        container: true,
+                        liveRegion: true,
+                        label: status,
+                        excludeSemantics: true,
+                        child: Text(
+                          status,
+                          key: const ValueKey('now-playing-status'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: error
+                                ? theme.colorScheme.error
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    _TrackLikeButton(track: track),
+                  ],
                 ),
               ),
               Padding(
@@ -565,6 +680,7 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                   if (constraints.maxWidth < 600) {
                     return _CompactExpandedPlaybackControls(
                       controller: controller,
+                      track: track,
                       authenticationFailure: authenticationFailure,
                       onSignInAgain: onSignInAgain,
                       qualityPreference: qualityPreference,
@@ -645,6 +761,7 @@ class _ExpandedPlaybackControls extends StatelessWidget {
 class _CompactExpandedPlaybackControls extends StatelessWidget {
   const _CompactExpandedPlaybackControls({
     required this.controller,
+    required this.track,
     required this.authenticationFailure,
     required this.onSignInAgain,
     required this.qualityPreference,
@@ -660,6 +777,7 @@ class _CompactExpandedPlaybackControls extends StatelessWidget {
   static const _horizontalInset = 4.0;
 
   final QueuePlaybackController controller;
+  final PlaylistTrackSummary track;
   final bool authenticationFailure;
   final VoidCallback onSignInAgain;
   final AppPlaybackQualityPreference? qualityPreference;

@@ -2,18 +2,18 @@ use std::fmt;
 
 use provider_api::{LibraryMutationError, TrackLikeMutationProvider};
 
-use super::authentication::native_qq_music_provider;
 use super::domain_track_id;
 use super::remote_mutation::{RemoteMutationLifecycle, RemoteMutationStart};
+use super::with_native_provider;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QqMusicTrackLikeState {
+pub enum TrackLikeState {
     Liked,
     NotLiked,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QqMusicTrackLikeMutationFailure {
+pub enum TrackLikeMutationFailure {
     CoreUnavailable,
     AuthenticationRequired,
     CredentialRejected,
@@ -22,32 +22,32 @@ pub enum QqMusicTrackLikeMutationFailure {
     InvalidRequest,
     InvalidResponseOutcomeUnknown,
     ReplacedOutcomeUnknown,
-    /// Cancelling the local wait cannot recall a write already sent to QQ
-    /// Music, so presentation must refresh instead of assuming failure.
+    /// Cancelling the local wait cannot recall a write already sent to the
+    /// Provider, so presentation must refresh instead of assuming failure.
     CancelledOutcomeUnknown,
     AlreadyRunning,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct QqMusicTrackLikeMutationResult {
-    pub confirmed_state: Option<QqMusicTrackLikeState>,
-    pub failure: Option<QqMusicTrackLikeMutationFailure>,
+pub struct TrackLikeMutationResult {
+    pub confirmed_state: Option<TrackLikeState>,
+    pub failure: Option<TrackLikeMutationFailure>,
 }
 
 /// One cancellable, single-use desired liked-Track mutation. Track identity is
 /// retained only for Provider routing and redacted from diagnostics.
 #[flutter_rust_bridge::frb(opaque)]
-pub struct QqMusicTrackLikeMutationHandle {
+pub struct TrackLikeMutationHandle {
     provider_id: String,
     opaque_track_id: String,
-    desired_state: QqMusicTrackLikeState,
+    desired_state: TrackLikeState,
     lifecycle: RemoteMutationLifecycle,
 }
 
-impl fmt::Debug for QqMusicTrackLikeMutationHandle {
+impl fmt::Debug for TrackLikeMutationHandle {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("QqMusicTrackLikeMutationHandle")
+            .debug_struct("TrackLikeMutationHandle")
             .field("provider_id", &self.provider_id)
             .field("opaque_track_id", &"[REDACTED]")
             .field("desired_state", &self.desired_state)
@@ -57,25 +57,26 @@ impl fmt::Debug for QqMusicTrackLikeMutationHandle {
     }
 }
 
-impl QqMusicTrackLikeMutationHandle {
-    pub async fn run(&self) -> QqMusicTrackLikeMutationResult {
+impl TrackLikeMutationHandle {
+    pub async fn run(&self) -> TrackLikeMutationResult {
         match self.lifecycle.try_start() {
             RemoteMutationStart::Started => {}
             RemoteMutationStart::Cancelled => {
-                return failed_mutation(QqMusicTrackLikeMutationFailure::CancelledOutcomeUnknown);
+                return failed_mutation(TrackLikeMutationFailure::CancelledOutcomeUnknown);
             }
             RemoteMutationStart::AlreadyRunning => {
-                return failed_mutation(QqMusicTrackLikeMutationFailure::AlreadyRunning);
+                return failed_mutation(TrackLikeMutationFailure::AlreadyRunning);
             }
         }
         let outcome = match domain_track_id(&self.provider_id, &self.opaque_track_id) {
-            Ok(track_id) => match native_qq_music_provider() {
-                Ok(provider) => {
-                    let liked = self.desired_state == QqMusicTrackLikeState::Liked;
+            Ok(track_id) => with_native_provider!(
+                &self.provider_id,
+                |provider| {
+                    let liked = self.desired_state == TrackLikeState::Liked;
                     tokio::select! {
                         () = self.lifecycle.cancelled() => {
                             failed_mutation(
-                                QqMusicTrackLikeMutationFailure::CancelledOutcomeUnknown,
+                                TrackLikeMutationFailure::CancelledOutcomeUnknown,
                             )
                         }
                         result = provider.set_track_liked(track_id, liked) => {
@@ -83,15 +84,15 @@ impl QqMusicTrackLikeMutationHandle {
                                 map_mutation(result, self.desired_state)
                             } else {
                                 failed_mutation(
-                                    QqMusicTrackLikeMutationFailure::CancelledOutcomeUnknown,
+                                    TrackLikeMutationFailure::CancelledOutcomeUnknown,
                                 )
                             }
                         }
                     }
-                }
-                Err(()) => failed_mutation(QqMusicTrackLikeMutationFailure::CoreUnavailable),
-            },
-            Err(()) => failed_mutation(QqMusicTrackLikeMutationFailure::InvalidRequest),
+                },
+                failed_mutation(TrackLikeMutationFailure::CoreUnavailable)
+            ),
+            Err(()) => failed_mutation(TrackLikeMutationFailure::InvalidRequest),
         };
         self.lifecycle.finish();
         outcome
@@ -109,12 +110,12 @@ impl QqMusicTrackLikeMutationHandle {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_qq_music_track_like_mutation(
+pub fn begin_track_like_mutation(
     provider_id: String,
     opaque_track_id: String,
-    desired_state: QqMusicTrackLikeState,
-) -> QqMusicTrackLikeMutationHandle {
-    QqMusicTrackLikeMutationHandle {
+    desired_state: TrackLikeState,
+) -> TrackLikeMutationHandle {
+    TrackLikeMutationHandle {
         provider_id,
         opaque_track_id,
         desired_state,
@@ -124,10 +125,10 @@ pub fn begin_qq_music_track_like_mutation(
 
 fn map_mutation(
     result: Result<(), LibraryMutationError>,
-    desired_state: QqMusicTrackLikeState,
-) -> QqMusicTrackLikeMutationResult {
+    desired_state: TrackLikeState,
+) -> TrackLikeMutationResult {
     match result {
-        Ok(()) => QqMusicTrackLikeMutationResult {
+        Ok(()) => TrackLikeMutationResult {
             confirmed_state: Some(desired_state),
             failure: None,
         },
@@ -135,34 +136,28 @@ fn map_mutation(
     }
 }
 
-const fn failed_mutation(
-    failure: QqMusicTrackLikeMutationFailure,
-) -> QqMusicTrackLikeMutationResult {
-    QqMusicTrackLikeMutationResult {
+const fn failed_mutation(failure: TrackLikeMutationFailure) -> TrackLikeMutationResult {
+    TrackLikeMutationResult {
         confirmed_state: None,
         failure: Some(failure),
     }
 }
 
-const fn map_error(error: LibraryMutationError) -> QqMusicTrackLikeMutationFailure {
+const fn map_error(error: LibraryMutationError) -> TrackLikeMutationFailure {
     match error {
         LibraryMutationError::AuthenticationRequired => {
-            QqMusicTrackLikeMutationFailure::AuthenticationRequired
+            TrackLikeMutationFailure::AuthenticationRequired
         }
-        LibraryMutationError::CredentialRejected => {
-            QqMusicTrackLikeMutationFailure::CredentialRejected
-        }
+        LibraryMutationError::CredentialRejected => TrackLikeMutationFailure::CredentialRejected,
         LibraryMutationError::NetworkOutcomeUnknown => {
-            QqMusicTrackLikeMutationFailure::NetworkOutcomeUnknown
+            TrackLikeMutationFailure::NetworkOutcomeUnknown
         }
-        LibraryMutationError::ServiceUnavailable => {
-            QqMusicTrackLikeMutationFailure::ServiceUnavailable
-        }
-        LibraryMutationError::InvalidRequest => QqMusicTrackLikeMutationFailure::InvalidRequest,
+        LibraryMutationError::ServiceUnavailable => TrackLikeMutationFailure::ServiceUnavailable,
+        LibraryMutationError::InvalidRequest => TrackLikeMutationFailure::InvalidRequest,
         LibraryMutationError::InvalidResponseOutcomeUnknown => {
-            QqMusicTrackLikeMutationFailure::InvalidResponseOutcomeUnknown
+            TrackLikeMutationFailure::InvalidResponseOutcomeUnknown
         }
-        LibraryMutationError::Replaced => QqMusicTrackLikeMutationFailure::ReplacedOutcomeUnknown,
+        LibraryMutationError::Replaced => TrackLikeMutationFailure::ReplacedOutcomeUnknown,
     }
 }
 
@@ -171,44 +166,44 @@ mod tests {
     use provider_api::LibraryMutationError;
 
     use super::{
-        QqMusicTrackLikeMutationFailure, QqMusicTrackLikeState, begin_qq_music_track_like_mutation,
-        map_error, map_mutation,
+        TrackLikeMutationFailure, TrackLikeState, begin_track_like_mutation, map_error,
+        map_mutation,
     };
 
     #[test]
     fn maps_confirmed_state_and_all_failures() {
-        let success = map_mutation(Ok(()), QqMusicTrackLikeState::Liked);
-        assert_eq!(success.confirmed_state, Some(QqMusicTrackLikeState::Liked));
+        let success = map_mutation(Ok(()), TrackLikeState::Liked);
+        assert_eq!(success.confirmed_state, Some(TrackLikeState::Liked));
         assert_eq!(success.failure, None);
 
         let cases = [
             (
                 LibraryMutationError::AuthenticationRequired,
-                QqMusicTrackLikeMutationFailure::AuthenticationRequired,
+                TrackLikeMutationFailure::AuthenticationRequired,
             ),
             (
                 LibraryMutationError::CredentialRejected,
-                QqMusicTrackLikeMutationFailure::CredentialRejected,
+                TrackLikeMutationFailure::CredentialRejected,
             ),
             (
                 LibraryMutationError::NetworkOutcomeUnknown,
-                QqMusicTrackLikeMutationFailure::NetworkOutcomeUnknown,
+                TrackLikeMutationFailure::NetworkOutcomeUnknown,
             ),
             (
                 LibraryMutationError::ServiceUnavailable,
-                QqMusicTrackLikeMutationFailure::ServiceUnavailable,
+                TrackLikeMutationFailure::ServiceUnavailable,
             ),
             (
                 LibraryMutationError::InvalidRequest,
-                QqMusicTrackLikeMutationFailure::InvalidRequest,
+                TrackLikeMutationFailure::InvalidRequest,
             ),
             (
                 LibraryMutationError::InvalidResponseOutcomeUnknown,
-                QqMusicTrackLikeMutationFailure::InvalidResponseOutcomeUnknown,
+                TrackLikeMutationFailure::InvalidResponseOutcomeUnknown,
             ),
             (
                 LibraryMutationError::Replaced,
-                QqMusicTrackLikeMutationFailure::ReplacedOutcomeUnknown,
+                TrackLikeMutationFailure::ReplacedOutcomeUnknown,
             ),
         ];
         for (input, expected) in cases {
@@ -218,10 +213,10 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_is_terminal_and_identity_is_redacted() {
-        let handle = begin_qq_music_track_like_mutation(
+        let handle = begin_track_like_mutation(
             "qq-music".into(),
             "track:41001:0:privateTrackMid:privateFileMid".into(),
-            QqMusicTrackLikeState::NotLiked,
+            TrackLikeState::NotLiked,
         );
         let debug = format!("{handle:?}");
         assert!(!debug.contains("41001"));
@@ -233,7 +228,7 @@ mod tests {
         assert_eq!(result.confirmed_state, None);
         assert_eq!(
             result.failure,
-            Some(QqMusicTrackLikeMutationFailure::CancelledOutcomeUnknown)
+            Some(TrackLikeMutationFailure::CancelledOutcomeUnknown)
         );
     }
 }

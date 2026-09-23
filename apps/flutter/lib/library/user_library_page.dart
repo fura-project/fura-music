@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/album/album_page.dart';
@@ -27,15 +28,20 @@ import 'package:flutterustmusic/home/official_playlist_controller.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
+import 'package:flutterustmusic/library/album_favorite_presentation_controller.dart';
 import 'package:flutterustmusic/library/favorite_artists_page.dart';
 import 'package:flutterustmusic/library/library_section_selector.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_collection_header.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/library_mutation_coordinator.dart';
+import 'package:flutterustmusic/library/library_mutation_feedback.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/liked_songs_page.dart';
 import 'package:flutterustmusic/library/recent_plays_page.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
+import 'package:flutterustmusic/library/track_like_presentation_controller.dart';
+import 'package:flutterustmusic/library/playlist_track_presentation_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/navigation/authenticated_navigation_state.dart';
 import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
@@ -542,6 +548,10 @@ class _SettingsShellNavigationTransitionState
 
 class _UserLibraryPageState extends State<UserLibraryPage> {
   late UserLibraryController _controller;
+  late LibraryMutationCoordinator _libraryMutations;
+  late TrackLikePresentationController _trackLikes;
+  late AlbumFavoritePresentationController _albumFavorites;
+  late PlaylistTrackPresentationController _playlistTracks;
   late HomeController _homeController;
   late final QueuePlaybackController _queuePlaybackController;
   late final ArtworkColorSchemeCache _expandedNowPlayingPalette;
@@ -621,6 +631,35 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   void _initializeProviderControllers() {
     _controller = UserLibraryController(_library.libraryGateway);
+    _libraryMutations = LibraryMutationCoordinator(
+      providerId: widget.settings.musicProvider.providerId,
+      trackLikeGateway: _library.trackLikeGateway,
+      albumFavoriteGateway: _library.albumFavoriteGateway,
+      playlistTrackGateway: _library.playlistTrackGateway,
+      playlistCreationGateway: _library.playlistCreationGateway,
+      playlistDeletionGateway: _library.playlistDeletionGateway,
+    );
+    _trackLikes = TrackLikePresentationController(
+      providerId: widget.settings.musicProvider.providerId,
+      enabled: widget.authenticated && widget.capabilities.trackLike,
+      playlistGateway: _library.playlistDetailGateway,
+      mutations: _libraryMutations,
+    );
+    _albumFavorites = AlbumFavoritePresentationController(
+      providerId: widget.settings.musicProvider.providerId,
+      enabled: widget.authenticated && widget.capabilities.albumFavorite,
+      gateway: _library.favoriteAlbumGateway,
+      mutations: _libraryMutations,
+    );
+    _playlistTracks = PlaylistTrackPresentationController(
+      providerId: widget.settings.musicProvider.providerId,
+      enabled:
+          widget.authenticated && widget.capabilities.playlistTrackMutation,
+      library: _controller,
+      gateway: _library.playlistDetailGateway,
+      mutations: _libraryMutations,
+    );
+    _controller.addListener(_onLibraryChanged);
     _homeController = HomeController(
       _home.accountSummaryGateway,
       _home.dailyRecommendationGateway,
@@ -661,6 +700,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }
 
   void _disposeProviderControllers() {
+    _controller.removeListener(_onLibraryChanged);
+    _playlistTracks.dispose();
+    _albumFavorites.dispose();
+    _trackLikes.dispose();
+    _libraryMutations.dispose();
     _controller.dispose();
     _homeController.removeListener(_onHomeChanged);
     _homeController.dispose();
@@ -717,6 +761,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       widget.discoveryDependencies;
   AuthenticatedPlaybackDependencies get _playback =>
       widget.playbackDependencies;
+
+  void _onLibraryChanged() {
+    _trackLikes.bindLikedPlaylist(_controller.likedSongsPlaylist);
+  }
 
   void _onQueuePlaybackChanged() {
     if (!mounted) return;
@@ -881,7 +929,19 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               _returnFromLocalPage();
             }
           },
-          child: shortcutPage,
+          child: LibraryMutationFeedbackScope(
+            onStatus: _showLibraryMutationOutcome,
+            child: AlbumFavoriteActionScope(
+              controller: _albumFavorites,
+              child: PlaylistTrackActionScope(
+                controller: _playlistTracks,
+                child: TrackLikeActionScope(
+                  controller: _trackLikes,
+                  child: shortcutPage,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -935,6 +995,17 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     onOpenAlbum: _openTrackContextAlbum,
     onOpenArtist: _openTrackContextArtist,
     onSignInAgain: widget.onSignInAgain,
+    mutationCoordinator: _libraryMutations,
+    canRemoveTracks:
+        widget.capabilities.playlistTrackMutation &&
+        route.playlist.ownership == UserPlaylistOwnership.owned &&
+        !route.playlist.isLikedSongs,
+    onDeletePlaylist:
+        widget.capabilities.playlistDelete &&
+            route.playlist.ownership == UserPlaylistOwnership.owned &&
+            !route.playlist.isLikedSongs
+        ? () => _showDeletePlaylistDialog(route.playlist)
+        : null,
     onHeaderCollapsedChanged: embedded
         ? (collapsed) =>
               _updateCollectionDetailHeaderCollapsed(route, collapsed)
@@ -1546,6 +1617,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         _navigation.hasLocalRoute) {
       return;
     }
+    _albumFavorites.observeFavorite(album);
     _pushLocalRoute(
       AlbumLocalRoute(album: album, origin: AlbumRouteOrigin.favoriteAlbums),
     );
@@ -1673,6 +1745,19 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   ? context.l10n.libraryRefreshingPlaylists
                   : context.l10n.libraryRefreshPlaylists,
               onRefresh: _controller.isLoading ? null : _controller.refresh,
+              actions: widget.capabilities.playlistCreate
+                  ? [
+                      const SizedBox(width: MusicSpacing.itemGap),
+                      IconButton.filledTonal(
+                        key: const ValueKey('create-playlist'),
+                        tooltip: context.l10n.libraryCreatePlaylist,
+                        onPressed: _libraryMutations.isCreatingPlaylist
+                            ? null
+                            : _showCreatePlaylistDialog,
+                        icon: const Icon(Icons.playlist_add_rounded),
+                      ),
+                    ]
+                  : const [],
             ),
           ),
         Expanded(
@@ -1690,6 +1775,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   onSignInAgain: widget.onSignInAgain,
                   embedded: true,
                   providerDisplayName: _providerDisplayName,
+                  mutationCoordinator: _libraryMutations,
+                  canMutateFavorites: widget.capabilities.albumFavorite,
                 )
               else
                 const SizedBox.shrink(),
@@ -1738,6 +1825,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         onOpenPlaylist: _openPlaylist,
         lastOpenedPlaylist: _lastOpenedPlaylist,
         playlistReturnFocusNode: _playlistReturnFocusNode,
+        onDeletePlaylist: widget.capabilities.playlistDelete
+            ? _showDeletePlaylistDialog
+            : null,
         onOpenAlbum: _openTrackContextAlbum,
         onOpenFavoriteAlbum: _openFavoriteAlbum,
         onOpenArtist: _openTrackContextArtist,
@@ -1745,6 +1835,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         onHeaderCollapsedChanged: _updateLikedHeaderCollapsed,
         collapsedHeaderActions: collapsedHeaderActions,
         providerDisplayName: _providerDisplayName,
+        mutationCoordinator: _libraryMutations,
+        canMutateTrackLikes: widget.capabilities.trackLike,
+        canMutateAlbumFavorites: widget.capabilities.albumFavorite,
       ),
     };
   }
@@ -2222,6 +2315,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           authenticated: widget.authenticated,
           providerDisplayName: _providerDisplayName,
           supportsRecentHistory: widget.capabilities.recentHistory,
+          supportsPlaylistCreate: widget.capabilities.playlistCreate,
           recommendationsFocusNode: _recommendationsReturnFocusNode,
           searchFocusNode: _searchReturnFocusNode,
           settingsSelected: settingsOpen,
@@ -2235,6 +2329,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             _selectPrimaryDestination(AuthenticatedPrimaryDestination.library);
             _openPlaylist(playlist);
           },
+          onCreatePlaylist: _showCreatePlaylistDialog,
+          onDeletePlaylist: widget.capabilities.playlistDelete
+              ? _showDeletePlaylistDialog
+              : null,
         ),
       );
       final settingsUsesOwnToolbar = settingsOpen && !wide;
@@ -2650,6 +2748,191 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     ],
   );
 
+  Future<void> _showCreatePlaylistDialog() async {
+    final formKey = GlobalKey<FormState>();
+    var playlistName = '';
+    final outcome =
+        await showDialog<LibraryMutationOutcome<UserPlaylistSummary>>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) {
+            var pending = false;
+            return StatefulBuilder(
+              builder: (context, setDialogState) {
+                Future<void> submit() async {
+                  if (pending || formKey.currentState?.validate() != true) {
+                    return;
+                  }
+                  setDialogState(() => pending = true);
+                  final result = await _libraryMutations.createPlaylist(
+                    name: playlistName.trim(),
+                    refreshAuthoritativeState: _controller.refresh,
+                  );
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop(result);
+                  }
+                }
+
+                return AlertDialog(
+                  key: const ValueKey('create-playlist-dialog'),
+                  title: Text(context.l10n.libraryCreatePlaylistTitle),
+                  content: Form(
+                    key: formKey,
+                    child: TextFormField(
+                      key: const ValueKey('create-playlist-name'),
+                      autofocus: true,
+                      enabled: !pending,
+                      maxLength: 256,
+                      textInputAction: TextInputAction.done,
+                      onChanged: (value) => playlistName = value,
+                      decoration: InputDecoration(
+                        labelText: context.l10n.libraryPlaylistNameLabel,
+                      ),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? context.l10n.libraryPlaylistNameLabel
+                          : null,
+                      onFieldSubmitted: pending
+                          ? null
+                          : (_) => unawaited(submit()),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      key: const ValueKey('create-playlist-cancel'),
+                      onPressed: pending
+                          ? null
+                          : () => Navigator.of(dialogContext).pop(),
+                      child: Text(context.l10n.commonCancel),
+                    ),
+                    FilledButton(
+                      key: const ValueKey('create-playlist-confirm'),
+                      onPressed: pending ? null : submit,
+                      child: pending
+                          ? SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Theme.of(context).colorScheme.onPrimary,
+                              ),
+                            )
+                          : Text(context.l10n.libraryCreatePlaylist),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+    if (!mounted || outcome == null) return;
+    _showLibraryMutationOutcome(outcome.status);
+  }
+
+  Future<void> _showDeletePlaylistDialog(UserPlaylistSummary playlist) async {
+    final outcome = await showDialog<LibraryMutationOutcome<bool>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        var pending = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            key: const ValueKey('delete-playlist-dialog'),
+            title: Text(context.l10n.libraryDeletePlaylistTitle),
+            content: Text(
+              context.l10n.libraryDeletePlaylistDetail(playlist.title),
+            ),
+            actions: [
+              TextButton(
+                key: const ValueKey('delete-playlist-cancel'),
+                onPressed: pending
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(),
+                child: Text(context.l10n.commonCancel),
+              ),
+              FilledButton(
+                key: const ValueKey('delete-playlist-confirm'),
+                onPressed: pending
+                    ? null
+                    : () async {
+                        setDialogState(() => pending = true);
+                        final result = await _libraryMutations.deletePlaylist(
+                          playlist: playlist,
+                          refreshAuthoritativeState: _controller.refresh,
+                        );
+                        if (dialogContext.mounted) {
+                          Navigator.of(dialogContext).pop(result);
+                        }
+                      },
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                  foregroundColor: Theme.of(context).colorScheme.onError,
+                ),
+                child: pending
+                    ? SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Theme.of(context).colorScheme.onError,
+                        ),
+                      )
+                    : Text(context.l10n.libraryDeletePlaylist),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (!mounted || outcome == null) return;
+    _showLibraryMutationOutcome(outcome.status);
+    final stillPresent = _controller.playlists.any(
+      (candidate) =>
+          candidate.providerId == playlist.providerId &&
+          candidate.opaqueId == playlist.opaqueId,
+    );
+    final topRoute = _navigation.topRoute;
+    if (!stillPresent &&
+        topRoute is PlaylistLocalRoute &&
+        topRoute.playlist.providerId == playlist.providerId &&
+        topRoute.playlist.opaqueId == playlist.opaqueId) {
+      _returnFromTopRoute();
+    }
+  }
+
+  void _showLibraryMutationOutcome(LibraryMutationStatus status) {
+    final message = switch (status) {
+      LibraryMutationStatus.confirmed => context.l10n.libraryMutationSuccess,
+      LibraryMutationStatus.outcomeUnknown =>
+        context.l10n.libraryMutationOutcomeUnknown,
+      LibraryMutationStatus.alreadyRunning =>
+        context.l10n.libraryMutationPending,
+      LibraryMutationStatus.definitiveFailure ||
+      LibraryMutationStatus.unavailable => context.l10n.libraryMutationFailure,
+    };
+    final routes = _navigation.routes;
+    final expandedNowPlayingOpen =
+        routes.isNotEmpty && routes.last is ExpandedNowPlayingLocalRoute;
+    final retainedRoutes = expandedNowPlayingOpen
+        ? routes.sublist(0, routes.length - 1)
+        : routes;
+    final settingsOpen =
+        retainedRoutes.isNotEmpty && retainedRoutes.last is SettingsLocalRoute;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          margin: playbackSnackBarMargin(
+            viewportWidth: MediaQuery.sizeOf(context).width,
+            bottomSafeArea: MediaQuery.paddingOf(context).bottom,
+            playerPresent: _queuePlaybackController.current != null,
+            settingsOpen: settingsOpen,
+            expandedNowPlayingOpen: expandedNowPlayingOpen,
+          ),
+          content: Text(message),
+        ),
+      );
+  }
+
   Future<void> _confirmSignOut() async {
     final confirmed = await showAdaptiveConfirmation(
       context,
@@ -2701,6 +2984,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             onSelected: _openPlaylist,
             returnFocusPlaylist: _lastOpenedPlaylist,
             returnFocusNode: _playlistReturnFocusNode,
+            onDelete: widget.capabilities.playlistDelete
+                ? _showDeletePlaylistDialog
+                : null,
           ),
         ),
       ],
@@ -2852,6 +3138,7 @@ class _DesktopMusicSidebar extends StatelessWidget {
     required this.authenticated,
     required this.providerDisplayName,
     required this.supportsRecentHistory,
+    required this.supportsPlaylistCreate,
     required this.recommendationsFocusNode,
     required this.searchFocusNode,
     required this.settingsSelected,
@@ -2862,6 +3149,8 @@ class _DesktopMusicSidebar extends StatelessWidget {
     required this.onOpenLikedSongs,
     required this.onOpenSettings,
     required this.onOpenPlaylist,
+    required this.onCreatePlaylist,
+    required this.onDeletePlaylist,
   });
 
   final AuthenticatedPrimaryDestination destination;
@@ -2872,6 +3161,7 @@ class _DesktopMusicSidebar extends StatelessWidget {
   final bool authenticated;
   final String providerDisplayName;
   final bool supportsRecentHistory;
+  final bool supportsPlaylistCreate;
   final FocusNode recommendationsFocusNode;
   final FocusNode searchFocusNode;
   final bool settingsSelected;
@@ -2882,6 +3172,8 @@ class _DesktopMusicSidebar extends StatelessWidget {
   final VoidCallback onOpenLikedSongs;
   final VoidCallback onOpenSettings;
   final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
+  final VoidCallback onCreatePlaylist;
+  final ValueChanged<UserPlaylistSummary>? onDeletePlaylist;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -2982,44 +3274,38 @@ class _DesktopMusicSidebar extends StatelessWidget {
                         const SizedBox(height: MusicSpacing.contentGap),
                         _SidebarSectionLabel(
                           context.l10n.navYourPlaylistsSection,
+                          action: supportsPlaylistCreate
+                              ? IconButton(
+                                  key: const ValueKey(
+                                    'sidebar-create-playlist',
+                                  ),
+                                  tooltip: context.l10n.libraryCreatePlaylist,
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: onCreatePlaylist,
+                                  icon: const Icon(
+                                    Icons.playlist_add_rounded,
+                                    size: 20,
+                                  ),
+                                )
+                              : null,
                         ),
                         for (final playlist
                             in libraryController.playlists.where(
                               (playlist) => !playlist.isLikedSongs,
                             ))
-                          ListTile(
-                            key: ValueKey(
-                              'sidebar-playlist-${playlist.opaqueId}',
-                            ),
+                          _SidebarPlaylistTile(
+                            playlist: playlist,
                             selected:
                                 activePlaylist?.providerId ==
                                     playlist.providerId &&
                                 activePlaylist?.opaqueId == playlist.opaqueId,
-                            dense: true,
-                            minTileHeight: 44,
-                            shape: const StadiumBorder(),
-                            selectedTileColor: Theme.of(context)
-                                .colorScheme
-                                .secondaryContainer,
-                            selectedColor: Theme.of(context)
-                                .colorScheme
-                                .onSecondaryContainer,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                            ),
-                            leading: SizedBox.square(
-                              dimension: 32,
-                              child: _PlaylistArtwork(playlist: playlist),
-                            ),
-                            title: Tooltip(
-                              message: playlist.title,
-                              child: Text(
-                                playlist.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
                             onTap: () => onOpenPlaylist(playlist),
+                            onDelete:
+                                playlist.ownership ==
+                                        UserPlaylistOwnership.owned &&
+                                    !playlist.isLikedSongs
+                                ? onDeletePlaylist
+                                : null,
                           ),
                       ],
                     ],
@@ -3149,22 +3435,109 @@ class _SidebarIdentity extends StatelessWidget {
 }
 
 class _SidebarSectionLabel extends StatelessWidget {
-  const _SidebarSectionLabel(this.label);
+  const _SidebarSectionLabel(this.label, {this.action});
 
   final String label;
+  final Widget? action;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-    child: Text(
-      label,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.8,
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ),
       ),
-    ),
+      ?action,
+    ],
   );
+}
+
+class _SidebarPlaylistTile extends StatefulWidget {
+  const _SidebarPlaylistTile({
+    required this.playlist,
+    required this.selected,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  final UserPlaylistSummary playlist;
+  final bool selected;
+  final VoidCallback onTap;
+  final ValueChanged<UserPlaylistSummary>? onDelete;
+
+  @override
+  State<_SidebarPlaylistTile> createState() => _SidebarPlaylistTileState();
+}
+
+class _SidebarPlaylistTileState extends State<_SidebarPlaylistTile> {
+  final MenuController _controller = MenuController();
+
+  void _openMenu() {
+    if (widget.onDelete != null && !_controller.isOpen) _controller.open();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tile = CallbackShortcuts(
+      bindings: widget.onDelete == null
+          ? const <ShortcutActivator, VoidCallback>{}
+          : <ShortcutActivator, VoidCallback>{
+              const SingleActivator(LogicalKeyboardKey.contextMenu): _openMenu,
+              const SingleActivator(LogicalKeyboardKey.f10, shift: true):
+                  _openMenu,
+            },
+      child: ListTile(
+        key: ValueKey('sidebar-playlist-${widget.playlist.opaqueId}'),
+        selected: widget.selected,
+        dense: true,
+        minTileHeight: 44,
+        shape: const StadiumBorder(),
+        selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
+        selectedColor: Theme.of(context).colorScheme.onSecondaryContainer,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+        leading: SizedBox.square(
+          dimension: 32,
+          child: _PlaylistArtwork(playlist: widget.playlist),
+        ),
+        title: Tooltip(
+          message: widget.playlist.title,
+          child: Text(
+            widget.playlist.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        onTap: widget.onTap,
+        onLongPress: widget.onDelete == null ? null : _openMenu,
+      ),
+    );
+    if (widget.onDelete == null) return tile;
+    return MenuAnchor(
+      controller: _controller,
+      menuChildren: [
+        MenuItemButton(
+          key: const ValueKey('sidebar-delete-playlist'),
+          leadingIcon: const Icon(Icons.delete_outline_rounded),
+          onPressed: () => widget.onDelete?.call(widget.playlist),
+          child: Text(context.l10n.libraryDeletePlaylist),
+        ),
+      ],
+      builder: (context, controller, child) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onSecondaryTap: _openMenu,
+        child: tile,
+      ),
+    );
+  }
 }
 
 class _SidebarDestinationTile extends StatelessWidget {
@@ -3642,6 +4015,7 @@ class _PlaylistCollection extends StatelessWidget {
     required this.onSelected,
     required this.returnFocusPlaylist,
     required this.returnFocusNode,
+    required this.onDelete,
     super.key,
   });
 
@@ -3649,6 +4023,7 @@ class _PlaylistCollection extends StatelessWidget {
   final ValueChanged<UserPlaylistSummary> onSelected;
   final UserPlaylistSummary? returnFocusPlaylist;
   final FocusNode returnFocusNode;
+  final ValueChanged<UserPlaylistSummary>? onDelete;
 
   FocusNode? _focusNodeFor(UserPlaylistSummary playlist) {
     final target = returnFocusPlaylist;
@@ -3677,6 +4052,7 @@ class _PlaylistCollection extends StatelessWidget {
                   playlists: playlists,
                   onSelected: onSelected,
                   focusNodeFor: _focusNodeFor,
+                  onDelete: onDelete,
                 )
               : ListView.separated(
                   key: const PageStorageKey<String>('user-playlist-list'),
@@ -3687,6 +4063,12 @@ class _PlaylistCollection extends StatelessWidget {
                     playlist: playlists[index],
                     onTap: () => onSelected(playlists[index]),
                     focusNode: _focusNodeFor(playlists[index]),
+                    onDelete:
+                        playlists[index].ownership ==
+                                UserPlaylistOwnership.owned &&
+                            !playlists[index].isLikedSongs
+                        ? onDelete
+                        : null,
                   ),
                 ),
         );
@@ -3700,11 +4082,13 @@ class _DesktopPlaylistList extends StatelessWidget {
     required this.playlists,
     required this.onSelected,
     required this.focusNodeFor,
+    required this.onDelete,
   });
 
   final List<UserPlaylistSummary> playlists;
   final ValueChanged<UserPlaylistSummary> onSelected;
   final FocusNode? Function(UserPlaylistSummary playlist) focusNodeFor;
+  final ValueChanged<UserPlaylistSummary>? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -3750,6 +4134,11 @@ class _DesktopPlaylistList extends StatelessWidget {
                 onTap: () => onSelected(playlist),
                 focusNode: focusNodeFor(playlist),
                 desktop: true,
+                onDelete:
+                    playlist.ownership == UserPlaylistOwnership.owned &&
+                        !playlist.isLikedSongs
+                    ? onDelete
+                    : null,
               );
             },
           ),
@@ -3759,85 +4148,166 @@ class _DesktopPlaylistList extends StatelessWidget {
   }
 }
 
-class _PlaylistListItem extends StatelessWidget {
+class _PlaylistListItem extends StatefulWidget {
   const _PlaylistListItem({
     required this.playlist,
     required this.onTap,
     required this.focusNode,
+    required this.onDelete,
     this.desktop = false,
   });
 
   final UserPlaylistSummary playlist;
   final VoidCallback onTap;
   final FocusNode? focusNode;
+  final ValueChanged<UserPlaylistSummary>? onDelete;
   final bool desktop;
+
+  @override
+  State<_PlaylistListItem> createState() => _PlaylistListItemState();
+}
+
+class _PlaylistListItemState extends State<_PlaylistListItem> {
+  final MenuController _menuController = MenuController();
+
+  void _openMenu() {
+    if (widget.onDelete == null) return;
+    if (MediaQuery.sizeOf(context).width < 760) {
+      unawaited(_openCompactMenu());
+    } else if (!_menuController.isOpen) {
+      _menuController.open();
+    }
+  }
+
+  Future<void> _openCompactMenu() async {
+    final action = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const ValueKey('compact-delete-playlist-menu-item'),
+              leading: const Icon(Icons.delete_outline_rounded),
+              title: Text(context.l10n.libraryDeletePlaylist),
+              onTap: () => Navigator.of(context).pop(true),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (action == true && mounted) widget.onDelete?.call(widget.playlist);
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final playlist = widget.playlist;
     final count = playlist.trackCount;
-    return Semantics(
+    final row = Semantics(
       label: _semanticLabel(context.l10n, playlist),
       button: true,
       excludeSemantics: true,
-      onTap: onTap,
-      child: InkWell(
-        focusNode: focusNode,
-        borderRadius: MusicRadii.content,
-        onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: desktop ? 4 : 6),
-          child: Row(
-            children: [
-              SizedBox.square(
-                dimension: desktop ? 56 : 72,
-                child: _PlaylistArtwork(playlist: playlist),
-              ),
-              const SizedBox(width: MusicSpacing.contentGap),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      playlist.title,
-                      maxLines: desktop ? 1 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (!desktop && count != null) ...[
-                      const SizedBox(height: 4),
+      onTap: widget.onTap,
+      onLongPress: widget.onDelete == null ? null : _openMenu,
+      customSemanticsActions: widget.onDelete == null
+          ? const {}
+          : {
+              CustomSemanticsAction(label: context.l10n.libraryDeletePlaylist):
+                  _openMenu,
+            },
+      child: CallbackShortcuts(
+        bindings: widget.onDelete == null
+            ? const <ShortcutActivator, VoidCallback>{}
+            : <ShortcutActivator, VoidCallback>{
+                const SingleActivator(LogicalKeyboardKey.contextMenu):
+                    _openMenu,
+                const SingleActivator(LogicalKeyboardKey.f10, shift: true):
+                    _openMenu,
+              },
+        child: InkWell(
+          focusNode: widget.focusNode,
+          borderRadius: MusicRadii.content,
+          onTap: widget.onTap,
+          onLongPress: widget.onDelete == null ? null : _openMenu,
+          onSecondaryTap: widget.onDelete == null ? null : _openMenu,
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: widget.desktop ? 4 : 6),
+            child: Row(
+              children: [
+                SizedBox.square(
+                  dimension: widget.desktop ? 56 : 72,
+                  child: _PlaylistArtwork(playlist: playlist),
+                ),
+                const SizedBox(width: MusicSpacing.contentGap),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        context.l10n.libraryPlaylistCount(count),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                        playlist.title,
+                        maxLines: widget.desktop ? 1 : 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
-                  ],
-                ),
-              ),
-              SizedBox(
-                width: desktop ? 104 : 0,
-                child: desktop && count != null
-                    ? Text(
-                        context.l10n.libraryPlaylistCount(count),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                      if (!widget.desktop && count != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          context.l10n.libraryPlaylistCount(count),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
-                      )
-                    : null,
-              ),
-              if (desktop)
-                const SizedBox(
-                  width: 40,
-                  child: Icon(Icons.chevron_right_rounded),
+                      ],
+                    ],
+                  ),
                 ),
-            ],
+                SizedBox(
+                  width: widget.desktop ? 104 : 0,
+                  child: widget.desktop && count != null
+                      ? Text(
+                          context.l10n.libraryPlaylistCount(count),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        )
+                      : null,
+                ),
+                if (widget.desktop)
+                  const SizedBox(
+                    width: 40,
+                    child: Icon(Icons.chevron_right_rounded),
+                  )
+                else if (widget.onDelete != null)
+                  IconButton(
+                    key: const ValueKey('compact-playlist-overflow'),
+                    tooltip: context.l10n.commonMoreActions,
+                    onPressed: _openMenu,
+                    icon: const Icon(Icons.more_vert_rounded),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
+    );
+    if (widget.onDelete == null) return row;
+    return MenuAnchor(
+      controller: _menuController,
+      menuChildren: [
+        MenuItemButton(
+          key: const ValueKey('delete-playlist-menu-item'),
+          leadingIcon: const Icon(Icons.delete_outline_rounded),
+          onPressed: () => widget.onDelete?.call(playlist),
+          child: Text(context.l10n.libraryDeletePlaylist),
+        ),
+      ],
+      builder: (context, controller, child) => row,
     );
   }
 }

@@ -20,8 +20,13 @@ import 'package:flutterustmusic/home/recent_listening_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/album_favorite_gateway.dart';
+import 'package:flutterustmusic/library/playlist_creation_gateway.dart';
+import 'package:flutterustmusic/library/playlist_deletion_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/playlist_track_gateway.dart';
 import 'package:flutterustmusic/library/recent_plays_gateway.dart';
+import 'package:flutterustmusic/library/track_like_gateway.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
@@ -34,7 +39,13 @@ class MusicProviderCapabilities {
   const MusicProviderCapabilities({
     required this.radar,
     required this.recentHistory,
-    required this.libraryMutations,
+    required this.trackLike,
+    required this.albumFavorite,
+    required this.artistFavorite,
+    required this.playlistSave,
+    required this.playlistTrackMutation,
+    required this.playlistCreate,
+    required this.playlistDelete,
     required this.dailyPlaylist,
     required this.dailyTracks,
     required this.personalFm,
@@ -45,7 +56,13 @@ class MusicProviderCapabilities {
   static const qqMusic = MusicProviderCapabilities(
     radar: true,
     recentHistory: true,
-    libraryMutations: true,
+    trackLike: true,
+    albumFavorite: true,
+    artistFavorite: false,
+    playlistSave: false,
+    playlistTrackMutation: true,
+    playlistCreate: true,
+    playlistDelete: true,
     dailyPlaylist: true,
     dailyTracks: false,
     personalFm: false,
@@ -55,8 +72,14 @@ class MusicProviderCapabilities {
 
   static const netEaseCloudMusic = MusicProviderCapabilities(
     radar: false,
-    recentHistory: false,
-    libraryMutations: false,
+    recentHistory: true,
+    trackLike: true,
+    albumFavorite: false,
+    artistFavorite: false,
+    playlistSave: false,
+    playlistTrackMutation: true,
+    playlistCreate: true,
+    playlistDelete: false,
     dailyPlaylist: false,
     dailyTracks: true,
     personalFm: true,
@@ -75,7 +98,24 @@ class MusicProviderCapabilities {
 
   final bool radar;
   final bool recentHistory;
-  final bool libraryMutations;
+  final bool trackLike;
+  final bool albumFavorite;
+  final bool artistFavorite;
+  final bool playlistSave;
+  final bool playlistTrackMutation;
+  final bool playlistCreate;
+  final bool playlistDelete;
+
+  /// Compatibility summary for callers that only need to know whether any
+  /// library write exists. Presentation must gate individual actions above.
+  bool get libraryMutations =>
+      trackLike ||
+      albumFavorite ||
+      artistFavorite ||
+      playlistSave ||
+      playlistTrackMutation ||
+      playlistCreate ||
+      playlistDelete;
   final bool dailyPlaylist;
   final bool dailyTracks;
   final bool personalFm;
@@ -154,6 +194,11 @@ class AuthenticatedLibraryDependencies {
     required this.favoriteAlbumGateway,
     required this.favoriteArtistGateway,
     this.recentPlaysGateway,
+    this.trackLikeGateway,
+    this.albumFavoriteGateway,
+    this.playlistTrackGateway,
+    this.playlistCreationGateway,
+    this.playlistDeletionGateway,
   });
 
   final UserLibraryGateway libraryGateway;
@@ -165,6 +210,11 @@ class AuthenticatedLibraryDependencies {
   final FavoriteAlbumGateway favoriteAlbumGateway;
   final FavoriteArtistGateway favoriteArtistGateway;
   final RecentPlaysGateway? recentPlaysGateway;
+  final TrackLikeGateway? trackLikeGateway;
+  final AlbumFavoriteGateway? albumFavoriteGateway;
+  final PlaylistTrackGateway? playlistTrackGateway;
+  final PlaylistCreationGateway? playlistCreationGateway;
+  final PlaylistDeletionGateway? playlistDeletionGateway;
 }
 
 @immutable

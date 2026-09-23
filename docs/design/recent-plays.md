@@ -15,7 +15,17 @@
 
 The sidebar/navigation composition remains retained; the latest authorized page corrections are recorded below. Production now injects a typed Rust-backed cloud source. `PagedTracksController` still exclusively owns serial paging, adaptive prefetch, incremental full search, refresh snapshot retention, retry/backoff, cancellation and stale-result suppression; recent history has no parallel scheduler or playlist identity.
 
-The corrected official read contract uses `PlayRecentlyRead.GetPlayRecentlyInfo` with `type=2 / updateTime=0`. Core bounds the snapshot to 8 MiB / 5,000 raw records, retains it only in the exact authenticated session, and serves 1–100-row local pages with omitted-record accounting. Refresh replaces that snapshot; no 2,500-row total is inferred from a screenshot. See the [protocol evidence](../research/qqmusic-recent-plays-evidence.md). The maintainer confirmed successful loading of 500 records on 2026-09-09; writeback and broader cross-client ordering/refresh remain separate evidence.
+The corrected QQ read contract uses `PlayRecentlyRead.GetPlayRecentlyInfo` with `type=2 / updateTime=0`. Core bounds the snapshot to 8 MiB / 5,000 raw records, retains it only in the exact authenticated session, and serves 1–100-row local pages with omitted-record accounting. Refresh replaces that snapshot; no 2,500-row total is inferred from a screenshot. See the [QQ protocol evidence](../research/qqmusic-recent-plays-evidence.md). The maintainer confirmed successful loading of 500 records on 2026-09-09; writeback and broader cross-client ordering/refresh remain separate evidence.
+
+The NetEase contract is deliberately different. It performs one ordinary-session
+WEAPI `/api/play-record/song/list` read with a maximum `limit=100`; the service
+does not expose an offset or cursor. Core retains that credential-generation
+snapshot and the same Flutter page locally traverses its raw slots. Every
+NetEase page reports `totalIsExact=false`: `data.total` is an upstream
+observation, not proof that Fura can continue beyond the returned window.
+Malformed rows still consume their raw slot, Provider order and duplicate
+identities are preserved, and refresh replaces the snapshot. See the
+[cross-Provider evidence matrix](../research/personal-library-capability-evidence-2026-09-23.md).
 
 Read success does not imply write support. There is no playback-history upload and the Provider does not advertise `RecentHistoryWrite`. A valid empty response is distinct from authentication rejection, unsupported/service failure, malformed response and account replacement. Production's former not-connected state remains available only when a caller deliberately supplies no gateway, such as the bounded UI regression fixture.
 
@@ -31,7 +41,7 @@ Read success does not imply write support. There is no playback-history upload a
 1. Signed out: no personal music entry at 390, 900 or 1440 px; public browsing and login still work.
 2. Signed in: recent plays is reachable, the selected destination and Back behave correctly, and resizing preserves the page.
 3. Review synthetic desktop/compact table density and controls separately from the real not-connected screen.
-4. Read acceptance remains Human-gated: verify account identity (including QQ versus WeChat identity), records created in an official client appearing in Fura, ordering/pagination while new plays arrive, refresh, credential rejection and account switching. Record only coarse results, never credentials or personal response content.
+4. Read acceptance remains Human-gated: verify account identity (including QQ versus WeChat identity), records created in each Provider's official client appearing in Fura, ordering and bounded-window behavior while new plays arrive, refresh, credential rejection, logout/login and Provider/account switching. Record only coarse results, never credentials or personal response content.
 5. Write acceptance is separately blocked on an ordinary QQ-session protocol. If that evidence becomes available, verify a Fura-only test play first through a fresh cloud read and then in an official client; neither step may be inferred from the other.
 
 No aesthetic acceptance or real QQ sync success is inferred from offline tests or screenshots.

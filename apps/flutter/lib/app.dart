@@ -31,9 +31,14 @@ import 'package:flutterustmusic/home/related_track_gateway.dart';
 import 'package:flutterustmusic/home/recent_listening_gateway.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
+import 'package:flutterustmusic/library/album_favorite_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/playlist_creation_gateway.dart';
+import 'package:flutterustmusic/library/playlist_deletion_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/library/playlist_track_gateway.dart';
 import 'package:flutterustmusic/library/recent_plays_gateway.dart';
+import 'package:flutterustmusic/library/track_like_gateway.dart';
 import 'package:flutterustmusic/library/user_library_page.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
@@ -85,6 +90,11 @@ class MusicApp extends StatefulWidget {
     RecentListeningGateway Function()? recentListeningFactory,
     FavoriteAlbumGateway? favoriteAlbumGateway,
     FavoriteArtistGateway? favoriteArtistGateway,
+    TrackLikeGateway? trackLikeGateway,
+    AlbumFavoriteGateway? albumFavoriteGateway,
+    PlaylistTrackGateway? playlistTrackGateway,
+    PlaylistCreationGateway? playlistCreationGateway,
+    PlaylistDeletionGateway? playlistDeletionGateway,
     TrackCommentGateway? trackCommentGateway,
     ForegroundAudioEngine? audioEngine,
     bool desktopQuickLoginEnabled = false,
@@ -92,6 +102,7 @@ class MusicApp extends StatefulWidget {
     AppSettings initialSettings = AppSettings.defaults,
     AppSettingsStore? settingsStore,
     BuiltInProviderDependencies? providerDependencies,
+    MusicProviderCapabilities capabilities = MusicProviderCapabilities.qqMusic,
     ValueChanged<AppPlaybackQualityPreference>? onPlaybackQualityChanged,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
@@ -184,6 +195,11 @@ class MusicApp extends StatefulWidget {
             artistAlbumGateway ?? const RustArtistAlbumGateway(),
         favoriteAlbumGateway: favoriteAlbumGateway,
         favoriteArtistGateway: favoriteArtistGateway,
+        trackLikeGateway: trackLikeGateway,
+        albumFavoriteGateway: albumFavoriteGateway,
+        playlistTrackGateway: playlistTrackGateway,
+        playlistCreationGateway: playlistCreationGateway,
+        playlistDeletionGateway: playlistDeletionGateway,
       ),
       discovery: AuthenticatedDiscoveryDependencies(
         trackSearchGateway: searchGateway ?? const RustTrackSearchGateway(),
@@ -202,7 +218,7 @@ class MusicApp extends StatefulWidget {
         rankingGateway: rankingGateway ?? const RustRankingGateway(),
         radarGateway: radarGateway,
       ),
-      capabilities: MusicProviderCapabilities.qqMusic,
+      capabilities: capabilities,
       desktopQuickLoginEnabled: desktopQuickLoginEnabled,
       initialCredentialRestore: initialCredentialRestore,
     );

@@ -110,12 +110,12 @@ Phone-code send uses EAPI `/api/sms/captcha/sent` with `ctcode`, `cellphone`, `v
 | TrackMusicVideoProvider | SUPPORTED | Exact Track association and validated HTTPS source; anonymous live sample passed, no content download |
 | DesktopQuickAuthenticationProvider | NOT_SUPPORTED | No local-client credential discovery/extraction |
 | DesktopQuickAuthenticationSession | NOT_SUPPORTED | No local-client credential discovery/extraction |
-| TrackLikeMutationProvider | NOT_SUPPORTED | No writes implemented or performed |
+| TrackLikeMutationProvider | PARTIAL_HUMAN | Desired-state EAPI `/api/song/like`; one request, typed unknown outcome, synthetic transport proof; real account roundtrip not run |
 | AlbumFavoriteMutationProvider | NOT_SUPPORTED | No writes implemented or performed |
-| PlaylistTrackMutationProvider | NOT_SUPPORTED | No writes implemented or performed |
-| PlaylistCreationProvider | NOT_SUPPORTED | No writes implemented or performed |
+| PlaylistTrackMutationProvider | PARTIAL_HUMAN | Authoritative owned/non-liked target check, then one WEAPI `/api/playlist/manipulate/tracks` request; no duplicate-ID retry; real account roundtrip not run |
+| PlaylistCreationProvider | PARTIAL_HUMAN | One WEAPI `/api/playlist/create` request, bounded name and typed returned owned identity; real account roundtrip not run |
 | PlaylistDeletionProvider | NOT_SUPPORTED | No writes implemented or performed |
-| RecentHistoryProvider | NOT_SUPPORTED | Current `play-record/song/list` is bounded by limit only and `pc/recent/listen/list` has no paging input; no clear neutral continuation, and QQ history is not reused |
+| RecentHistoryProvider | PARTIAL_HUMAN | One bounded WEAPI `/api/play-record/song/list` snapshot, local raw-offset windows, `totalIsExact=false`; official-account ordering and visibility await Human comparison |
 
 Before implementation, native QR selection and daily Track delivery were `NEEDS_PROVIDER_API_EXTENSION`: existing channels offered only QQ/WeChat and the daily contract returned an optional Playlist. The implemented ProviderDefault variant and DailyTracksProvider resolve these neutral gaps without NetEase-specific traits. TrackDetailsProvider likewise supplies a neutral exact-lookup contract absent from the original API.
 

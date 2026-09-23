@@ -74,13 +74,12 @@ AlbumFavoriteMutationOperation _beginRustMutation(
   String opaqueAlbumId,
   AlbumFavoriteState desiredState,
 ) => _RustAlbumFavoriteMutationOperation(
-  bridge.beginQqMusicAlbumFavoriteMutation(
+  bridge.beginAlbumFavoriteMutation(
     providerId: providerId,
     opaqueAlbumId: opaqueAlbumId,
     desiredState: switch (desiredState) {
-      AlbumFavoriteState.favorite => bridge.QqMusicAlbumFavoriteState.favorite,
-      AlbumFavoriteState.notFavorite =>
-        bridge.QqMusicAlbumFavoriteState.notFavorite,
+      AlbumFavoriteState.favorite => bridge.AlbumFavoriteState.favorite,
+      AlbumFavoriteState.notFavorite => bridge.AlbumFavoriteState.notFavorite,
     },
   ),
 );
@@ -89,7 +88,7 @@ class _RustAlbumFavoriteMutationOperation
     implements AlbumFavoriteMutationOperation {
   const _RustAlbumFavoriteMutationOperation(this._handle);
 
-  final bridge.QqMusicAlbumFavoriteMutationHandle _handle;
+  final bridge.AlbumFavoriteMutationHandle _handle;
 
   @override
   bool cancel() => _handle.cancel();
@@ -137,7 +136,7 @@ class _VaultCleaningAlbumFavoriteMutationOperation
 
 @visibleForTesting
 AlbumFavoriteMutationResult mapBridgeAlbumFavoriteMutation(
-  bridge.QqMusicAlbumFavoriteMutationResult result,
+  bridge.AlbumFavoriteMutationResult result,
 ) {
   final failure = result.failure;
   final confirmedState = result.confirmedState;
@@ -153,35 +152,34 @@ AlbumFavoriteMutationResult mapBridgeAlbumFavoriteMutation(
   }
   return AlbumFavoriteMutationResult(
     confirmedState: switch (confirmedState!) {
-      bridge.QqMusicAlbumFavoriteState.favorite => AlbumFavoriteState.favorite,
-      bridge.QqMusicAlbumFavoriteState.notFavorite =>
-        AlbumFavoriteState.notFavorite,
+      bridge.AlbumFavoriteState.favorite => AlbumFavoriteState.favorite,
+      bridge.AlbumFavoriteState.notFavorite => AlbumFavoriteState.notFavorite,
     },
   );
 }
 
 @visibleForTesting
 AlbumFavoriteMutationFailure mapBridgeAlbumFavoriteMutationFailure(
-  bridge.QqMusicAlbumFavoriteMutationFailure failure,
+  bridge.AlbumFavoriteMutationFailure failure,
 ) => switch (failure) {
-  bridge.QqMusicAlbumFavoriteMutationFailure.coreUnavailable =>
+  bridge.AlbumFavoriteMutationFailure.coreUnavailable =>
     AlbumFavoriteMutationFailure.coreUnavailable,
-  bridge.QqMusicAlbumFavoriteMutationFailure.authenticationRequired =>
+  bridge.AlbumFavoriteMutationFailure.authenticationRequired =>
     AlbumFavoriteMutationFailure.authenticationRequired,
-  bridge.QqMusicAlbumFavoriteMutationFailure.credentialRejected =>
+  bridge.AlbumFavoriteMutationFailure.credentialRejected =>
     AlbumFavoriteMutationFailure.credentialRejected,
-  bridge.QqMusicAlbumFavoriteMutationFailure.networkOutcomeUnknown =>
+  bridge.AlbumFavoriteMutationFailure.networkOutcomeUnknown =>
     AlbumFavoriteMutationFailure.networkOutcomeUnknown,
-  bridge.QqMusicAlbumFavoriteMutationFailure.serviceUnavailable =>
+  bridge.AlbumFavoriteMutationFailure.serviceUnavailable =>
     AlbumFavoriteMutationFailure.serviceUnavailable,
-  bridge.QqMusicAlbumFavoriteMutationFailure.invalidRequest =>
+  bridge.AlbumFavoriteMutationFailure.invalidRequest =>
     AlbumFavoriteMutationFailure.invalidRequest,
-  bridge.QqMusicAlbumFavoriteMutationFailure.invalidResponseOutcomeUnknown =>
+  bridge.AlbumFavoriteMutationFailure.invalidResponseOutcomeUnknown =>
     AlbumFavoriteMutationFailure.invalidResponseOutcomeUnknown,
-  bridge.QqMusicAlbumFavoriteMutationFailure.replacedOutcomeUnknown =>
+  bridge.AlbumFavoriteMutationFailure.replacedOutcomeUnknown =>
     AlbumFavoriteMutationFailure.replacedOutcomeUnknown,
-  bridge.QqMusicAlbumFavoriteMutationFailure.cancelledOutcomeUnknown =>
+  bridge.AlbumFavoriteMutationFailure.cancelledOutcomeUnknown =>
     AlbumFavoriteMutationFailure.cancelledOutcomeUnknown,
-  bridge.QqMusicAlbumFavoriteMutationFailure.alreadyRunning =>
+  bridge.AlbumFavoriteMutationFailure.alreadyRunning =>
     AlbumFavoriteMutationFailure.alreadyRunning,
 };

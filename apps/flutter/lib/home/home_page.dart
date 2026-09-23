@@ -3059,6 +3059,9 @@ Future<void> _showHomeTrackActions({
 }) async {
   final canOpenAlbum = onOpenAlbum != null && track.album != null;
   final canOpenArtist = onOpenArtist != null && track.artists.isNotEmpty;
+  final likeAction = await resolveMusicTrackLikeAction(context, track);
+  if (!context.mounted) return;
+  final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
   final compact = MediaQuery.sizeOf(context).width < 600;
   final action = compact || position == null
       ? await showModalBottomSheet<MusicTrackAction>(
@@ -3073,6 +3076,27 @@ Future<void> _showHomeTrackActions({
                   title: Text(context.l10n.commonPlayFromHere),
                   onTap: () => Navigator.pop(context, MusicTrackAction.play),
                 ),
+                if (canAddToPlaylist)
+                  ListTile(
+                    leading: const Icon(Icons.playlist_add_rounded),
+                    title: Text(context.l10n.libraryAddTrackToPlaylist),
+                    onTap: () =>
+                        Navigator.pop(context, MusicTrackAction.addToPlaylist),
+                  ),
+                if (likeAction != null)
+                  ListTile(
+                    leading: Icon(
+                      likeAction == MusicTrackAction.like
+                          ? Icons.favorite_border_rounded
+                          : Icons.favorite_rounded,
+                    ),
+                    title: Text(
+                      likeAction == MusicTrackAction.like
+                          ? context.l10n.libraryLikeTrack
+                          : context.l10n.libraryUnlikeTrack,
+                    ),
+                    onTap: () => Navigator.pop(context, likeAction),
+                  ),
                 ListTile(
                   leading: const Icon(Icons.playlist_add_rounded),
                   title: Text(context.l10n.commonAddToQueue),
@@ -3105,6 +3129,20 @@ Future<void> _showHomeTrackActions({
               value: MusicTrackAction.play,
               child: Text(context.l10n.commonPlayFromHere),
             ),
+            if (canAddToPlaylist)
+              PopupMenuItem(
+                value: MusicTrackAction.addToPlaylist,
+                child: Text(context.l10n.libraryAddTrackToPlaylist),
+              ),
+            if (likeAction != null)
+              PopupMenuItem(
+                value: likeAction,
+                child: Text(
+                  likeAction == MusicTrackAction.like
+                      ? context.l10n.libraryLikeTrack
+                      : context.l10n.libraryUnlikeTrack,
+                ),
+              ),
             PopupMenuItem(
               value: MusicTrackAction.addToQueue,
               child: Text(context.l10n.commonAddToQueue),
@@ -3127,6 +3165,8 @@ Future<void> _showHomeTrackActions({
       onPlay();
     case MusicTrackAction.addToQueue:
       onQueue();
+    case MusicTrackAction.addToPlaylist:
+      await showAddTrackToPlaylist(context: context, track: track);
     case MusicTrackAction.openAlbum:
       if (track.album case final album?) onOpenAlbum?.call(album);
     case MusicTrackAction.openArtist:
@@ -3136,6 +3176,8 @@ Future<void> _showHomeTrackActions({
         onSelected: onOpenArtist,
         itemKeyPrefix: 'home-track-artist',
       );
+    case MusicTrackAction.like || MusicTrackAction.unlike:
+      await runMusicTrackLikeAction(context, track, action!);
     case null:
       break;
   }

@@ -12,58 +12,58 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `bridge_playlist_summary`, `bridge_track_summary`, `domain_album_summary`, `domain_artist_summary`, `domain_playlist_id`, `domain_track_summary`, `failed_load`, `failed_track_page`, `map_error`, `map_load`, `map_track_page_error`, `map_track_page_load`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
-QqMusicUserPlaylistLoadHandle beginQqMusicUserPlaylistLoad({
-  required String providerId,
-}) => RustLib.instance.api.crateApiLibraryBeginQqMusicUserPlaylistLoad(
-  providerId: providerId,
-);
+UserPlaylistLoadHandle beginUserPlaylistLoad({required String providerId}) =>
+    RustLib.instance.api.crateApiLibraryBeginUserPlaylistLoad(
+      providerId: providerId,
+    );
 
-QqMusicPlaylistTrackPageLoadHandle beginQqMusicPlaylistTrackPageLoad({
+PlaylistTrackPageLoadHandle beginPlaylistTrackPageLoad({
   required String providerId,
   required String opaquePlaylistId,
   required int offset,
   required int size,
-}) => RustLib.instance.api.crateApiLibraryBeginQqMusicPlaylistTrackPageLoad(
+}) => RustLib.instance.api.crateApiLibraryBeginPlaylistTrackPageLoad(
   providerId: providerId,
   opaquePlaylistId: opaquePlaylistId,
   offset: offset,
   size: size,
 );
 
-QqMusicRecentTrackPageLoadHandle beginQqMusicRecentTrackPageLoad({
+RecentTrackPageLoadHandle beginRecentTrackPageLoad({
+  required String providerId,
   required int offset,
   required int size,
-}) => RustLib.instance.api.crateApiLibraryBeginQqMusicRecentTrackPageLoad(
+}) => RustLib.instance.api.crateApiLibraryBeginRecentTrackPageLoad(
+  providerId: providerId,
   offset: offset,
   size: size,
 );
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicPlaylistTrackPageLoadHandle>>
-abstract class QqMusicPlaylistTrackPageLoadHandle
-    implements RustOpaqueInterface {
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PlaylistTrackPageLoadHandle>>
+abstract class PlaylistTrackPageLoadHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
 
-  Future<QqMusicPlaylistTrackPageLoad> run();
+  Future<PlaylistTrackPageLoad> run();
 }
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicRecentTrackPageLoadHandle>>
-abstract class QqMusicRecentTrackPageLoadHandle implements RustOpaqueInterface {
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RecentTrackPageLoadHandle>>
+abstract class RecentTrackPageLoadHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
 
-  Future<QqMusicPlaylistTrackPageLoad> run();
+  Future<PlaylistTrackPageLoad> run();
 }
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicUserPlaylistLoadHandle>>
-abstract class QqMusicUserPlaylistLoadHandle implements RustOpaqueInterface {
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<UserPlaylistLoadHandle>>
+abstract class UserPlaylistLoadHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
 
-  Future<QqMusicUserPlaylistLoad> run();
+  Future<UserPlaylistLoad> run();
 }
 
 enum LibraryPlaylistOwnership { unspecified, owned, saved }
@@ -166,7 +166,7 @@ class LibraryTrackSummary {
           durationSeconds == other.durationSeconds;
 }
 
-class QqMusicPlaylistTrackPageLoad {
+class PlaylistTrackPageLoad {
   final int offset;
   final int nextOffset;
   final int total;
@@ -174,9 +174,9 @@ class QqMusicPlaylistTrackPageLoad {
   final bool hasMore;
   final int omittedTrackCount;
   final List<LibraryTrackSummary> tracks;
-  final QqMusicPlaylistTrackPageLoadFailure? failure;
+  final PlaylistTrackPageLoadFailure? failure;
 
-  const QqMusicPlaylistTrackPageLoad({
+  const PlaylistTrackPageLoad({
     required this.offset,
     required this.nextOffset,
     required this.total,
@@ -201,7 +201,7 @@ class QqMusicPlaylistTrackPageLoad {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is QqMusicPlaylistTrackPageLoad &&
+      other is PlaylistTrackPageLoad &&
           runtimeType == other.runtimeType &&
           offset == other.offset &&
           nextOffset == other.nextOffset &&
@@ -213,7 +213,7 @@ class QqMusicPlaylistTrackPageLoad {
           failure == other.failure;
 }
 
-enum QqMusicPlaylistTrackPageLoadFailure {
+enum PlaylistTrackPageLoadFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,
@@ -225,12 +225,12 @@ enum QqMusicPlaylistTrackPageLoadFailure {
   alreadyRunning,
 }
 
-class QqMusicUserPlaylistLoad {
+class UserPlaylistLoad {
   final List<LibraryPlaylistSummary> playlists;
   final int omittedPlaylistCount;
-  final QqMusicUserPlaylistLoadFailure? failure;
+  final UserPlaylistLoadFailure? failure;
 
-  const QqMusicUserPlaylistLoad({
+  const UserPlaylistLoad({
     required this.playlists,
     required this.omittedPlaylistCount,
     this.failure,
@@ -243,14 +243,14 @@ class QqMusicUserPlaylistLoad {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is QqMusicUserPlaylistLoad &&
+      other is UserPlaylistLoad &&
           runtimeType == other.runtimeType &&
           playlists == other.playlists &&
           omittedPlaylistCount == other.omittedPlaylistCount &&
           failure == other.failure;
 }
 
-enum QqMusicUserPlaylistLoadFailure {
+enum UserPlaylistLoadFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,

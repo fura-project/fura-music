@@ -81,13 +81,13 @@ class RustUserLibraryGateway implements UserLibraryGateway {
 
 UserLibraryLoadOperation _beginRustUserLibraryLoad(String providerId) =>
     _RustUserLibraryLoadOperation(
-      bridge.beginQqMusicUserPlaylistLoad(providerId: providerId),
+      bridge.beginUserPlaylistLoad(providerId: providerId),
     );
 
 class _RustUserLibraryLoadOperation implements UserLibraryLoadOperation {
   const _RustUserLibraryLoadOperation(this._handle);
 
-  final bridge.QqMusicUserPlaylistLoadHandle _handle;
+  final bridge.UserPlaylistLoadHandle _handle;
 
   @override
   bool cancel() => _handle.cancel();
@@ -167,23 +167,21 @@ class _VaultCleaningLibraryLoadOperation implements UserLibraryLoadOperation {
   }
 }
 
-UserLibraryFailure _mapFailure(
-  bridge.QqMusicUserPlaylistLoadFailure failure,
-) => switch (failure) {
-  bridge.QqMusicUserPlaylistLoadFailure.coreUnavailable =>
-    UserLibraryFailure.coreUnavailable,
-  bridge.QqMusicUserPlaylistLoadFailure.authenticationRequired =>
-    UserLibraryFailure.authenticationRequired,
-  bridge.QqMusicUserPlaylistLoadFailure.credentialRejected =>
-    UserLibraryFailure.credentialRejected,
-  bridge.QqMusicUserPlaylistLoadFailure.network => UserLibraryFailure.network,
-  bridge.QqMusicUserPlaylistLoadFailure.serviceUnavailable =>
-    UserLibraryFailure.serviceUnavailable,
-  bridge.QqMusicUserPlaylistLoadFailure.invalidResponse =>
-    UserLibraryFailure.invalidResponse,
-  bridge.QqMusicUserPlaylistLoadFailure.replaced => UserLibraryFailure.replaced,
-  bridge.QqMusicUserPlaylistLoadFailure.cancelled =>
-    UserLibraryFailure.cancelled,
-  bridge.QqMusicUserPlaylistLoadFailure.alreadyRunning =>
-    UserLibraryFailure.alreadyRunning,
-};
+UserLibraryFailure _mapFailure(bridge.UserPlaylistLoadFailure failure) =>
+    switch (failure) {
+      bridge.UserPlaylistLoadFailure.coreUnavailable =>
+        UserLibraryFailure.coreUnavailable,
+      bridge.UserPlaylistLoadFailure.authenticationRequired =>
+        UserLibraryFailure.authenticationRequired,
+      bridge.UserPlaylistLoadFailure.credentialRejected =>
+        UserLibraryFailure.credentialRejected,
+      bridge.UserPlaylistLoadFailure.network => UserLibraryFailure.network,
+      bridge.UserPlaylistLoadFailure.serviceUnavailable =>
+        UserLibraryFailure.serviceUnavailable,
+      bridge.UserPlaylistLoadFailure.invalidResponse =>
+        UserLibraryFailure.invalidResponse,
+      bridge.UserPlaylistLoadFailure.replaced => UserLibraryFailure.replaced,
+      bridge.UserPlaylistLoadFailure.cancelled => UserLibraryFailure.cancelled,
+      bridge.UserPlaylistLoadFailure.alreadyRunning =>
+        UserLibraryFailure.alreadyRunning,
+    };

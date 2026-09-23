@@ -10,24 +10,24 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 // These functions are ignored because they are not marked as `pub`: `failed_deletion`, `map_deletion`, `map_error`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
 
-QqMusicPlaylistDeletionHandle beginQqMusicPlaylistDeletion({
+PlaylistDeletionHandle beginPlaylistDeletion({
   required String providerId,
   required String opaquePlaylistId,
-}) => RustLib.instance.api.crateApiPlaylistDeletionBeginQqMusicPlaylistDeletion(
+}) => RustLib.instance.api.crateApiPlaylistDeletionBeginPlaylistDeletion(
   providerId: providerId,
   opaquePlaylistId: opaquePlaylistId,
 );
 
-// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<QqMusicPlaylistDeletionHandle>>
-abstract class QqMusicPlaylistDeletionHandle implements RustOpaqueInterface {
+// Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<PlaylistDeletionHandle>>
+abstract class PlaylistDeletionHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
 
-  Future<QqMusicPlaylistDeletionResult> run();
+  Future<PlaylistDeletionResult> run();
 }
 
-enum QqMusicPlaylistDeletionFailure {
+enum PlaylistDeletionFailure {
   coreUnavailable,
   authenticationRequired,
   credentialRejected,
@@ -38,16 +38,16 @@ enum QqMusicPlaylistDeletionFailure {
   replacedOutcomeUnknown,
 
   /// Cancelling the local wait cannot recall a delete request already sent
-  /// to QQ Music, so presentation must refresh instead of assuming failure.
+  /// to the Provider, so presentation must refresh instead of assuming failure.
   cancelledOutcomeUnknown,
   alreadyRunning,
 }
 
-class QqMusicPlaylistDeletionResult {
+class PlaylistDeletionResult {
   final bool deleted;
-  final QqMusicPlaylistDeletionFailure? failure;
+  final PlaylistDeletionFailure? failure;
 
-  const QqMusicPlaylistDeletionResult({required this.deleted, this.failure});
+  const PlaylistDeletionResult({required this.deleted, this.failure});
 
   @override
   int get hashCode => deleted.hashCode ^ failure.hashCode;
@@ -55,7 +55,7 @@ class QqMusicPlaylistDeletionResult {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is QqMusicPlaylistDeletionResult &&
+      other is PlaylistDeletionResult &&
           runtimeType == other.runtimeType &&
           deleted == other.deleted &&
           failure == other.failure;

@@ -8,41 +8,41 @@ import 'package:flutterustmusic/src/rust/api/playlist_tracks.dart' as bridge;
 void main() {
   test('maps confirmed states and every typed failure', () {
     for (final pair in [
-      (bridge.QqMusicPlaylistTrackState.present, PlaylistTrackState.present),
-      (bridge.QqMusicPlaylistTrackState.absent, PlaylistTrackState.absent),
+      (bridge.PlaylistTrackState.present, PlaylistTrackState.present),
+      (bridge.PlaylistTrackState.absent, PlaylistTrackState.absent),
     ]) {
       final result = mapBridgePlaylistTrackMutation(
-        bridge.QqMusicPlaylistTrackMutationResult(confirmedState: pair.$1),
+        bridge.PlaylistTrackMutationResult(confirmedState: pair.$1),
       );
       expect(result.confirmedState, pair.$2);
       expect(result.failure, isNull);
     }
 
     final failures = {
-      bridge.QqMusicPlaylistTrackMutationFailure.coreUnavailable:
+      bridge.PlaylistTrackMutationFailure.coreUnavailable:
           PlaylistTrackMutationFailure.coreUnavailable,
-      bridge.QqMusicPlaylistTrackMutationFailure.authenticationRequired:
+      bridge.PlaylistTrackMutationFailure.authenticationRequired:
           PlaylistTrackMutationFailure.authenticationRequired,
-      bridge.QqMusicPlaylistTrackMutationFailure.credentialRejected:
+      bridge.PlaylistTrackMutationFailure.credentialRejected:
           PlaylistTrackMutationFailure.credentialRejected,
-      bridge.QqMusicPlaylistTrackMutationFailure.networkOutcomeUnknown:
+      bridge.PlaylistTrackMutationFailure.networkOutcomeUnknown:
           PlaylistTrackMutationFailure.networkOutcomeUnknown,
-      bridge.QqMusicPlaylistTrackMutationFailure.serviceUnavailable:
+      bridge.PlaylistTrackMutationFailure.serviceUnavailable:
           PlaylistTrackMutationFailure.serviceUnavailable,
-      bridge.QqMusicPlaylistTrackMutationFailure.invalidRequest:
+      bridge.PlaylistTrackMutationFailure.invalidRequest:
           PlaylistTrackMutationFailure.invalidRequest,
-      bridge.QqMusicPlaylistTrackMutationFailure.invalidResponseOutcomeUnknown:
+      bridge.PlaylistTrackMutationFailure.invalidResponseOutcomeUnknown:
           PlaylistTrackMutationFailure.invalidResponseOutcomeUnknown,
-      bridge.QqMusicPlaylistTrackMutationFailure.replacedOutcomeUnknown:
+      bridge.PlaylistTrackMutationFailure.replacedOutcomeUnknown:
           PlaylistTrackMutationFailure.replacedOutcomeUnknown,
-      bridge.QqMusicPlaylistTrackMutationFailure.cancelledOutcomeUnknown:
+      bridge.PlaylistTrackMutationFailure.cancelledOutcomeUnknown:
           PlaylistTrackMutationFailure.cancelledOutcomeUnknown,
-      bridge.QqMusicPlaylistTrackMutationFailure.alreadyRunning:
+      bridge.PlaylistTrackMutationFailure.alreadyRunning:
           PlaylistTrackMutationFailure.alreadyRunning,
     };
     for (final MapEntry(key: input, value: expected) in failures.entries) {
       final result = mapBridgePlaylistTrackMutation(
-        bridge.QqMusicPlaylistTrackMutationResult(failure: input),
+        bridge.PlaylistTrackMutationResult(failure: input),
       );
       expect(result.confirmedState, isNull);
       expect(result.failure, expected);
@@ -51,10 +51,10 @@ void main() {
 
   test('rejects contradictory or empty bridge results', () {
     for (final result in [
-      const bridge.QqMusicPlaylistTrackMutationResult(),
-      const bridge.QqMusicPlaylistTrackMutationResult(
-        confirmedState: bridge.QqMusicPlaylistTrackState.present,
-        failure: bridge.QqMusicPlaylistTrackMutationFailure.serviceUnavailable,
+      const bridge.PlaylistTrackMutationResult(),
+      const bridge.PlaylistTrackMutationResult(
+        confirmedState: bridge.PlaylistTrackState.present,
+        failure: bridge.PlaylistTrackMutationFailure.serviceUnavailable,
       ),
     ]) {
       expect(

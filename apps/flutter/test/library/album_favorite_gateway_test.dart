@@ -8,44 +8,41 @@ import 'package:flutterustmusic/src/rust/api/album_favorites.dart' as bridge;
 void main() {
   test('maps confirmed states and every typed failure', () {
     for (final pair in [
-      (bridge.QqMusicAlbumFavoriteState.favorite, AlbumFavoriteState.favorite),
-      (
-        bridge.QqMusicAlbumFavoriteState.notFavorite,
-        AlbumFavoriteState.notFavorite,
-      ),
+      (bridge.AlbumFavoriteState.favorite, AlbumFavoriteState.favorite),
+      (bridge.AlbumFavoriteState.notFavorite, AlbumFavoriteState.notFavorite),
     ]) {
       final result = mapBridgeAlbumFavoriteMutation(
-        bridge.QqMusicAlbumFavoriteMutationResult(confirmedState: pair.$1),
+        bridge.AlbumFavoriteMutationResult(confirmedState: pair.$1),
       );
       expect(result.confirmedState, pair.$2);
       expect(result.failure, isNull);
     }
 
     final failures = {
-      bridge.QqMusicAlbumFavoriteMutationFailure.coreUnavailable:
+      bridge.AlbumFavoriteMutationFailure.coreUnavailable:
           AlbumFavoriteMutationFailure.coreUnavailable,
-      bridge.QqMusicAlbumFavoriteMutationFailure.authenticationRequired:
+      bridge.AlbumFavoriteMutationFailure.authenticationRequired:
           AlbumFavoriteMutationFailure.authenticationRequired,
-      bridge.QqMusicAlbumFavoriteMutationFailure.credentialRejected:
+      bridge.AlbumFavoriteMutationFailure.credentialRejected:
           AlbumFavoriteMutationFailure.credentialRejected,
-      bridge.QqMusicAlbumFavoriteMutationFailure.networkOutcomeUnknown:
+      bridge.AlbumFavoriteMutationFailure.networkOutcomeUnknown:
           AlbumFavoriteMutationFailure.networkOutcomeUnknown,
-      bridge.QqMusicAlbumFavoriteMutationFailure.serviceUnavailable:
+      bridge.AlbumFavoriteMutationFailure.serviceUnavailable:
           AlbumFavoriteMutationFailure.serviceUnavailable,
-      bridge.QqMusicAlbumFavoriteMutationFailure.invalidRequest:
+      bridge.AlbumFavoriteMutationFailure.invalidRequest:
           AlbumFavoriteMutationFailure.invalidRequest,
-      bridge.QqMusicAlbumFavoriteMutationFailure.invalidResponseOutcomeUnknown:
+      bridge.AlbumFavoriteMutationFailure.invalidResponseOutcomeUnknown:
           AlbumFavoriteMutationFailure.invalidResponseOutcomeUnknown,
-      bridge.QqMusicAlbumFavoriteMutationFailure.replacedOutcomeUnknown:
+      bridge.AlbumFavoriteMutationFailure.replacedOutcomeUnknown:
           AlbumFavoriteMutationFailure.replacedOutcomeUnknown,
-      bridge.QqMusicAlbumFavoriteMutationFailure.cancelledOutcomeUnknown:
+      bridge.AlbumFavoriteMutationFailure.cancelledOutcomeUnknown:
           AlbumFavoriteMutationFailure.cancelledOutcomeUnknown,
-      bridge.QqMusicAlbumFavoriteMutationFailure.alreadyRunning:
+      bridge.AlbumFavoriteMutationFailure.alreadyRunning:
           AlbumFavoriteMutationFailure.alreadyRunning,
     };
     for (final MapEntry(key: input, value: expected) in failures.entries) {
       final result = mapBridgeAlbumFavoriteMutation(
-        bridge.QqMusicAlbumFavoriteMutationResult(failure: input),
+        bridge.AlbumFavoriteMutationResult(failure: input),
       );
       expect(result.confirmedState, isNull);
       expect(result.failure, expected);
@@ -54,10 +51,10 @@ void main() {
 
   test('rejects contradictory or empty bridge results', () {
     for (final result in [
-      const bridge.QqMusicAlbumFavoriteMutationResult(),
-      const bridge.QqMusicAlbumFavoriteMutationResult(
-        confirmedState: bridge.QqMusicAlbumFavoriteState.favorite,
-        failure: bridge.QqMusicAlbumFavoriteMutationFailure.serviceUnavailable,
+      const bridge.AlbumFavoriteMutationResult(),
+      const bridge.AlbumFavoriteMutationResult(
+        confirmedState: bridge.AlbumFavoriteState.favorite,
+        failure: bridge.AlbumFavoriteMutationFailure.serviceUnavailable,
       ),
     ]) {
       expect(
