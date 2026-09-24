@@ -1213,6 +1213,7 @@ pub enum TrackSummaryField {
 #[derive(Clone, Eq, PartialEq)]
 pub struct TrackSummary {
     id: TrackId,
+    membership_opaque_id: String,
     title: String,
     subtitle: Option<String>,
     artist_names: Vec<String>,
@@ -1245,8 +1246,10 @@ impl TrackSummary {
                 field: TrackSummaryField::ArtistName,
             });
         }
+        let membership_opaque_id = id.opaque().to_owned();
         Ok(Self {
             id,
+            membership_opaque_id,
             title,
             subtitle: None,
             artist_names,
@@ -1294,9 +1297,26 @@ impl TrackSummary {
         self
     }
 
+    /// Supplies a Provider-owned stable membership key. It may intentionally
+    /// differ from the playback identity when that identity carries optional
+    /// media-resolution fields.
+    #[must_use]
+    pub fn with_membership_opaque_id(mut self, membership_opaque_id: impl Into<String>) -> Self {
+        let membership_opaque_id = membership_opaque_id.into();
+        if !membership_opaque_id.trim().is_empty() {
+            self.membership_opaque_id = membership_opaque_id;
+        }
+        self
+    }
+
     #[must_use]
     pub const fn id(&self) -> &TrackId {
         &self.id
+    }
+
+    #[must_use]
+    pub fn membership_opaque_id(&self) -> &str {
+        &self.membership_opaque_id
     }
 
     #[must_use]
@@ -1345,6 +1365,7 @@ impl fmt::Debug for TrackSummary {
         formatter
             .debug_struct("TrackSummary")
             .field("id", &self.id)
+            .field("membership_opaque_id", &"[REDACTED]")
             .field("title", &"[REDACTED]")
             .field("has_subtitle", &self.subtitle.is_some())
             .field("artist_count", &self.artist_names.len())
@@ -1841,6 +1862,8 @@ pub struct PlaylistTracksPage {
     total_is_exact: bool,
     has_more: bool,
     omitted_track_count: u32,
+    membership_is_exact: bool,
+    membership_track_opaque_ids: Vec<String>,
     tracks: Vec<TrackSummary>,
 }
 
@@ -1899,6 +1922,8 @@ pub struct FavoriteAlbumsPage {
     total: u32,
     has_more: bool,
     omitted_album_count: u32,
+    membership_is_exact: bool,
+    membership_album_ids: Vec<AlbumId>,
     albums: Vec<AlbumSummary>,
 }
 
@@ -1984,12 +2009,15 @@ impl FavoriteAlbumsPage {
     #[must_use]
     pub fn new(offset: u32, total: u32, has_more: bool, albums: Vec<AlbumSummary>) -> Self {
         let visible_count = u32::try_from(albums.len()).unwrap_or(u32::MAX);
+        let membership_album_ids = albums.iter().map(|album| album.id().clone()).collect();
         Self {
             offset,
             next_offset: offset.saturating_add(visible_count),
             total,
             has_more,
             omitted_album_count: 0,
+            membership_is_exact: true,
+            membership_album_ids,
             albums,
         }
     }
@@ -1998,6 +2026,18 @@ impl FavoriteAlbumsPage {
     pub const fn with_integrity(mut self, next_offset: u32, omitted_album_count: u32) -> Self {
         self.next_offset = next_offset;
         self.omitted_album_count = omitted_album_count;
+        self
+    }
+
+    #[must_use]
+    pub fn with_membership_album_ids(mut self, album_ids: Vec<AlbumId>) -> Self {
+        self.membership_album_ids = album_ids;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_membership_exact(mut self, exact: bool) -> Self {
+        self.membership_is_exact = exact;
         self
     }
 
@@ -2030,6 +2070,16 @@ impl FavoriteAlbumsPage {
     pub fn albums(&self) -> &[AlbumSummary] {
         &self.albums
     }
+
+    #[must_use]
+    pub fn membership_album_ids(&self) -> &[AlbumId] {
+        &self.membership_album_ids
+    }
+
+    #[must_use]
+    pub const fn membership_is_exact(&self) -> bool {
+        self.membership_is_exact
+    }
 }
 
 impl fmt::Debug for FavoriteAlbumsPage {
@@ -2041,6 +2091,8 @@ impl fmt::Debug for FavoriteAlbumsPage {
             .field("total", &self.total)
             .field("has_more", &self.has_more)
             .field("omitted_album_count", &self.omitted_album_count)
+            .field("membership_is_exact", &self.membership_is_exact)
+            .field("membership_album_count", &self.membership_album_ids.len())
             .field("album_count", &self.albums.len())
             .finish()
     }
@@ -3488,6 +3540,10 @@ impl PlaylistTracksPage {
     #[must_use]
     pub fn new(offset: u32, total: u32, has_more: bool, tracks: Vec<TrackSummary>) -> Self {
         let visible_count = u32::try_from(tracks.len()).unwrap_or(u32::MAX);
+        let membership_track_opaque_ids = tracks
+            .iter()
+            .map(|track| track.membership_opaque_id().to_owned())
+            .collect();
         Self {
             offset,
             next_offset: offset.saturating_add(visible_count),
@@ -3495,12 +3551,14 @@ impl PlaylistTracksPage {
             total_is_exact: true,
             has_more,
             omitted_track_count: 0,
+            membership_is_exact: true,
+            membership_track_opaque_ids,
             tracks,
         }
     }
 
     #[must_use]
-    pub const fn new_with_cursor(
+    pub fn new_with_cursor(
         offset: u32,
         next_offset: u32,
         total: u32,
@@ -3508,6 +3566,10 @@ impl PlaylistTracksPage {
         omitted_track_count: u32,
         tracks: Vec<TrackSummary>,
     ) -> Self {
+        let membership_track_opaque_ids = tracks
+            .iter()
+            .map(|track| track.membership_opaque_id().to_owned())
+            .collect();
         Self {
             offset,
             next_offset,
@@ -3515,12 +3577,14 @@ impl PlaylistTracksPage {
             total_is_exact: true,
             has_more,
             omitted_track_count,
+            membership_is_exact: true,
+            membership_track_opaque_ids,
             tracks,
         }
     }
 
     #[must_use]
-    pub const fn new_with_cursor_and_total_certainty(
+    pub fn new_with_cursor_and_total_certainty(
         offset: u32,
         next_offset: u32,
         total: u32,
@@ -3529,6 +3593,10 @@ impl PlaylistTracksPage {
         omitted_track_count: u32,
         tracks: Vec<TrackSummary>,
     ) -> Self {
+        let membership_track_opaque_ids = tracks
+            .iter()
+            .map(|track| track.membership_opaque_id().to_owned())
+            .collect();
         Self {
             offset,
             next_offset,
@@ -3536,8 +3604,26 @@ impl PlaylistTracksPage {
             total_is_exact,
             has_more,
             omitted_track_count,
+            membership_is_exact: true,
+            membership_track_opaque_ids,
             tracks,
         }
+    }
+
+    /// Replaces the presentation-derived identities with the complete set of
+    /// provider-owned identities observed in the same wire page. This lets a
+    /// collection remain authoritative when a row cannot be rendered as a
+    /// full [`TrackSummary`].
+    #[must_use]
+    pub fn with_membership_track_opaque_ids(mut self, track_ids: Vec<String>) -> Self {
+        self.membership_track_opaque_ids = track_ids;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_membership_exact(mut self, exact: bool) -> Self {
+        self.membership_is_exact = exact;
+        self
     }
 
     #[must_use]
@@ -3574,6 +3660,16 @@ impl PlaylistTracksPage {
     pub fn tracks(&self) -> &[TrackSummary] {
         &self.tracks
     }
+
+    #[must_use]
+    pub fn membership_track_opaque_ids(&self) -> &[String] {
+        &self.membership_track_opaque_ids
+    }
+
+    #[must_use]
+    pub const fn membership_is_exact(&self) -> bool {
+        self.membership_is_exact
+    }
 }
 
 impl fmt::Debug for PlaylistTracksPage {
@@ -3586,6 +3682,11 @@ impl fmt::Debug for PlaylistTracksPage {
             .field("total_is_exact", &self.total_is_exact)
             .field("has_more", &self.has_more)
             .field("omitted_track_count", &self.omitted_track_count)
+            .field("membership_is_exact", &self.membership_is_exact)
+            .field(
+                "membership_track_count",
+                &self.membership_track_opaque_ids.len(),
+            )
             .field("track_count", &self.tracks.len())
             .finish()
     }

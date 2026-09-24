@@ -123,6 +123,44 @@ void main() {
     controller.dispose();
   });
 
+  test(
+    'manual refresh preserves then atomically replaces the snapshot',
+    () async {
+      final refreshed = Completer<FavoriteAlbumPageResult>();
+      final gateway = _ScriptedGateway([
+        const _ImmediateOperation(
+          FavoriteAlbumPageResult(
+            continuationOffset: 1,
+            total: 1,
+            albums: [first],
+          ),
+        ),
+        _PendingOperation(refreshed.future),
+      ]);
+      final controller = FavoriteAlbumController(gateway);
+      await controller.load();
+
+      final refresh = controller.refresh();
+      expect(controller.stage, FavoriteAlbumStage.content);
+      expect(controller.albums, [first]);
+      expect(controller.isLoading, isTrue);
+
+      refreshed.complete(
+        const FavoriteAlbumPageResult(
+          continuationOffset: 1,
+          total: 1,
+          albums: [second],
+        ),
+      );
+      await refresh;
+
+      expect(controller.stage, FavoriteAlbumStage.content);
+      expect(controller.albums, [second]);
+      expect(controller.isLoading, isFalse);
+      controller.dispose();
+    },
+  );
+
   test('replacement and disposal cancel stale first pages', () async {
     final firstResult = Completer<FavoriteAlbumPageResult>();
     final firstOperation = _PendingOperation(firstResult.future);

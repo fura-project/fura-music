@@ -2207,7 +2207,12 @@ void main() {
       find.byKey(const ValueKey('home-refresh-recommendations')),
       findsOneWidget,
     );
-    expect(officialDetailGateway.requests, isEmpty);
+    expect(
+      officialDetailGateway.requests.map(
+        (request) => request.playlist.opaqueId,
+      ),
+      ['owned:7001:201'],
+    );
     await tester.tap(find.byKey(const ValueKey('home-recommendation-0')));
     await tester.pumpAndSettle();
     expect(
@@ -8679,6 +8684,9 @@ void main() {
         failure: UserLibraryFailure.serviceUnavailable,
       ),
       const PlaylistTrackPageResult(
+        failure: UserLibraryFailure.serviceUnavailable,
+      ),
+      const PlaylistTrackPageResult(
         offset: 1,
         nextOffset: 2,
         total: 2,
@@ -8716,14 +8724,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(_en.likedSearchInterruptedTitle), findsOneWidget);
-    expect(detail.requests.map((request) => request.offset), [0, 1]);
+    expect(detail.requests.map((request) => request.offset), [0, 1, 1]);
 
     await tester.tap(find.text(_en.likedContinueSearch));
     await tester.pumpAndSettle();
 
     expect(find.text('Found after retry'), findsOneWidget);
     expect(find.text(_en.likedSearchInterruptedTitle), findsNothing);
-    expect(detail.requests.map((request) => request.offset), [0, 1, 1]);
+    expect(detail.requests.map((request) => request.offset), [0, 1, 1, 1]);
     expect(
       find.text(_en.likedSearchCompleteStatus(_en.likedExactResults(1), 2)),
       findsOneWidget,
@@ -8961,14 +8969,15 @@ void main() {
     );
     await tester.drag(desktopLikedList, const Offset(0, -180));
     await tester.pumpAndSettle();
-    // Lookahead is now speed/latency-dependent: one or two bounded pages,
-    // without an extra request merely because a ScrollEnd arrives.
-    expect(reviewDetail.requests.length, inInclusiveRange(2, 3));
-    expect(reviewDetail.requests.map((request) => request.offset), [
-      0,
-      tracks.length,
-      if (reviewDetail.requests.length == 3) tracks.length + 100,
-    ]);
+    // The account-session membership preload consumes every bounded page once.
+    // Entering and scrolling Liked reuses those same page futures/results.
+    final expectedMembershipOffsets = detailPages()
+        .map((page) => page.offset)
+        .toList(growable: false);
+    expect(
+      reviewDetail.requests.map((request) => request.offset),
+      expectedMembershipOffsets,
+    );
     expect(find.text(_en.likedSongsTab(1029)), findsOneWidget);
     expect(
       find.byKey(const ValueKey('liked-songs-collapsed-header')),

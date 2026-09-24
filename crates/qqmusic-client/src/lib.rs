@@ -77,7 +77,8 @@ pub use daily_recommendation::{
     QqMusicPersonalizedPlaylistsError,
 };
 pub use favorite_albums::{
-    FavoriteAlbumField, QqMusicFavoriteAlbumsError, QqMusicFavoriteAlbumsPage,
+    FavoriteAlbumField, QqMusicAlbumMembershipIdentity, QqMusicFavoriteAlbumsError,
+    QqMusicFavoriteAlbumsPage,
 };
 pub use favorite_artists::{
     FavoriteArtistField, QqMusicFavoriteArtistsError, QqMusicFavoriteArtistsPage,
@@ -122,7 +123,8 @@ pub use playlist_containers::{
 };
 pub use playlist_detail::{
     PlaylistDetailTrackField, QqMusicAlbumSummary, QqMusicArtistSummary,
-    QqMusicPlaylistDetailError, QqMusicPlaylistTracksPage, QqMusicTrackSummary,
+    QqMusicPlaylistDetailError, QqMusicPlaylistTracksPage, QqMusicTrackMembershipIdentity,
+    QqMusicTrackSummary,
 };
 pub use playlist_search::{
     PlaylistSearchField, QqMusicPlaylistSearchError, QqMusicPlaylistSearchPage,

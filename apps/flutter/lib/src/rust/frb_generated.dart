@@ -10759,19 +10759,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LibraryTrackSummary dco_decode_library_track_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return LibraryTrackSummary(
       providerId: dco_decode_String(arr[0]),
       opaqueId: dco_decode_String(arr[1]),
-      title: dco_decode_String(arr[2]),
-      subtitle: dco_decode_opt_String(arr[3]),
-      artistNames: dco_decode_list_String(arr[4]),
-      artists: dco_decode_list_catalog_artist_summary(arr[5]),
-      albumTitle: dco_decode_opt_String(arr[6]),
-      album: dco_decode_opt_box_autoadd_catalog_album_summary(arr[7]),
-      artworkUri: dco_decode_opt_String(arr[8]),
-      durationSeconds: dco_decode_opt_box_autoadd_u_32(arr[9]),
+      membershipOpaqueId: dco_decode_opt_String(arr[2]),
+      title: dco_decode_String(arr[3]),
+      subtitle: dco_decode_opt_String(arr[4]),
+      artistNames: dco_decode_list_String(arr[5]),
+      artists: dco_decode_list_catalog_artist_summary(arr[6]),
+      albumTitle: dco_decode_opt_String(arr[7]),
+      album: dco_decode_opt_box_autoadd_catalog_album_summary(arr[8]),
+      artworkUri: dco_decode_opt_String(arr[9]),
+      durationSeconds: dco_decode_opt_box_autoadd_u_32(arr[10]),
     );
   }
 
@@ -11792,8 +11793,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlaylistTrackPageLoad dco_decode_playlist_track_page_load(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return PlaylistTrackPageLoad(
       offset: dco_decode_u_32(arr[0]),
       nextOffset: dco_decode_u_32(arr[1]),
@@ -11801,9 +11802,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       totalIsExact: dco_decode_bool(arr[3]),
       hasMore: dco_decode_bool(arr[4]),
       omittedTrackCount: dco_decode_u_32(arr[5]),
-      tracks: dco_decode_list_library_track_summary(arr[6]),
+      membershipIsExact: dco_decode_bool(arr[6]),
+      membershipTrackOpaqueIds: dco_decode_list_String(arr[7]),
+      tracks: dco_decode_list_library_track_summary(arr[8]),
       failure: dco_decode_opt_box_autoadd_playlist_track_page_load_failure(
-        arr[7],
+        arr[9],
       ),
     );
   }
@@ -12251,18 +12254,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return QqMusicFavoriteAlbumPageLoad(
       offset: dco_decode_u_32(arr[0]),
       nextOffset: dco_decode_u_32(arr[1]),
       total: dco_decode_u_32(arr[2]),
       hasMore: dco_decode_bool(arr[3]),
       omittedAlbumCount: dco_decode_u_32(arr[4]),
-      albums: dco_decode_list_catalog_album_summary(arr[5]),
+      membershipIsExact: dco_decode_bool(arr[5]),
+      membershipAlbumOpaqueIds: dco_decode_list_String(arr[6]),
+      albums: dco_decode_list_catalog_album_summary(arr[7]),
       failure:
           dco_decode_opt_box_autoadd_qq_music_favorite_album_page_load_failure(
-            arr[6],
+            arr[8],
           ),
     );
   }
@@ -15144,6 +15149,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_providerId = sse_decode_String(deserializer);
     var var_opaqueId = sse_decode_String(deserializer);
+    var var_membershipOpaqueId = sse_decode_opt_String(deserializer);
     var var_title = sse_decode_String(deserializer);
     var var_subtitle = sse_decode_opt_String(deserializer);
     var var_artistNames = sse_decode_list_String(deserializer);
@@ -15157,6 +15163,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return LibraryTrackSummary(
       providerId: var_providerId,
       opaqueId: var_opaqueId,
+      membershipOpaqueId: var_membershipOpaqueId,
       title: var_title,
       subtitle: var_subtitle,
       artistNames: var_artistNames,
@@ -16633,6 +16640,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_totalIsExact = sse_decode_bool(deserializer);
     var var_hasMore = sse_decode_bool(deserializer);
     var var_omittedTrackCount = sse_decode_u_32(deserializer);
+    var var_membershipIsExact = sse_decode_bool(deserializer);
+    var var_membershipTrackOpaqueIds = sse_decode_list_String(deserializer);
     var var_tracks = sse_decode_list_library_track_summary(deserializer);
     var var_failure =
         sse_decode_opt_box_autoadd_playlist_track_page_load_failure(
@@ -16645,6 +16654,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       totalIsExact: var_totalIsExact,
       hasMore: var_hasMore,
       omittedTrackCount: var_omittedTrackCount,
+      membershipIsExact: var_membershipIsExact,
+      membershipTrackOpaqueIds: var_membershipTrackOpaqueIds,
       tracks: var_tracks,
       failure: var_failure,
     );
@@ -17170,6 +17181,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_total = sse_decode_u_32(deserializer);
     var var_hasMore = sse_decode_bool(deserializer);
     var var_omittedAlbumCount = sse_decode_u_32(deserializer);
+    var var_membershipIsExact = sse_decode_bool(deserializer);
+    var var_membershipAlbumOpaqueIds = sse_decode_list_String(deserializer);
     var var_albums = sse_decode_list_catalog_album_summary(deserializer);
     var var_failure =
         sse_decode_opt_box_autoadd_qq_music_favorite_album_page_load_failure(
@@ -17181,6 +17194,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       total: var_total,
       hasMore: var_hasMore,
       omittedAlbumCount: var_omittedAlbumCount,
+      membershipIsExact: var_membershipIsExact,
+      membershipAlbumOpaqueIds: var_membershipAlbumOpaqueIds,
       albums: var_albums,
       failure: var_failure,
     );
@@ -20504,6 +20519,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.providerId, serializer);
     sse_encode_String(self.opaqueId, serializer);
+    sse_encode_opt_String(self.membershipOpaqueId, serializer);
     sse_encode_String(self.title, serializer);
     sse_encode_opt_String(self.subtitle, serializer);
     sse_encode_list_String(self.artistNames, serializer);
@@ -21903,6 +21919,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.totalIsExact, serializer);
     sse_encode_bool(self.hasMore, serializer);
     sse_encode_u_32(self.omittedTrackCount, serializer);
+    sse_encode_bool(self.membershipIsExact, serializer);
+    sse_encode_list_String(self.membershipTrackOpaqueIds, serializer);
     sse_encode_list_library_track_summary(self.tracks, serializer);
     sse_encode_opt_box_autoadd_playlist_track_page_load_failure(
       self.failure,
@@ -22349,6 +22367,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.total, serializer);
     sse_encode_bool(self.hasMore, serializer);
     sse_encode_u_32(self.omittedAlbumCount, serializer);
+    sse_encode_bool(self.membershipIsExact, serializer);
+    sse_encode_list_String(self.membershipAlbumOpaqueIds, serializer);
     sse_encode_list_catalog_album_summary(self.albums, serializer);
     sse_encode_opt_box_autoadd_qq_music_favorite_album_page_load_failure(
       self.failure,

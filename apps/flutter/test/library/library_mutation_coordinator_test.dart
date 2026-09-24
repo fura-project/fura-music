@@ -13,37 +13,32 @@ void main() {
     artistNames: ['Synthetic artist'],
   );
 
-  test('same identity is single-flight and confirmed writes refresh', () async {
-    final operation = _CompletingTrackLikeOperation();
-    final gateway = _TrackLikeGateway(operation);
-    final coordinator = LibraryMutationCoordinator(
-      providerId: 'netease-cloud-music',
-      trackLikeGateway: gateway,
-    );
-    var refreshes = 0;
+  test(
+    'same identity is single-flight and reports confirmed outcome',
+    () async {
+      final operation = _CompletingTrackLikeOperation();
+      final gateway = _TrackLikeGateway(operation);
+      final coordinator = LibraryMutationCoordinator(
+        providerId: 'netease-cloud-music',
+        trackLikeGateway: gateway,
+      );
+      final first = coordinator.setTrackLiked(track: track, liked: true);
+      final repeated = await coordinator.setTrackLiked(
+        track: track,
+        liked: true,
+      );
 
-    final first = coordinator.setTrackLiked(
-      track: track,
-      liked: true,
-      refreshAuthoritativeState: () async => refreshes += 1,
-    );
-    final repeated = await coordinator.setTrackLiked(
-      track: track,
-      liked: true,
-      refreshAuthoritativeState: () async => refreshes += 1,
-    );
+      expect(repeated.status, LibraryMutationStatus.alreadyRunning);
+      expect(gateway.beginCount, 1);
+      operation.complete(
+        const TrackLikeMutationResult(confirmedState: TrackLikeState.liked),
+      );
+      expect((await first).status, LibraryMutationStatus.confirmed);
+      coordinator.dispose();
+    },
+  );
 
-    expect(repeated.status, LibraryMutationStatus.alreadyRunning);
-    expect(gateway.beginCount, 1);
-    operation.complete(
-      const TrackLikeMutationResult(confirmedState: TrackLikeState.liked),
-    );
-    expect((await first).status, LibraryMutationStatus.confirmed);
-    expect(refreshes, 1);
-    coordinator.dispose();
-  });
-
-  test('unknown outcome refreshes once and is never retried', () async {
+  test('unknown outcome is reported and the write is never retried', () async {
     final operation = _ImmediateTrackLikeOperation(
       const TrackLikeMutationResult(
         failure: TrackLikeMutationFailure.networkOutcomeUnknown,
@@ -54,18 +49,11 @@ void main() {
       providerId: 'netease-cloud-music',
       trackLikeGateway: gateway,
     );
-    var refreshes = 0;
-
-    final result = await coordinator.setTrackLiked(
-      track: track,
-      liked: false,
-      refreshAuthoritativeState: () async => refreshes += 1,
-    );
+    final result = await coordinator.setTrackLiked(track: track, liked: false);
 
     expect(result.status, LibraryMutationStatus.outcomeUnknown);
     expect(gateway.beginCount, 1);
     expect(operation.runCount, 1);
-    expect(refreshes, 1);
     coordinator.dispose();
   });
 
@@ -79,11 +67,7 @@ void main() {
       trackLikeGateway: gateway,
     );
 
-    final result = await coordinator.setTrackLiked(
-      track: track,
-      liked: true,
-      refreshAuthoritativeState: () async {},
-    );
+    final result = await coordinator.setTrackLiked(track: track, liked: true);
 
     expect(result.status, LibraryMutationStatus.unavailable);
     expect(gateway.beginCount, 0);
@@ -91,19 +75,14 @@ void main() {
   });
 
   test(
-    'disposing cancels local wait and stale completion cannot refresh',
+    'disposing cancels local wait and stale completion becomes unknown',
     () async {
       final operation = _CompletingTrackLikeOperation();
       final coordinator = LibraryMutationCoordinator(
         providerId: 'netease-cloud-music',
         trackLikeGateway: _TrackLikeGateway(operation),
       );
-      var refreshes = 0;
-      final pending = coordinator.setTrackLiked(
-        track: track,
-        liked: true,
-        refreshAuthoritativeState: () async => refreshes += 1,
-      );
+      final pending = coordinator.setTrackLiked(track: track, liked: true);
 
       coordinator.dispose();
       expect(operation.cancelCount, 1);
@@ -112,7 +91,6 @@ void main() {
       );
 
       expect((await pending).status, LibraryMutationStatus.outcomeUnknown);
-      expect(refreshes, 0);
     },
   );
 }

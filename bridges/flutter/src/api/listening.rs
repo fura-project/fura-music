@@ -87,6 +87,7 @@ mod tests {
         let track = LibraryTrackSummary {
             provider_id: "qq-music".to_owned(),
             opaque_id: String::new(),
+            membership_opaque_id: None,
             title: "Private title".to_owned(),
             subtitle: None,
             artist_names: vec![],

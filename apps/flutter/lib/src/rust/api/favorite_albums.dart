@@ -38,6 +38,8 @@ class QqMusicFavoriteAlbumPageLoad {
   final int total;
   final bool hasMore;
   final int omittedAlbumCount;
+  final bool membershipIsExact;
+  final List<String> membershipAlbumOpaqueIds;
   final List<CatalogAlbumSummary> albums;
   final QqMusicFavoriteAlbumPageLoadFailure? failure;
 
@@ -47,6 +49,8 @@ class QqMusicFavoriteAlbumPageLoad {
     required this.total,
     required this.hasMore,
     required this.omittedAlbumCount,
+    required this.membershipIsExact,
+    required this.membershipAlbumOpaqueIds,
     required this.albums,
     this.failure,
   });
@@ -58,6 +62,8 @@ class QqMusicFavoriteAlbumPageLoad {
       total.hashCode ^
       hasMore.hashCode ^
       omittedAlbumCount.hashCode ^
+      membershipIsExact.hashCode ^
+      membershipAlbumOpaqueIds.hashCode ^
       albums.hashCode ^
       failure.hashCode;
 
@@ -71,6 +77,8 @@ class QqMusicFavoriteAlbumPageLoad {
           total == other.total &&
           hasMore == other.hasMore &&
           omittedAlbumCount == other.omittedAlbumCount &&
+          membershipIsExact == other.membershipIsExact &&
+          membershipAlbumOpaqueIds == other.membershipAlbumOpaqueIds &&
           albums == other.albums &&
           failure == other.failure;
 }

@@ -21,6 +21,7 @@ import 'package:flutterustmusic/theme/material_theme.dart';
 class FavoriteAlbumsPage extends StatefulWidget {
   const FavoriteAlbumsPage({
     required this.gateway,
+    required this.membershipController,
     required this.queuePlaybackController,
     required this.onBack,
     required this.onOpenAlbum,
@@ -35,6 +36,7 @@ class FavoriteAlbumsPage extends StatefulWidget {
   });
 
   final FavoriteAlbumGateway gateway;
+  final AlbumFavoritePresentationController membershipController;
   final QueuePlaybackController queuePlaybackController;
   final VoidCallback onBack;
   final ValueChanged<AlbumSummary> onOpenAlbum;
@@ -106,7 +108,7 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
                             : context.l10n.favoriteAlbumsRefresh
                       : null,
                   onRefresh: widget.embedded && !_controller.isLoading
-                      ? _controller.load
+                      ? _refresh
                       : null,
                 ),
               Expanded(child: body),
@@ -131,7 +133,7 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
               tooltip: _controller.isLoading
                   ? context.l10n.favoriteAlbumsRefreshing
                   : context.l10n.favoriteAlbumsRefresh,
-              onPressed: _controller.isLoading ? null : _controller.load,
+              onPressed: _controller.isLoading ? null : _refresh,
               icon: const Icon(Icons.refresh_rounded),
             ),
           ),
@@ -249,8 +251,13 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
       context: context,
       album: album,
       favorite: false,
-      refreshAdditionalState: _controller.load,
+      refreshAdditionalState: _controller.refresh,
     );
+  }
+
+  Future<void> _refresh() async {
+    final membership = widget.membershipController.refreshSnapshot();
+    await Future.wait<void>([membership, _controller.refresh()]);
   }
 }
 

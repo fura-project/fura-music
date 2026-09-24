@@ -517,6 +517,7 @@ mod tests {
         LibraryTrackSummary {
             provider_id: "qq-music".into(),
             opaque_id: value.into(),
+            membership_opaque_id: Some(value.into()),
             title: "private-title".into(),
             subtitle: Some("private-subtitle".into()),
             artist_names: vec!["private-artist".into()],

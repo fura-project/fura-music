@@ -153,7 +153,37 @@ pub struct QqMusicFavoriteAlbumsPage {
     total: u32,
     has_more: bool,
     omitted_album_count: u32,
+    membership_is_exact: bool,
+    membership_identities: Vec<QqMusicAlbumMembershipIdentity>,
     albums: Vec<QqMusicAlbumSummary>,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicAlbumMembershipIdentity {
+    album_id: u64,
+    media_mid: String,
+}
+
+impl QqMusicAlbumMembershipIdentity {
+    #[must_use]
+    pub const fn album_id(&self) -> u64 {
+        self.album_id
+    }
+
+    #[must_use]
+    pub fn media_mid(&self) -> &str {
+        &self.media_mid
+    }
+}
+
+impl fmt::Debug for QqMusicAlbumMembershipIdentity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicAlbumMembershipIdentity")
+            .field("album_id", &"[REDACTED]")
+            .field("media_mid", &"[REDACTED]")
+            .finish()
+    }
 }
 
 impl QqMusicFavoriteAlbumsPage {
@@ -183,8 +213,18 @@ impl QqMusicFavoriteAlbumsPage {
     }
 
     #[must_use]
+    pub const fn membership_is_exact(&self) -> bool {
+        self.membership_is_exact
+    }
+
+    #[must_use]
     pub fn albums(&self) -> &[QqMusicAlbumSummary] {
         &self.albums
+    }
+
+    #[must_use]
+    pub fn membership_identities(&self) -> &[QqMusicAlbumMembershipIdentity] {
+        &self.membership_identities
     }
 }
 
@@ -197,6 +237,11 @@ impl fmt::Debug for QqMusicFavoriteAlbumsPage {
             .field("total", &self.total)
             .field("has_more", &self.has_more)
             .field("omitted_album_count", &self.omitted_album_count)
+            .field("membership_is_exact", &self.membership_is_exact)
+            .field(
+                "membership_identity_count",
+                &self.membership_identities.len(),
+            )
             .field("album_count", &self.albums.len())
             .finish()
     }
@@ -339,14 +384,24 @@ fn map_response<E>(
         return Err(QqMusicFavoriteAlbumsError::InvalidPagination);
     }
     let mut albums = Vec::with_capacity(raw_albums.len());
+    let mut membership_identities = Vec::with_capacity(raw_albums.len());
+    let mut membership_is_exact = true;
     let mut omitted_album_count = 0_u32;
     for (index, value) in raw_albums.into_iter().enumerate() {
-        let mapped = serde_json::from_value::<RawFavoriteAlbum>(value)
-            .map_err(|_| QqMusicFavoriteAlbumsError::InvalidAlbum {
+        let mapped = serde_json::from_value::<RawFavoriteAlbum>(value).map_err(|_| {
+            QqMusicFavoriteAlbumsError::InvalidAlbum {
                 index,
                 field: FavoriteAlbumField::AlbumId,
-            })
-            .and_then(|album| map_album(album, index));
+            }
+        });
+        let mapped = mapped.and_then(|album| {
+            if let Some(identity) = map_membership_identity(&album) {
+                membership_identities.push(identity);
+            } else {
+                membership_is_exact = false;
+            }
+            map_album(album, index)
+        });
         match mapped {
             Ok(album) => albums.push(album),
             Err(QqMusicFavoriteAlbumsError::InvalidAlbum { .. }) => {
@@ -363,7 +418,18 @@ fn map_response<E>(
         total,
         has_more,
         omitted_album_count,
+        membership_is_exact,
+        membership_identities,
         albums,
+    })
+}
+
+fn map_membership_identity(raw: &RawFavoriteAlbum) -> Option<QqMusicAlbumMembershipIdentity> {
+    let album_id = raw.albumid.filter(|value| *value != 0)?;
+    let media_mid = safe_mid_ref(raw.albummid.as_deref())?.to_owned();
+    Some(QqMusicAlbumMembershipIdentity {
+        album_id,
+        media_mid,
     })
 }
 
@@ -396,6 +462,14 @@ fn map_album<E>(
 }
 
 fn safe_mid(value: Option<String>) -> Option<String> {
+    value.filter(|value| {
+        !value.trim().is_empty()
+            && value.len() <= 64
+            && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
+    })
+}
+
+fn safe_mid_ref(value: Option<&str>) -> Option<&str> {
     value.filter(|value| {
         !value.trim().is_empty()
             && value.len() <= 64
@@ -481,6 +555,7 @@ mod tests {
         assert_eq!(page.total(), 22);
         assert!(!page.has_more());
         assert_eq!(page.albums().len(), 2);
+        assert!(page.membership_is_exact());
         assert_eq!(page.albums()[0].album_id(), Some(43_001));
         assert_eq!(page.albums()[1].media_mid(), Some("fixtureAlbumMid2"));
         assert_eq!(page.albums()[1].name(), Some("Second Album"));
@@ -585,7 +660,7 @@ mod tests {
         );
 
         let invalid = QqMusicClient::new(FakeTransport::new(&response(
-            &json!([{"albumid": 43001, "albummid": "unsafe/mid", "albumname": "Album"}]),
+            &json!([{"albumid": 43001, "albummid": "privateAlbumMid", "albumname": ""}]),
             1,
             &json!(0),
         )));
@@ -595,6 +670,22 @@ mod tests {
             .expect("malformed collection row must be isolated");
         assert!(partial.albums().is_empty());
         assert_eq!(partial.omitted_album_count(), 1);
+        assert_eq!(partial.membership_identities().len(), 1);
+        assert!(partial.membership_is_exact());
+        assert_eq!(partial.membership_identities()[0].album_id(), 43001);
         assert_eq!(partial.next_offset(), 1);
+
+        let missing_identity = QqMusicClient::new(FakeTransport::new(&response(
+            &json!([{"albumid": 0, "albummid": "privateAlbumMid", "albumname": "Album"}]),
+            1,
+            &json!(0),
+        )));
+        let incomplete = missing_identity
+            .favorite_albums(&credential(), 0, 20)
+            .await
+            .expect("identity-incomplete row remains an isolated presentation omission");
+        assert!(incomplete.albums().is_empty());
+        assert!(incomplete.membership_identities().is_empty());
+        assert!(!incomplete.membership_is_exact());
     }
 }

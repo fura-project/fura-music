@@ -1768,7 +1768,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               if (_navigation.visitedLibrarySection(LibrarySection.albums))
                 FavoriteAlbumsPage(
                   key: const ValueKey('favorite-albums-page'),
-                  gateway: _library.favoriteAlbumGateway,
+                  gateway: _albumFavorites.sessionGateway,
+                  membershipController: _albumFavorites,
                   queuePlaybackController: _queuePlaybackController,
                   onBack: _returnFromLocalPage,
                   onOpenAlbum: _openFavoriteAlbum,
@@ -1819,8 +1820,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         ),
         playlist: playlist,
         playlists: _controller.playlists,
-        gateway: _library.playlistDetailGateway,
-        favoriteAlbumGateway: _library.favoriteAlbumGateway,
+        gateway: _trackLikes.sessionGateway,
+        trackLikeController: _trackLikes,
+        favoriteAlbumGateway: _albumFavorites.sessionGateway,
+        albumFavoriteController: _albumFavorites,
         queuePlaybackController: _queuePlaybackController,
         onOpenPlaylist: _openPlaylist,
         lastOpenedPlaylist: _lastOpenedPlaylist,

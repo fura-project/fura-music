@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
+import 'package:flutterustmusic/library/album_favorite_presentation_controller.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_albums_page.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -29,7 +30,9 @@ class LikedSongsPage extends StatefulWidget {
     required this.playlist,
     required this.playlists,
     required this.gateway,
+    required this.trackLikeController,
     required this.favoriteAlbumGateway,
+    required this.albumFavoriteController,
     required this.queuePlaybackController,
     required this.onOpenPlaylist,
     required this.onSignInAgain,
@@ -51,7 +54,9 @@ class LikedSongsPage extends StatefulWidget {
   final UserPlaylistSummary? playlist;
   final List<UserPlaylistSummary> playlists;
   final PlaylistDetailGateway gateway;
+  final TrackLikePresentationController trackLikeController;
   final FavoriteAlbumGateway favoriteAlbumGateway;
+  final AlbumFavoritePresentationController albumFavoriteController;
   final QueuePlaybackController queuePlaybackController;
   final ValueChanged<UserPlaylistSummary> onOpenPlaylist;
   final VoidCallback onSignInAgain;
@@ -303,7 +308,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                 onPlayAll: tracks.isEmpty ? null : () => _playAll(tracks),
                 onRefresh: controller == null || controller.isLoading
                     ? null
-                    : controller.refresh,
+                    : _refreshLikedSongs,
                 selectedSection: _section,
                 tabController: _tabController,
                 collapsed: _headerCollapsed,
@@ -361,6 +366,8 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                             ? FavoriteAlbumsPage(
                                 key: const ValueKey('liked-favorite-albums'),
                                 gateway: widget.favoriteAlbumGateway,
+                                membershipController:
+                                    widget.albumFavoriteController,
                                 queuePlaybackController:
                                     widget.queuePlaybackController,
                                 onBack: () => _selectSection(
@@ -586,6 +593,13 @@ class _LikedSongsPageState extends State<LikedSongsPage>
       liked: false,
       refreshAdditionalState: controller.refresh,
     );
+  }
+
+  Future<void> _refreshLikedSongs() async {
+    final controller = _controller;
+    if (controller == null) return;
+    final membership = widget.trackLikeController.refreshSnapshot();
+    await Future.wait<void>([membership, controller.refresh()]);
   }
 }
 

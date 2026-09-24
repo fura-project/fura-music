@@ -47,6 +47,7 @@ void main() {
       const bridge.LibraryTrackSummary(
         providerId: 'qq-music',
         opaqueId: 'track:41001:0:fixtureTrackMid:-',
+        membershipOpaqueId: 'track-membership:41001:0',
         title: 'Synthetic Track',
         artistNames: ['Synthetic Artist'],
         artists: [
@@ -67,6 +68,20 @@ void main() {
 
     expect(mapped?.album?.opaqueId, 'album:43001:fixtureAlbumMid');
     expect(mapped?.artists.single.opaqueId, 'artist:42001:fixtureArtistMid');
+    expect(mapped?.membershipIdentity, 'track-membership:41001:0');
+    expect(
+      mapBridgeLibraryTrackSummary(
+        const bridge.LibraryTrackSummary(
+          providerId: 'qq-music',
+          opaqueId: 'track:41001:0:fixtureTrackMid:-',
+          membershipOpaqueId: '',
+          title: 'Synthetic Track',
+          artistNames: ['Synthetic Artist'],
+          artists: [],
+        ),
+      ),
+      isNull,
+    );
     expect(
       mapBridgeLibraryTrackSummary(
         const bridge.LibraryTrackSummary(

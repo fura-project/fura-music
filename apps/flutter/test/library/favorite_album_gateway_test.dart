@@ -12,6 +12,8 @@ void main() {
       const bridge.QqMusicFavoriteAlbumPageLoad(
         nextOffset: 21,
         omittedAlbumCount: 0,
+        membershipIsExact: true,
+        membershipAlbumOpaqueIds: ['album:43001:fixtureAlbumMid'],
 
         offset: 20,
         total: 21,
@@ -31,8 +33,14 @@ void main() {
     expect(result.offset, 20);
     expect(result.total, 21);
     expect(result.hasMore, isFalse);
+    expect(result.membershipIsExact, isTrue);
+    expect(result.membershipAlbumOpaqueIds, ['album:43001:fixtureAlbumMid']);
     expect(result.albums.single.title, 'Synthetic Album');
     expect(() => result.albums.clear(), throwsUnsupportedError);
+    expect(
+      () => result.membershipAlbumOpaqueIds.clear(),
+      throwsUnsupportedError,
+    );
   });
 
   test('maps every Bridge failure and rejects contradictory content', () {
@@ -64,6 +72,8 @@ void main() {
       const bridge.QqMusicFavoriteAlbumPageLoad(
         nextOffset: 0,
         omittedAlbumCount: 0,
+        membershipIsExact: false,
+        membershipAlbumOpaqueIds: [],
 
         offset: 0,
         total: 1,
@@ -84,6 +94,8 @@ void main() {
       const bridge.QqMusicFavoriteAlbumPageLoad(
         nextOffset: 0,
         omittedAlbumCount: 0,
+        membershipIsExact: true,
+        membershipAlbumOpaqueIds: [],
 
         offset: 0,
         total: 1,
@@ -103,6 +115,8 @@ void main() {
       const bridge.QqMusicFavoriteAlbumPageLoad(
         nextOffset: 0,
         omittedAlbumCount: 0,
+        membershipIsExact: true,
+        membershipAlbumOpaqueIds: [],
 
         offset: 0,
         total: 2,
@@ -120,6 +134,20 @@ void main() {
       contradictoryPagination.failure,
       FavoriteAlbumFailure.invalidResponse,
     );
+
+    final malformedMembership = mapBridgeFavoriteAlbumPage(
+      const bridge.QqMusicFavoriteAlbumPageLoad(
+        nextOffset: 0,
+        omittedAlbumCount: 0,
+        membershipIsExact: false,
+        membershipAlbumOpaqueIds: [''],
+        offset: 0,
+        total: 0,
+        hasMore: false,
+        albums: [],
+      ),
+    );
+    expect(malformedMembership.failure, FavoriteAlbumFailure.invalidResponse);
   });
 
   test('forwards exact paging and cancellation', () {

@@ -24,6 +24,8 @@ class FavoriteAlbumPageResult {
     this.total = 0,
     this.hasMore = false,
     this.albums = const [],
+    this.membershipAlbumOpaqueIds = const [],
+    this.membershipIsExact = true,
     this.omittedAlbumCount = 0,
     this.failure,
   });
@@ -33,6 +35,8 @@ class FavoriteAlbumPageResult {
   final int total;
   final bool hasMore;
   final List<AlbumSummary> albums;
+  final List<String> membershipAlbumOpaqueIds;
+  final bool membershipIsExact;
   final int omittedAlbumCount;
   final FavoriteAlbumFailure? failure;
 }
@@ -150,6 +154,8 @@ FavoriteAlbumPageResult mapBridgeFavoriteAlbumPage(
         result.total != 0 ||
         result.hasMore ||
         result.albums.isNotEmpty ||
+        result.membershipIsExact ||
+        result.membershipAlbumOpaqueIds.isNotEmpty ||
         result.omittedAlbumCount != 0) {
       return const FavoriteAlbumPageResult(
         failure: FavoriteAlbumFailure.invalidResponse,
@@ -167,6 +173,11 @@ FavoriteAlbumPageResult mapBridgeFavoriteAlbumPage(
     visibleCount: result.albums.length,
     omittedCount: result.omittedAlbumCount,
   )) {
+    return const FavoriteAlbumPageResult(
+      failure: FavoriteAlbumFailure.invalidResponse,
+    );
+  }
+  if (result.membershipAlbumOpaqueIds.any((id) => id.trim().isEmpty)) {
     return const FavoriteAlbumPageResult(
       failure: FavoriteAlbumFailure.invalidResponse,
     );
@@ -196,6 +207,10 @@ FavoriteAlbumPageResult mapBridgeFavoriteAlbumPage(
     total: result.total,
     hasMore: result.hasMore,
     albums: List.unmodifiable(albums),
+    membershipAlbumOpaqueIds: List.unmodifiable(
+      result.membershipAlbumOpaqueIds,
+    ),
+    membershipIsExact: result.membershipIsExact,
     omittedAlbumCount: result.omittedAlbumCount,
   );
 }

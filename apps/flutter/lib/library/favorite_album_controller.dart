@@ -54,22 +54,30 @@ class FavoriteAlbumController extends ChangeNotifier {
       !_isLoadingMore &&
       _isRetryable(_appendFailure);
 
-  Future<void> load() => _loadFirstPage();
+  Future<void> load() => _loadFirstPage(preserveSnapshot: false);
 
-  Future<void> _loadFirstPage() async {
+  Future<void> refresh() => _loadFirstPage(
+    preserveSnapshot:
+        _stage == FavoriteAlbumStage.content ||
+        _stage == FavoriteAlbumStage.empty,
+  );
+
+  Future<void> _loadFirstPage({required bool preserveSnapshot}) async {
     final generation = ++_generation;
     _operation?.cancel();
     final operation = _gateway.beginLoad(offset: 0, size: pageSize);
     _operation = operation;
-    _albums = const [];
     _failure = null;
     _appendFailure = null;
-    _total = 0;
-    _nextOffset = 0;
-    _hasMore = false;
-    _omittedAlbumCount = 0;
     _isLoadingMore = false;
-    _stage = FavoriteAlbumStage.loading;
+    if (!preserveSnapshot) {
+      _albums = const [];
+      _total = 0;
+      _nextOffset = 0;
+      _hasMore = false;
+      _omittedAlbumCount = 0;
+      _stage = FavoriteAlbumStage.loading;
+    }
     _notify();
 
     final result = await operation.run();
@@ -86,7 +94,7 @@ class FavoriteAlbumController extends ChangeNotifier {
       _stage = _albums.isEmpty && _omittedAlbumCount == 0
           ? FavoriteAlbumStage.empty
           : FavoriteAlbumStage.content;
-    } else {
+    } else if (!preserveSnapshot || _isSessionFailure(result.failure)) {
       _applyInitialFailure(
         result.failure ?? FavoriteAlbumFailure.invalidResponse,
       );
@@ -141,7 +149,7 @@ class FavoriteAlbumController extends ChangeNotifier {
   }
 
   void retry() {
-    if (canRetry) unawaited(_loadFirstPage());
+    if (canRetry) unawaited(load());
   }
 
   void retryMore() {

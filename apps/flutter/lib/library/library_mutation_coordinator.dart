@@ -34,7 +34,8 @@ class LibraryMutationOutcome<T> {
 ///
 /// It owns only request lifecycle and pending presentation. Provider protocol
 /// remains in Rust, Queue state remains in QueuePlaybackController, and the
-/// supplied refresh callbacks remain the authoritative read-after-write path.
+/// presentation membership owners decide how confirmed and indeterminate
+/// writes are reconciled without discarding unrelated account state.
 class LibraryMutationCoordinator extends ChangeNotifier {
   LibraryMutationCoordinator({
     required this.providerId,
@@ -70,7 +71,6 @@ class LibraryMutationCoordinator extends ChangeNotifier {
   Future<LibraryMutationOutcome<TrackLikeState>> setTrackLiked({
     required PlaylistTrackSummary track,
     required bool liked,
-    required Future<void> Function() refreshAuthoritativeState,
   }) async {
     final gateway = trackLikeGateway;
     if (gateway == null || track.providerId != providerId) {
@@ -95,26 +95,35 @@ class LibraryMutationCoordinator extends ChangeNotifier {
         status: LibraryMutationStatus.alreadyRunning,
       );
     }
+    _diagnostic(kind: 'track_like', phase: 'bridge_started');
     final result = await operation.run();
     if (!_finishIfCurrent(key, operation, generation)) {
+      _diagnostic(
+        kind: 'track_like',
+        phase: 'bridge_finished',
+        outcome: LibraryMutationStatus.outcomeUnknown,
+        failure: 'stale_generation',
+      );
       return const LibraryMutationOutcome(
         status: LibraryMutationStatus.outcomeUnknown,
       );
     }
-    final outcome = LibraryMutationOutcome<TrackLikeState>(
-      status: _trackLikeStatus(result),
+    final status = _trackLikeStatus(result);
+    _diagnostic(
+      kind: 'track_like',
+      phase: 'bridge_finished',
+      outcome: status,
+      failure: result.failure?.name,
+    );
+    return LibraryMutationOutcome<TrackLikeState>(
+      status: status,
       value: result.confirmedState,
     );
-    if (outcome.confirmed || outcome.requiresAuthoritativeRefresh) {
-      await _refreshIfCurrent(generation, refreshAuthoritativeState);
-    }
-    return outcome;
   }
 
   Future<LibraryMutationOutcome<AlbumFavoriteState>> setAlbumFavorite({
     required AlbumSummary album,
     required bool favorite,
-    required Future<void> Function() refreshAuthoritativeState,
   }) async {
     final gateway = albumFavoriteGateway;
     if (gateway == null || album.providerId != providerId) {
@@ -141,20 +150,30 @@ class LibraryMutationCoordinator extends ChangeNotifier {
         status: LibraryMutationStatus.alreadyRunning,
       );
     }
+    _diagnostic(kind: 'album_favorite', phase: 'bridge_started');
     final result = await operation.run();
     if (!_finishIfCurrent(key, operation, generation)) {
+      _diagnostic(
+        kind: 'album_favorite',
+        phase: 'bridge_finished',
+        outcome: LibraryMutationStatus.outcomeUnknown,
+        failure: 'stale_generation',
+      );
       return const LibraryMutationOutcome(
         status: LibraryMutationStatus.outcomeUnknown,
       );
     }
-    final outcome = LibraryMutationOutcome<AlbumFavoriteState>(
-      status: _albumFavoriteStatus(result),
+    final status = _albumFavoriteStatus(result);
+    _diagnostic(
+      kind: 'album_favorite',
+      phase: 'bridge_finished',
+      outcome: status,
+      failure: result.failure?.name,
+    );
+    return LibraryMutationOutcome<AlbumFavoriteState>(
+      status: status,
       value: result.confirmedState,
     );
-    if (outcome.confirmed || outcome.requiresAuthoritativeRefresh) {
-      await _refreshIfCurrent(generation, refreshAuthoritativeState);
-    }
-    return outcome;
   }
 
   Future<LibraryMutationOutcome<PlaylistTrackState>> setPlaylistTrack({
@@ -315,6 +334,19 @@ class LibraryMutationCoordinator extends ChangeNotifier {
   ) async {
     if (_disposed || generation != _generation) return;
     await refresh();
+  }
+
+  void _diagnostic({
+    required String kind,
+    required String phase,
+    LibraryMutationStatus? outcome,
+    String? failure,
+  }) {
+    debugPrint(
+      'FURA_DIAGNOSTIC library_mutation provider=$providerId kind=$kind '
+      'phase=$phase${outcome == null ? '' : ' outcome=${outcome.name}'}'
+      '${failure == null ? '' : ' failure=$failure'}',
+    );
   }
 
   static LibraryMutationStatus _trackLikeStatus(

@@ -9,6 +9,7 @@ class PlaylistTrackSummary {
   const PlaylistTrackSummary({
     required this.providerId,
     required this.opaqueId,
+    this.membershipOpaqueId,
     required this.title,
     required this.artistNames,
     this.artists = const [],
@@ -21,6 +22,8 @@ class PlaylistTrackSummary {
 
   final String providerId;
   final String opaqueId;
+  final String? membershipOpaqueId;
+  String get membershipIdentity => membershipOpaqueId ?? opaqueId;
   final String title;
   final List<String> artistNames;
   final List<ArtistSummary> artists;
@@ -39,6 +42,8 @@ class PlaylistTrackPageResult {
     this.totalIsExact = true,
     this.hasMore = false,
     this.omittedTrackCount = 0,
+    this.membershipIsExact = true,
+    this.membershipTrackOpaqueIds = const [],
     this.tracks = const [],
     this.failure,
   });
@@ -49,6 +54,11 @@ class PlaylistTrackPageResult {
   final bool totalIsExact;
   final bool hasMore;
   final int omittedTrackCount;
+  final bool membershipIsExact;
+
+  /// Provider-owned identities observed in the raw collection page, including
+  /// rows that could not be mapped into full presentation summaries.
+  final List<String> membershipTrackOpaqueIds;
   final List<PlaylistTrackSummary> tracks;
   final UserLibraryFailure? failure;
 }
@@ -135,6 +145,11 @@ class _RustTrackPageLoadOperation implements PlaylistTrackPageLoadOperation {
         }
         tracks.add(mapped);
       }
+      if (result.membershipTrackOpaqueIds.any((id) => id.trim().isEmpty)) {
+        return const PlaylistTrackPageResult(
+          failure: UserLibraryFailure.invalidResponse,
+        );
+      }
       return PlaylistTrackPageResult(
         offset: result.offset,
         nextOffset: result.nextOffset,
@@ -142,6 +157,10 @@ class _RustTrackPageLoadOperation implements PlaylistTrackPageLoadOperation {
         totalIsExact: result.totalIsExact,
         hasMore: result.hasMore,
         omittedTrackCount: result.omittedTrackCount,
+        membershipIsExact: result.membershipIsExact,
+        membershipTrackOpaqueIds: List.unmodifiable(
+          result.membershipTrackOpaqueIds,
+        ),
         tracks: List.unmodifiable(tracks),
       );
     } catch (_) {
@@ -182,6 +201,7 @@ PlaylistTrackSummary? mapBridgeLibraryTrackSummary(
   }
   if (!validProvider ||
       track.opaqueId.trim().isEmpty ||
+      (track.membershipOpaqueId?.trim().isEmpty ?? false) ||
       track.title.trim().isEmpty ||
       track.artistNames.any((artist) => artist.trim().isEmpty) ||
       _blank(track.subtitle) ||
@@ -193,6 +213,7 @@ PlaylistTrackSummary? mapBridgeLibraryTrackSummary(
   return PlaylistTrackSummary(
     providerId: providerId,
     opaqueId: track.opaqueId,
+    membershipOpaqueId: track.membershipOpaqueId,
     title: track.title,
     artistNames: List.unmodifiable(track.artistNames),
     artists: List.unmodifiable(mappedArtists),

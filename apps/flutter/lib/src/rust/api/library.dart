@@ -114,6 +114,7 @@ class LibraryPlaylistSummary {
 class LibraryTrackSummary {
   final String providerId;
   final String opaqueId;
+  final String? membershipOpaqueId;
   final String title;
   final String? subtitle;
   final List<String> artistNames;
@@ -126,6 +127,7 @@ class LibraryTrackSummary {
   const LibraryTrackSummary({
     required this.providerId,
     required this.opaqueId,
+    this.membershipOpaqueId,
     required this.title,
     this.subtitle,
     required this.artistNames,
@@ -140,6 +142,7 @@ class LibraryTrackSummary {
   int get hashCode =>
       providerId.hashCode ^
       opaqueId.hashCode ^
+      membershipOpaqueId.hashCode ^
       title.hashCode ^
       subtitle.hashCode ^
       artistNames.hashCode ^
@@ -156,6 +159,7 @@ class LibraryTrackSummary {
           runtimeType == other.runtimeType &&
           providerId == other.providerId &&
           opaqueId == other.opaqueId &&
+          membershipOpaqueId == other.membershipOpaqueId &&
           title == other.title &&
           subtitle == other.subtitle &&
           artistNames == other.artistNames &&
@@ -173,6 +177,8 @@ class PlaylistTrackPageLoad {
   final bool totalIsExact;
   final bool hasMore;
   final int omittedTrackCount;
+  final bool membershipIsExact;
+  final List<String> membershipTrackOpaqueIds;
   final List<LibraryTrackSummary> tracks;
   final PlaylistTrackPageLoadFailure? failure;
 
@@ -183,6 +189,8 @@ class PlaylistTrackPageLoad {
     required this.totalIsExact,
     required this.hasMore,
     required this.omittedTrackCount,
+    required this.membershipIsExact,
+    required this.membershipTrackOpaqueIds,
     required this.tracks,
     this.failure,
   });
@@ -195,6 +203,8 @@ class PlaylistTrackPageLoad {
       totalIsExact.hashCode ^
       hasMore.hashCode ^
       omittedTrackCount.hashCode ^
+      membershipIsExact.hashCode ^
+      membershipTrackOpaqueIds.hashCode ^
       tracks.hashCode ^
       failure.hashCode;
 
@@ -209,6 +219,8 @@ class PlaylistTrackPageLoad {
           totalIsExact == other.totalIsExact &&
           hasMore == other.hasMore &&
           omittedTrackCount == other.omittedTrackCount &&
+          membershipIsExact == other.membershipIsExact &&
+          membershipTrackOpaqueIds == other.membershipTrackOpaqueIds &&
           tracks == other.tracks &&
           failure == other.failure;
 }

@@ -1482,9 +1482,22 @@ where
                 }
             }
         }
+        let membership_album_ids = page
+            .membership_identities()
+            .iter()
+            .filter_map(|identity| {
+                AlbumId::new(
+                    qq_music_provider_id(),
+                    format!("album:{}:{}", identity.album_id(), identity.media_mid()),
+                )
+                .ok()
+            })
+            .collect();
         Ok(
             FavoriteAlbumsPage::new(page.offset(), page.total(), page.has_more(), albums)
-                .with_integrity(page.next_offset(), omitted),
+                .with_integrity(page.next_offset(), omitted)
+                .with_membership_album_ids(membership_album_ids)
+                .with_membership_exact(page.membership_is_exact()),
         )
     }
 }
@@ -1592,6 +1605,11 @@ where
                 }
             }
         }
+        let membership_track_opaque_ids = page
+            .membership_identities()
+            .iter()
+            .map(map_track_membership_opaque_id)
+            .collect();
         Ok(PlaylistTracksPage::new_with_cursor(
             page.offset(),
             page.next_offset(),
@@ -1599,7 +1617,9 @@ where
             page.has_more(),
             omitted,
             tracks,
-        ))
+        )
+        .with_membership_track_opaque_ids(membership_track_opaque_ids)
+        .with_membership_exact(page.membership_is_exact()))
     }
 }
 
@@ -2838,6 +2858,10 @@ fn map_track_summary(track: &QqMusicTrackSummary) -> Result<TrackSummary, ()> {
     TrackSummary::new(id, track.title(), artists)
         .map(|summary| {
             summary
+                .with_membership_opaque_id(track_membership_opaque_id(
+                    track.track_id(),
+                    track.song_type(),
+                ))
                 .with_subtitle(track.subtitle().map(str::to_owned))
                 .with_artists(credited_artists)
                 .with_album_title(album_title)
@@ -2848,14 +2872,20 @@ fn map_track_summary(track: &QqMusicTrackSummary) -> Result<TrackSummary, ()> {
         .map_err(|_| ())
 }
 
+fn map_track_membership_opaque_id(
+    identity: &qqmusic_client::QqMusicTrackMembershipIdentity,
+) -> String {
+    track_membership_opaque_id(identity.track_id(), identity.song_type())
+}
+
+fn track_membership_opaque_id(song_id: u64, primary_song_type: u32) -> String {
+    format!("track-membership:{song_id}:{primary_song_type}")
+}
+
 fn map_recent_track_summary(track: &QqMusicRecentTrackSummary) -> Result<TrackSummary, ()> {
     let file_media_mid = track.file_media_mid().unwrap_or("-");
-    let numeric_track_id = track
-        .track_id()
-        .map_or_else(|| "-".to_owned(), |value| value.to_string());
-    let song_type = track
-        .song_type()
-        .map_or_else(|| "-".to_owned(), |value| value.to_string());
+    let numeric_track_id = track.track_id().filter(|value| *value != 0).ok_or(())?;
+    let song_type = track.song_type().ok_or(())?;
     let id = TrackId::new(
         qq_music_provider_id(),
         format!(
@@ -2892,6 +2922,7 @@ fn map_recent_track_summary(track: &QqMusicRecentTrackSummary) -> Result<TrackSu
     TrackSummary::new(id, track.title(), artists)
         .map(|summary| {
             summary
+                .with_membership_opaque_id(track_membership_opaque_id(numeric_track_id, song_type))
                 .with_subtitle(track.subtitle().map(str::to_owned))
                 .with_artists(credited_artists)
                 .with_album_title(album_title)
@@ -3240,19 +3271,25 @@ fn map_playlist_detail_error<E>(error: &QqMusicPlaylistDetailError<E>) -> UserLi
 fn map_recent_plays_page(
     page: &QqMusicRecentPlaysPage,
 ) -> Result<PlaylistTracksPage, UserLibraryError> {
-    let tracks = page
-        .records()
-        .iter()
-        .map(|record| map_recent_track_summary(record.track()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|()| UserLibraryError::InvalidResponse)?;
+    let mut omitted = page.omitted_track_count();
+    let mut tracks = Vec::with_capacity(page.records().len());
+    for record in page.records() {
+        match map_recent_track_summary(record.track()) {
+            Ok(track) => tracks.push(track),
+            Err(()) => {
+                omitted = omitted
+                    .checked_add(1)
+                    .ok_or(UserLibraryError::InvalidResponse)?;
+            }
+        }
+    }
     Ok(PlaylistTracksPage::new_with_cursor_and_total_certainty(
         page.offset(),
         page.next_offset(),
         page.total(),
         page.total_is_exact(),
         page.has_more(),
-        page.omitted_track_count(),
+        omitted,
         tracks,
     ))
 }
@@ -4068,7 +4105,7 @@ mod tests {
     use super::{QqMusicCredentialRestoreState, QqMusicCredentialTransferError, QqMusicProvider};
     use music_domain::{
         AlbumId, ArtistId, AudioFormat, AudioQuality, NewAlbumRegion, NewSongCategory, PlaylistId,
-        PlaylistOwnership, PlaylistPurpose, ProviderId, RankingId, TrackId,
+        PlaylistOwnership, PlaylistPurpose, ProviderId, RankingId, TrackId, TrackSummary,
     };
     use provider_api::{
         AccountSummaryError, AccountSummaryProvider, AlbumDetailsProvider,
@@ -4130,6 +4167,21 @@ mod tests {
     struct TrackLikeTransport {
         response: HttpResponse,
         requests: Mutex<Vec<HttpRequest>>,
+    }
+
+    fn assert_mutation_capable_track(track: &TrackSummary) {
+        let identity = super::parse_track_identity(track.id())
+            .expect("QQ presentation Track must retain Provider mutation identity");
+        let song_id = identity
+            .song_id
+            .expect("QQ presentation Track must retain numeric song ID");
+        let song_type = identity
+            .primary_song_type
+            .expect("QQ presentation Track must retain primary song type");
+        assert_eq!(
+            track.membership_opaque_id(),
+            super::track_membership_opaque_id(song_id, song_type)
+        );
     }
 
     struct MediaTransport {
@@ -5024,6 +5076,7 @@ mod tests {
         assert_eq!(page.items().len(), 1);
         let item = &page.items()[0];
         let track = item.track();
+        assert_mutation_capable_track(track);
         assert_eq!(track.id().provider().as_str(), "qq-music");
         assert_eq!(
             track.id().opaque(),
@@ -5300,6 +5353,7 @@ mod tests {
         assert_eq!(page.total(), 1);
         assert!(!page.has_more());
         assert_eq!(page.tracks().len(), 1);
+        assert_mutation_capable_track(&page.tracks()[0]);
         assert_eq!(
             page.tracks()[0].id().opaque(),
             "track:41001:0:fixtureTrackMid1:fixtureFileMid1"
@@ -5439,6 +5493,7 @@ mod tests {
         assert_eq!(page.total(), 1);
         assert!(!page.has_more());
         assert_eq!(page.tracks().len(), 1);
+        assert_mutation_capable_track(&page.tracks()[0]);
         assert_eq!(
             page.tracks()[0].id().opaque(),
             "track:41001:0:fixtureTrackMid1:fixtureFileMid1"
@@ -5629,6 +5684,7 @@ mod tests {
         assert_eq!(collection.category(), NewSongCategory::Latest);
         assert_eq!(collection.tracks().len(), 1);
         let track = &collection.tracks()[0];
+        assert_mutation_capable_track(track);
         assert_eq!(
             track.id().opaque(),
             "track:41001:0:fixtureTrackMid1:fixtureFileMid1"
@@ -5823,6 +5879,7 @@ mod tests {
         assert_eq!(page.page(), 2);
         assert!(page.has_more());
         assert_eq!(page.tracks().len(), 1);
+        assert_mutation_capable_track(&page.tracks()[0]);
         assert_eq!(page.tracks()[0].id().provider().as_str(), "qq-music");
         assert_eq!(
             page.tracks()[0].id().opaque(),
@@ -6144,6 +6201,7 @@ mod tests {
             .await
             .expect("personalized Tracks");
         assert_eq!(tracks.len(), 1);
+        assert_mutation_capable_track(&tracks[0]);
         assert_eq!(tracks[0].id().provider().as_str(), "qq-music");
         assert_eq!(
             tracks[0].id().opaque(),
@@ -6178,6 +6236,7 @@ mod tests {
 
         let tracks = provider.related_tracks(seed).await.expect("related Tracks");
         assert_eq!(tracks.len(), 1);
+        assert_mutation_capable_track(&tracks[0]);
         assert_eq!(tracks[0].title(), "Synthetic related Track");
         assert_eq!(
             tracks[0].id().opaque(),
@@ -6373,6 +6432,7 @@ mod tests {
         assert_eq!(page.total(), 31);
         assert!(!page.has_more());
         assert_eq!(page.tracks().len(), 1);
+        assert_mutation_capable_track(&page.tracks()[0]);
         assert_eq!(page.tracks()[0].title(), "Synthetic Track");
         assert!(!detail_provider.has_authenticated_credential());
         let debug = format!("{page:?}");
@@ -6863,6 +6923,12 @@ mod tests {
         assert_eq!(page.total(), 21);
         assert!(!page.has_more());
         assert_eq!(page.albums().len(), 1);
+        assert!(page.membership_is_exact());
+        assert_eq!(page.membership_album_ids().len(), 1);
+        assert_eq!(
+            page.membership_album_ids()[0].opaque(),
+            "album:43001:fixtureAlbumMid"
+        );
         assert_eq!(
             page.albums()[0].id().opaque(),
             "album:43001:fixtureAlbumMid"
@@ -7046,7 +7112,15 @@ mod tests {
         assert_eq!(page.total(), 51);
         assert!(page.has_more());
         let track = &page.tracks()[0];
+        assert_mutation_capable_track(track);
+        assert_eq!(page.membership_track_opaque_ids().len(), 1);
+        assert!(page.membership_is_exact());
+        assert_eq!(
+            page.membership_track_opaque_ids()[0],
+            "track-membership:41001:0"
+        );
         assert_eq!(track.id().provider().as_str(), "qq-music");
+        assert_eq!(track.membership_opaque_id(), "track-membership:41001:0");
         assert_eq!(
             track.id().opaque(),
             "track:41001:0:fixtureTrackMid1:fixtureFileMid1"
@@ -7116,8 +7190,8 @@ mod tests {
 
     fn recent_response(mids: &[&str]) -> Value {
         json!({"code":0,"req_0":{"code":0,"data":{"code":0,"type":2,
-            "updateTime":1_700_000_000_u64,"data":{"songList":mids.iter().map(|mid| json!({
-                "lastTime":1_700_000_000_u64,"track":{"mid":mid,"name":"Synthetic recent track",
+            "updateTime":1_700_000_000_u64,"data":{"songList":mids.iter().enumerate().map(|(index, mid)| json!({
+                "lastTime":1_700_000_000_u64,"track":{"id":index + 1,"type":0,"mid":mid,"name":"Synthetic recent track",
                     "interval":203,"singer":[{"name":"Recent artist"}],
                     "album":{"mid":"recentAlbumMid","name":"Recent album"}}
             })).collect::<Vec<_>>()}}}})
@@ -7138,7 +7212,13 @@ mod tests {
         assert!(page.total_is_exact());
         assert!(!page.has_more());
         let track = &page.tracks()[0];
-        assert_eq!(track.id().opaque(), "track:-:-:recentTrackMid:-");
+        assert_mutation_capable_track(track);
+        assert_eq!(track.id().opaque(), "track:1:0:recentTrackMid:-");
+        assert_eq!(track.membership_opaque_id(), "track-membership:1:0");
+        let mutation_identity = super::parse_track_identity(track.id())
+            .expect("displayed recent Track must carry mutation identity");
+        assert_eq!(mutation_identity.song_id, Some(1));
+        assert_eq!(mutation_identity.primary_song_type, Some(0));
         assert_eq!(track.id().provider(), &super::qq_music_provider_id());
         assert_eq!(track.artist_names(), ["Recent artist"]);
         assert_eq!(track.album_title(), Some("Recent album"));
@@ -7154,6 +7234,28 @@ mod tests {
             Err(UserLibraryError::AuthenticationRequired)
         );
         assert_eq!(provider.client().transport().requests().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn recent_history_omits_rows_without_mutation_identity() {
+        let response = json!({"code":0,"req_0":{"code":0,"data":{"code":0,"type":2,
+        "updateTime":1_700_000_000_u64,"data":{"songList":[{
+            "lastTime":1_700_000_000_u64,"track":{"mid":"midOnly",
+                "name":"Synthetic recent track","interval":203,
+                "singer":[{"name":"Recent artist"}]}
+        }]}}}});
+        let provider =
+            QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([response])));
+        set_authenticated(&provider, "123456");
+
+        let page = provider
+            .recent_tracks_page(0, 100)
+            .await
+            .expect("identity-incomplete row is isolated");
+
+        assert!(page.tracks().is_empty());
+        assert_eq!(page.omitted_track_count(), 1);
+        assert_eq!(page.next_offset(), 1);
     }
 
     #[tokio::test]
@@ -7198,7 +7300,7 @@ mod tests {
         assert_eq!(refreshed.total(), 1);
         assert_eq!(
             refreshed.tracks()[0].id().opaque(),
-            "track:-:-:refreshMid:-"
+            "track:1:0:refreshMid:-"
         );
         provider.sign_out();
         assert_eq!(
@@ -7212,7 +7314,7 @@ mod tests {
             .expect("fresh session");
         assert_eq!(
             after_login.tracks()[0].id().opaque(),
-            "track:-:-:afterLoginMid:-"
+            "track:1:0:afterLoginMid:-"
         );
         assert_eq!(provider.client().transport().requests().len(), 3);
     }
@@ -7268,14 +7370,14 @@ mod tests {
                 .recent_tracks_page(0, 1)
                 .await
                 .expect("new refresh");
-            assert_eq!(first.tracks()[0].id().opaque(), "track:-:-:freshOne:-");
+            assert_eq!(first.tracks()[0].id().opaque(), "track:1:0:freshOne:-");
             provider.client().transport().release.notify_one();
             assert_eq!(task.await.expect("task"), Err(UserLibraryError::Replaced));
             let second = provider
                 .recent_tracks_page(1, 1)
                 .await
                 .expect("same new snapshot");
-            assert_eq!(second.tracks()[0].id().opaque(), "track:-:-:freshTwo:-");
+            assert_eq!(second.tracks()[0].id().opaque(), "track:2:0:freshTwo:-");
             assert!(provider.has_authenticated_credential());
             assert_eq!(
                 provider.client().transport().calls.load(Ordering::SeqCst),
@@ -7298,7 +7400,7 @@ mod tests {
             .recent_tracks_page(0, 1)
             .await
             .expect("new session");
-        assert_eq!(page.tracks()[0].id().opaque(), "track:-:-:freshOne:-");
+        assert_eq!(page.tracks()[0].id().opaque(), "track:1:0:freshOne:-");
     }
 
     #[tokio::test]
@@ -7310,7 +7412,7 @@ mod tests {
         task.abort();
         assert!(task.await.expect_err("cancelled").is_cancelled());
         let page = provider.recent_tracks_page(0, 1).await.expect("new load");
-        assert_eq!(page.tracks()[0].id().opaque(), "track:-:-:freshOne:-");
+        assert_eq!(page.tracks()[0].id().opaque(), "track:1:0:freshOne:-");
     }
 
     #[tokio::test]

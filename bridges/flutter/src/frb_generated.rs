@@ -10581,6 +10581,7 @@ impl SseDecode for crate::api::library::LibraryTrackSummary {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_providerId = <String>::sse_decode(deserializer);
         let mut var_opaqueId = <String>::sse_decode(deserializer);
+        let mut var_membershipOpaqueId = <Option<String>>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_subtitle = <Option<String>>::sse_decode(deserializer);
         let mut var_artistNames = <Vec<String>>::sse_decode(deserializer);
@@ -10594,6 +10595,7 @@ impl SseDecode for crate::api::library::LibraryTrackSummary {
         return crate::api::library::LibraryTrackSummary {
             provider_id: var_providerId,
             opaque_id: var_opaqueId,
+            membership_opaque_id: var_membershipOpaqueId,
             title: var_title,
             subtitle: var_subtitle,
             artist_names: var_artistNames,
@@ -12072,6 +12074,8 @@ impl SseDecode for crate::api::library::PlaylistTrackPageLoad {
         let mut var_totalIsExact = <bool>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
         let mut var_omittedTrackCount = <u32>::sse_decode(deserializer);
+        let mut var_membershipIsExact = <bool>::sse_decode(deserializer);
+        let mut var_membershipTrackOpaqueIds = <Vec<String>>::sse_decode(deserializer);
         let mut var_tracks =
             <Vec<crate::api::library::LibraryTrackSummary>>::sse_decode(deserializer);
         let mut var_failure =
@@ -12083,6 +12087,8 @@ impl SseDecode for crate::api::library::PlaylistTrackPageLoad {
             total_is_exact: var_totalIsExact,
             has_more: var_hasMore,
             omitted_track_count: var_omittedTrackCount,
+            membership_is_exact: var_membershipIsExact,
+            membership_track_opaque_ids: var_membershipTrackOpaqueIds,
             tracks: var_tracks,
             failure: var_failure,
         };
@@ -12752,6 +12758,8 @@ impl SseDecode for crate::api::favorite_albums::QqMusicFavoriteAlbumPageLoad {
         let mut var_total = <u32>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
         let mut var_omittedAlbumCount = <u32>::sse_decode(deserializer);
+        let mut var_membershipIsExact = <bool>::sse_decode(deserializer);
+        let mut var_membershipAlbumOpaqueIds = <Vec<String>>::sse_decode(deserializer);
         let mut var_albums =
             <Vec<crate::api::album::CatalogAlbumSummary>>::sse_decode(deserializer);
         let mut var_failure = <Option<
@@ -12763,6 +12771,8 @@ impl SseDecode for crate::api::favorite_albums::QqMusicFavoriteAlbumPageLoad {
             total: var_total,
             has_more: var_hasMore,
             omitted_album_count: var_omittedAlbumCount,
+            membership_is_exact: var_membershipIsExact,
+            membership_album_opaque_ids: var_membershipAlbumOpaqueIds,
             albums: var_albums,
             failure: var_failure,
         };
@@ -15120,6 +15130,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::library::LibraryTrackSummary 
         [
             self.provider_id.into_into_dart().into_dart(),
             self.opaque_id.into_into_dart().into_dart(),
+            self.membership_opaque_id.into_into_dart().into_dart(),
             self.title.into_into_dart().into_dart(),
             self.subtitle.into_into_dart().into_dart(),
             self.artist_names.into_into_dart().into_dart(),
@@ -15684,6 +15695,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::library::PlaylistTrackPageLoa
             self.total_is_exact.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
             self.omitted_track_count.into_into_dart().into_dart(),
+            self.membership_is_exact.into_into_dart().into_dart(),
+            self.membership_track_opaque_ids
+                .into_into_dart()
+                .into_dart(),
             self.tracks.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -16568,6 +16583,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::favorite_albums::QqMusicFavor
             self.total.into_into_dart().into_dart(),
             self.has_more.into_into_dart().into_dart(),
             self.omitted_album_count.into_into_dart().into_dart(),
+            self.membership_is_exact.into_into_dart().into_dart(),
+            self.membership_album_opaque_ids
+                .into_into_dart()
+                .into_dart(),
             self.albums.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
@@ -19186,6 +19205,7 @@ impl SseEncode for crate::api::library::LibraryTrackSummary {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.provider_id, serializer);
         <String>::sse_encode(self.opaque_id, serializer);
+        <Option<String>>::sse_encode(self.membership_opaque_id, serializer);
         <String>::sse_encode(self.title, serializer);
         <Option<String>>::sse_encode(self.subtitle, serializer);
         <Vec<String>>::sse_encode(self.artist_names, serializer);
@@ -20399,6 +20419,8 @@ impl SseEncode for crate::api::library::PlaylistTrackPageLoad {
         <bool>::sse_encode(self.total_is_exact, serializer);
         <bool>::sse_encode(self.has_more, serializer);
         <u32>::sse_encode(self.omitted_track_count, serializer);
+        <bool>::sse_encode(self.membership_is_exact, serializer);
+        <Vec<String>>::sse_encode(self.membership_track_opaque_ids, serializer);
         <Vec<crate::api::library::LibraryTrackSummary>>::sse_encode(self.tracks, serializer);
         <Option<crate::api::library::PlaylistTrackPageLoadFailure>>::sse_encode(
             self.failure,
@@ -20971,6 +20993,8 @@ impl SseEncode for crate::api::favorite_albums::QqMusicFavoriteAlbumPageLoad {
         <u32>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
         <u32>::sse_encode(self.omitted_album_count, serializer);
+        <bool>::sse_encode(self.membership_is_exact, serializer);
+        <Vec<String>>::sse_encode(self.membership_album_opaque_ids, serializer);
         <Vec<crate::api::album::CatalogAlbumSummary>>::sse_encode(self.albums, serializer);
         <Option<crate::api::favorite_albums::QqMusicFavoriteAlbumPageLoadFailure>>::sse_encode(
             self.failure,

@@ -404,7 +404,51 @@ pub struct QqMusicPlaylistTracksPage {
     total: u32,
     has_more: bool,
     omitted_track_count: u32,
+    membership_is_exact: bool,
+    membership_identities: Vec<QqMusicTrackMembershipIdentity>,
     tracks: Vec<QqMusicTrackSummary>,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicTrackMembershipIdentity {
+    track_id: u64,
+    song_mid: String,
+    file_media_mid: Option<String>,
+    song_type: u32,
+}
+
+impl QqMusicTrackMembershipIdentity {
+    #[must_use]
+    pub const fn track_id(&self) -> u64 {
+        self.track_id
+    }
+
+    #[must_use]
+    pub fn song_mid(&self) -> &str {
+        &self.song_mid
+    }
+
+    #[must_use]
+    pub fn file_media_mid(&self) -> Option<&str> {
+        self.file_media_mid.as_deref()
+    }
+
+    #[must_use]
+    pub const fn song_type(&self) -> u32 {
+        self.song_type
+    }
+}
+
+impl fmt::Debug for QqMusicTrackMembershipIdentity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicTrackMembershipIdentity")
+            .field("track_id", &"[REDACTED]")
+            .field("song_mid", &"[REDACTED]")
+            .field("has_file_media_mid", &self.file_media_mid.is_some())
+            .field("song_type", &self.song_type)
+            .finish()
+    }
 }
 
 impl QqMusicPlaylistTracksPage {
@@ -434,8 +478,18 @@ impl QqMusicPlaylistTracksPage {
     }
 
     #[must_use]
+    pub const fn membership_is_exact(&self) -> bool {
+        self.membership_is_exact
+    }
+
+    #[must_use]
     pub fn tracks(&self) -> &[QqMusicTrackSummary] {
         &self.tracks
+    }
+
+    #[must_use]
+    pub fn membership_identities(&self) -> &[QqMusicTrackMembershipIdentity] {
+        &self.membership_identities
     }
 }
 
@@ -448,6 +502,11 @@ impl fmt::Debug for QqMusicPlaylistTracksPage {
             .field("total", &self.total)
             .field("has_more", &self.has_more)
             .field("omitted_track_count", &self.omitted_track_count)
+            .field("membership_is_exact", &self.membership_is_exact)
+            .field(
+                "membership_identity_count",
+                &self.membership_identities.len(),
+            )
             .field("track_count", &self.tracks.len())
             .finish()
     }
@@ -859,20 +918,8 @@ fn map_response<E>(
     if next_offset == offset && (has_more || offset < total) {
         return Err(QqMusicPlaylistDetailError::InvalidPagination);
     }
-    let mut tracks = Vec::with_capacity(raw_tracks.len());
-    let mut omitted_track_count = 0_u32;
-    for (index, raw) in raw_tracks.into_iter().enumerate() {
-        match map_track(raw, index) {
-            Ok(track) => tracks.push(track),
-            Err(
-                QqMusicPlaylistDetailError::InvalidTrack { .. }
-                | QqMusicPlaylistDetailError::InvalidArtist { .. },
-            ) => {
-                omitted_track_count += 1;
-            }
-            Err(error) => return Err(error),
-        }
-    }
+    let (tracks, membership_identities, membership_is_exact, omitted_track_count) =
+        map_track_rows(raw_tracks)?;
 
     Ok(QqMusicPlaylistTracksPage {
         offset,
@@ -880,7 +927,63 @@ fn map_response<E>(
         total,
         has_more,
         omitted_track_count,
+        membership_is_exact,
+        membership_identities,
         tracks,
+    })
+}
+
+type MappedTrackRows = (
+    Vec<QqMusicTrackSummary>,
+    Vec<QqMusicTrackMembershipIdentity>,
+    bool,
+    u32,
+);
+
+fn map_track_rows<E>(
+    raw_tracks: Vec<RawTrack>,
+) -> Result<MappedTrackRows, QqMusicPlaylistDetailError<E>> {
+    let mut tracks = Vec::with_capacity(raw_tracks.len());
+    let mut membership_identities = Vec::with_capacity(raw_tracks.len());
+    let mut membership_is_exact = true;
+    let mut omitted_track_count = 0_u32;
+    for (index, raw) in raw_tracks.into_iter().enumerate() {
+        if let Some(identity) = map_membership_identity(&raw) {
+            membership_identities.push(identity);
+        } else {
+            membership_is_exact = false;
+        }
+        match map_track(raw, index) {
+            Ok(track) => tracks.push(track),
+            Err(
+                QqMusicPlaylistDetailError::InvalidTrack { .. }
+                | QqMusicPlaylistDetailError::InvalidArtist { .. },
+            ) => omitted_track_count += 1,
+            Err(error) => return Err(error),
+        }
+    }
+    Ok((
+        tracks,
+        membership_identities,
+        membership_is_exact,
+        omitted_track_count,
+    ))
+}
+
+fn map_membership_identity(raw: &RawTrack) -> Option<QqMusicTrackMembershipIdentity> {
+    let track_id = raw.id.filter(|value| *value != 0)?;
+    let song_mid = safe_media_mid_ref(raw.mid.as_deref())?.to_owned();
+    let song_type = raw.song_type?;
+    let file_media_mid = raw
+        .file
+        .as_ref()
+        .and_then(|file| safe_media_mid_ref(file.media_mid.as_deref()))
+        .map(str::to_owned);
+    Some(QqMusicTrackMembershipIdentity {
+        track_id,
+        song_mid,
+        file_media_mid,
+        song_type,
     })
 }
 
@@ -967,6 +1070,12 @@ pub(crate) fn nonblank(value: Option<String>) -> Option<String> {
 
 pub(crate) fn safe_media_mid(value: Option<String>) -> Option<String> {
     nonblank(value)
+        .filter(|value| value.len() <= 64 && value.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+}
+
+fn safe_media_mid_ref(value: Option<&str>) -> Option<&str> {
+    value
+        .filter(|value| !value.trim().is_empty())
         .filter(|value| value.len() <= 64 && value.bytes().all(|byte| byte.is_ascii_alphanumeric()))
 }
 
@@ -1341,6 +1450,10 @@ mod tests {
         assert_eq!(page.next_offset(), 1);
         assert_eq!(page.omitted_track_count(), 1);
         assert!(page.tracks().is_empty());
+        assert_eq!(page.membership_identities().len(), 1);
+        assert!(page.membership_is_exact());
+        assert_eq!(page.membership_identities()[0].track_id(), 1);
+        assert_eq!(page.membership_identities()[0].song_type(), 0);
         assert!(!format!("{page:?}").contains("must-not-leak"));
     }
 
@@ -1373,6 +1486,8 @@ mod tests {
         assert_eq!(page.offset(), 300);
         assert_eq!(page.next_offset(), 301);
         assert_eq!(page.omitted_track_count(), 1);
+        assert!(page.membership_identities().is_empty());
+        assert!(!page.membership_is_exact());
         assert!(page.has_more());
         assert!(page.tracks().is_empty());
         assert!(!format!("{page:?}").contains("must-not-leak"));

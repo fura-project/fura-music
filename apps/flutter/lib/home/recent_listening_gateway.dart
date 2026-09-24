@@ -23,6 +23,7 @@ class RustRecentListeningGateway implements RecentListeningGateway {
             : library_bridge.LibraryTrackSummary(
                 providerId: track.providerId,
                 opaqueId: track.opaqueId,
+                membershipOpaqueId: track.membershipIdentity,
                 title: track.title,
                 subtitle: track.subtitle,
                 artistNames: track.artistNames,

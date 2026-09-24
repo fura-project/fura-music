@@ -209,6 +209,7 @@ const fn map_error(error: UserLibraryError) -> UserPlaylistLoadFailure {
 pub struct LibraryTrackSummary {
     pub provider_id: String,
     pub opaque_id: String,
+    pub membership_opaque_id: Option<String>,
     pub title: String,
     pub subtitle: Option<String>,
     pub artist_names: Vec<String>,
@@ -225,6 +226,10 @@ impl fmt::Debug for LibraryTrackSummary {
             .debug_struct("LibraryTrackSummary")
             .field("provider_id", &self.provider_id)
             .field("opaque_id", &"[REDACTED]")
+            .field(
+                "has_membership_identity",
+                &self.membership_opaque_id.is_some(),
+            )
             .field("title", &"[REDACTED]")
             .field("has_subtitle", &self.subtitle.is_some())
             .field("artist_count", &self.artist_names.len())
@@ -258,6 +263,8 @@ pub struct PlaylistTrackPageLoad {
     pub total_is_exact: bool,
     pub has_more: bool,
     pub omitted_track_count: u32,
+    pub membership_is_exact: bool,
+    pub membership_track_opaque_ids: Vec<String>,
     pub tracks: Vec<LibraryTrackSummary>,
     pub failure: Option<PlaylistTrackPageLoadFailure>,
 }
@@ -272,6 +279,11 @@ impl fmt::Debug for PlaylistTrackPageLoad {
             .field("total_is_exact", &self.total_is_exact)
             .field("has_more", &self.has_more)
             .field("omitted_track_count", &self.omitted_track_count)
+            .field("membership_is_exact", &self.membership_is_exact)
+            .field(
+                "membership_track_count",
+                &self.membership_track_opaque_ids.len(),
+            )
             .field("track_count", &self.tracks.len())
             .field("failure", &self.failure)
             .finish()
@@ -480,6 +492,8 @@ fn map_track_page_load(
             total_is_exact: page.total_is_exact(),
             has_more: page.has_more(),
             omitted_track_count: page.omitted_track_count(),
+            membership_is_exact: page.membership_is_exact(),
+            membership_track_opaque_ids: page.membership_track_opaque_ids().to_vec(),
             tracks: page.tracks().iter().map(bridge_track_summary).collect(),
             failure: None,
         },
@@ -491,6 +505,7 @@ pub(super) fn bridge_track_summary(track: &music_domain::TrackSummary) -> Librar
     LibraryTrackSummary {
         provider_id: track.id().provider().to_string(),
         opaque_id: track.id().opaque().to_owned(),
+        membership_opaque_id: Some(track.membership_opaque_id().to_owned()),
         title: track.title().to_owned(),
         subtitle: track.subtitle().map(str::to_owned),
         artist_names: track.artist_names().to_vec(),
@@ -527,6 +542,12 @@ pub(super) fn domain_track_summary(
     let id = music_domain::TrackId::new(provider, track.opaque_id).map_err(|_| ())?;
     music_domain::TrackSummary::new(id, track.title, track.artist_names)
         .map(|summary| {
+            let summary = match track.membership_opaque_id {
+                Some(membership_opaque_id) => {
+                    summary.with_membership_opaque_id(membership_opaque_id)
+                }
+                None => summary,
+            };
             summary
                 .with_subtitle(track.subtitle)
                 .with_artists(artists)
@@ -562,6 +583,8 @@ const fn failed_track_page(failure: PlaylistTrackPageLoadFailure) -> PlaylistTra
         total_is_exact: true,
         has_more: false,
         omitted_track_count: 0,
+        membership_is_exact: false,
+        membership_track_opaque_ids: Vec::new(),
         tracks: Vec::new(),
         failure: Some(failure),
     }
@@ -676,6 +699,7 @@ mod tests {
         .expect("track ID");
         let track = TrackSummary::new(track_id, "must-not-leak", vec!["private-artist".into()])
             .expect("track summary")
+            .with_membership_opaque_id("track-membership:41001:0")
             .with_artists(vec![
                 ArtistSummary::new(
                     ArtistId::new(
@@ -719,9 +743,18 @@ mod tests {
         assert!(!mapped.total_is_exact);
         assert!(mapped.has_more);
         assert_eq!(mapped.omitted_track_count, 1);
+        assert!(mapped.membership_is_exact);
+        assert_eq!(
+            mapped.membership_track_opaque_ids,
+            ["track-membership:41001:0"]
+        );
         assert_eq!(mapped.tracks.len(), 1);
         assert_eq!(mapped.tracks[0].provider_id, "qq-music");
         assert_eq!(mapped.tracks[0].opaque_id, "track:41001:0:1:opaque-mid");
+        assert_eq!(
+            mapped.tracks[0].membership_opaque_id.as_deref(),
+            Some("track-membership:41001:0")
+        );
         assert_eq!(mapped.tracks[0].title, "must-not-leak");
         assert_eq!(mapped.tracks[0].artist_names, ["private-artist"]);
         assert_eq!(mapped.tracks[0].artists.len(), 1);

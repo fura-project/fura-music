@@ -27,6 +27,8 @@ pub struct QqMusicFavoriteAlbumPageLoad {
     pub total: u32,
     pub has_more: bool,
     pub omitted_album_count: u32,
+    pub membership_is_exact: bool,
+    pub membership_album_opaque_ids: Vec<String>,
     pub albums: Vec<CatalogAlbumSummary>,
     pub failure: Option<QqMusicFavoriteAlbumPageLoadFailure>,
 }
@@ -40,6 +42,11 @@ impl fmt::Debug for QqMusicFavoriteAlbumPageLoad {
             .field("total", &self.total)
             .field("has_more", &self.has_more)
             .field("omitted_album_count", &self.omitted_album_count)
+            .field("membership_is_exact", &self.membership_is_exact)
+            .field(
+                "membership_album_count",
+                &self.membership_album_opaque_ids.len(),
+            )
             .field("album_count", &self.albums.len())
             .field("failure", &self.failure)
             .finish()
@@ -142,6 +149,12 @@ fn map_load(
             total: page.total(),
             has_more: page.has_more(),
             omitted_album_count: page.omitted_album_count(),
+            membership_is_exact: page.membership_is_exact(),
+            membership_album_opaque_ids: page
+                .membership_album_ids()
+                .iter()
+                .map(|album_id| album_id.opaque().to_owned())
+                .collect(),
             albums: page.albums().iter().map(bridge_album_summary).collect(),
             failure: None,
         },
@@ -156,6 +169,8 @@ const fn failed_load(failure: QqMusicFavoriteAlbumPageLoadFailure) -> QqMusicFav
         total: 0,
         has_more: false,
         omitted_album_count: 0,
+        membership_is_exact: false,
+        membership_album_opaque_ids: Vec::new(),
         albums: Vec::new(),
         failure: Some(failure),
     }
@@ -204,6 +219,11 @@ mod tests {
         assert_eq!(mapped.offset, 20);
         assert_eq!(mapped.total, 21);
         assert!(!mapped.has_more);
+        assert!(mapped.membership_is_exact);
+        assert_eq!(
+            mapped.membership_album_opaque_ids,
+            ["album:43001:fixtureAlbumMid"]
+        );
         assert_eq!(mapped.albums.len(), 1);
         assert_eq!(mapped.albums[0].provider_id, "qq-music");
         assert_eq!(mapped.albums[0].opaque_id, "album:43001:fixtureAlbumMid");

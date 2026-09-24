@@ -3,13 +3,45 @@ execution:
   mode: HUMAN_GATED_REGRESSION
   work_domain: MIXED
   state: HUMAN_REVIEW
-  acceptance_milestone: ANDROID_PHYSICAL_STARTUP_AND_REMOTE_APPIMAGE_VERIFY
-  active_workstream: ANDROID_STARTUP_AND_APPIMAGE_VERIFY
-  current_task: WAYDROID_ABCD_REPAIR_AND_APPIMAGE_VERIFY_CANDIDATE
-  next_action: HUMAN_PHYSICAL_ANDROID_RETEST_AND_FRESH_ACTIONS_RUN
+  acceptance_milestone: PERSONAL_LIBRARY_MEMBERSHIP_LIVE_ACCEPTANCE
+  active_workstream: PERSONAL_LIBRARY_MEMBERSHIP_REGRESSION
+  current_task: QQ_TRACK_LIKE_AND_ALBUM_FAVORITE_SESSION_MEMBERSHIP_CANDIDATE
+  next_action: HUMAN_QQ_REVERSIBLE_LIKE_UNLIKE_READBACK
 ---
 
 # Current State
+
+- **2026-09-24 personal-library membership lifecycle correction:** starting
+  local and remote HEAD were both
+  `cc59ea3e75ffecbc65f374ee3852b9a21d9ca2bc`. Track-like and Album-favorite
+  membership are now authenticated-session owners rather than page-local
+  rescans. QQ reuses the existing dir-201 playlist and favorite-Album page
+  responses to expose Provider-owned membership identities plus independent
+  membership completeness across Core, generated Bridge and Flutter; a
+  malformed presentation row no longer invalidates otherwise exact
+  membership, while a row lacking Provider identity cannot fabricate a
+  negative. One serial single-flight preload retains its continuation, Liked
+  and Favorite pages join the same page futures, normal route/widget rebuilds
+  reuse the completed in-memory snapshot, and manual refresh preserves the old
+  snapshot until an exact replacement is ready. Confirmed writes apply an
+  immediate per-identity delta and reconcile in the background; unknown
+  outcomes isolate only the requested identity, and definitive failures retain
+  the prior state. Coarse diagnostics distinguish action dispatch, Bridge
+  start, typed outcome and failure without logging content or identity. QQ
+  Search, Album, Artist, Ranking, Playlist, Recent, personalized, related,
+  New-song and Radar mappings retain mutation-capable numeric identity solely
+  inside the Provider. The 1,032-Track/11-page fixture, continuation, omitted
+  presentation, identity-incomplete, account replacement/logout/credential
+  rejection, Like/Unlike, Album favorite/unfavorite, shared-page, atomic
+  refresh and Now Playing rebuild/tap regressions pass, as do Dart analysis,
+  the complete 924-test Flutter suite, locked Rust checks and 440 affected
+  Rust tests.
+  The pinned FRB 2.13.0 generation is current. No stored account was accessed:
+  reversible QQ Like/Unlike plus fresh read-back remains Human review. Local
+  Rust 1.98.1 all-target Clippy still stops only on the pre-existing
+  `unused_async_trait_impl` diagnostic in `live_wechat_exchange.rs`; the
+  repository CI baseline is Rust 1.97.1 and no lint suppression or unrelated
+  live-test rewrite was added. No commit or push occurred.
 
 - **2026-09-24 Waydroid A/B/C/D startup isolation and AppImage follow-up:**
   local and remote HEAD are both
