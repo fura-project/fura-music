@@ -11,6 +11,42 @@ execution:
 
 # Current State
 
+- **2026-09-24 current-HEAD Waydroid bisection and AppImage verifier
+  follow-up:** the tested source baseline was
+  `c865f88ab0fa165a715ff8f85a9d14283c681e4b`, then one preserved local commit
+  ahead of `origin/main` at
+  `cc59ea3e75ffecbc65f374ee3852b9a21d9ca2bc`; `61a24bf...` and
+  `0a5939a6...` remain in history. Four separately checksummed native-x86_64
+  Debug APKs from this same HEAD were cold-started in the existing Waydroid
+  1.6.3 Android 13/API 33 runtime. A and B reached a real rendered Fura window
+  directly. Fresh C and D installs first presented Android 13's notification
+  permission UI; after the test permission was granted, both reached a real
+  Fura first frame, stayed alive and top/resumed for the observation window,
+  kept an empty crash buffer, and exposed exactly one Media3 session. C and D
+  also emitted one non-fatal MediaKit `NativeReferenceHolder` number-parse
+  exception without process death; it is recorded rather than used to justify
+  an unrelated playback rewrite. Native pre-Flutter markers were visible in
+  `adb logcat`, but the existing Dart `developer.log` startup lines were not;
+  requested/effective stacks were therefore cross-checked through each build's
+  defines, the default selector regression, and the merged-manifest ownership
+  test. That diagnostic transport gap remains evidence for the physical-device
+  follow-up. Waydroid therefore does not reproduce the
+  Human's physical-device death, and physical Android startup remains
+  `FAILED_ON_PHYSICAL_DEVICE` pending a same-build device retest. The newer
+  remote workflow run `35941978035` at `cc59ea3...` passed the AppImage build
+  and every native package build/verify, but both AppImage matrix entries
+  failed earlier than extraction in the explicit nested-bubblewrap namespace
+  probe, so final assembly remained correctly skipped. The verifier candidate
+  now confines Docker's official `seccomp=unconfined`, `apparmor=unconfined`,
+  and `systempaths=unconfined` exceptions to those two clean-room jobs; it adds
+  neither privileged mode nor `SYS_ADMIN`. Shell syntax, ShellCheck 0.11.0,
+  actionlint 1.7.7, normalization/helpers/strict-ELF tests, Android selector
+  diagnostics, and the default-D merged-manifest ownership check pass. A new
+  remote run is still required to prove the Docker correction, execute both
+  full AppImage launch gates, and assemble the verified four-format artifact.
+  The Human subsequently authorized a local commit of this evidence and
+  verifier correction; no push, tag, or release occurred.
+
 - **2026-09-24 personal-library membership lifecycle correction:** starting
   local and remote HEAD were both
   `cc59ea3e75ffecbc65f374ee3852b9a21d9ca2bc`. Track-like and Album-favorite

@@ -707,16 +707,25 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # WebKit's bubblewrap runs as an ordinary user inside the clean-room
+          # job container. Docker's default seccomp, AppArmor, and confined
+          # system paths otherwise block the nested user/mount namespace before
+          # the AppImage can be audited or launched. Keep these exceptions on
+          # this verifier only; no host capability or privileged mode is added.
           - name: Ubuntu 24.04
             image: ubuntu:24.04
             family: deb
-            container_options: --security-opt seccomp=unconfined
+            container_options: >-
+              --security-opt seccomp=unconfined
+              --security-opt apparmor=unconfined
+              --security-opt systempaths=unconfined
           - name: Fedora 43
             image: fedora:43
             family: rpm
             container_options: >-
               --security-opt seccomp=unconfined
               --security-opt apparmor=unconfined
+              --security-opt systempaths=unconfined
 
     steps:
       - name: Install declared AppImage base and test harness
