@@ -70,6 +70,35 @@ grep -Fq \
   'NEEDED libfura_fixture_dependency.so.1 -> bundled:usr/lib/libfura_fixture_dependency.so.1' \
   "$payload_report"
 
+# Model the concrete AppImage regression: bundled libdc1394 must resolve its
+# normal userspace libusb edge from the AppDir payload, not from the clean-room
+# system base and not through a missing-SONAME exception.
+cat > "$test_root/libusb.c" <<'SOURCE'
+int libusb_init(void) { return 0; }
+SOURCE
+cat > "$test_root/libdc1394.c" <<'SOURCE'
+extern int libusb_init(void);
+int dc1394_camera_new(void) { return libusb_init(); }
+SOURCE
+cc -shared -fPIC "$test_root/libusb.c" \
+  -Wl,-soname,libusb-1.0.so.0 \
+  -o "$payload_runtime/libusb-1.0.so.0"
+# The linker, not this shell, owns the literal ORIGIN token.
+# shellcheck disable=SC2016
+cc -shared -fPIC "$test_root/libdc1394.c" \
+  -L"$payload_runtime" -Wl,--no-as-needed -Wl,-rpath,'$ORIGIN' \
+  -Wl,-soname,libdc1394.so.25 -l:libusb-1.0.so.0 \
+  -o "$payload_runtime/libdc1394.so.25"
+chmod 0644 "$payload_runtime/libusb-1.0.so.0" \
+  "$payload_runtime/libdc1394.so.25"
+libdc1394_report="$test_root/libdc1394-audit.txt"
+audit_elf_dependencies \
+  "$payload_runtime/libdc1394.so.25" \
+  "$payload_root" "$payload_runtime" "$libdc1394_report"
+grep -Fq \
+  'NEEDED libusb-1.0.so.0 -> bundled:usr/lib/libusb-1.0.so.0' \
+  "$libdc1394_report"
+
 missing_root="$test_root/missing"
 mkdir "$missing_root"
 cp "$test_root/libfura_fixture_plugin.so" "$missing_root/"

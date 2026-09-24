@@ -1,8 +1,38 @@
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val playbackDartDefines =
+    providers.gradleProperty("dart-defines").orNull
+        ?.split(",")
+        ?.mapNotNull { encoded ->
+            runCatching {
+                String(Base64.getDecoder().decode(encoded), Charsets.UTF_8)
+            }.getOrNull()
+        }
+        ?.mapNotNull { define ->
+            val separator = define.indexOf('=')
+            if (separator <= 0) {
+                null
+            } else {
+                define.substring(0, separator) to define.substring(separator + 1)
+            }
+        }
+        ?.toMap()
+        .orEmpty()
+val requestedAudioEngine = playbackDartDefines["FURA_AUDIO_ENGINE"]
+val requestedSystemMedia = playbackDartDefines["FURA_SYSTEM_MEDIA"]
+val invalidPlaybackDefine =
+    requestedAudioEngine != null &&
+        requestedAudioEngine !in setOf("audioplayers", "media_kit") ||
+        requestedSystemMedia != null &&
+        requestedSystemMedia !in setOf("audio_service", "flutter_media_session")
+val audioServiceMediaButtonReceiverEnabled =
+    invalidPlaybackDefine || requestedSystemMedia == "audio_service"
 
 val flutterAndroidAbis =
     mapOf(
@@ -21,6 +51,10 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -38,6 +72,25 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // AndroidX Media3 requires exactly one enabled MEDIA_BUTTON receiver.
+        // Keep audio_service packaged for rollback builds, but disable its
+        // receiver when the valid/default requested edge is
+        // flutter_media_session. Invalid defines fail closed to rollback A in
+        // Dart, so they must also enable the audio_service receiver here.
+        manifestPlaceholders["audioServiceMediaButtonReceiverEnabled"] =
+            audioServiceMediaButtonReceiverEnabled
+        manifestPlaceholders["flutterMediaSessionMediaButtonReceiverEnabled"] =
+            !audioServiceMediaButtonReceiverEnabled
+        manifestPlaceholders["audioServiceSystemEdgeEnabled"] =
+            audioServiceMediaButtonReceiverEnabled
+        manifestPlaceholders["flutterMediaSessionSystemEdgeEnabled"] =
+            !audioServiceMediaButtonReceiverEnabled
+        buildConfigField(
+            "boolean",
+            "USE_AUDIO_SERVICE_SYSTEM_EDGE",
+            audioServiceMediaButtonReceiverEnabled.toString(),
+        )
 
         // Flutter limits its engine output to target-platform, but a transitive
         // JNI dependency can otherwise add libraries for unrelated ABIs. Keep

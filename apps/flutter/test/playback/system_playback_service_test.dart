@@ -237,6 +237,7 @@ void main() {
 
       await edge.activate();
       expect(driver.autoHandleInterruptions, [false]);
+      expect(driver.backgroundKeepAlive, [true, false]);
       expect(driver.activateCalls, 1);
 
       await controller.replaceAndPlay(const [first, second], 0);
@@ -836,6 +837,7 @@ class _FakeProjectAudioSession implements ProjectAudioSession {
 class _FakeFlutterMediaSessionDriver implements FlutterMediaSessionDriver {
   final _actions = StreamController<fms.MediaAction>.broadcast();
   final List<bool> autoHandleInterruptions = [];
+  final List<bool> backgroundKeepAlive = [];
   final List<fms.MediaMetadata> metadata = [];
   final List<fms.PlaybackState> states = [];
   final List<Set<fms.MediaAction>> availableActions = [];
@@ -849,6 +851,10 @@ class _FakeFlutterMediaSessionDriver implements FlutterMediaSessionDriver {
   @override
   Future<void> setAutoHandleInterruptions(bool enabled) async =>
       autoHandleInterruptions.add(enabled);
+
+  @override
+  Future<void> setBackgroundKeepAlive(bool enabled) async =>
+      backgroundKeepAlive.add(enabled);
 
   @override
   Future<void> activate() async {

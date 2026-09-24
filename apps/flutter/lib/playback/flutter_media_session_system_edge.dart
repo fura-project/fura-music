@@ -12,6 +12,7 @@ abstract interface class FlutterMediaSessionDriver {
   Stream<fms.MediaAction> get actions;
 
   Future<void> setAutoHandleInterruptions(bool enabled);
+  Future<void> setBackgroundKeepAlive(bool enabled);
   Future<void> activate();
   Future<void> deactivate();
   Future<void> updateMetadata(fms.MediaMetadata metadata);
@@ -33,6 +34,10 @@ class PlatformFlutterMediaSessionDriver implements FlutterMediaSessionDriver {
   @override
   Future<void> setAutoHandleInterruptions(bool enabled) =>
       _session.setAutoHandleInterruptions(enabled);
+
+  @override
+  Future<void> setBackgroundKeepAlive(bool enabled) =>
+      _session.setBackgroundKeepAlive(enabled);
 
   @override
   Future<void> activate() => _session.activate();
@@ -114,15 +119,35 @@ class FuraMediaSessionAdapter implements SystemMediaEdge {
         // A platform command-stream failure must not affect Queue or playback.
       },
     );
+    var androidForegroundStartupPrimed = false;
     try {
       // Android is the only supported Fura candidate target where 3.0.5 has
       // an optional focus owner. Disable it before creating the Media3 service.
       if (_platform == TargetPlatform.android) {
         await _driver.setAutoHandleInterruptions(false);
+        // flutter_media_session 3.0.5 starts its MediaSessionService with
+        // startForegroundService(), even while the initial Queue state is
+        // idle. Prime its public keep-alive switch before activation so
+        // Media3 posts the required foreground notification inside Android's
+        // deadline, then immediately return to the Queue-owned playback state.
+        // Without this handshake Android reports a foreground-service ANR.
+        await _driver.setBackgroundKeepAlive(true);
+        androidForegroundStartupPrimed = true;
       }
       await _driver.activate();
+      if (androidForegroundStartupPrimed) {
+        await _driver.setBackgroundKeepAlive(false);
+        androidForegroundStartupPrimed = false;
+      }
       await _enqueueSynchronization(force: true, exposeFailure: true);
     } on Object {
+      if (androidForegroundStartupPrimed) {
+        try {
+          await _driver.setBackgroundKeepAlive(false);
+        } on Object {
+          // The original activation failure remains the useful diagnostic.
+        }
+      }
       await _detach(deactivatePlatform: true);
       rethrow;
     }

@@ -61,6 +61,10 @@ copy_package_runtime_paths libharfbuzz0b '/libharfbuzz\.so\.0(\.|$)'
 # system-library exclusion list omits. Keep it private to the AppImage rather
 # than treating bidirectional text shaping as a target-system capability.
 copy_package_runtime_paths libfribidi0 '/libfribidi\.so\.0(\.|$)'
+# libmpv's selected FFmpeg closure includes libavdevice -> libdc1394, whose
+# ordinary userspace USB backend is not part of the declared target graphics
+# or audio base. Keep the exact libusb SONAME private to the AppImage.
+copy_package_runtime_paths libusb-1.0-0 '/libusb-1\.0\.so\.0(\.|$)'
 webkit_package=$(dpkg-query -W -f='${binary:Package}\n' 'libwebkit2gtk-4.1-0*' 2>/dev/null | head -n 1)
 test -n "$webkit_package" || die 'unable to resolve the Ubuntu WebKitGTK runtime package'
 copy_package_runtime_paths "$webkit_package" '/webkit(2)?gtk-4\.1/|/webkit2gtk-4\.1/'

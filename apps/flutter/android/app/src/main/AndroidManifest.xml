@@ -40,6 +40,7 @@
         </activity>
         <service
             android:name="com.ryanheise.audioservice.AudioService"
+            android:enabled="${audioServiceSystemEdgeEnabled}"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback"
             tools:ignore="ExportedService,Instantiatable">
@@ -49,12 +50,20 @@
         </service>
         <receiver
             android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+            android:enabled="${audioServiceMediaButtonReceiverEnabled}"
             android:exported="true"
             tools:ignore="Instantiatable">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:enabled="${flutterMediaSessionMediaButtonReceiverEnabled}" />
+        <service
+            android:name="dev.wyrin.flutter_media_session.FlutterMediaSessionService"
+            android:enabled="${flutterMediaSessionSystemEdgeEnabled}"
+            tools:replace="android:enabled" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -126,6 +126,14 @@ jobs:
           grep -q "android.permission.INTERNET" build/android-arm64-permissions.txt
           "$aapt" dump xmltree "$apk" AndroidManifest.xml \
             > build/android-arm64-manifest.txt
+          apkanalyzer=$(find "$ANDROID_HOME/cmdline-tools" -type f -name apkanalyzer -print \
+            | sort -V | tail -n 1)
+          test -n "$apkanalyzer"
+          "$apkanalyzer" manifest print "$apk" \
+            > build/android-arm64-manifest.xml
+          ../../scripts/ci/verify_android_media_button_manifest.py \
+            build/android-arm64-manifest.xml \
+            androidx.media3.session.MediaButtonReceiver
           grep -q 'dev.axiaobo.flutterustmusic.FuraApplication' \
             build/android-arm64-manifest.txt
           grep -q 'dev.wyrin.flutter_media_session.FlutterMediaSessionService' \
@@ -693,7 +701,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ${{ matrix.image }}
-      options: --security-opt seccomp=unconfined
+      options: ${{ matrix.container_options }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -702,9 +710,13 @@ jobs:
           - name: Ubuntu 24.04
             image: ubuntu:24.04
             family: deb
+            container_options: --security-opt seccomp=unconfined
           - name: Fedora 43
             image: fedora:43
             family: rpm
+            container_options: >-
+              --security-opt seccomp=unconfined
+              --security-opt apparmor=unconfined
 
     steps:
       - name: Install declared AppImage base and test harness
@@ -736,6 +748,25 @@ jobs:
           ldconfig -p | grep -F 'libjack.so.0'
           ldconfig -p | grep -F 'libpipewire-0.3.so.0'
           ldconfig -p | grep -F 'libGLESv2.so.2'
+
+      - name: Probe AppImage sandbox namespaces
+        run: |
+          id
+          uname -a
+          bwrap --version
+          cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || true
+          cat /proc/sys/user/max_user_namespaces 2>/dev/null || true
+          cat /proc/self/attr/current 2>/dev/null || true
+          findmnt -o TARGET,PROPAGATION / || true
+          useradd --create-home --user-group namespace-tester
+          runuser -u namespace-tester -- \
+            bwrap \
+              --unshare-user \
+              --unshare-pid \
+              --ro-bind / / \
+              --proc /proc \
+              --dev /dev \
+              /bin/true
 
       - name: Check out verification scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

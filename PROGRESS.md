@@ -5,11 +5,42 @@ execution:
   state: HUMAN_REVIEW
   acceptance_milestone: ANDROID_PHYSICAL_STARTUP_AND_REMOTE_APPIMAGE_VERIFY
   active_workstream: ANDROID_STARTUP_AND_APPIMAGE_VERIFY
-  current_task: APPIMAGE_CLEAN_ROOM_REPAIR_AND_ANDROID_ABCD_DIAGNOSTICS
-  next_action: HUMAN_DEVICE_ABCD_BISECTION_AND_FRESH_ACTIONS_RUN
+  current_task: WAYDROID_ABCD_REPAIR_AND_APPIMAGE_VERIFY_CANDIDATE
+  next_action: HUMAN_PHYSICAL_ANDROID_RETEST_AND_FRESH_ACTIONS_RUN
 ---
 
 # Current State
+
+- **2026-09-24 Waydroid A/B/C/D startup isolation and AppImage follow-up:**
+  local and remote HEAD are both
+  `61a24bfd3cb50dd3c100e42fca28e16d5fd427f7`; the retained parent
+  `0a5939a6...` personal-library mutation work was not reverted or expanded.
+  Waydroid 1.6.3 (Android 13/API 33, native x86_64) ran four separately
+  checksummed Debug APKs from that exact clean source baseline. A and B reached
+  a real first frame; C and D both crashed while creating
+  `FlutterMediaSessionService` because Media3 found two enabled
+  `MEDIA_BUTTON` receivers. The candidate now selects exactly one Android
+  receiver, service, and FlutterEngine owner from the same Dart defines, while
+  invalid defines fail closed to rollback A. This exposed and then corrected a
+  second default-D startup defect: flutter_media_session 3.0.5 used
+  `startForegroundService()` from an idle Queue without entering foreground,
+  producing an Android ANR after the apparent first frame. A bounded public
+  keep-alive handshake now satisfies the service deadline and immediately
+  returns to Queue-owned playback state. Fixed A, C, and default/no-define D
+  all remain alive, top/resumed, crash-free and ANR-free after real Waydroid
+  windows; D retains exactly one Media3 session. Physical Android startup is
+  still `FAILED_ON_PHYSICAL_DEVICE` until the Human retests the rebuilt package.
+  Separately, the selected AppImage media closure is proven as
+  `libmpv.so.2` → `libavdevice.so.60` → `libdc1394.so.25` →
+  `libusb-1.0.so.0`; the last normal userspace SONAME is now private payload,
+  not an expanded host-base contract. A current AppImage passed checksum,
+  extraction, strict all-ELF audit, ordinary-user nested-bubblewrap AppRun and
+  real X11-window verification in local Ubuntu 24.04 and Fedora 43 clean
+  roots. Fedora's remote failure is consistent with its Docker AppArmor
+  profile despite unconfined seccomp, so only the Fedora AppImage matrix entry
+  adds `apparmor=unconfined` and a namespace probe; a new remote run is still
+  required to prove that correction and execute the fail-closed four-format
+  final assembly. No commit, push, tag, release, or remote run occurred.
 
 - **2026-09-24 AppImage clean-room repair and Android P0 diagnostics:** from
   HEAD `a2d9ce93f82406d244d454c3b2dfb4713331442a`, the AppImage verifier now
