@@ -385,6 +385,22 @@ pub fn begin_playlist_track_page_load(
     }
 }
 
+/// Requests a fresh account-scoped Track membership snapshot on the next
+/// Liked Songs load. Providers without a separate membership cache need no
+/// native invalidation and report success as a no-op.
+#[flutter_rust_bridge::frb(sync)]
+pub fn request_track_membership_refresh(provider_id: String) -> bool {
+    match super::built_in_provider(&provider_id) {
+        Ok(provider_api::BuiltInProvider::QQMusic) => true,
+        Ok(provider_api::BuiltInProvider::NetEaseCloudMusic) => {
+            crate::native_netease::native_netease_provider()
+                .map(provider_netease::NeteaseProvider::request_track_membership_refresh)
+                .unwrap_or(false)
+        }
+        Err(()) => false,
+    }
+}
+
 /// One cancellable, single-use account recent-history page load. Source
 /// request details and credentials remain behind the Provider boundary.
 #[flutter_rust_bridge::frb(opaque)]
@@ -615,7 +631,7 @@ mod tests {
     use super::{
         PlaylistTrackPageLoadFailure, UserPlaylistLoadFailure, begin_playlist_track_page_load,
         begin_recent_track_page_load, begin_user_playlist_load, map_error, map_load,
-        map_track_page_error, map_track_page_load,
+        map_track_page_error, map_track_page_load, request_track_membership_refresh,
     };
 
     #[test]
@@ -793,6 +809,13 @@ mod tests {
             map_track_page_error(UserLibraryError::Replaced),
             PlaylistTrackPageLoadFailure::Replaced
         );
+    }
+
+    #[test]
+    fn membership_refresh_dispatch_is_exact_and_has_no_cross_provider_fallback() {
+        assert!(request_track_membership_refresh("qq-music".into()));
+        assert!(!request_track_membership_refresh("netease".into()));
+        assert!(!request_track_membership_refresh("kugou-music".into()));
     }
 
     #[tokio::test]

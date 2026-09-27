@@ -7,6 +7,7 @@ import 'package:flutterustmusic/library/library_mutation_feedback.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/track_like_gateway.dart';
+import 'package:flutterustmusic/provider_diagnostics.dart';
 
 enum AuthoritativeTrackLikeState {
   unavailable,
@@ -48,12 +49,14 @@ class TrackLikePresentationController extends ChangeNotifier {
   PlaylistTrackPageLoadOperation? _operation;
   int _nextOffset = 0;
   bool _complete = false;
+  bool _membershipComplete = false;
   bool _loading = false;
   bool _scanReliable = true;
   bool _refreshing = false;
   Set<String>? _refreshIds;
   int _refreshNextOffset = 0;
   bool _refreshReliable = true;
+  bool _refreshMembershipComplete = false;
   int _generation = 0;
   bool _disposed = false;
 
@@ -86,7 +89,7 @@ class TrackLikePresentationController extends ChangeNotifier {
     if (_likedTrackIds.contains(membershipIdentity)) {
       return AuthoritativeTrackLikeState.liked;
     }
-    if (_complete && _scanReliable) {
+    if ((_membershipComplete || _complete) && _scanReliable) {
       return AuthoritativeTrackLikeState.notLiked;
     }
     if (_loading && _requestedTrackIds.contains(membershipIdentity)) {
@@ -102,9 +105,22 @@ class TrackLikePresentationController extends ChangeNotifier {
       return Future.value();
     }
     final running = _scan;
-    if (running != null) return running;
+    if (running != null) {
+      _diagnostic(
+        ProviderDiagnosticPhase.preload,
+        cache: ProviderDiagnosticCache.miss,
+        singleFlightJoin: true,
+        networkRequests: 0,
+      );
+      return running;
+    }
     final generation = _generation;
-    _diagnostic('preload_started');
+    _diagnostic(
+      ProviderDiagnosticPhase.preload,
+      cache: ProviderDiagnosticCache.miss,
+      singleFlightJoin: false,
+      networkRequests: 0,
+    );
     late final Future<void> scan;
     scan = _scanContinuation(generation).whenComplete(() {
       if (identical(_scan, scan)) _scan = null;
@@ -120,6 +136,11 @@ class TrackLikePresentationController extends ChangeNotifier {
     if (initial == AuthoritativeTrackLikeState.unavailable ||
         initial == AuthoritativeTrackLikeState.liked ||
         initial == AuthoritativeTrackLikeState.notLiked) {
+      _diagnostic(
+        ProviderDiagnosticPhase.resolve,
+        cache: ProviderDiagnosticCache.hit,
+        networkRequests: 0,
+      );
       return initial;
     }
     _requestedTrackIds.add(track.membershipIdentity);
@@ -136,31 +157,43 @@ class TrackLikePresentationController extends ChangeNotifier {
     required bool liked,
     Future<void> Function()? refreshAdditionalState,
   }) async {
-    _diagnostic(
-      'action_requested',
-      detail: 'knownState=${stateFor(track).name}',
-    );
+    _diagnostic(ProviderDiagnosticPhase.request, networkRequests: 1);
     final outcome = await mutations.setTrackLiked(track: track, liked: liked);
     switch (outcome.status) {
       case LibraryMutationStatus.confirmed:
         _confirmedOverrides[track.membershipIdentity] =
             outcome.value == TrackLikeState.liked;
         _needsReconciliation.remove(track.membershipIdentity);
-        _diagnostic('write_confirmed');
+        _diagnostic(
+          ProviderDiagnosticPhase.request,
+          outcome: ProviderDiagnosticOutcome.confirmed,
+        );
         _notify();
-        _startBackgroundReconciliation(refreshAdditionalState);
+        _refreshAdditionalState(refreshAdditionalState);
       case LibraryMutationStatus.outcomeUnknown:
         _confirmedOverrides.remove(track.membershipIdentity);
         _needsReconciliation.add(track.membershipIdentity);
-        _diagnostic('write_outcome_unknown');
+        _diagnostic(
+          ProviderDiagnosticPhase.request,
+          outcome: ProviderDiagnosticOutcome.outcomeUnknown,
+        );
         _notify();
-        _startBackgroundReconciliation(refreshAdditionalState);
+        _startUnknownOutcomeReconciliation(refreshAdditionalState);
       case LibraryMutationStatus.definitiveFailure:
-        _diagnostic('write_definitive_failure');
+        _diagnostic(
+          ProviderDiagnosticPhase.request,
+          outcome: ProviderDiagnosticOutcome.definitiveFailure,
+        );
       case LibraryMutationStatus.unavailable:
-        _diagnostic('write_unavailable');
+        _diagnostic(
+          ProviderDiagnosticPhase.request,
+          outcome: ProviderDiagnosticOutcome.unavailable,
+        );
       case LibraryMutationStatus.alreadyRunning:
-        _diagnostic('write_already_running');
+        _diagnostic(
+          ProviderDiagnosticPhase.request,
+          outcome: ProviderDiagnosticOutcome.alreadyRunning,
+        );
     }
     return outcome;
   }
@@ -171,6 +204,11 @@ class TrackLikePresentationController extends ChangeNotifier {
     final running = _refresh;
     if (running != null) return running;
     if (!enabled || _likedPlaylist == null || _disposed) return Future.value();
+    final sourceGateway = _sourceGateway;
+    if (sourceGateway is TrackMembershipRefreshGateway) {
+      (sourceGateway as TrackMembershipRefreshGateway)
+          .requestTrackMembershipRefresh(playlist: _likedPlaylist!);
+    }
     _operation?.cancel();
     _operation = null;
     _scan = null;
@@ -179,8 +217,14 @@ class TrackLikePresentationController extends ChangeNotifier {
     _refreshIds = <String>{};
     _refreshNextOffset = 0;
     _refreshReliable = true;
+    _refreshMembershipComplete = false;
     final generation = _generation;
-    _diagnostic('reconcile_started');
+    _diagnostic(
+      ProviderDiagnosticPhase.refresh,
+      cache: ProviderDiagnosticCache.miss,
+      singleFlightJoin: false,
+      networkRequests: 0,
+    );
     late final Future<void> refresh;
     refresh = _scanRefresh(generation).whenComplete(() {
       if (identical(_refresh, refresh)) _refresh = null;
@@ -189,26 +233,50 @@ class TrackLikePresentationController extends ChangeNotifier {
     return refresh;
   }
 
-  void _startBackgroundReconciliation(
+  void _refreshAdditionalState(
+    Future<void> Function()? refreshAdditionalState,
+  ) {
+    if (refreshAdditionalState == null) return;
+    // Presentation pages may need a fresh row after a confirmed write, but
+    // their cached page futures are not the membership snapshot. Drop only
+    // those page futures; retain membership IDs, completion and continuation.
+    if (!_refreshing) {
+      _operation?.cancel();
+      _operation = null;
+      _scan = null;
+      _cancelSharedPages();
+    }
+    unawaited(refreshAdditionalState());
+  }
+
+  void _startUnknownOutcomeReconciliation(
     Future<void> Function()? refreshAdditionalState,
   ) {
     final membership = refreshSnapshot();
-    if (refreshAdditionalState != null) {
-      unawaited(Future.wait<void>([membership, refreshAdditionalState()]));
-    } else {
+    if (refreshAdditionalState == null) {
       unawaited(membership);
+      return;
     }
+    unawaited(Future.wait<void>([membership, refreshAdditionalState()]));
   }
 
   Future<void> _scanContinuation(int generation) async {
     _loading = _requestedTrackIds.isNotEmpty;
     _notify();
-    while (_isCurrent(generation) && !_complete && !_refreshing) {
+    while (_isCurrent(generation) &&
+        !_complete &&
+        !_membershipComplete &&
+        !_refreshing) {
       final playlist = _likedPlaylist;
       if (playlist == null) break;
       final expectedOffset = _nextOffset;
       late final PlaylistTrackPageLoadOperation operation;
       try {
+        _diagnostic(
+          ProviderDiagnosticPhase.preload,
+          cache: ProviderDiagnosticCache.miss,
+          networkRequests: 1,
+        );
         operation = sessionGateway.beginLoad(
           playlist: playlist,
           offset: expectedOffset,
@@ -220,7 +288,15 @@ class TrackLikePresentationController extends ChangeNotifier {
       _operation = operation;
       final result = await operation.run();
       if (identical(_operation, operation)) _operation = null;
-      if (!_isCurrent(generation) || _refreshing) return;
+      if (!_isCurrent(generation)) {
+        _diagnostic(
+          ProviderDiagnosticPhase.preload,
+          outcome: ProviderDiagnosticOutcome.paused,
+          generation: ProviderDiagnosticGeneration.replaced,
+        );
+        return;
+      }
+      if (_refreshing) return;
       if (_isSessionFailure(result.failure)) {
         _invalidate(null);
         return;
@@ -231,7 +307,11 @@ class TrackLikePresentationController extends ChangeNotifier {
     if (!_isCurrent(generation)) return;
     _loading = false;
     _diagnostic(
-      _complete && _scanReliable ? 'preload_complete' : 'preload_paused',
+      ProviderDiagnosticPhase.preload,
+      outcome: (_membershipComplete || (_complete && _scanReliable))
+          ? ProviderDiagnosticOutcome.success
+          : ProviderDiagnosticOutcome.paused,
+      generation: ProviderDiagnosticGeneration.current,
     );
     _notify();
   }
@@ -243,6 +323,11 @@ class TrackLikePresentationController extends ChangeNotifier {
       final expectedOffset = _refreshNextOffset;
       late final PlaylistTrackPageLoadOperation operation;
       try {
+        _diagnostic(
+          ProviderDiagnosticPhase.refresh,
+          cache: ProviderDiagnosticCache.miss,
+          networkRequests: 1,
+        );
         operation = sessionGateway.beginLoad(
           playlist: playlist,
           offset: expectedOffset,
@@ -254,14 +339,22 @@ class TrackLikePresentationController extends ChangeNotifier {
       _operation = operation;
       final result = await operation.run();
       if (identical(_operation, operation)) _operation = null;
-      if (!_isCurrent(generation) || !_refreshing) return;
+      if (!_isCurrent(generation)) {
+        _diagnostic(
+          ProviderDiagnosticPhase.refresh,
+          outcome: ProviderDiagnosticOutcome.paused,
+          generation: ProviderDiagnosticGeneration.replaced,
+        );
+        return;
+      }
+      if (!_refreshing) return;
       if (_isSessionFailure(result.failure)) {
         _invalidate(null);
         return;
       }
       if (!_validPage(result, expectedOffset)) break;
       _acceptRefreshPage(result);
-      if (!result.hasMore) {
+      if (_refreshMembershipComplete || !result.hasMore) {
         if (_refreshReliable) _commitRefresh();
         break;
       }
@@ -269,7 +362,12 @@ class TrackLikePresentationController extends ChangeNotifier {
     if (!_isCurrent(generation)) return;
     _refreshing = false;
     _refreshIds = null;
-    _diagnostic('reconcile_finished');
+    _refreshMembershipComplete = false;
+    _diagnostic(
+      ProviderDiagnosticPhase.refresh,
+      outcome: ProviderDiagnosticOutcome.success,
+      generation: ProviderDiagnosticGeneration.current,
+    );
     _notify();
   }
 
@@ -326,6 +424,11 @@ class TrackLikePresentationController extends ChangeNotifier {
       }
     }
     _scanReliable = _scanReliable && result.membershipIsExact;
+    if (result.membershipIsExact &&
+        result.totalIsExact &&
+        result.membershipTrackOpaqueIds.length == result.total) {
+      _membershipComplete = true;
+    }
     if (result.nextOffset > _nextOffset) _nextOffset = result.nextOffset;
     if (!result.hasMore) _complete = true;
     _notify();
@@ -345,6 +448,11 @@ class TrackLikePresentationController extends ChangeNotifier {
     }
     _needsReconciliation.removeAll(ids);
     _refreshReliable = _refreshReliable && result.membershipIsExact;
+    if (result.membershipIsExact &&
+        result.totalIsExact &&
+        result.membershipTrackOpaqueIds.length == result.total) {
+      _refreshMembershipComplete = true;
+    }
     if (result.nextOffset > _refreshNextOffset) {
       _refreshNextOffset = result.nextOffset;
     }
@@ -359,6 +467,7 @@ class TrackLikePresentationController extends ChangeNotifier {
       ..addAll(ids);
     _nextOffset = _refreshNextOffset;
     _complete = true;
+    _membershipComplete = true;
     _scanReliable = true;
     _confirmedOverrides.clear();
     _needsReconciliation.clear();
@@ -390,6 +499,7 @@ class TrackLikePresentationController extends ChangeNotifier {
     _needsReconciliation.clear();
     _nextOffset = 0;
     _complete = false;
+    _membershipComplete = false;
     _loading = false;
     _scanReliable = true;
     _refreshing = false;
@@ -411,10 +521,23 @@ class TrackLikePresentationController extends ChangeNotifier {
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 
-  void _diagnostic(String phase, {String? detail}) {
-    debugPrint(
-      'FURA_DIAGNOSTIC library_mutation provider=$providerId '
-      'kind=track_like phase=$phase${detail == null ? '' : ' $detail'}',
+  void _diagnostic(
+    ProviderDiagnosticPhase phase, {
+    ProviderDiagnosticCache? cache,
+    bool? singleFlightJoin,
+    int? networkRequests,
+    ProviderDiagnosticOutcome? outcome,
+    ProviderDiagnosticGeneration? generation,
+  }) {
+    logProviderDiagnostic(
+      providerId: providerId,
+      operation: ProviderDiagnosticOperation.trackMembership,
+      phase: phase,
+      cache: cache,
+      singleFlightJoin: singleFlightJoin,
+      networkRequests: networkRequests,
+      outcome: outcome,
+      generation: generation,
     );
   }
 

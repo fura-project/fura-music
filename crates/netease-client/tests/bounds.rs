@@ -168,3 +168,48 @@ async fn malformed_optional_lyric_tracks_do_not_discard_valid_original() {
     assert_eq!(lyrics.romanization.len(), 2);
     assert_eq!(lyrics.omitted_line_count, 2);
 }
+
+#[tokio::test]
+async fn lyric_v1_prefers_complete_yrc_and_falls_back_atomically_when_malformed() {
+    let lyrics = client(&json!({
+        "code": 200,
+        "lrc": {"lyric": "[00:01.00]Line only"},
+        "yrc": {"lyric": "[1000,900](1000,400,0)Word (1400,500,0)timing"},
+        "ytlrc": {"lyric": "[00:01.00]Translation"},
+        "yromalrc": {"lyric": "[00:01.00]Romanization"}
+    }))
+    .lyrics(1)
+    .await
+    .expect("complete YRC");
+    assert_eq!(lyrics.lines[0].text, "Word timing");
+    assert_eq!(lyrics.lines[0].duration_ms, 900);
+    assert_eq!(lyrics.lines[0].segments.len(), 2);
+    assert_eq!(lyrics.translation[0].text, "Translation");
+    assert_eq!(lyrics.romanization[0].text, "Romanization");
+
+    let fallback = client(&json!({
+        "code": 200,
+        "lrc": {"lyric": "[00:01.00]Canonical A\n[00:02.00]Canonical B"},
+        "yrc": {"lyric": "[1000,900](1000,900,0)Valid\n[2000,900](0,900,0)Malformed"}
+    }))
+    .lyrics(1)
+    .await
+    .expect("canonical LRC survives malformed YRC");
+    assert_eq!(fallback.lines.len(), 2);
+    assert_eq!(fallback.lines[0].text, "Canonical A");
+    assert!(fallback.lines.iter().all(|line| line.segments.is_empty()));
+    assert_eq!(fallback.omitted_line_count, 1);
+}
+
+#[tokio::test]
+async fn lyric_v1_keeps_word_track_resource_bounds_fail_closed() {
+    let error = client(&json!({
+        "code": 200,
+        "lrc": {"lyric": "[00:01.00]Canonical"},
+        "yrc": {"lyric": "x".repeat(512 * 1024 + 1)}
+    }))
+    .lyrics(1)
+    .await
+    .expect_err("oversized YRC must not be hidden by canonical fallback");
+    assert_eq!(error, netease_client::Error::ResponseBound);
+}

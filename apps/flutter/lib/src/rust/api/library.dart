@@ -29,6 +29,14 @@ PlaylistTrackPageLoadHandle beginPlaylistTrackPageLoad({
   size: size,
 );
 
+/// Requests a fresh account-scoped Track membership snapshot on the next
+/// Liked Songs load. Providers without a separate membership cache need no
+/// native invalidation and report success as a no-op.
+bool requestTrackMembershipRefresh({required String providerId}) => RustLib
+    .instance
+    .api
+    .crateApiLibraryRequestTrackMembershipRefresh(providerId: providerId);
+
 RecentTrackPageLoadHandle beginRecentTrackPageLoad({
   required String providerId,
   required int offset,

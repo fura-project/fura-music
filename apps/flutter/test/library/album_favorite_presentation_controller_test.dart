@@ -128,32 +128,42 @@ void main() {
     controller.dispose();
   });
 
-  test('confirmed favorite applies local delta while reconciling', () async {
-    final refresh = Completer<FavoriteAlbumPageResult>();
-    final gateway = _FakeGateway([
-      const _ImmediateAlbumOperation(FavoriteAlbumPageResult()),
-      _PendingAlbumOperation(refresh),
-    ]);
-    final controller = _controller(
-      gateway,
-      mutationGateway: _AlbumMutationGateway(
-        const AlbumFavoriteMutationResult(
-          confirmedState: AlbumFavoriteState.favorite,
+  test(
+    'confirmed favorite applies local delta without membership rescan',
+    () async {
+      final gateway = _FakeGateway.fromResults([
+        const FavoriteAlbumPageResult(),
+      ]);
+      final controller = _controller(
+        gateway,
+        mutationGateway: _AlbumMutationGateway(
+          const AlbumFavoriteMutationResult(
+            confirmedState: AlbumFavoriteState.favorite,
+          ),
         ),
-      ),
-    );
-    await controller.preload();
+      );
+      await controller.preload();
 
-    final outcome = await controller.setFavorite(album: other, favorite: true);
+      var additionalRefreshes = 0;
+      final outcome = await controller.setFavorite(
+        album: other,
+        favorite: true,
+        refreshAdditionalState: () async {
+          additionalRefreshes += 1;
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
 
-    expect(outcome.status, LibraryMutationStatus.confirmed);
-    expect(
-      controller.stateFor(other),
-      AuthoritativeAlbumFavoriteState.favorite,
-    );
-    expect(gateway.requests, [(0, 20), (0, 20)]);
-    controller.dispose();
-  });
+      expect(outcome.status, LibraryMutationStatus.confirmed);
+      expect(
+        controller.stateFor(other),
+        AuthoritativeAlbumFavoriteState.favorite,
+      );
+      expect(gateway.requests, [(0, 20)]);
+      expect(additionalRefreshes, 1);
+      controller.dispose();
+    },
+  );
 
   test('unknown Album outcome targets only the mutated identity', () async {
     final refresh = Completer<FavoriteAlbumPageResult>();
@@ -189,7 +199,6 @@ void main() {
   });
 
   test('confirmed unfavorite applies an immediate negative delta', () async {
-    final refresh = Completer<FavoriteAlbumPageResult>();
     final gateway = _FakeGateway([
       const _ImmediateAlbumOperation(
         FavoriteAlbumPageResult(
@@ -198,7 +207,6 @@ void main() {
           membershipAlbumOpaqueIds: ['favorite'],
         ),
       ),
-      _PendingAlbumOperation(refresh),
     ]);
     final controller = _controller(
       gateway,
@@ -220,6 +228,7 @@ void main() {
       controller.stateFor(favorite),
       AuthoritativeAlbumFavoriteState.notFavorite,
     );
+    expect(gateway.requests, [(0, 20)]);
     controller.dispose();
   });
 

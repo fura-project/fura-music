@@ -2,7 +2,7 @@
 
 Status: active bounded research for HD-031
 
-Last updated: 2026-09-15
+Last updated: 2026-09-24
 
 Implementation rule: independent Rust, direct HTTPS, no sidecar and no copied
 third-party source.
@@ -100,47 +100,110 @@ availability, entitlement, recommendation quality or another network/region.
 The failed strict detail gates are evidence of an unresolved response contract,
 not evidence that a broader or more permissive parser would be correct.
 
+## 2026-09-24 resumed workstream
+
+Human opened a new `KUGOU_PUBLIC_READ_EVIDENCE_WINDOW` with an independent hard
+limit of 40 HTTPS requests. The window used exactly all 40 requests and is now
+closed. Every request was anonymous, read-only, single-attempt, redirect-disabled,
+byte-bounded and separated from the next request by at least one second. No raw
+body was retained. Structural logs contained no query, title, Artist, Album,
+Track/hash identity, media URI, Cookie, token, `dfid`, device or account value.
+No HTTP 429, CAPTCHA, SSA, security-verification or other risk-control signal
+occurred.
+
+The earlier negative detail evidence remains valid: the two 2026-09-15 gates
+really did reject their then-assumed shape. The new window explains the
+variance rather than erasing it:
+
+- the exact mobile detail document is a flat JSON object served as
+  `text/html`; its Album key is `albumid`, not `album_id`;
+- `errcode=0` is the stable success signal in the observed contract, while two
+  exact successful rows used different `status` values (`0` and `1`);
+- Search and ranking rows each matched detail on standard hash,
+  `album_audio_id`/`MixSongID`, `audio_id` and Album ID. A ranking Track also
+  matched through the same chain. This accepts `MixSongID` as the canonical
+  recording/version identity and retains the standard hash, `Audioid`, duration
+  and optional Album ID as Provider-private exact-resolution context;
+- the independently current `musicdl` implementation at
+  `e5c3bd51b518642c24027921e63f482865809b61` (PolyForm Noncommercial 1.0.0,
+  evidence-only) still reads the same flat mobile detail and unsigned lyric
+  pair. The current KugouMusic.NET tree at
+  `0cf0db0752bc87e1bd9990b7ea7330a9965f3604` independently models
+  `album_audio_id`/`MixSongID`, hash, `audio_id`, numeric/string variation and
+  lyric candidate/download semantics. These current rechecks supplement rather
+  than replace the pinned durable commits above;
+- exact-hash lyric search returned server-issued candidates and an exact LRC
+  download returned valid base64 UTF-8 with timed lines. No translation,
+  romanization or word-timing field was observed, so the implementation claims
+  line timing only;
+- the unsigned public mobile ranking inventory returned 55 typed ranking rows.
+  Ranking Tracks returned native 30-row pages, numeric total and true page 2;
+  each inspected row carried the exact private Track context above;
+- the public curated-playlist index returned 30 rows and real continuation
+  metadata, but its detail route redirected from HTTPS to HTTP. It was not
+  followed and neither Playlist detail nor Playlist Tracks was implemented;
+- unsigned current Artist/Album/Playlist Search routes returned HTTP 200 with
+  business error `20006`. Older catalog routes did not yield a current direct
+  HTTPS contract. Search x4 therefore remains Track-only;
+- four representative standard hashes were sent to the only deterministic
+  legacy `kgcloudv2` candidate corroborated by a current independent source.
+  All four returned HTTP 200, business `status=2`, and zero source candidates.
+  Legacy detail also returned no URL. No media URI was opened or logged.
+  Current modern implementations place media behind app signing plus
+  device/install-shaped inputs. Those inputs were not copied, fabricated or
+  replayed.
+
+The independent Rust implementation now has strict offline fixtures for Track
+detail, mixed numeric/string identity fields, rankings, native ranking paging,
+exact-hash two-step lyrics, malformed rows, duplicate identities, contradictory
+pagination, invalid base64 and secret-safe request diagnostics. It advertises
+only Search, Catalog and Lyrics in `provider-kugou`; Catalog currently means
+exact Track detail plus rankings, not the unimplemented Album/Artist/Playlist
+surfaces. No Bridge or Flutter production composition was added because the
+standard-media gate did not pass.
+
 ## Capability evidence matrix
 
 | Capability | State | Evidence and next proof |
 | --- | --- | --- |
-| Track Search | `IMPLEMENTED_CORE` | Independent bounded Rust client and Provider mapping; five offline client contracts, two Provider contracts, strict Clippy and the one-request opt-in live gate pass. Bridge/UI not yet exposed. |
-| Artist Search | `SUPPORTED_EVIDENCE` | MakcRe and KugouMusic.NET expose a direct type; live and identity proof pending. |
-| Album Search | `SUPPORTED_EVIDENCE` | MakcRe and KugouMusic.NET expose a direct type; live and pagination proof pending. |
-| Playlist Search | `SUPPORTED_EVIDENCE` | MakcRe and historical Listen1 expose direct public results; current live proof pending. |
-| Track detail | `EXTERNAL_BLOCKED` | The legacy mobile response partially corroborates `MixSongID`/hash/Album/Artist linkage, but two strict Search-to-detail live gates failed with `ResponseShapeMismatch`; the implementation was completely withdrawn. A scrubbed structural fixture or a future bounded evidence window must explain the variance before retrying. Modern signed/device-shaped routes require separate Human classification. |
-| Playlist detail | `SUPPORTED_EVIDENCE` | Current MakcRe and real-client products expose it; identity/pagination live proof pending. |
-| Playlist Tracks | `SUPPORTED_EVIDENCE` | Current implementations expose explicit Track collections; raw cursor and unavailable-row semantics pending. |
-| Album detail | `SUPPORTED_EVIDENCE` | Current MakcRe/KugouMusic.NET evidence; exact Album identity proof pending. |
-| Album Tracks | `SUPPORTED_EVIDENCE` | Current MakcRe/KugouMusic.NET evidence; paging and Track identity proof pending. |
-| Artist Tracks | `SUPPORTED_EVIDENCE` | Current MakcRe/KugouMusic.NET evidence; true Artist ID and paging proof pending. |
-| Artist Albums | `SUPPORTED_EVIDENCE` | Current MakcRe/KugouMusic.NET evidence; true Artist ID and paging proof pending. |
-| Lyrics | `SUPPORTED_EVIDENCE` | MakcRe, KugouMusic.NET and both product clients expose lyrics. KRC/LRC representation and access-control boundary pending. |
-| Rankings | `SUPPORTED_EVIDENCE` | Official public page plus current implementations expose rankings; canonical ranking ID/paging pending. |
-| Recommended Playlists | `SUPPORTED_EVIDENCE` | Official public curated playlists and current clients exist; exact non-personalized semantics pending. |
-| New Songs | `SUPPORTED_EVIDENCE` | Official public region tabs exist; exact mapping to Fura categories pending. |
-| New Albums | `PARTIAL_EVIDENCE` | Current APIs expose Album listings; exact new-release category semantics pending. |
-| Related Tracks | `PARTIAL_EVIDENCE` | Current implementation candidates exist; exact public seed semantics pending. |
-| Comments | `SUPPORTED_EVIDENCE` | MakcRe and EchoMusic product behavior expose read-only comments; independent request/pagination proof pending. |
-| Track-associated MV | `PARTIAL_EVIDENCE` | Search/detail fields and product behavior suggest an association; exact HTTPS media path pending. |
-| Media source | `HUMAN_DECISION_REQUIRED` | The observed anonymous legacy detail response carried no playable URL. Current modern routes combine signing/device-shaped inputs and newer evidence mentions V5/encrypted responses. No official secret, device impersonation, encrypted-audio cracking or entitlement bypass is permitted. |
-| Authentication | `OUT_OF_SCOPE` | Not authorized in the first phase. |
-| Account Summary | `OUT_OF_SCOPE` | Depends on a future independently authorized authentication workstream. |
-| User Playlists | `OUT_OF_SCOPE` | Private account read is not authorized. |
-| Favorites | `OUT_OF_SCOPE` | Private account read/mutation is not authorized. |
-| Recent Plays | `OUT_OF_SCOPE` | Private history/reporting is not authorized. |
+| Track Search | `DONE` | Existing unsigned strict Search retained. Track IDs now carry a versioned Provider-private exact context while membership remains `MixSongID`; no title/Artist matching is used. Core only; UI remains media-gated. |
+| Artist Search | `EXTERNAL_BLOCKED` | The current unsigned direct route returned business error `20006`; no safe current HTTPS alternative was established. |
+| Album Search | `EXTERNAL_BLOCKED` | The current unsigned direct route returned business error `20006`; no safe current HTTPS alternative was established. |
+| Playlist Search | `EXTERNAL_BLOCKED` | The current unsigned direct route returned business error `20006`; the older route is not a current direct HTTPS contract. |
+| Track detail | `DONE` | The old mismatch is explained. Strict decoding accepts only `errcode=0`, observed status variants, bounded fields and exact equality for hash/MixSongID/Audioid plus known Album context. Core only. |
+| Playlist detail | `EXTERNAL_BLOCKED` | Public index works, but current detail downgraded to HTTP. Fura did not follow or normalize it. |
+| Playlist Tracks | `EXTERNAL_BLOCKED` | Depends on the blocked detail route; no title-based reconstruction is permitted. |
+| Album detail | `EXTERNAL_BLOCKED` | Current safe unsigned HTTPS contract not established in the closed window. |
+| Album Tracks | `EXTERNAL_BLOCKED` | Current safe unsigned HTTPS contract and paging not established. |
+| Artist Tracks | `EXTERNAL_BLOCKED` | Current safe unsigned HTTPS contract and paging not established. |
+| Artist Albums | `EXTERNAL_BLOCKED` | Current safe unsigned HTTPS contract and paging not established. |
+| Lyrics | `DONE` | Exact hash + duration search, bounded first server-ranked candidate, LRC download, base64 UTF-8 and line timing are implemented. Translation, romanization, KRC and word timing are not claimed. Core only. |
+| Rankings | `DONE` | Public inventory plus fixed 30-row native page contract, real page 2, total, duplicate/omission and exact Track-context mapping are implemented. Core only. |
+| Recommended Playlists | `EXTERNAL_BLOCKED` | Public index is current, but the HTTPS detail/Tracks path did not remain HTTPS; no incomplete recommendation navigation is advertised. |
+| New Songs | `EXTERNAL_BLOCKED` | Historical public region evidence exists, but no current exact category/pagination contract was accepted before the window closed. |
+| New Albums | `EXTERNAL_BLOCKED` | Historical API evidence exists, but no current exact release-region contract was accepted before the window closed. |
+| Related Tracks | `EXTERNAL_BLOCKED` | Candidate endpoints exist, but an exact safe public seed contract was not established. |
+| Comments | `EXTERNAL_BLOCKED` | Product behavior exists, but independent safe request and pagination evidence remains incomplete. |
+| Track-associated MV | `EXTERNAL_BLOCKED` | Association fields exist, but no exact safe HTTPS metadata/source contract was established. |
+| Media source | `HUMAN_DECISION_REQUIRED` | Legacy detail returned no URL and four deterministic standard-source probes returned business `status=2` with no candidate. Modern routes still require unclassified app signing/device inputs. No resolver exists. |
+| Authentication | `NOT_SUPPORTED` | No ordinary safe authentication contract was investigated or implemented; QQ/NetEase gateways are never reused. |
+| Account Summary | `NOT_SUPPORTED` | Depends on a future independently authorized authentication workstream. |
+| User Playlists | `NOT_SUPPORTED` | Private account read is not authorized or implemented. |
+| Favorites | `NOT_SUPPORTED` | Private account read/mutation is not authorized or implemented. |
+| Recent Plays | `NOT_SUPPORTED` | Private history/reporting is not authorized or implemented. |
 
 ## Canonical identity investigation
 
 Search exposes quality-dependent `FileHash`/`HQFileHash`/`SQFileHash`, numeric
-`Audioid`, and `MixSongID`/`AlbumAudioID`. A quality hash cannot be the canonical
-Track identity merely because older clients used it. Search currently owns the
-provider-scoped, opaque `MixSongID`, while the standard hash remains private
-Search context rather than a public Fura identity. The legacy detail observation
-supports this candidate but the strict live decoder failed twice, so production
-identity is not accepted. Search, detail, Playlist, Album, Artist, lyrics,
-comments and media evidence must eventually link the same recording/version
-without title/Artist matching.
+`Audioid`, and `MixSongID`/`AlbumAudioID`. The resumed evidence accepts
+`MixSongID` as the canonical provider-owned recording/version key: independent
+Search and ranking rows mapped it exactly to mobile detail
+`album_audio_id`. The opaque Domain identity uses a versioned composite so the
+Provider can carry the standard hash, `Audioid`, duration and optional Album ID
+back to exact detail/lyrics without cache, title lookup or exposing protocol
+field names to Flutter. Those fields are resolution context, not independent
+cross-Provider identity. A quality-dependent hash is still not presented as the
+canonical Track ID.
 
 No QQ song MID, NetEase numeric ID, title/Artist lookup or cross-service Search
 may fill an identity gap.
@@ -185,25 +248,28 @@ evidence has not met that threshold.
 | --- | --- |
 | Governance / source provenance / license audit | `DONE` |
 | TME hypothesis and exact-isolation plan | `DONE` |
-| Canonical Track identity | `EXTERNAL_BLOCKED` — Search owns opaque `MixSongID`, but the strict legacy detail contract failed both live gates and the modern signed/device boundary is unresolved |
-| Bounded HTTP transport | `DONE` for the exact unsigned Search host |
-| Track Search | `DONE_CORE` — Bridge/UI integration intentionally waits for a coherent public capability slice |
-| Artist / Album / Playlist Search | `EXTERNAL_BLOCKED` — held behind the unresolved canonical Track identity gate; do not pile up endpoints |
-| Track detail and public Playlist / Album / Artist reads | `EXTERNAL_BLOCKED` — strict legacy detail decoding failed twice; a scrubbed structural fixture or new evidence window is required |
-| Lyrics / Rankings / evidenced recommendations | `EXTERNAL_BLOCKED` — held behind the identity/detail gate |
+| Canonical Track identity | `DONE` — exact Search/ranking/detail linkage accepts `MixSongID`; versioned opaque context carries only Provider-private exact fields |
+| Bounded HTTP transport | `DONE` for the exact allowlisted Search/detail/ranking/lyric hosts and paths; HTTPS-only, no redirects, 2 MiB ceiling |
+| Track Search | `DONE` — existing implementation retained and migrated to the exact opaque identity |
+| Artist / Album / Playlist Search | `EXTERNAL_BLOCKED` — current unsigned routes returned business `20006`; no older HTTP fallback is used |
+| Track detail | `DONE` — strict exact-context client and Provider mapping are implemented |
+| Public Playlist / Album / Artist reads | `EXTERNAL_BLOCKED` — Playlist detail downgraded to HTTP; Album/Artist reads lack a current safe contract |
+| Lyrics / Rankings | `DONE` — exact LRC and native Ranking paging are implemented |
+| Recommendations | `EXTERNAL_BLOCKED` — current public detail/navigation remains incomplete |
 | Related Tracks / Comments / MV | `EXTERNAL_BLOCKED` — held behind the identity/detail gate |
 | Standard Media and dfid/device safety | `HUMAN_DECISION_REQUIRED` — anonymous legacy detail yielded no URL; modern signature/device/encrypted-source boundaries are unclassified |
 | High / Lossless Media | `NOT_SUPPORTED` — no proved ordinarily authorized direct unencrypted source and no entitlement model |
-| Authentication / Account / User Library / writes | `NOT_APPLICABLE` |
-| Provider API static routing / native singleton / Bridge | `EXTERNAL_BLOCKED` — one Search primitive is not a coherent Provider slice |
-| Flutter selector / capability hiding / continuity / i18n | `EXTERNAL_BLOCKED` — Core gate is not coherent enough to expose truthfully |
+| Authentication / Account / User Library / writes | `NOT_SUPPORTED` |
+| Provider API static routing / native singleton / Bridge | `EXTERNAL_BLOCKED` — Core has a coherent public read slice, but production composition remains behind standard media |
+| Flutter selector / capability hiding / continuity / i18n | `EXTERNAL_BLOCKED` — `KUGOU_UI_PRODUCTION_GATE = BLOCKED_BY_MEDIA`; the ordinary selector remains QQ/NetEase only |
 | Public distribution authorization | `HUMAN_DECISION_REQUIRED` |
-| Real-account acceptance | `NOT_APPLICABLE` for the public-only phase |
+| Real-account acceptance | `NOT_SUPPORTED` for the public-only phase |
 
-No safe KuGou capability remains autonomous under the current identity gate and
-closed request budget. Resumption requires either a scrubbed structural fixture
-that explains the legacy detail response variance, a separately authorized new
-bounded evidence window, or a Human decision that classifies the modern public
-signing/device boundary. None of those options authorizes a private secret,
-fabricated official device, encrypted-media cracking or cross-Provider source
-fallback.
+The bounded safe autonomous implementation is complete for Track Search, exact
+Track detail, Rankings and line-timed LRC. The live window is exhausted and
+closed. Ordinary UI, Bridge production routing and native composition remain
+unchanged because standard media is still blocked. Resumption of media or the
+other catalog/search surfaces requires a separately authorized evidence window
+or a Human decision that classifies the modern signing/device boundary. Neither
+option authorizes a private secret, fabricated official device, encrypted-media
+cracking or cross-Provider source fallback.

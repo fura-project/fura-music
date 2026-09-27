@@ -289,6 +289,33 @@ async fn lyrics_align_translation_and_romanization_without_invented_words() {
     assert!(l.lines()[0].segments().is_empty());
     assert_eq!(l.lines()[0].duration_ms(), 0);
 }
+
+#[tokio::test]
+async fn lyric_v1_maps_yrc_segments_into_the_shared_domain_model() {
+    let (provider, _) = provider(vec![json!({
+        "code": 200,
+        "lrc": {"lyric": "[00:01.00]Line only"},
+        "yrc": {"lyric": "[1000,900](1000,400,0)Word (1400,500,0)timing"},
+        "ytlrc": {"lyric": "[00:01.00]Translation"},
+        "yromalrc": {"lyric": "[00:01.00]Romanization"}
+    })]);
+
+    let lyrics = provider.lyrics(track()).await.expect("word-timed lyrics");
+    let line = &lyrics.lines()[0];
+    assert_eq!((line.start_ms(), line.duration_ms()), (1_000, 900));
+    assert_eq!(line.text(), "Word timing");
+    assert_eq!(line.segments().len(), 2);
+    assert_eq!(
+        (
+            line.segments()[0].start_ms(),
+            line.segments()[0].duration_ms(),
+            line.segments()[0].text()
+        ),
+        (1_000, 400, "Word ")
+    );
+    assert_eq!(line.translation(), Some("Translation"));
+    assert_eq!(line.romanization(), Some("Romanization"));
+}
 #[tokio::test]
 async fn foreign_ids_never_send_or_attempt_fuzzy_matching() {
     let (p, c) = provider(vec![]);

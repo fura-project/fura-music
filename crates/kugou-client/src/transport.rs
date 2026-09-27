@@ -64,7 +64,7 @@ impl Transport for HttpsTransport {
     async fn send(&self, request: Request) -> Result<Response, Error> {
         let parsed = url::Url::parse(&request.url).map_err(|_| Error::InputBound)?;
         if parsed.scheme() != "https"
-            || parsed.host_str() != Some("songsearch.kugou.com")
+            || !allowed_route(&parsed)
             || !parsed.username().is_empty()
             || parsed.password().is_some()
             || parsed.port().is_some()
@@ -115,5 +115,46 @@ impl Transport for HttpsTransport {
             content_type,
             body,
         })
+    }
+}
+
+fn allowed_route(parsed: &url::Url) -> bool {
+    matches!(
+        (parsed.host_str(), parsed.path()),
+        (Some("songsearch.kugou.com"), "/song_search_v2")
+            | (
+                Some("m.kugou.com"),
+                "/app/i/getSongInfo.php" | "/rank/list" | "/rank/info/"
+            )
+            | (Some("krcs.kugou.com"), "/search")
+            | (Some("lyrics.kugou.com"), "/download")
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allowed_route;
+
+    #[test]
+    fn route_allowlist_is_exact_and_rejects_host_and_path_lookalikes() {
+        for value in [
+            "https://songsearch.kugou.com/song_search_v2",
+            "https://m.kugou.com/app/i/getSongInfo.php",
+            "https://m.kugou.com/rank/list",
+            "https://m.kugou.com/rank/info/",
+            "https://krcs.kugou.com/search",
+            "https://lyrics.kugou.com/download",
+        ] {
+            assert!(allowed_route(&url::Url::parse(value).unwrap()));
+        }
+        for value in [
+            "https://example.invalid/song_search_v2",
+            "https://songsearch.kugou.com.evil.invalid/song_search_v2",
+            "https://m.kugou.com/rank/info",
+            "https://m.kugou.com/app/i/getSongInfo.php/extra",
+            "https://lyrics.kugou.com/v1/download",
+        ] {
+            assert!(!allowed_route(&url::Url::parse(value).unwrap()));
+        }
     }
 }

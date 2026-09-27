@@ -75,6 +75,7 @@ Future<void> main(List<String> arguments) async {
     logStartupPhase(phase: 'rust_init', outcome: 'failed');
     Error.throwWithStackTrace(error, stackTrace);
   }
+  final bootstrap = bootstrapStatus();
 
   final playbackStack = PlaybackStackSelection.current();
   logPlaybackStackSelected(
@@ -169,6 +170,10 @@ Future<void> main(List<String> arguments) async {
       authenticationGateway: qqAuthenticationGateway,
       credentialVault: qqCredentialVault,
       initialCredentialRestore: qqRestore,
+      implementedCapabilities: _implementedCapabilities(
+        bootstrap,
+        AppMusicProvider.qqMusic.providerId,
+      ),
       desktopQuickLoginEnabled: _desktopQuickLoginSupported,
     ),
     netEase: _buildProviderDependencies(
@@ -176,13 +181,17 @@ Future<void> main(List<String> arguments) async {
       authenticationGateway: netEaseAuthenticationGateway,
       credentialVault: netEaseCredentialVault,
       initialCredentialRestore: netEaseRestore,
+      implementedCapabilities: _implementedCapabilities(
+        bootstrap,
+        AppMusicProvider.netEaseCloudMusic.providerId,
+      ),
     ),
   );
 
   logStartupPhase(phase: 'run_app', outcome: 'started');
   runApp(
     MusicApp(
-      bootstrap: bootstrapStatus(),
+      bootstrap: bootstrap,
       providerDependencies: providerDependencies,
       mediaResolutionGateway: mediaResolutionGateway,
       lyricGateway: lyricGateway,
@@ -208,6 +217,7 @@ MusicProviderDependencies _buildProviderDependencies({
   required QqMusicAuthenticationGateway authenticationGateway,
   required CredentialVault credentialVault,
   required CredentialRestoreResult initialCredentialRestore,
+  required Iterable<String> implementedCapabilities,
   bool desktopQuickLoginEnabled = false,
 }) {
   final providerId = provider.providerId;
@@ -293,10 +303,24 @@ MusicProviderDependencies _buildProviderDependencies({
           ? RustRadarGateway(credentialVault: credentialVault)
           : const UnsupportedRadarGateway(),
     ),
-    capabilities: qqMusic
-        ? MusicProviderCapabilities.qqMusic
-        : MusicProviderCapabilities.netEaseCloudMusic,
+    capabilities:
+        (qqMusic
+                ? MusicProviderCapabilities.qqMusic
+                : MusicProviderCapabilities.netEaseCloudMusic)
+            .constrainedByCore(implementedCapabilities),
     initialCredentialRestore: initialCredentialRestore,
     desktopQuickLoginEnabled: desktopQuickLoginEnabled,
   );
+}
+
+Iterable<String> _implementedCapabilities(
+  BootstrapStatus bootstrap,
+  String providerId,
+) sync* {
+  for (final provider in bootstrap.providers) {
+    if (provider.id == providerId) {
+      yield* provider.implementedCapabilities;
+      return;
+    }
+  }
 }

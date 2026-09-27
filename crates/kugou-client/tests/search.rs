@@ -102,6 +102,7 @@ async fn search_is_unsigned_bounded_and_preserves_exact_context() {
     assert_eq!(item.mix_song_id, "123");
     assert_eq!(item.standard_hash, "0123456789ABCDEF0123456789ABCDEF");
     assert_eq!(item.audio_id, 42);
+    assert_eq!(item.album_id.as_deref(), Some("9"));
     assert_eq!(item.title, "Fixture Track (Live)");
     assert_eq!(item.artists.len(), 2);
     assert_eq!(item.album.as_ref().unwrap().id, "9");

@@ -1,15 +1,109 @@
 ---
 execution:
-  mode: HUMAN_GATED_REGRESSION
+  mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
-  state: HUMAN_REVIEW
-  acceptance_milestone: PERSONAL_LIBRARY_MEMBERSHIP_LIVE_ACCEPTANCE
-  active_workstream: PERSONAL_LIBRARY_MEMBERSHIP_REGRESSION
-  current_task: QQ_TRACK_LIKE_AND_ALBUM_FAVORITE_SESSION_MEMBERSHIP_CANDIDATE
-  next_action: HUMAN_QQ_REVERSIBLE_LIKE_UNLIKE_READBACK
+  state: IMPLEMENTED_NEEDS_HUMAN
+  acceptance_milestone: PROVIDER_PARITY_AUDIT_REVIEW
+  active_workstream: PROVIDER_PARITY_AND_IMPROVEMENT_AUDIT
+  current_task: PROVIDER_PARITY_IMPLEMENTATION_CLOSURE
+  next_action: HUMAN_REVIEW_OF_MEMBERSHIP_AND_CAPABILITY_TRUTH
 ---
 
 # Current State
+
+- **2026-09-24 Provider parity implementation closure candidate:** the existing
+  KuGou Core, QQ CDN dispatch cache and NetEase lyric-v1/YRC work remain in
+  place. Confirmed Track Like and Album favorite writes now apply only a target
+  delta and no longer restart membership scans at offset zero; unknown outcomes
+  retain the old account snapshot, isolate the target, and build an atomic
+  replacement. NetEase now actually uses its existing `/api/song/like/get`
+  client read as a generation-scoped, single-flight account snapshot while the
+  Liked Playlist remains the display-order source. Confirmed Like/Unlike
+  updates that snapshot without another read, concurrent Hearts share the cold
+  request, and replacement-account work returns `Replaced`. Flutter startup
+  intersects product policy with the running Rust descriptors, so missing Core
+  mutation capabilities fail closed and unaccepted NetEase foundations cannot
+  become UI actions. KuGou's separate Search/Catalog/Lyrics descriptor remains
+  outside `BuiltInProvider` and Settings. Opt-in
+  `FURA_PROVIDER_DIAGNOSTIC=1` tracing reports only coarse operation/cache/
+  request/outcome/generation fields. The four cache ownership classes and
+  their invalidation rules are recorded in the built-in integration guide and
+  parity audit. An explicit Bridge refresh signal now separates genuine manual
+  membership refresh from an offset-zero presentation load: NetEase reloads
+  `/api/song/like/get` only for that signal or an unknown mutation outcome,
+  while confirmed writes and route re-entry retain the generation snapshot.
+  Pinned FRB 2.13.0 generation, Rust format, locked workspace/all-target tests,
+  affected production-library Clippy with `-D warnings`, `git diff --check`,
+  ASCII-path Dart analysis and all 929 Flutter tests pass. The host's broader
+  Rust 1.98.1 all-target Clippy remains non-green only on already-present QQ
+  test transport `unused_async_trait_impl` diagnostics; no lint suppression or
+  unrelated fixture rewrite was added. No live Provider traffic, account write,
+  commit or push was performed.
+
+- **2026-09-24 three-Provider parity and improvement audit:** local and remote
+  HEAD remained
+  `91c31d980d2ecf6a5fdf61b1e7e4a1d84a8fc219`; the existing uncommitted KuGou
+  exact public-read slice was preserved. Current exact commits, activity,
+  licenses and derivative relationships were recorded for five QQ, six
+  NetEase and eight KuGou direct-client/product sources. Ports, forks,
+  submodules and products using the same API server were not counted as
+  independent wire votes. The QQ resolver now keeps a memory-only,
+  single-flight CDN dispatch cache whose lifetime is the earliest server TTL;
+  ten deterministic sequential Track resolutions fall from 20 requests (10
+  dispatch + 10 VKey) to 11 (1 dispatch + 10 VKey), while VKeys, final URLs,
+  credentials and identities remain uncached and unpersisted. NetEase lyrics
+  now use current EAPI `/api/song/lyric/v1` and map bounded YRC words,
+  translation and romanization into shared `SynchronizedLyrics`; malformed
+  word tracks fall back atomically to valid LRC. Independent current evidence
+  also supports client-only one-attempt foundations for Album favorite,
+  Artist follow and owned Playlist `/remove`; deterministic request/error
+  tests exist, but no Provider descriptor, Bridge or UI advertises them before
+  a separately authorized real-account gate. QQ Search profile rotation, VKey
+  batching/prefetch, external Playlist save, NetEase HiRes/effect/master
+  qualities and additional product surfaces remain gated. KuGou received no
+  new network traffic: its 40/40 window is still closed, KRC lacks two
+  independent word-grammar implementations, modern Catalog remains blocked by
+  signing/transport evidence, and media/device inputs remain outside the
+  accepted boundary. The complete provenance graph, parity matrices,
+  architecture decisions, rejected patterns and fifteen requested answers are
+  recorded in
+  `docs/research/provider-parity-and-improvement-audit-2026-09-24.md`. Rust
+  format, locked workspace/all-target tests, strict production-lib Clippy and
+  strict Clippy for the modified NetEase/KuGou test targets pass. The host has
+  Arch Rust/Clippy 1.98.1 and no rustup; strict all-target Clippy reaches nine
+  pre-existing `provider-qqmusic` test-only `unused_async_trait_impl`
+  diagnostics, so it is not reported green and no global/unknown-lint allow
+  was added. `git diff --check` passes. No real account write, capability
+  advertisement, commit or push occurred.
+
+- **2026-09-24 KuGou public read resumption:** starting local and remote HEAD
+  were both `91c31d980d2ecf6a5fdf61b1e7e4a1d84a8fc219` with a clean worktree.
+  Human opened one new 40-request anonymous/read-only HTTPS evidence window;
+  it used exactly 40 single-attempt, redirect-disabled, byte-bounded requests
+  and then closed without a 429, CAPTCHA, SSA or risk-control signal. The old
+  strict Track-detail failure is now explained by a flat `text/html` JSON
+  document, `albumid` naming, and valid `status=0`/`status=1` variance under
+  `errcode=0`. Search and ranking rows matched detail on MixSongID, standard
+  hash, Audioid and Album ID. Core now carries a versioned provider-private
+  exact context, implements strict Track detail, public Ranking inventory and
+  native 30-row paging, plus exact-hash line-timed LRC; malformed list rows are
+  counted while duplicate identity, envelope and pagination contradictions
+  fail closed. Focused client/Provider tests and focused strict all-target
+  Clippy pass; locked workspace/all-target tests also pass. Full-workspace
+  Clippy under the host's newer Rust 1.98.1 still stops on the pre-existing QQ
+  `unused_async_trait_impl` diagnostics (including the already recorded live
+  WeChat fixture), outside this KuGou scope; the CI baseline Rust 1.97.1 was not
+  installed on this host and no warning suppression was added.
+  Artist/Album/Playlist Search remains blocked by unsigned business code
+  `20006`; Playlist detail downgraded to HTTP and was not followed. Legacy
+  detail had no source and four representative deterministic standard-source
+  probes all returned business `status=2` with no URL. Modern media still uses
+  unclassified app signing and device/install-shaped inputs. Consequently no
+  media resolver, BuiltInProvider, Bridge, bootstrap, Settings or Flutter
+  production wiring was added:
+  `KUGOU_UI_PRODUCTION_GATE = BLOCKED_BY_MEDIA`. Authentication and personal
+  library remain unsupported. No account, sidecar, private secret, fabricated
+  device, cross-Provider fallback, commit or push was used.
 
 - **2026-09-24 current-HEAD Waydroid bisection and AppImage verifier
   follow-up:** the tested source baseline was

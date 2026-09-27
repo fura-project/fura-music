@@ -3,9 +3,13 @@
 //! This crate is an independent implementation. It neither starts nor embeds
 //! a third-party API server and it owns no cross-Provider identity or fallback.
 
+mod catalog;
+mod lyrics;
 mod search;
 mod transport;
 
+pub use catalog::{Ranking, RankingCollection, RankingPage, TrackDetails};
+pub use lyrics::{LyricLine, Lyrics};
 pub use search::{Album, Artist, SearchPage, SearchTrack};
 pub use transport::{HttpsTransport, MAX_RESPONSE_BYTES, Request, Response, Transport};
 
@@ -14,6 +18,7 @@ pub enum Error {
     RateLimited,
     SecurityVerificationRequired,
     ProtocolUnavailable,
+    ContentUnavailable,
     TemporaryNetworkFailure,
     UpstreamUnknown,
     InputBound,
@@ -30,7 +35,7 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 pub struct KuGouClient<T> {
-    transport: T,
+    pub(crate) transport: T,
 }
 
 impl<T> KuGouClient<T> {

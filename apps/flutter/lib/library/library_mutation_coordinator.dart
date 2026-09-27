@@ -9,6 +9,7 @@ import 'package:flutterustmusic/library/playlist_deletion_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_track_gateway.dart';
 import 'package:flutterustmusic/library/track_like_gateway.dart';
+import 'package:flutterustmusic/provider_diagnostics.dart';
 
 enum LibraryMutationStatus {
   confirmed,
@@ -95,14 +96,18 @@ class LibraryMutationCoordinator extends ChangeNotifier {
         status: LibraryMutationStatus.alreadyRunning,
       );
     }
-    _diagnostic(kind: 'track_like', phase: 'bridge_started');
+    _diagnostic(
+      operation: ProviderDiagnosticOperation.trackLikeMutation,
+      phase: ProviderDiagnosticPhase.bridge,
+      networkRequests: 1,
+    );
     final result = await operation.run();
     if (!_finishIfCurrent(key, operation, generation)) {
       _diagnostic(
-        kind: 'track_like',
-        phase: 'bridge_finished',
-        outcome: LibraryMutationStatus.outcomeUnknown,
-        failure: 'stale_generation',
+        operation: ProviderDiagnosticOperation.trackLikeMutation,
+        phase: ProviderDiagnosticPhase.bridge,
+        outcome: ProviderDiagnosticOutcome.outcomeUnknown,
+        generation: ProviderDiagnosticGeneration.replaced,
       );
       return const LibraryMutationOutcome(
         status: LibraryMutationStatus.outcomeUnknown,
@@ -110,10 +115,10 @@ class LibraryMutationCoordinator extends ChangeNotifier {
     }
     final status = _trackLikeStatus(result);
     _diagnostic(
-      kind: 'track_like',
-      phase: 'bridge_finished',
-      outcome: status,
-      failure: result.failure?.name,
+      operation: ProviderDiagnosticOperation.trackLikeMutation,
+      phase: ProviderDiagnosticPhase.bridge,
+      outcome: _diagnosticOutcome(status),
+      generation: ProviderDiagnosticGeneration.current,
     );
     return LibraryMutationOutcome<TrackLikeState>(
       status: status,
@@ -150,14 +155,18 @@ class LibraryMutationCoordinator extends ChangeNotifier {
         status: LibraryMutationStatus.alreadyRunning,
       );
     }
-    _diagnostic(kind: 'album_favorite', phase: 'bridge_started');
+    _diagnostic(
+      operation: ProviderDiagnosticOperation.albumFavoriteMutation,
+      phase: ProviderDiagnosticPhase.bridge,
+      networkRequests: 1,
+    );
     final result = await operation.run();
     if (!_finishIfCurrent(key, operation, generation)) {
       _diagnostic(
-        kind: 'album_favorite',
-        phase: 'bridge_finished',
-        outcome: LibraryMutationStatus.outcomeUnknown,
-        failure: 'stale_generation',
+        operation: ProviderDiagnosticOperation.albumFavoriteMutation,
+        phase: ProviderDiagnosticPhase.bridge,
+        outcome: ProviderDiagnosticOutcome.outcomeUnknown,
+        generation: ProviderDiagnosticGeneration.replaced,
       );
       return const LibraryMutationOutcome(
         status: LibraryMutationStatus.outcomeUnknown,
@@ -165,10 +174,10 @@ class LibraryMutationCoordinator extends ChangeNotifier {
     }
     final status = _albumFavoriteStatus(result);
     _diagnostic(
-      kind: 'album_favorite',
-      phase: 'bridge_finished',
-      outcome: status,
-      failure: result.failure?.name,
+      operation: ProviderDiagnosticOperation.albumFavoriteMutation,
+      phase: ProviderDiagnosticPhase.bridge,
+      outcome: _diagnosticOutcome(status),
+      generation: ProviderDiagnosticGeneration.current,
     );
     return LibraryMutationOutcome<AlbumFavoriteState>(
       status: status,
@@ -337,17 +346,34 @@ class LibraryMutationCoordinator extends ChangeNotifier {
   }
 
   void _diagnostic({
-    required String kind,
-    required String phase,
-    LibraryMutationStatus? outcome,
-    String? failure,
+    required ProviderDiagnosticOperation operation,
+    required ProviderDiagnosticPhase phase,
+    ProviderDiagnosticOutcome? outcome,
+    ProviderDiagnosticGeneration? generation,
+    int? networkRequests,
   }) {
-    debugPrint(
-      'FURA_DIAGNOSTIC library_mutation provider=$providerId kind=$kind '
-      'phase=$phase${outcome == null ? '' : ' outcome=${outcome.name}'}'
-      '${failure == null ? '' : ' failure=$failure'}',
+    logProviderDiagnostic(
+      providerId: providerId,
+      operation: operation,
+      phase: phase,
+      outcome: outcome,
+      generation: generation,
+      networkRequests: networkRequests,
     );
   }
+
+  static ProviderDiagnosticOutcome _diagnosticOutcome(
+    LibraryMutationStatus status,
+  ) => switch (status) {
+    LibraryMutationStatus.confirmed => ProviderDiagnosticOutcome.confirmed,
+    LibraryMutationStatus.definitiveFailure =>
+      ProviderDiagnosticOutcome.definitiveFailure,
+    LibraryMutationStatus.outcomeUnknown =>
+      ProviderDiagnosticOutcome.outcomeUnknown,
+    LibraryMutationStatus.unavailable => ProviderDiagnosticOutcome.unavailable,
+    LibraryMutationStatus.alreadyRunning =>
+      ProviderDiagnosticOutcome.alreadyRunning,
+  };
 
   static LibraryMutationStatus _trackLikeStatus(
     TrackLikeMutationResult result,

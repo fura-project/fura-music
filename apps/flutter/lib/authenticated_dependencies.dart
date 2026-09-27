@@ -121,6 +121,37 @@ class MusicProviderCapabilities {
   final bool personalFm;
   final List<NewAlbumRegion> supportedNewAlbumRegions;
   final List<NewSongCategory> supportedNewSongCategories;
+
+  /// Intersects Flutter product policy with the Core descriptor actually
+  /// shipped in this process. An absent Core capability always fails closed;
+  /// an extra Core capability never opts a Provider into an unapproved UI.
+  MusicProviderCapabilities constrainedByCore(
+    Iterable<String> implementedCapabilities,
+  ) {
+    final core = implementedCapabilities.toSet();
+    bool has(String capability) => core.contains(capability);
+    return MusicProviderCapabilities(
+      radar: radar && has('Recommendations'),
+      recentHistory: recentHistory && has('RecentHistoryRead'),
+      trackLike: trackLike && has('TrackLikeMutation'),
+      albumFavorite: albumFavorite && has('AlbumFavoriteMutation'),
+      artistFavorite: artistFavorite && has('ArtistFavoriteMutation'),
+      playlistSave: playlistSave && has('PlaylistSaveMutation'),
+      playlistTrackMutation:
+          playlistTrackMutation && has('PlaylistTrackMutation'),
+      playlistCreate: playlistCreate && has('PlaylistCreation'),
+      playlistDelete: playlistDelete && has('PlaylistDeletion'),
+      dailyPlaylist: dailyPlaylist && has('Recommendations'),
+      dailyTracks: dailyTracks && has('Recommendations'),
+      personalFm: personalFm && has('Recommendations'),
+      supportedNewAlbumRegions: has('Catalog')
+          ? supportedNewAlbumRegions
+          : const [],
+      supportedNewSongCategories: has('Catalog')
+          ? supportedNewSongCategories
+          : const [],
+    );
+  }
 }
 
 @immutable

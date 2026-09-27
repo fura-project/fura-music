@@ -45,24 +45,25 @@ use qqmusic_client::{
     QqDesktopQuickLoginError, QqDesktopQuickLoginSession, QqMusicAlbumDetailsError,
     QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState, QqMusicAlbumSearchError,
     QqMusicAlbumSummary, QqMusicAlbumTracksError, QqMusicArtistAlbumsError,
-    QqMusicArtistSearchError, QqMusicArtistTracksError, QqMusicAudioProfile, QqMusicClient,
-    QqMusicCreatePlaylistError, QqMusicDailyRecommendation, QqMusicDailyRecommendationError,
-    QqMusicDeletePlaylistError, QqMusicFavoriteAlbumsError, QqMusicFavoriteArtistsError,
-    QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError, QqMusicLyrics, QqMusicLyricsError,
-    QqMusicMediaError, QqMusicMusicVideoQuality, QqMusicNewAlbumArea, QqMusicNewAlbumsError,
-    QqMusicNewSongCategory, QqMusicNewSongsError, QqMusicOfficialPlaylist,
-    QqMusicOfficialPlaylistsError, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
-    QqMusicPersonalizedPlaylist, QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError,
-    QqMusicPlaylistDetailError, QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary,
-    QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary,
-    QqMusicRankingsError, QqMusicRecentPlaysError, QqMusicRecentPlaysPage,
-    QqMusicRecentPlaysSnapshot, QqMusicRecentTrackSummary, QqMusicRecommendedPlaylist,
-    QqMusicRecommendedPlaylistsError, QqMusicRelatedTracksError, QqMusicSearchError,
-    QqMusicTimedLyricLine, QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackLikeState,
-    QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError, QqMusicTrackSummary, QqQrError,
-    QrImageMediaType, QrLoginChannel, WechatCredentialExchangeError, WechatQrError,
-    WechatQrLoginCancellation, WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
-    WechatQrLoginSession, export_encrypted_credential_bundle, import_encrypted_credential_bundle,
+    QqMusicArtistSearchError, QqMusicArtistTracksError, QqMusicAudioProfile, QqMusicCdnDispatch,
+    QqMusicClient, QqMusicCreatePlaylistError, QqMusicDailyRecommendation,
+    QqMusicDailyRecommendationError, QqMusicDeletePlaylistError, QqMusicFavoriteAlbumsError,
+    QqMusicFavoriteArtistsError, QqMusicFavoritePlaylist, QqMusicFavoritePlaylistsError,
+    QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError, QqMusicMediaSource,
+    QqMusicMusicVideoQuality, QqMusicNewAlbumArea, QqMusicNewAlbumsError, QqMusicNewSongCategory,
+    QqMusicNewSongsError, QqMusicOfficialPlaylist, QqMusicOfficialPlaylistsError,
+    QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError, QqMusicPersonalizedPlaylist,
+    QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError, QqMusicPlaylistDetailError,
+    QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary, QqMusicPlaylistTrackError,
+    QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError,
+    QqMusicRecentPlaysError, QqMusicRecentPlaysPage, QqMusicRecentPlaysSnapshot,
+    QqMusicRecentTrackSummary, QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError,
+    QqMusicRelatedTracksError, QqMusicSearchError, QqMusicTimedLyricLine, QqMusicTrackComment,
+    QqMusicTrackCommentsError, QqMusicTrackLikeState, QqMusicTrackMusicVideo,
+    QqMusicTrackMusicVideoError, QqMusicTrackSummary, QqQrError, QrImageMediaType, QrLoginChannel,
+    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
+    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
+    export_encrypted_credential_bundle, import_encrypted_credential_bundle,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -123,6 +124,21 @@ struct RecentPlaysCache {
     snapshot: Option<QqMusicRecentPlaysSnapshot>,
 }
 
+#[derive(Debug)]
+struct CdnDispatchCacheEntry {
+    dispatch: QqMusicCdnDispatch,
+    valid_until: tokio::time::Instant,
+}
+
+fn provider_diagnostic(message: std::fmt::Arguments<'_>) {
+    if matches!(
+        std::env::var("FURA_PROVIDER_DIAGNOSTIC").as_deref(),
+        Ok("1" | "true")
+    ) {
+        eprintln!("FURA_PROVIDER_DIAGNOSTIC provider=qq-music {message}");
+    }
+}
+
 impl QqMusicCredentialState {
     fn authenticated(credential: Credential) -> Self {
         Self::Authenticated(credential, RecentPlaysCache::default())
@@ -137,6 +153,7 @@ pub struct QqMusicProvider<T> {
     next_restore_verification: AtomicU32,
     active_restore_verification: Mutex<Option<u32>>,
     consumed_credential_transfer_sessions: Mutex<HashSet<String>>,
+    cdn_dispatch_cache: tokio::sync::Mutex<Option<CdnDispatchCacheEntry>>,
 }
 
 /// QQ-owned immediate-playback source edge. It deliberately borrows the
@@ -157,6 +174,7 @@ impl<T> QqMusicProvider<T> {
             next_restore_verification: AtomicU32::new(1),
             active_restore_verification: Mutex::new(None),
             consumed_credential_transfer_sessions: Mutex::new(HashSet::new()),
+            cdn_dispatch_cache: tokio::sync::Mutex::new(None),
         }
     }
 
@@ -249,6 +267,60 @@ impl<T> QqMusicProvider<T> {
                 Err(MediaResolutionError::AuthenticationRequired)
             }
         }
+    }
+
+    async fn cached_cdn_dispatch(&self) -> Result<QqMusicCdnDispatch, QqMusicMediaError<T::Error>>
+    where
+        T: HttpTransport,
+    {
+        let joined = self.cdn_dispatch_cache.try_lock().is_err();
+        let mut cache = self.cdn_dispatch_cache.lock().await;
+        let now = tokio::time::Instant::now();
+        if let Some(entry) = cache.as_ref()
+            && entry.valid_until > now
+        {
+            provider_diagnostic(format_args!(
+                "operation=media_dispatch phase=resolve cache=hit \
+                 single_flight_join={joined} network_requests=0 outcome=success"
+            ));
+            return Ok(entry.dispatch.clone());
+        }
+
+        // Holding this narrow provider-owned lock across the one dispatch
+        // request makes concurrent media resolves a single flight. The cache
+        // contains only public CDN roots and server TTLs: never a vkey, media
+        // URL or credential, and it is never persisted.
+        provider_diagnostic(format_args!(
+            "operation=media_dispatch phase=request_started cache=miss \
+             single_flight_join={joined} network_requests=1"
+        ));
+        let dispatch = match self.client().cdn_dispatch().await {
+            Ok(dispatch) => dispatch,
+            Err(error) => {
+                provider_diagnostic(format_args!(
+                    "operation=media_dispatch phase=request_finished cache=miss \
+                     single_flight_join={joined} network_requests=1 outcome=failure"
+                ));
+                return Err(error);
+            }
+        };
+        let valid_for_seconds = dispatch
+            .expiration_seconds()
+            .min(dispatch.refresh_after_seconds())
+            .min(dispatch.cache_for_seconds());
+        if valid_for_seconds == 0 {
+            *cache = None;
+        } else {
+            *cache = Some(CdnDispatchCacheEntry {
+                dispatch: dispatch.clone(),
+                valid_until: now + std::time::Duration::from_secs(u64::from(valid_for_seconds)),
+            });
+        }
+        provider_diagnostic(format_args!(
+            "operation=media_dispatch phase=request_finished cache=miss \
+             single_flight_join={joined} network_requests=1 outcome=success"
+        ));
+        Ok(dispatch)
     }
 
     fn finish_media_await(
@@ -1856,6 +1928,94 @@ where
     }
 }
 
+impl<T> QqMusicMediaSourceResolver<'_, T>
+where
+    T: HttpTransport + 'static,
+{
+    async fn request_profile(
+        &self,
+        candidate: Option<&Credential>,
+        route: QqMusicMediaTrack<'_>,
+        profile: QqMusicAudioProfile,
+        dispatch: &QqMusicCdnDispatch,
+    ) -> Result<Result<QqMusicMediaSource, QqMusicMediaError<T::Error>>, MediaResolutionError> {
+        provider_diagnostic(format_args!(
+            "operation=media_vkey phase=request_started cache=miss network_requests=1"
+        ));
+        let mut response = match candidate {
+            Some(candidate) => {
+                self.provider
+                    .client()
+                    .media_source(
+                        candidate,
+                        route.song_mid,
+                        route.file_media_mid,
+                        profile,
+                        dispatch,
+                    )
+                    .await
+            }
+            None => {
+                self.provider
+                    .client()
+                    .anonymous_media_source(route.song_mid, route.file_media_mid, profile, dispatch)
+                    .await
+            }
+        };
+        provider_diagnostic(format_args!(
+            "operation=media_vkey phase=request_finished cache=miss network_requests=1 outcome={}",
+            if response.is_ok() {
+                "success"
+            } else {
+                "failure"
+            }
+        ));
+        let Some(candidate) = candidate else {
+            return Ok(response);
+        };
+        self.provider.finish_media_await(
+            candidate,
+            matches!(response, Err(QqMusicMediaError::Rejected { .. })),
+        )?;
+        if matches!(
+            response,
+            Err(QqMusicMediaError::Unavailable {
+                result_code: MEDIA_ROUTE_COMPATIBILITY_CODE
+            })
+        ) {
+            provider_diagnostic(format_args!(
+                "operation=media_vkey_compatibility phase=request_started cache=miss \
+                 network_requests=1"
+            ));
+            response = self
+                .provider
+                .client()
+                .compatible_authenticated_media_source(
+                    candidate,
+                    route.song_mid,
+                    route.file_media_mid,
+                    profile,
+                    dispatch,
+                )
+                .await;
+            provider_diagnostic(format_args!(
+                "operation=media_vkey_compatibility phase=request_finished cache=miss \
+                 network_requests=1 outcome={}",
+                if response.is_ok() {
+                    "success"
+                } else {
+                    "failure"
+                }
+            ));
+            self.provider.finish_media_await(
+                candidate,
+                matches!(response, Err(QqMusicMediaError::Rejected { .. })),
+            )?;
+        }
+        Ok(response)
+    }
+}
+
 impl<T> MediaSourceResolver for QqMusicMediaSourceResolver<'_, T>
 where
     T: HttpTransport + 'static,
@@ -1872,7 +2032,7 @@ where
         let candidate = self.provider.media_credential()?;
         let route = parse_media_track(&track_id)?;
 
-        let dispatch_response = self.provider.client().cdn_dispatch().await;
+        let dispatch_response = self.provider.cached_cdn_dispatch().await;
         if let Some(candidate) = candidate.as_ref() {
             self.provider.finish_media_await(
                 candidate,
@@ -1883,59 +2043,9 @@ where
 
         let profiles = media_profiles(candidate.is_some(), preferred_quality);
         for (index, profile) in profiles.iter().copied().enumerate() {
-            let mut source_response = match candidate.as_ref() {
-                Some(candidate) => {
-                    self.provider
-                        .client()
-                        .media_source(
-                            candidate,
-                            route.song_mid,
-                            route.file_media_mid,
-                            profile,
-                            dispatch,
-                        )
-                        .await
-                }
-                None => {
-                    self.provider
-                        .client()
-                        .anonymous_media_source(
-                            route.song_mid,
-                            route.file_media_mid,
-                            profile,
-                            dispatch,
-                        )
-                        .await
-                }
-            };
-            if let Some(candidate) = candidate.as_ref() {
-                self.provider.finish_media_await(
-                    candidate,
-                    matches!(source_response, Err(QqMusicMediaError::Rejected { .. })),
-                )?;
-                if matches!(
-                    source_response,
-                    Err(QqMusicMediaError::Unavailable {
-                        result_code: MEDIA_ROUTE_COMPATIBILITY_CODE
-                    })
-                ) {
-                    source_response = self
-                        .provider
-                        .client()
-                        .compatible_authenticated_media_source(
-                            candidate,
-                            route.song_mid,
-                            route.file_media_mid,
-                            profile,
-                            dispatch,
-                        )
-                        .await;
-                    self.provider.finish_media_await(
-                        candidate,
-                        matches!(source_response, Err(QqMusicMediaError::Rejected { .. })),
-                    )?;
-                }
-            }
+            let source_response = self
+                .request_profile(candidate.as_ref(), route, profile, dispatch)
+                .await?;
             match source_response {
                 Ok(source) => {
                     let (format, actual_quality) = map_media_profile(source.profile());
@@ -4189,6 +4299,13 @@ mod tests {
         requests: Mutex<Vec<HttpRequest>>,
     }
 
+    struct CachedDispatchMediaTransport {
+        dispatch_calls: AtomicUsize,
+        vkey_calls: AtomicUsize,
+        dispatch_started: Notify,
+        release_dispatch: Notify,
+    }
+
     struct LyricsTransport {
         response: Mutex<Option<HttpResponse>>,
         requests: Mutex<Vec<HttpRequest>>,
@@ -4418,6 +4535,30 @@ mod tests {
                 .expect("response lock")
                 .pop_front()
                 .expect("fixture response"))
+        }
+    }
+
+    impl HttpTransport for CachedDispatchMediaTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            let body = std::str::from_utf8(request.body_bytes().expect("media request body"))
+                .expect("media request UTF-8");
+            let response = if body.contains("music.audioCdnDispatch.cdnDispatch") {
+                let call = self.dispatch_calls.fetch_add(1, Ordering::SeqCst);
+                if call == 0 {
+                    self.dispatch_started.notify_one();
+                    self.release_dispatch.notified().await;
+                }
+                media_dispatch_json()
+            } else {
+                self.vkey_calls.fetch_add(1, Ordering::SeqCst);
+                media_vkey_json(0, "M500fixtureFileMid1.mp3?vkey=private-source")
+            };
+            Ok(HttpResponse::new(
+                200,
+                serde_json::to_vec(&response).expect("fixture JSON"),
+            ))
         }
     }
 
@@ -4803,6 +4944,17 @@ mod tests {
 
     #[test]
     fn descriptor_claims_only_implemented_capabilities() {
+        fn assert_mutation_contracts<P>()
+        where
+            P: TrackLikeMutationProvider
+                + AlbumFavoriteMutationProvider
+                + PlaylistTrackMutationProvider
+                + PlaylistCreationProvider
+                + PlaylistDeletionProvider,
+        {
+        }
+        assert_mutation_contracts::<QqMusicProvider<SearchTransport>>();
+
         let provider = QqMusicProvider::new(QqMusicClient::new(()));
         let descriptor = provider.descriptor();
 
@@ -8129,6 +8281,165 @@ mod tests {
             vkey["req_0"]["param"]["filename"],
             json!(["M500fixtureFileMid1.mp3"])
         );
+    }
+
+    #[tokio::test]
+    async fn ten_media_resolves_share_one_server_ttl_cdn_dispatch() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(CachedDispatchMediaTransport {
+            dispatch_calls: AtomicUsize::new(0),
+            vkey_calls: AtomicUsize::new(0),
+            dispatch_started: Notify::new(),
+            release_dispatch: Notify::new(),
+        }));
+        provider.client().transport().release_dispatch.notify_one();
+
+        for _ in 0..10 {
+            provider
+                .media_source_resolver()
+                .resolve_media(
+                    qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+                    AudioQuality::Standard,
+                )
+                .await
+                .expect("cached-dispatch media source");
+        }
+
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .dispatch_calls
+                .load(Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .vkey_calls
+                .load(Ordering::SeqCst),
+            10
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_media_resolves_single_flight_cdn_dispatch() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(CachedDispatchMediaTransport {
+            dispatch_calls: AtomicUsize::new(0),
+            vkey_calls: AtomicUsize::new(0),
+            dispatch_started: Notify::new(),
+            release_dispatch: Notify::new(),
+        }));
+        let resolver = provider.media_source_resolver();
+        let first = resolver.resolve_media(
+            qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+            AudioQuality::Standard,
+        );
+        let second = resolver.resolve_media(
+            qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
+            AudioQuality::Standard,
+        );
+        let release = async {
+            provider
+                .client()
+                .transport()
+                .dispatch_started
+                .notified()
+                .await;
+            tokio::task::yield_now().await;
+            provider.client().transport().release_dispatch.notify_one();
+        };
+
+        let (first, second, ()) = tokio::join!(first, second, release);
+        first.expect("first media source");
+        second.expect("second media source");
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .dispatch_calls
+                .load(Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .vkey_calls
+                .load(Ordering::SeqCst),
+            2
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cdn_dispatch_refreshes_at_the_earliest_server_ttl() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(CachedDispatchMediaTransport {
+            dispatch_calls: AtomicUsize::new(0),
+            vkey_calls: AtomicUsize::new(0),
+            dispatch_started: Notify::new(),
+            release_dispatch: Notify::new(),
+        }));
+        provider.client().transport().release_dispatch.notify_one();
+        let track = || qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1");
+
+        provider
+            .media_source_resolver()
+            .resolve_media(track(), AudioQuality::Standard)
+            .await
+            .expect("initial media source");
+        tokio::time::advance(std::time::Duration::from_secs(1_799)).await;
+        provider
+            .media_source_resolver()
+            .resolve_media(track(), AudioQuality::Standard)
+            .await
+            .expect("source before refresh time");
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .dispatch_calls
+                .load(Ordering::SeqCst),
+            1
+        );
+
+        tokio::time::advance(std::time::Duration::from_secs(1)).await;
+        provider
+            .media_source_resolver()
+            .resolve_media(track(), AudioQuality::Standard)
+            .await
+            .expect("source after refresh time");
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .dispatch_calls
+                .load(Ordering::SeqCst),
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_cdn_dispatch_is_not_cached() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([
+            json!({"code": 0, "req_0": {"code": 50_006}}),
+            media_dispatch_json(),
+            media_vkey_json(0, "M500fixtureFileMid1.mp3?vkey=private-source"),
+        ])));
+        let track = || qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1");
+
+        assert_eq!(
+            provider
+                .media_source_resolver()
+                .resolve_media(track(), AudioQuality::Standard)
+                .await,
+            Err(MediaResolutionError::ServiceUnavailable)
+        );
+        provider
+            .media_source_resolver()
+            .resolve_media(track(), AudioQuality::Standard)
+            .await
+            .expect("retry uses a new dispatch request");
+        assert_eq!(provider.client().transport().requests().len(), 3);
     }
 
     #[tokio::test]

@@ -967,6 +967,84 @@ impl<T: Transport> NeteaseClient<T> {
         mutation_success(&value)
     }
 
+    /// Evidence-backed offline foundation for setting Album subscription
+    /// state. It is intentionally not advertised by the Provider until a
+    /// Human-authorized real-account read-after-write gate is completed.
+    ///
+    /// # Errors
+    /// Authentication, transport, explicit service and indeterminate response
+    /// outcomes remain distinct. The write is never retried.
+    pub async fn set_album_favorite(
+        &self,
+        credential: &Credential,
+        album: u64,
+        favorite: bool,
+    ) -> Result<(), Error> {
+        id(album).map_err(|_| Error::InputBound)?;
+        let action = if favorite { "sub" } else { "unsub" };
+        let (value, _) = self
+            .raw_request(
+                &format!("/api/album/{action}"),
+                json!({"id":album}),
+                false,
+                Some(&credential.cookie()),
+            )
+            .await?;
+        mutation_success(&value)
+    }
+
+    /// Evidence-backed offline foundation for setting Artist subscription
+    /// state. No UI or Provider capability is advertised before a separate
+    /// product contract and Human live gate exist.
+    ///
+    /// # Errors
+    /// Authentication, transport, explicit service and indeterminate response
+    /// outcomes remain distinct. The write is never retried.
+    pub async fn set_artist_followed(
+        &self,
+        credential: &Credential,
+        artist: u64,
+        followed: bool,
+    ) -> Result<(), Error> {
+        id(artist).map_err(|_| Error::InputBound)?;
+        let action = if followed { "sub" } else { "unsub" };
+        let artist_ids = serde_json::to_string(&[artist]).map_err(|_| Error::InputBound)?;
+        let (value, _) = self
+            .raw_request(
+                &format!("/api/artist/{action}"),
+                json!({"artistId":artist,"artistIds":artist_ids}),
+                false,
+                Some(&credential.cookie()),
+            )
+            .await?;
+        mutation_success(&value)
+    }
+
+    /// Evidence-backed offline foundation for deleting one owned Playlist.
+    /// Ownership must be proven by the Provider before this is exposed beyond
+    /// the client, so there is deliberately no Provider capability yet.
+    ///
+    /// # Errors
+    /// Authentication, transport, explicit service and indeterminate response
+    /// outcomes remain distinct. The write is never retried.
+    pub async fn delete_owned_playlist(
+        &self,
+        credential: &Credential,
+        playlist: u64,
+    ) -> Result<(), Error> {
+        id(playlist).map_err(|_| Error::InputBound)?;
+        let ids = serde_json::to_string(&[playlist]).map_err(|_| Error::InputBound)?;
+        let (value, _) = self
+            .raw_request(
+                "/api/playlist/remove",
+                json!({"ids":ids}),
+                false,
+                Some(&credential.cookie()),
+            )
+            .await?;
+        mutation_success(&value)
+    }
+
     /// Creates exactly one normal, public owned playlist.
     ///
     /// # Errors

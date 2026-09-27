@@ -1,5 +1,5 @@
 use kugou_client::{Error, KuGouClient, Request, Response, Transport};
-use provider_api::{MusicProvider, ProviderCapability, TrackSearchProvider};
+use provider_api::{BuiltInProvider, MusicProvider, ProviderCapability, TrackSearchProvider};
 use provider_kugou::{KuGouProvider, provider_id};
 use serde_json::{Value, json};
 use std::sync::{
@@ -69,7 +69,11 @@ async fn descriptor_and_search_are_truthful_and_provider_scoped() {
     assert_eq!(provider.descriptor().display_name, "KuGou Music");
     assert_eq!(
         provider.descriptor().capabilities,
-        [ProviderCapability::Search]
+        [
+            ProviderCapability::Search,
+            ProviderCapability::Catalog,
+            ProviderCapability::Lyrics,
+        ]
     );
 
     let page = provider
@@ -81,7 +85,11 @@ async fn descriptor_and_search_are_truthful_and_provider_scoped() {
     assert_eq!(page.omitted_item_count(), 0);
     let item = &page.items()[0];
     assert_eq!(item.track().id().provider(), &provider_id());
-    assert_eq!(item.track().id().opaque(), "123");
+    assert_eq!(
+        item.track().id().opaque(),
+        "v1:123:0123456789ABCDEF0123456789ABCDEF:42:123:9"
+    );
+    assert_eq!(item.track().membership_opaque_id(), "123");
     assert_eq!(item.track().title(), "Fixture Track");
     assert_eq!(
         item.track().artist_names(),
@@ -92,6 +100,12 @@ async fn descriptor_and_search_are_truthful_and_provider_scoped() {
     assert_eq!(item.album().unwrap().id().provider(), &provider_id());
     assert_eq!(item.track().duration_seconds(), Some(123));
     assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert!(
+        BuiltInProvider::ALL
+            .into_iter()
+            .all(|built_in| built_in.id() != provider_id()),
+        "Core incubation must not imply production BuiltInProvider admission"
+    );
 }
 
 #[tokio::test]

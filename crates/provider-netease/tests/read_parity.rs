@@ -83,47 +83,31 @@ fn track() -> TrackId {
 
 #[test]
 fn descriptor_advertises_only_completed_read_capabilities() {
+    fn assert_mutation_contracts<P>()
+    where
+        P: TrackLikeMutationProvider + PlaylistTrackMutationProvider + PlaylistCreationProvider,
+    {
+    }
+    assert_mutation_contracts::<NeteaseProvider<Fake>>();
+
     let (provider, _) = provider(vec![]);
     let descriptor = provider.descriptor();
-    assert!(
-        descriptor
-            .capabilities
-            .contains(&ProviderCapability::Comments)
-    );
-    assert!(
-        descriptor
-            .capabilities
-            .contains(&ProviderCapability::MusicVideo)
-    );
-    assert!(
-        descriptor
-            .capabilities
-            .contains(&ProviderCapability::RecentHistoryRead)
-    );
-    assert!(
-        descriptor
-            .capabilities
-            .contains(&ProviderCapability::TrackLikeMutation)
-    );
-    assert!(
-        descriptor
-            .capabilities
-            .contains(&ProviderCapability::PlaylistTrackMutation)
-    );
-    assert!(
-        descriptor
-            .capabilities
-            .contains(&ProviderCapability::PlaylistCreation)
-    );
-    assert!(
-        !descriptor
-            .capabilities
-            .contains(&ProviderCapability::AlbumFavoriteMutation)
-    );
-    assert!(
-        !descriptor
-            .capabilities
-            .contains(&ProviderCapability::PlaylistDeletion)
+    assert_eq!(
+        descriptor.capabilities,
+        [
+            ProviderCapability::Search,
+            ProviderCapability::Catalog,
+            ProviderCapability::Recommendations,
+            ProviderCapability::Lyrics,
+            ProviderCapability::Authentication,
+            ProviderCapability::UserLibrary,
+            ProviderCapability::RecentHistoryRead,
+            ProviderCapability::TrackLikeMutation,
+            ProviderCapability::PlaylistTrackMutation,
+            ProviderCapability::PlaylistCreation,
+            ProviderCapability::Comments,
+            ProviderCapability::MusicVideo,
+        ]
     );
 }
 

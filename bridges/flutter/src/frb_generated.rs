@@ -62,7 +62,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -302435718;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1598603090;
 
 // Section: executor
 
@@ -8647,6 +8647,38 @@ fn wire__crate__api__netease_authentication__request_netease_sms_code_impl(
         },
     )
 }
+fn wire__crate__api__library__request_track_membership_refresh_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "request_track_membership_refresh",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_provider_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(
+                    crate::api::library::request_track_membership_refresh(api_provider_id),
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__netease_authentication__reserve_netease_credential_verification_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -13882,12 +13914,12 @@ fn pde_ffi_dispatcher_primary_impl(
 164 => wire__crate__api__netease_authentication__cancel_active_netease_system_browser_login_and_wait_impl(port, ptr, rust_vec_len, data_len),
 181 => wire__crate__api__bootstrap__init_app_impl(port, ptr, rust_vec_len, data_len),
 185 => wire__crate__api__netease_authentication__request_netease_sms_code_impl(port, ptr, rust_vec_len, data_len),
-200 => wire__crate__api__netease_authentication__start_netease_qr_login_impl(port, ptr, rust_vec_len, data_len),
-201 => wire__crate__api__authentication__start_qq_music_desktop_quick_login_impl(port, ptr, rust_vec_len, data_len),
-202 => wire__crate__api__authentication__start_qq_music_qr_login_impl(port, ptr, rust_vec_len, data_len),
-203 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(port, ptr, rust_vec_len, data_len),
-204 => wire__crate__api__netease_authentication__verify_restored_netease_credential_impl(port, ptr, rust_vec_len, data_len),
-205 => wire__crate__api__authentication__verify_restored_qq_music_credential_impl(port, ptr, rust_vec_len, data_len),
+201 => wire__crate__api__netease_authentication__start_netease_qr_login_impl(port, ptr, rust_vec_len, data_len),
+202 => wire__crate__api__authentication__start_qq_music_desktop_quick_login_impl(port, ptr, rust_vec_len, data_len),
+203 => wire__crate__api__authentication__start_qq_music_qr_login_impl(port, ptr, rust_vec_len, data_len),
+204 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(port, ptr, rust_vec_len, data_len),
+205 => wire__crate__api__netease_authentication__verify_restored_netease_credential_impl(port, ptr, rust_vec_len, data_len),
+206 => wire__crate__api__authentication__verify_restored_qq_music_credential_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -14043,20 +14075,21 @@ fn pde_ffi_dispatcher_sync_impl(
 182 => wire__crate__api__netease_authentication__netease_has_authenticated_credential_impl(ptr, rust_vec_len, data_len),
 183 => wire__crate__api__netease_authentication__netease_system_browser_login_supported_impl(ptr, rust_vec_len, data_len),
 184 => wire__crate__api__authentication__qq_music_has_authenticated_credential_impl(ptr, rust_vec_len, data_len),
-186 => wire__crate__api__netease_authentication__reserve_netease_credential_verification_impl(ptr, rust_vec_len, data_len),
-187 => wire__crate__api__netease_authentication__reserve_netease_qr_login_start_impl(ptr, rust_vec_len, data_len),
-188 => wire__crate__api__netease_authentication__reserve_netease_sms_code_request_impl(ptr, rust_vec_len, data_len),
-189 => wire__crate__api__netease_authentication__reserve_netease_sms_login_impl(ptr, rust_vec_len, data_len),
-190 => wire__crate__api__netease_authentication__reserve_netease_system_browser_login_impl(ptr, rust_vec_len, data_len),
-191 => wire__crate__api__authentication__reserve_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
-192 => wire__crate__api__authentication__reserve_qq_music_desktop_quick_login_start_impl(ptr, rust_vec_len, data_len),
-193 => wire__crate__api__authentication__reserve_qq_music_qr_login_start_impl(ptr, rust_vec_len, data_len),
-194 => wire__crate__api__authentication__reserve_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
-195 => wire__crate__api__netease_authentication__restore_netease_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
-196 => wire__crate__api__authentication__restore_qq_music_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
-197 => wire__crate__api__netease_authentication__sign_out_netease_impl(ptr, rust_vec_len, data_len),
-198 => wire__crate__api__authentication__sign_out_qq_music_impl(ptr, rust_vec_len, data_len),
-199 => wire__crate__api__netease_authentication__stage_netease_official_web_credential_impl(ptr, rust_vec_len, data_len),
+186 => wire__crate__api__library__request_track_membership_refresh_impl(ptr, rust_vec_len, data_len),
+187 => wire__crate__api__netease_authentication__reserve_netease_credential_verification_impl(ptr, rust_vec_len, data_len),
+188 => wire__crate__api__netease_authentication__reserve_netease_qr_login_start_impl(ptr, rust_vec_len, data_len),
+189 => wire__crate__api__netease_authentication__reserve_netease_sms_code_request_impl(ptr, rust_vec_len, data_len),
+190 => wire__crate__api__netease_authentication__reserve_netease_sms_login_impl(ptr, rust_vec_len, data_len),
+191 => wire__crate__api__netease_authentication__reserve_netease_system_browser_login_impl(ptr, rust_vec_len, data_len),
+192 => wire__crate__api__authentication__reserve_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
+193 => wire__crate__api__authentication__reserve_qq_music_desktop_quick_login_start_impl(ptr, rust_vec_len, data_len),
+194 => wire__crate__api__authentication__reserve_qq_music_qr_login_start_impl(ptr, rust_vec_len, data_len),
+195 => wire__crate__api__authentication__reserve_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
+196 => wire__crate__api__netease_authentication__restore_netease_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
+197 => wire__crate__api__authentication__restore_qq_music_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
+198 => wire__crate__api__netease_authentication__sign_out_netease_impl(ptr, rust_vec_len, data_len),
+199 => wire__crate__api__authentication__sign_out_qq_music_impl(ptr, rust_vec_len, data_len),
+200 => wire__crate__api__netease_authentication__stage_netease_official_web_credential_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }

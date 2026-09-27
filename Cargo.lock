@@ -1044,6 +1044,7 @@ dependencies = [
 name = "kugou-client"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "reqwest",
  "serde",
  "serde_json",
@@ -1337,6 +1338,7 @@ dependencies = [
 name = "provider-kugou"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "kugou-client",
  "music-domain",
  "provider-api",

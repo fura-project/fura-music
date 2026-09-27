@@ -71,6 +71,13 @@ abstract interface class PlaylistDetailGateway {
   });
 }
 
+/// Optional account-snapshot boundary used only by an explicit membership
+/// refresh. Ordinary presentation loads, including offset zero, must not
+/// invalidate a Provider-owned membership cache.
+abstract interface class TrackMembershipRefreshGateway {
+  void requestTrackMembershipRefresh({required UserPlaylistSummary playlist});
+}
+
 abstract interface class PlaylistTrackPageLoadOperation {
   Future<PlaylistTrackPageResult> run();
   bool cancel();
@@ -83,7 +90,8 @@ typedef PlaylistTrackPageLoadOperationFactory =
       int size,
     );
 
-class RustPlaylistDetailGateway implements PlaylistDetailGateway {
+class RustPlaylistDetailGateway
+    implements PlaylistDetailGateway, TrackMembershipRefreshGateway {
   RustPlaylistDetailGateway({
     CredentialVault? credentialVault,
     PlaylistTrackPageLoadOperationFactory? operationFactory,
@@ -104,6 +112,11 @@ class RustPlaylistDetailGateway implements PlaylistDetailGateway {
     _operationFactory(playlist, offset, size),
     _credentialVault,
   );
+
+  @override
+  void requestTrackMembershipRefresh({required UserPlaylistSummary playlist}) {
+    bridge.requestTrackMembershipRefresh(providerId: playlist.providerId);
+  }
 }
 
 PlaylistTrackPageLoadOperation _beginRustLoad(

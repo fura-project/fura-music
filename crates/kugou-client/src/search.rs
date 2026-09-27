@@ -5,12 +5,12 @@ use std::collections::HashSet;
 
 const SEARCH_ENDPOINT: &str = "https://songsearch.kugou.com/song_search_v2";
 const MAX_QUERY_BYTES: usize = 256;
-const MAX_PAGE: u32 = 100_000;
-const MAX_PAGE_SIZE: u32 = 30;
-const MAX_TOTAL: u32 = 100_000_000;
-const MAX_TEXT_BYTES: usize = 4096;
-const MAX_ARTISTS: usize = 32;
-const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+pub(crate) const MAX_PAGE: u32 = 100_000;
+pub(crate) const MAX_PAGE_SIZE: u32 = 30;
+pub(crate) const MAX_TOTAL: u32 = 100_000_000;
+pub(crate) const MAX_TEXT_BYTES: usize = 4096;
+pub(crate) const MAX_ARTISTS: usize = 32;
+pub(crate) const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct Artist {
@@ -29,6 +29,9 @@ pub struct SearchTrack {
     pub mix_song_id: String,
     pub standard_hash: String,
     pub audio_id: u64,
+    /// Provider-private catalog relation retained even when the public row has
+    /// no trustworthy Album title and therefore cannot expose an Album summary.
+    pub album_id: Option<String>,
     pub title: String,
     pub artists: Vec<Artist>,
     pub album: Option<Album>,
@@ -312,7 +315,7 @@ fn decode_track(raw: RawTrack) -> Result<SearchTrack, Error> {
             .and_then(|()| text(&album_title))
             .ok()
             .map(|()| Album {
-                id: album_id,
+                id: album_id.clone(),
                 title: album_title,
             })
     };
@@ -321,6 +324,7 @@ fn decode_track(raw: RawTrack) -> Result<SearchTrack, Error> {
         mix_song_id: raw.mix_song_id,
         standard_hash: raw.standard_hash.to_ascii_uppercase(),
         audio_id: raw.audio_id,
+        album_id: (!album_id.is_empty() && album_id != "0").then_some(album_id),
         title,
         artists,
         album,
@@ -329,7 +333,7 @@ fn decode_track(raw: RawTrack) -> Result<SearchTrack, Error> {
     })
 }
 
-fn numeric_identity(value: &str) -> Result<(), Error> {
+pub(crate) fn numeric_identity(value: &str) -> Result<(), Error> {
     if value.is_empty()
         || value.starts_with('0')
         || value.len() > 20
@@ -342,7 +346,7 @@ fn numeric_identity(value: &str) -> Result<(), Error> {
     }
 }
 
-fn text(value: &str) -> Result<(), Error> {
+pub(crate) fn text(value: &str) -> Result<(), Error> {
     if value.trim().is_empty()
         || value.len() > MAX_TEXT_BYTES
         || value.chars().any(char::is_control)

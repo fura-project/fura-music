@@ -7,6 +7,7 @@ import 'package:flutterustmusic/library/favorite_album_controller.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/library_mutation_coordinator.dart';
 import 'package:flutterustmusic/library/library_mutation_feedback.dart';
+import 'package:flutterustmusic/provider_diagnostics.dart';
 
 enum AuthoritativeAlbumFavoriteState {
   unavailable,
@@ -89,9 +90,22 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
       return Future.value();
     }
     final running = _scan;
-    if (running != null) return running;
+    if (running != null) {
+      _diagnostic(
+        ProviderDiagnosticPhase.preload,
+        cache: ProviderDiagnosticCache.miss,
+        singleFlightJoin: true,
+        networkRequests: 0,
+      );
+      return running;
+    }
     final generation = _generation;
-    _diagnostic('preload_started');
+    _diagnostic(
+      ProviderDiagnosticPhase.preload,
+      cache: ProviderDiagnosticCache.miss,
+      singleFlightJoin: false,
+      networkRequests: 0,
+    );
     late final Future<void> scan;
     scan = _scanContinuation(generation).whenComplete(() {
       if (identical(_scan, scan)) _scan = null;
@@ -105,6 +119,11 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
     if (initial == AuthoritativeAlbumFavoriteState.unavailable ||
         initial == AuthoritativeAlbumFavoriteState.favorite ||
         initial == AuthoritativeAlbumFavoriteState.notFavorite) {
+      _diagnostic(
+        ProviderDiagnosticPhase.resolve,
+        cache: ProviderDiagnosticCache.hit,
+        networkRequests: 0,
+      );
       return initial;
     }
     _requestedAlbumIds.add(album.opaqueId);
@@ -121,10 +140,7 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
     required bool favorite,
     Future<void> Function()? refreshAdditionalState,
   }) async {
-    _diagnostic(
-      'action_requested',
-      detail: 'knownState=${stateFor(album).name}',
-    );
+    _diagnostic(ProviderDiagnosticPhase.request, networkRequests: 1);
     final outcome = await mutations.setAlbumFavorite(
       album: album,
       favorite: favorite,
@@ -134,21 +150,36 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
         _confirmedOverrides[album.opaqueId] =
             outcome.value == AlbumFavoriteState.favorite;
         _needsReconciliation.remove(album.opaqueId);
-        _diagnostic('write_confirmed');
+        _diagnostic(
+          ProviderDiagnosticPhase.request,
+          outcome: ProviderDiagnosticOutcome.confirmed,
+        );
         _notify();
-        _startBackgroundReconciliation(refreshAdditionalState);
+        _refreshAdditionalState(refreshAdditionalState);
       case LibraryMutationStatus.outcomeUnknown:
         _confirmedOverrides.remove(album.opaqueId);
         _needsReconciliation.add(album.opaqueId);
-        _diagnostic('write_outcome_unknown');
+        _diagnostic(
+          ProviderDiagnosticPhase.request,
+          outcome: ProviderDiagnosticOutcome.outcomeUnknown,
+        );
         _notify();
-        _startBackgroundReconciliation(refreshAdditionalState);
+        _startUnknownOutcomeReconciliation(refreshAdditionalState);
       case LibraryMutationStatus.definitiveFailure:
-        _diagnostic('write_definitive_failure');
+        _diagnostic(
+          ProviderDiagnosticPhase.request,
+          outcome: ProviderDiagnosticOutcome.definitiveFailure,
+        );
       case LibraryMutationStatus.unavailable:
-        _diagnostic('write_unavailable');
+        _diagnostic(
+          ProviderDiagnosticPhase.request,
+          outcome: ProviderDiagnosticOutcome.unavailable,
+        );
       case LibraryMutationStatus.alreadyRunning:
-        _diagnostic('write_already_running');
+        _diagnostic(
+          ProviderDiagnosticPhase.request,
+          outcome: ProviderDiagnosticOutcome.alreadyRunning,
+        );
     }
     return outcome;
   }
@@ -166,7 +197,12 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
     _refreshNextOffset = 0;
     _refreshReliable = true;
     final generation = _generation;
-    _diagnostic('reconcile_started');
+    _diagnostic(
+      ProviderDiagnosticPhase.refresh,
+      cache: ProviderDiagnosticCache.miss,
+      singleFlightJoin: false,
+      networkRequests: 0,
+    );
     late final Future<void> refresh;
     refresh = _scanRefresh(generation).whenComplete(() {
       if (identical(_refresh, refresh)) _refresh = null;
@@ -175,15 +211,30 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
     return refresh;
   }
 
-  void _startBackgroundReconciliation(
+  void _refreshAdditionalState(
+    Future<void> Function()? refreshAdditionalState,
+  ) {
+    if (refreshAdditionalState == null) return;
+    // Refresh the visible collection row without discarding the authoritative
+    // membership snapshot or starting a membership rescan from offset zero.
+    if (!_refreshing) {
+      _operation?.cancel();
+      _operation = null;
+      _scan = null;
+      _cancelSharedPages();
+    }
+    unawaited(refreshAdditionalState());
+  }
+
+  void _startUnknownOutcomeReconciliation(
     Future<void> Function()? refreshAdditionalState,
   ) {
     final membership = refreshSnapshot();
-    if (refreshAdditionalState != null) {
-      unawaited(Future.wait<void>([membership, refreshAdditionalState()]));
-    } else {
+    if (refreshAdditionalState == null) {
       unawaited(membership);
+      return;
     }
+    unawaited(Future.wait<void>([membership, refreshAdditionalState()]));
   }
 
   Future<void> _scanContinuation(int generation) async {
@@ -193,6 +244,11 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
       final expectedOffset = _nextOffset;
       late final FavoriteAlbumPageLoadOperation operation;
       try {
+        _diagnostic(
+          ProviderDiagnosticPhase.preload,
+          cache: ProviderDiagnosticCache.miss,
+          networkRequests: 1,
+        );
         operation = sessionGateway.beginLoad(
           offset: expectedOffset,
           size: FavoriteAlbumController.pageSize,
@@ -203,7 +259,15 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
       _operation = operation;
       final result = await operation.run();
       if (identical(_operation, operation)) _operation = null;
-      if (!_isCurrent(generation) || _refreshing) return;
+      if (!_isCurrent(generation)) {
+        _diagnostic(
+          ProviderDiagnosticPhase.preload,
+          outcome: ProviderDiagnosticOutcome.paused,
+          generation: ProviderDiagnosticGeneration.replaced,
+        );
+        return;
+      }
+      if (_refreshing) return;
       if (_isSessionFailure(result.failure)) {
         _invalidateSession();
         return;
@@ -214,7 +278,11 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
     if (!_isCurrent(generation)) return;
     _loading = false;
     _diagnostic(
-      _complete && _scanReliable ? 'preload_complete' : 'preload_paused',
+      ProviderDiagnosticPhase.preload,
+      outcome: _complete && _scanReliable
+          ? ProviderDiagnosticOutcome.success
+          : ProviderDiagnosticOutcome.paused,
+      generation: ProviderDiagnosticGeneration.current,
     );
     _notify();
   }
@@ -224,6 +292,11 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
       final expectedOffset = _refreshNextOffset;
       late final FavoriteAlbumPageLoadOperation operation;
       try {
+        _diagnostic(
+          ProviderDiagnosticPhase.refresh,
+          cache: ProviderDiagnosticCache.miss,
+          networkRequests: 1,
+        );
         operation = sessionGateway.beginLoad(
           offset: expectedOffset,
           size: FavoriteAlbumController.pageSize,
@@ -234,7 +307,15 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
       _operation = operation;
       final result = await operation.run();
       if (identical(_operation, operation)) _operation = null;
-      if (!_isCurrent(generation) || !_refreshing) return;
+      if (!_isCurrent(generation)) {
+        _diagnostic(
+          ProviderDiagnosticPhase.refresh,
+          outcome: ProviderDiagnosticOutcome.paused,
+          generation: ProviderDiagnosticGeneration.replaced,
+        );
+        return;
+      }
+      if (!_refreshing) return;
       if (_isSessionFailure(result.failure)) {
         _invalidateSession();
         return;
@@ -249,7 +330,11 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
     if (!_isCurrent(generation)) return;
     _refreshing = false;
     _refreshIds = null;
-    _diagnostic('reconcile_finished');
+    _diagnostic(
+      ProviderDiagnosticPhase.refresh,
+      outcome: ProviderDiagnosticOutcome.success,
+      generation: ProviderDiagnosticGeneration.current,
+    );
     _notify();
   }
 
@@ -374,10 +459,23 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
 
-  void _diagnostic(String phase, {String? detail}) {
-    debugPrint(
-      'FURA_DIAGNOSTIC library_mutation provider=$providerId '
-      'kind=album_favorite phase=$phase${detail == null ? '' : ' $detail'}',
+  void _diagnostic(
+    ProviderDiagnosticPhase phase, {
+    ProviderDiagnosticCache? cache,
+    bool? singleFlightJoin,
+    int? networkRequests,
+    ProviderDiagnosticOutcome? outcome,
+    ProviderDiagnosticGeneration? generation,
+  }) {
+    logProviderDiagnostic(
+      providerId: providerId,
+      operation: ProviderDiagnosticOperation.albumMembership,
+      phase: phase,
+      cache: cache,
+      singleFlightJoin: singleFlightJoin,
+      networkRequests: networkRequests,
+      outcome: outcome,
+      generation: generation,
     );
   }
 

@@ -18,6 +18,7 @@ use provider_api::{
     UserPlaylistsProvider,
 };
 use std::{
+    collections::BTreeSet,
     future::Future,
     sync::{
         Arc, Mutex,
@@ -34,6 +35,9 @@ struct State {
     pending: Option<Credential>,
     sms: Option<SmsLoginChallenge>,
     liked_playlist: Option<u64>,
+    liked_membership: Option<Arc<BTreeSet<u64>>>,
+    liked_membership_revision: u64,
+    liked_membership_needs_refresh: bool,
     recent_request: Option<Arc<()>>,
     recent_snapshot: Option<RecentHistorySnapshot>,
 }
@@ -44,6 +48,7 @@ struct RecentHistorySnapshot {
 pub(super) struct AuthOwner {
     state: Mutex<State>,
     changed: watch::Sender<u64>,
+    liked_membership_load: tokio::sync::Mutex<()>,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Failure {
@@ -61,6 +66,7 @@ impl AuthOwner {
         Self {
             state: Mutex::new(State::default()),
             changed,
+            liked_membership_load: tokio::sync::Mutex::new(()),
         }
     }
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
@@ -76,6 +82,9 @@ impl AuthOwner {
         self.changed.send_replace(state.generation);
         state.recent_request = None;
         state.recent_snapshot = None;
+        state.liked_membership = None;
+        state.liked_membership_needs_refresh = false;
+        state.liked_membership_revision = state.liked_membership_revision.wrapping_add(1);
     }
     pub(super) fn generation(&self) -> u64 {
         self.lock().generation
@@ -99,6 +108,8 @@ impl AuthOwner {
         }
         state.active = None;
         state.liked_playlist = None;
+        state.liked_membership = None;
+        state.liked_membership_needs_refresh = false;
         state.pending = Some(credential);
         state.sms = None;
         Ok(())
@@ -135,8 +146,38 @@ impl AuthOwner {
         s.sms = None;
         s.active = Some((credential, user));
         s.liked_playlist = None;
+        s.liked_membership = None;
+        s.liked_membership_needs_refresh = false;
         self.bump(&mut s);
         Ok(())
+    }
+
+    fn apply_liked_delta(&self, generation: u64, track: u64, liked: bool) -> Result<(), Failure> {
+        let mut state = self.lock();
+        if state.generation != generation {
+            return Err(Failure::Replaced);
+        }
+        let Some(current) = state.liked_membership.as_ref() else {
+            return Ok(());
+        };
+        let mut replacement = current.as_ref().clone();
+        if liked {
+            replacement.insert(track);
+        } else {
+            replacement.remove(&track);
+        }
+        state.liked_membership = Some(Arc::new(replacement));
+        state.liked_membership_revision = state.liked_membership_revision.wrapping_add(1);
+        Ok(())
+    }
+
+    fn mark_liked_membership_refresh(&self, generation: u64) -> bool {
+        let mut state = self.lock();
+        if state.generation == generation && state.liked_membership.is_some() {
+            state.liked_membership_needs_refresh = true;
+            return true;
+        }
+        false
     }
 }
 
@@ -224,6 +265,15 @@ fn sms_error(failure: Failure) -> SmsAuthenticationError {
 fn sms_debug(message: std::fmt::Arguments<'_>) {
     if std::env::var_os("FURA_NETEASE_SMS_DEBUG").is_some() {
         eprintln!("FURA_DIAGNOSTIC netease_sms_core {message}");
+    }
+}
+
+fn provider_diagnostic(message: std::fmt::Arguments<'_>) {
+    if matches!(
+        std::env::var("FURA_PROVIDER_DIAGNOSTIC").as_deref(),
+        Ok("1" | "true")
+    ) {
+        eprintln!("FURA_PROVIDER_DIAGNOSTIC provider=netease-cloud-music {message}");
     }
 }
 pub(super) fn library_error(f: Failure) -> UserLibraryError {
@@ -470,6 +520,8 @@ impl<T: Transport> QrAuthenticationProvider for NeteaseProvider<T> {
             self.auth.bump(&mut s);
             s.active = None;
             s.liked_playlist = None;
+            s.liked_membership = None;
+            s.liked_membership_needs_refresh = false;
             s.pending = None;
             s.sms = None;
             s.generation
@@ -881,14 +933,33 @@ impl<T: Transport> TrackLikeMutationProvider for NeteaseProvider<T> {
         let numeric_track = super::catalog::identity(track_id.provider(), track_id.opaque())
             .map_err(|_| LibraryMutationError::InvalidRequest)?;
         let (generation, credential, user) = self.auth.snapshot().map_err(mutation_error)?;
-        self.auth
+        let result = self
+            .auth
             .run(
                 generation,
                 self.client
                     .set_track_liked(&credential, user, numeric_track, liked),
             )
-            .await
-            .map_err(mutation_error)
+            .await;
+        match result {
+            Ok(()) => self
+                .auth
+                .apply_liked_delta(generation, numeric_track, liked)
+                .map_err(mutation_error),
+            Err(failure) => {
+                if matches!(
+                    failure,
+                    Failure::Client(
+                        Error::TemporaryNetworkFailure
+                            | Error::ResponseShapeMismatch
+                            | Error::ResponseBound
+                    )
+                ) {
+                    self.auth.mark_liked_membership_refresh(generation);
+                }
+                Err(mutation_error(failure))
+            }
+        }
     }
 }
 
@@ -938,6 +1009,100 @@ impl<T: Transport> PlaylistTrackMutationProvider for NeteaseProvider<T> {
     }
 }
 impl<T: Transport> NeteaseProvider<T> {
+    /// Marks the account-scoped Liked Songs membership snapshot stale.
+    ///
+    /// This is intentionally separate from loading presentation offset zero:
+    /// route entry and post-mutation row refreshes must keep reusing the
+    /// authoritative account snapshot, while an explicit manual refresh may
+    /// request one new `/api/song/like/get` read.
+    #[must_use]
+    pub fn request_track_membership_refresh(&self) -> bool {
+        let generation = self.auth.generation();
+        self.auth.mark_liked_membership_refresh(generation)
+    }
+
+    async fn liked_membership_snapshot(
+        &self,
+        generation: u64,
+        credential: &Credential,
+        user: u64,
+        force_refresh: bool,
+    ) -> Result<Arc<BTreeSet<u64>>, Failure> {
+        let observed_revision = {
+            let state = self.auth.lock();
+            if state.generation != generation {
+                return Err(Failure::Replaced);
+            }
+            if !force_refresh
+                && !state.liked_membership_needs_refresh
+                && let Some(snapshot) = &state.liked_membership
+            {
+                provider_diagnostic(format_args!(
+                    "operation=track_membership phase=resolve cache=hit \
+                     single_flight_join=false network_requests=0 generation=current"
+                ));
+                return Ok(Arc::clone(snapshot));
+            }
+            state.liked_membership_revision
+        };
+
+        let joined = self.auth.liked_membership_load.try_lock().is_err();
+        let _load = self.auth.liked_membership_load.lock().await;
+        {
+            let state = self.auth.lock();
+            if state.generation != generation {
+                return Err(Failure::Replaced);
+            }
+            if let Some(snapshot) = &state.liked_membership
+                && (state.liked_membership_revision != observed_revision
+                    || (!force_refresh && !state.liked_membership_needs_refresh))
+            {
+                provider_diagnostic(format_args!(
+                    "operation=track_membership phase=resolve cache=hit \
+                     single_flight_join={joined} network_requests=0 generation=current"
+                ));
+                return Ok(Arc::clone(snapshot));
+            }
+        }
+
+        provider_diagnostic(format_args!(
+            "operation=track_membership phase=request cache=miss \
+             single_flight_join={joined} network_requests=1 generation=current"
+        ));
+        let ids = match self
+            .auth
+            .run(generation, self.client.liked_ids(credential, user))
+            .await
+        {
+            Ok(ids) => ids,
+            Err(failure) => {
+                provider_diagnostic(format_args!(
+                    "operation=track_membership phase=request cache=miss \
+                     single_flight_join={joined} network_requests=1 outcome=failure generation={}",
+                    if failure == Failure::Replaced {
+                        "replaced"
+                    } else {
+                        "current"
+                    }
+                ));
+                return Err(failure);
+            }
+        };
+        let replacement = Arc::new(ids.into_iter().collect::<BTreeSet<_>>());
+        let mut state = self.auth.lock();
+        if state.generation != generation {
+            return Err(Failure::Replaced);
+        }
+        state.liked_membership = Some(Arc::clone(&replacement));
+        state.liked_membership_needs_refresh = false;
+        state.liked_membership_revision = state.liked_membership_revision.wrapping_add(1);
+        provider_diagnostic(format_args!(
+            "operation=track_membership phase=request cache=miss \
+             single_flight_join={joined} network_requests=1 outcome=success generation=current"
+        ));
+        Ok(replacement)
+    }
+
     pub(super) async fn playlist_source(
         &self,
         id: u64,
@@ -1002,6 +1167,10 @@ impl<T: Transport> NeteaseProvider<T> {
                 return Err(Error::InputBound.into());
             }
         }
+        let force_membership_refresh = self.auth.lock().liked_membership_needs_refresh;
+        let membership = self
+            .liked_membership_snapshot(g, &c, user, force_membership_refresh)
+            .await?;
         // `/song/like/get` is a membership set and does not define display
         // order. The actual Liked playlist's `trackIds` is the canonical
         // ordered identity table, just as it is for every other playlist.
@@ -1037,6 +1206,8 @@ impl<T: Transport> NeteaseProvider<T> {
                 Err(error) => return Err(error.into()),
             }
         }
+        let membership_is_exact =
+            u32::try_from(membership.len()).is_ok_and(|count| count == page.total);
         Ok(PlaylistTracksPage::new_with_cursor(
             page.offset,
             page.next,
@@ -1044,7 +1215,9 @@ impl<T: Transport> NeteaseProvider<T> {
             page.next < page.total,
             omitted,
             tracks,
-        ))
+        )
+        .with_membership_track_opaque_ids(membership.iter().map(u64::to_string).collect())
+        .with_membership_exact(membership_is_exact))
     }
 }
 impl<T: Transport> PersonalizedTracksProvider for NeteaseProvider<T> {

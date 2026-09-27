@@ -625,6 +625,7 @@ async fn account_library_liked_and_recommendations_remain_exact_and_bounded() {
         Reply::Json(account()),
         Reply::Json(account()),
         Reply::Json(json!({"code":200,"playlist":[playlist],"more":false})),
+        Reply::Json(json!({"code":200,"ids":[5,1]})),
         Reply::Json(
             json!({"code":200,"playlist":{"id":4,"name":"Liked","trackCount":2,"trackIds":[{"id":5},{"id":1}]}}),
         ),
@@ -648,6 +649,8 @@ async fn account_library_liked_and_recommendations_remain_exact_and_bounded() {
         .unwrap();
     assert_eq!(page.next_offset(), 2);
     assert_eq!(page.omitted_track_count(), 0);
+    assert!(page.membership_is_exact());
+    assert_eq!(page.membership_track_opaque_ids(), ["1", "5"]);
     assert_eq!(
         page.tracks()
             .iter()
@@ -658,17 +661,19 @@ async fn account_library_liked_and_recommendations_remain_exact_and_bounded() {
     assert_eq!(p.daily_tracks().await.unwrap()[0].id().opaque(), "1");
     assert_eq!(p.personalized_tracks().await.unwrap().len(), 1);
     assert!(p.personalized_playlists().await.unwrap().is_empty());
-    assert_eq!(a.load(Ordering::SeqCst), 8);
+    assert_eq!(a.load(Ordering::SeqCst), 9);
 }
 
 #[tokio::test]
 async fn liked_collection_above_the_old_ceiling_pages_by_raw_identity() {
     let ids: Vec<_> = (1..=1001).map(|id| json!({"id":id})).collect();
+    let liked_ids: Vec<_> = (1..=1001).collect();
     let playlist =
         json!({"id":4,"name":"Liked","trackCount":1001,"specialType":5,"creator":{"userId":42}});
     let (p, calls, authenticated_calls) = provider(vec![
         Reply::Json(account()),
         Reply::Json(json!({"code":200,"playlist":[playlist],"more":false})),
+        Reply::Json(json!({"code":200,"ids":liked_ids})),
         Reply::Json(
             json!({"code":200,"playlist":{"id":4,"name":"Liked","trackCount":1001,"trackIds":ids}}),
         ),
@@ -685,8 +690,10 @@ async fn liked_collection_above_the_old_ceiling_pages_by_raw_identity() {
     assert_eq!(page.tracks()[0].id().opaque(), "1001");
     assert_eq!(page.next_offset(), 1001);
     assert!(!page.has_more());
-    assert_eq!(calls.load(Ordering::SeqCst), 4);
-    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 4);
+    assert!(page.membership_is_exact());
+    assert_eq!(page.membership_track_opaque_ids().len(), 1001);
+    assert_eq!(calls.load(Ordering::SeqCst), 5);
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 5);
 }
 
 #[tokio::test]
@@ -698,6 +705,7 @@ async fn liked_collection_good_bad_good_keeps_valid_order_and_raw_cursor() {
     let (provider, calls, authenticated_calls) = provider(vec![
         Reply::Json(account()),
         Reply::Json(json!({"code":200,"playlist":[playlist],"more":false})),
+        Reply::Json(json!({"code":200,"ids":[1,5,7]})),
         Reply::Json(
             json!({"code":200,"playlist":{"id":4,"name":"Liked","trackCount":3,"trackIds":[{"id":1},{"id":5},{"id":7}]}}),
         ),
@@ -724,8 +732,170 @@ async fn liked_collection_good_bad_good_keeps_valid_order_and_raw_cursor() {
     );
     assert_eq!((page.next_offset(), page.omitted_track_count()), (3, 1));
     assert!(!page.has_more());
-    assert_eq!(calls.load(Ordering::SeqCst), 4);
-    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 4);
+    assert_eq!(page.membership_track_opaque_ids(), ["1", "5", "7"]);
+    assert_eq!(calls.load(Ordering::SeqCst), 5);
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 5);
+}
+
+#[tokio::test]
+async fn concurrent_liked_pages_single_flight_the_account_membership_snapshot() {
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let playlist =
+        json!({"id":4,"name":"Liked","trackCount":1,"specialType":5,"creator":{"userId":42}});
+    let detail = json!({
+        "code":200,
+        "playlist":{"id":4,"name":"Liked","trackCount":1,"trackIds":[{"id":1}]}
+    });
+    let songs = json!({"code":200,"songs":[song()]});
+    let (provider, calls, authenticated_calls) = provider(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":200,"playlist":[playlist],"more":false})),
+        Reply::Blocked(
+            Arc::clone(&started),
+            Arc::clone(&release),
+            json!({"code":200,"ids":[1]}),
+        ),
+        Reply::Json(detail.clone()),
+        Reply::Json(songs.clone()),
+        Reply::Json(detail),
+        Reply::Json(songs),
+    ]);
+    provider.import_credential(&credential()).unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    let liked = provider.user_playlists().await.unwrap().playlists()[0].clone();
+
+    let first_provider = Arc::clone(&provider);
+    let first_id = liked.id().clone();
+    let first =
+        tokio::spawn(async move { first_provider.playlist_tracks_page(first_id, 0, 1).await });
+    started.notified().await;
+    let second_provider = Arc::clone(&provider);
+    let second = tokio::spawn(async move {
+        second_provider
+            .playlist_tracks_page(liked.id().clone(), 0, 1)
+            .await
+    });
+    tokio::task::yield_now().await;
+    release.notify_one();
+
+    let (first, second) = tokio::join!(first, second);
+    assert!(first.unwrap().unwrap().membership_is_exact());
+    assert!(second.unwrap().unwrap().membership_is_exact());
+    assert_eq!(calls.load(Ordering::SeqCst), 7);
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 7);
+}
+
+#[tokio::test]
+async fn confirmed_like_updates_the_generation_snapshot_without_refetching_it() {
+    let playlist =
+        json!({"id":4,"name":"Liked","trackCount":1,"specialType":5,"creator":{"userId":42}});
+    let (provider, calls, authenticated_calls) = provider(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":200,"playlist":[playlist],"more":false})),
+        Reply::Json(json!({"code":200,"ids":[1]})),
+        Reply::Json(json!({
+            "code":200,
+            "playlist":{"id":4,"name":"Liked","trackCount":1,"trackIds":[{"id":1}]}
+        })),
+        Reply::Json(json!({"code":200,"songs":[song()]})),
+        Reply::Json(json!({"code":200})),
+        Reply::Json(json!({
+            "code":200,
+            "playlist":{"id":4,"name":"Liked","trackCount":2,"trackIds":[{"id":1},{"id":9}]}
+        })),
+        Reply::Json(json!({"code":200,"songs":[song()]})),
+    ]);
+    provider.import_credential(&credential()).unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    let liked = provider.user_playlists().await.unwrap().playlists()[0].clone();
+    provider
+        .playlist_tracks_page(liked.id().clone(), 0, 1)
+        .await
+        .unwrap();
+
+    provider
+        .set_track_liked(TrackId::new(provider_id(), "9").unwrap(), true)
+        .await
+        .unwrap();
+    let page = provider
+        .playlist_tracks_page(liked.id().clone(), 0, 1)
+        .await
+        .unwrap();
+
+    assert!(page.membership_is_exact());
+    assert_eq!(page.membership_track_opaque_ids(), ["1", "9"]);
+    assert_eq!(calls.load(Ordering::SeqCst), 8);
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 8);
+}
+
+#[tokio::test]
+async fn explicit_manual_refresh_replaces_the_account_membership_snapshot() {
+    let playlist =
+        json!({"id":4,"name":"Liked","trackCount":1,"specialType":5,"creator":{"userId":42}});
+    let detail = json!({
+        "code":200,
+        "playlist":{"id":4,"name":"Liked","trackCount":1,"trackIds":[{"id":1}]}
+    });
+    let songs = json!({"code":200,"songs":[song()]});
+    let (provider, calls, authenticated_calls) = provider(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":200,"playlist":[playlist],"more":false})),
+        Reply::Json(json!({"code":200,"ids":[1]})),
+        Reply::Json(detail.clone()),
+        Reply::Json(songs.clone()),
+        Reply::Json(json!({"code":200,"ids":[1,9]})),
+        Reply::Json(detail),
+        Reply::Json(songs),
+    ]);
+    provider.import_credential(&credential()).unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    let liked = provider.user_playlists().await.unwrap().playlists()[0].clone();
+    let first = provider
+        .playlist_tracks_page(liked.id().clone(), 0, 1)
+        .await
+        .unwrap();
+    assert_eq!(first.membership_track_opaque_ids(), ["1"]);
+
+    assert!(provider.request_track_membership_refresh());
+    let refreshed = provider
+        .playlist_tracks_page(liked.id().clone(), 0, 1)
+        .await
+        .unwrap();
+
+    assert_eq!(refreshed.membership_track_opaque_ids(), ["1", "9"]);
+    assert_eq!(calls.load(Ordering::SeqCst), 8);
+    assert_eq!(authenticated_calls.load(Ordering::SeqCst), 8);
+}
+
+#[tokio::test]
+async fn account_replacement_cancels_liked_membership_before_it_can_publish() {
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let playlist =
+        json!({"id":4,"name":"Liked","trackCount":1,"specialType":5,"creator":{"userId":42}});
+    let (provider, calls, _) = provider(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":200,"playlist":[playlist],"more":false})),
+        Reply::Blocked(
+            Arc::clone(&started),
+            Arc::clone(&release),
+            json!({"code":200,"ids":[1]}),
+        ),
+    ]);
+    provider.import_credential(&credential()).unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    let liked = provider.user_playlists().await.unwrap().playlists()[0].clone();
+    let reader = Arc::clone(&provider);
+    let request =
+        tokio::spawn(async move { reader.playlist_tracks_page(liked.id().clone(), 0, 1).await });
+
+    started.notified().await;
+    provider.sign_out();
+    release.notify_one();
+
+    assert_eq!(request.await.unwrap(), Err(UserLibraryError::Replaced));
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
 
 #[tokio::test]

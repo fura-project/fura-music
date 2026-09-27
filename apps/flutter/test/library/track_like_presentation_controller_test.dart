@@ -63,15 +63,26 @@ void main() {
         for (var offset = 0; offset < 1032; offset += 100) (offset, 100),
       ]);
 
-      for (var index = 0; index < 20; index++) {
-        expect(
-          await controller.resolve(member),
-          AuthoritativeTrackLikeState.liked,
-        );
-        expect(
-          await controller.resolve(other),
-          AuthoritativeTrackLikeState.notLiked,
-        );
+      const routeSequence = [
+        'home',
+        'search',
+        'album',
+        'playlist',
+        'recent',
+        'now-playing-expanded',
+        'home',
+      ];
+      for (var repetition = 0; repetition < 3; repetition++) {
+        for (final _ in routeSequence) {
+          expect(
+            await controller.resolve(member),
+            AuthoritativeTrackLikeState.liked,
+          );
+          expect(
+            await controller.resolve(other),
+            AuthoritativeTrackLikeState.notLiked,
+          );
+        }
       }
       expect(gateway.requests.length, 11);
       controller.dispose();
@@ -95,6 +106,41 @@ void main() {
 
       expect(controller.stateFor(liked), AuthoritativeTrackLikeState.liked);
       expect(controller.stateFor(other), AuthoritativeTrackLikeState.notLiked);
+      controller.dispose();
+    },
+  );
+
+  test(
+    'complete account membership snapshot does not scan presentation pages',
+    () async {
+      final membership = [
+        for (var index = 0; index < 1032; index++) 'track-$index',
+      ];
+      final gateway = _FakePlaylistGateway.fromResults([
+        PlaylistTrackPageResult(
+          nextOffset: 100,
+          total: 1032,
+          hasMore: true,
+          membershipTrackOpaqueIds: membership,
+        ),
+      ]);
+      final controller = _controller(gateway)..bindLikedPlaylist(likedPlaylist);
+
+      await controller.preload();
+
+      expect(
+        controller.stateFor(
+          const PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'track-1031',
+            title: 'Member',
+            artistNames: ['Artist'],
+          ),
+        ),
+        AuthoritativeTrackLikeState.liked,
+      );
+      expect(controller.stateFor(other), AuthoritativeTrackLikeState.notLiked);
+      expect(gateway.requests, [(0, 100)]);
       controller.dispose();
     },
   );
@@ -267,10 +313,8 @@ void main() {
   test(
     'confirmed mutation applies a local delta without full invalidation',
     () async {
-      final refresh = Completer<PlaylistTrackPageResult>();
-      final gateway = _FakePlaylistGateway([
-        const _ImmediateOperation(PlaylistTrackPageResult()),
-        _PendingOperation(refresh),
+      final gateway = _FakePlaylistGateway.fromResults([
+        const PlaylistTrackPageResult(),
       ]);
       final mutationGateway = _TrackMutationGateway(
         const TrackLikeMutationResult(confirmedState: TrackLikeState.liked),
@@ -279,12 +323,22 @@ void main() {
         ..bindLikedPlaylist(likedPlaylist);
       await controller.preload();
 
-      final outcome = await controller.setLiked(track: other, liked: true);
+      var additionalRefreshes = 0;
+      final outcome = await controller.setLiked(
+        track: other,
+        liked: true,
+        refreshAdditionalState: () async {
+          additionalRefreshes += 1;
+        },
+      );
+      await Future<void>.delayed(Duration.zero);
 
       expect(outcome.status, LibraryMutationStatus.confirmed);
       expect(controller.stateFor(other), AuthoritativeTrackLikeState.liked);
-      expect(gateway.requests, [(0, 100), (0, 100)]);
+      expect(gateway.requests, [(0, 100)]);
+      expect(gateway.membershipRefreshRequests, isEmpty);
       expect(mutationGateway.runCount, 1);
+      expect(additionalRefreshes, 1);
       controller.dispose();
     },
   );
@@ -318,6 +372,7 @@ void main() {
       expect(outcome.status, LibraryMutationStatus.outcomeUnknown);
       expect(controller.stateFor(other), AuthoritativeTrackLikeState.unknown);
       expect(controller.stateFor(liked), AuthoritativeTrackLikeState.liked);
+      expect(gateway.membershipRefreshRequests, [likedPlaylist]);
       controller.dispose();
     },
   );
@@ -346,7 +401,7 @@ void main() {
 
     expect(outcome.status, LibraryMutationStatus.confirmed);
     expect(controller.stateFor(liked), AuthoritativeTrackLikeState.notLiked);
-    expect(gateway.requests, [(0, 100), (0, 100)]);
+    expect(gateway.requests, [(0, 100)]);
     controller.dispose();
   });
 
@@ -397,7 +452,8 @@ TrackLikePresentationController _controller(
   );
 }
 
-class _FakePlaylistGateway implements PlaylistDetailGateway {
+class _FakePlaylistGateway
+    implements PlaylistDetailGateway, TrackMembershipRefreshGateway {
   _FakePlaylistGateway(this.operations);
 
   _FakePlaylistGateway.fromResults(List<PlaylistTrackPageResult> results)
@@ -407,7 +463,13 @@ class _FakePlaylistGateway implements PlaylistDetailGateway {
 
   final List<PlaylistTrackPageLoadOperation> operations;
   final List<(int, int)> requests = [];
+  final List<UserPlaylistSummary> membershipRefreshRequests = [];
   int _index = 0;
+
+  @override
+  void requestTrackMembershipRefresh({required UserPlaylistSummary playlist}) {
+    membershipRefreshRequests.add(playlist);
+  }
 
   @override
   PlaylistTrackPageLoadOperation beginLoad({

@@ -4,7 +4,7 @@ use music_domain::{
     AudioFormat, AudioQuality, PlaylistId, PlaylistTracksPage, RankingGroup,
     RankingGroupsCollection, RankingId, RankingSummary, RankingTracksPage,
     RecommendedPlaylistsPage, ResolvedMediaSource, SynchronizedLyricLine, SynchronizedLyrics,
-    TrackId, TrackSummary,
+    TimedLyricSegment, TrackId, TrackSummary,
 };
 use netease_client::{Error, MediaFormat, MediaQuality, Transport};
 use provider_api::{
@@ -380,8 +380,16 @@ impl<T: Transport> LyricsProvider for NeteaseProvider<T> {
         );
         let mut lines = Vec::with_capacity(lyrics.lines.len());
         for (original_index, line) in lyrics.lines.into_iter().enumerate() {
+            let segments = line
+                .segments
+                .into_iter()
+                .map(|segment| {
+                    TimedLyricSegment::new(segment.text, segment.start_ms, segment.duration_ms)
+                        .map_err(|_| LyricsError::InvalidResponse)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
             lines.push(
-                SynchronizedLyricLine::new(line.text, line.start_ms, 0, vec![])
+                SynchronizedLyricLine::new(line.text, line.start_ms, line.duration_ms, segments)
                     .map_err(|_| LyricsError::InvalidResponse)?
                     .with_translation(aligned_netease_auxiliary_text(
                         &translations.lines,
