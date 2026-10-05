@@ -2,10 +2,75 @@
 
 Status: active bounded research for HD-031
 
-Last updated: 2026-09-24
+Last updated: 2026-09-27
 
 Implementation rule: independent Rust, direct HTTPS, no sidecar and no copied
 third-party source.
+
+## 2026-09-27 Standard-media production review
+
+This review was static only. It made no KuGou service request and did not reopen
+the closed 40/40 anonymous evidence window. The two intended independent
+families were rechecked at current exact commits:
+
+- MakcRe/KuGouMusicApi `b624d645a5213829882f06088e148bd43b1b1fa3`;
+- Linsxyx/KugouMusic.NET
+  `2a9cedd912257c8097b0b2c19140733269bf8394`.
+
+Both trees expose the same broad media family, but they do not establish a
+safe public minimum contract:
+
+1. `/v2/get_res_privilege/lite` describes Standard (`128`) entitlement and
+   exact hash/Album context. It is useful before choosing a quality, but both
+   clients can construct `/v5/url` independently, so static evidence does not
+   prove privilege is a mandatory predecessor for the wire request.
+2. `/v5/url` is the only candidate that remains HTTPS and targets ordinary
+   Standard playback. Both implementations use exact hash, quality `128`,
+   Album context, `behavior=play` and a Lite app/client profile. They also bind
+   the request key to an embedded V5 salt plus app identity, `mid`, `userid`
+   and a `dfid`-derived identity. MakcRe documents current verification as
+   requiring `/register/dev`; that registration body contains device/hardware
+   impersonation-shaped data. KugouMusic.NET locally creates/persists install
+   identities and derives `mid` from `dfid`. Its current request additionally
+   signs the request, while the MakcRe v5 module deliberately suppresses the
+   general signature. This disagreement prevents treating the full request as
+   an independently corroborated minimal contract.
+3. `/v6/priv_url` is not a production candidate: both current families use an
+   `http://tracker.kugou.com` origin and include entitlement, signing and
+   device/install-shaped fields. The route also returns encrypted-audio
+   candidates in the referenced family, outside this Standard scope.
+
+### Field classification
+
+| Field family | Classification | Production consequence |
+| --- | --- | --- |
+| exact hash, MixSongID/album-audio context, optional Album ID | `PUBLIC_STABLE_PROTOCOL` | Already provider-owned exact context; permitted as resolver input. |
+| quality `128`, `behavior=play`, bounded free-part flag | `PUBLIC_STABLE_PROTOCOL` | Suitable for Standard-only semantics if the remaining contract is accepted. |
+| anonymous `userid=0`, empty token | `SESSION_OWNED` | Does not create authentication authority or VIP entitlement. |
+| timestamp/collection time | `LOCALLY_RANDOM_NONSECRET` | Acceptable only with a bounded request lifetime and no persistence. |
+| `dfid`, derived/persistent `mid`, `uuid`, install GUID/MAC/dev values | `DEVICE_IDENTITY_UNCLASSIFIED` | Not accepted; random generation does not prove non-tracking semantics. |
+| Lite/official app ID, client version, page/pid profile | `PRIVATE_IMPERSONATION_RISK` | They identify an official application profile and lack a public Fura contract. |
+| V5 key salt, Android signature salt and derived key/signature | `PRIVATE_IMPERSONATION_RISK` | Embedded agreement between clients is not proof that a private app secret is public protocol. |
+| `/register/dev`, SSA, behavior simulation and identity rotation | `RISK_CONTROL` | Permanently excluded from Fura production. |
+
+The source evidence therefore cannot support a live-ready request made only
+from accepted field classes. No request model, signer or resolver containing
+the unaccepted constants was added. No endpoint was probed, no URL was
+retained, and no capability or UI surface was advertised.
+
+Current decision:
+
+```text
+KUGOU_STANDARD_MEDIA_LIVE_WINDOW = NOT_AUTHORIZED
+KUGOU_STANDARD_MEDIA_MACHINE_PROOF = HUMAN_DECISION_REQUIRED
+KUGOU_MEDIA_RESOLVER = NOT_IMPLEMENTED
+KUGOU_UI_PRODUCTION_GATE = BLOCKED_BY_MEDIA
+```
+
+The remaining Human decision is not whether to spend more anonymous requests;
+it is whether any official app/client and device-derived input can ever fit
+Fura's identity and privacy boundary. Until that classification changes, a
+new live window would not be safe or technically meaningful.
 
 ## Product and legal boundary
 

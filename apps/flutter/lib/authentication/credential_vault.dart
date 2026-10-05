@@ -63,13 +63,13 @@ class FlutterSecureStringStore implements SecureStringStore {
                storageNamespace: 'flutterustmusic_auth',
              ),
              iOptions: IOSOptions(
-               accountName: 'dev.axiaobo.flutterustmusic',
+               accountName: 'com.fura.flutterustmusic',
                accessibility: KeychainAccessibility.first_unlock_this_device,
                synchronizable: false,
                label: platformLabel,
              ),
              mOptions: MacOsOptions(
-               accountName: 'dev.axiaobo.flutterustmusic',
+               accountName: 'com.fura.flutterustmusic',
                accessibility: KeychainAccessibility.first_unlock_this_device,
                synchronizable: false,
                label: platformLabel,

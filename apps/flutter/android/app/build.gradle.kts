@@ -47,7 +47,7 @@ val requestedAndroidAbis =
     }?.toSet()
 
 android {
-    namespace = "dev.axiaobo.flutterustmusic"
+    namespace = "com.fura.flutterustmusic"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -61,7 +61,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.axiaobo.flutterustmusic"
+        applicationId = "com.fura.flutterustmusic"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

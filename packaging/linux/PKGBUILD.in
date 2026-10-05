@@ -24,8 +24,8 @@ source=(
   'flutterustmusic-bundle.tar.gz'
   'flutterustmusic-notices.tar.gz'
   'flutterustmusic'
-  'dev.axiaobo.flutterustmusic.desktop'
-  'dev.axiaobo.flutterustmusic.png'
+  'com.fura.flutterustmusic.desktop'
+  'com.fura.flutterustmusic.png'
   'LICENSE'
   'BUILD-INFO.txt'
 )
@@ -48,10 +48,10 @@ package() {
     "$pkgdir/usr/share/doc/flutterustmusic"
   cp -a "$srcdir/bundle/." "$pkgdir/usr/lib/flutterustmusic/"
   install -m 0755 "$srcdir/flutterustmusic" "$pkgdir/usr/bin/flutterustmusic"
-  install -m 0644 "$srcdir/dev.axiaobo.flutterustmusic.desktop" \
-    "$pkgdir/usr/share/applications/dev.axiaobo.flutterustmusic.desktop"
-  install -m 0644 "$srcdir/dev.axiaobo.flutterustmusic.png" \
-    "$pkgdir/usr/share/icons/hicolor/512x512/apps/dev.axiaobo.flutterustmusic.png"
+  install -m 0644 "$srcdir/com.fura.flutterustmusic.desktop" \
+    "$pkgdir/usr/share/applications/com.fura.flutterustmusic.desktop"
+  install -m 0644 "$srcdir/com.fura.flutterustmusic.png" \
+    "$pkgdir/usr/share/icons/hicolor/512x512/apps/com.fura.flutterustmusic.png"
   install -m 0644 "$srcdir/LICENSE" "$pkgdir/usr/share/doc/flutterustmusic/LICENSE"
   install -m 0644 "$srcdir/BUILD-INFO.txt" \
     "$pkgdir/usr/share/doc/flutterustmusic/BUILD-INFO.txt"

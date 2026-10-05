@@ -93,8 +93,18 @@ unit_separator=$'\x1f'
 rust_flags="-L${unit_separator}$libgcc_workaround"
 rust_flags+="${unit_separator}-C${unit_separator}link-arg=-Wl,--hash-style=both"
 rust_flags+="${unit_separator}-C${unit_separator}link-arg=-Wl,-z,max-page-size=16384"
+
+source_root=$(realpath "$manifest_dir/../..")
+rust_flags="--remap-path-prefix=$source_root=/fura-source${unit_separator}$rust_flags"
+printf -v source_root_shell '%q' "$source_root"
+c_path_map_flags="-ffile-prefix-map=$source_root_shell=/fura-source -fdebug-prefix-map=$source_root_shell=/fura-source"
+if [[ -n ${HOME:-} ]]; then
+  rust_flags="--remap-path-prefix=$HOME=/fura-build${unit_separator}$rust_flags"
+  printf -v user_home_shell '%q' "$HOME"
+  c_path_map_flags+=" -ffile-prefix-map=$user_home_shell=/fura-build -fdebug-prefix-map=$user_home_shell=/fura-build"
+fi
 if [[ $rust_target == aarch64-linux-android ]]; then
-  clang_resource_dir=$($ndk_bin/clang --print-resource-dir)
+  clang_resource_dir=$("$ndk_bin/clang" --print-resource-dir)
   compiler_rt_builtins="$clang_resource_dir/lib/linux/libclang_rt.builtins-aarch64-android.a"
   if [[ ! -f $compiler_rt_builtins ]]; then
     echo "Missing Android AArch64 compiler runtime: $compiler_rt_builtins" >&2
@@ -108,11 +118,12 @@ fi
 
 env \
   RUSTC_BOOTSTRAP=1 \
+  CC_SHELL_ESCAPED_FLAGS=1 \
   "AR_${rust_target}=$ndk_bin/llvm-ar" \
   "CC_${rust_target}=$ndk_bin/clang" \
-  "CFLAGS_${rust_target}=--target=${rust_target}${min_sdk}" \
+  "CFLAGS_${rust_target}=--target=${rust_target}${min_sdk} $c_path_map_flags" \
   "CXX_${rust_target}=$ndk_bin/clang++" \
-  "CXXFLAGS_${rust_target}=--target=${rust_target}${min_sdk}" \
+  "CXXFLAGS_${rust_target}=--target=${rust_target}${min_sdk} $c_path_map_flags" \
   "RANLIB_${rust_target}=$ndk_bin/llvm-ranlib" \
   "CARGO_TARGET_${cargo_target_env}_LINKER=$target_clang" \
   "CARGO_ENCODED_RUSTFLAGS=$rust_flags" \

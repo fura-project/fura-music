@@ -7,7 +7,7 @@ use jni::{EnvUnowned, objects::JObject};
 /// the native boundary and reports initialization failures to Android.
 #[unsafe(no_mangle)]
 #[allow(non_snake_case)]
-pub extern "system" fn Java_dev_axiaobo_flutterustmusic_FuraApplication_initializeRustlsPlatformVerifier<
+pub extern "system" fn Java_com_fura_flutterustmusic_FuraApplication_initializeRustlsPlatformVerifier<
     'caller,
 >(
     mut unowned_env: EnvUnowned<'caller>,

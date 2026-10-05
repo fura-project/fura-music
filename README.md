@@ -58,10 +58,10 @@ flutter test integration_test/secure_storage_test.dart -d <android-device>
 flutter test integration_test/playback_engine_test.dart -d <android-device>
 ```
 
-The current Flutter 3.47.1 wrapper resolves an ASCII SDK symlink back to its non-ASCII physical path, so invoking `/home/axiaobo/flutter-sdk/bin/flutter` is not sufficient on this recorded host. Use the logical root with the cached Dart VM and `flutter_tools.snapshot` directly:
+The current Flutter 3.47.1 wrapper resolves an ASCII SDK symlink back to its non-ASCII physical path, so invoking `$HOME/flutter-sdk/bin/flutter` is not sufficient on this recorded host. Use the logical root with the cached Dart VM and `flutter_tools.snapshot` directly:
 
 ```bash
-flutter_logical_root=/home/axiaobo/flutter-sdk
+flutter_logical_root="$HOME/flutter-sdk"
 env FLUTTER_ROOT="$flutter_logical_root" \
   "$flutter_logical_root/bin/cache/dart-sdk/bin/dart" \
   "$flutter_logical_root/bin/cache/flutter_tools.snapshot" \

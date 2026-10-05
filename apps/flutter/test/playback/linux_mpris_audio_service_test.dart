@@ -47,7 +47,7 @@ void main() {
         'Metadata',
       )).asStringVariantDict();
       expect(metadata['mpris:trackid'], player.trackId);
-      expect(player.trackId.value, startsWith('/dev/axiaobo/'));
+      expect(player.trackId.value, startsWith('/com/fura/'));
     },
   );
 
@@ -87,7 +87,7 @@ void main() {
           interface: projectMprisPlayerInterface,
           name: 'SetPosition',
           values: [
-            DBusObjectPath('/dev/axiaobo/flutterustmusic/track/stale'),
+            DBusObjectPath('/com/fura/flutterustmusic/track/stale'),
             const DBusInt64(1000000),
           ],
         ),

@@ -3,13 +3,40 @@ execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: MIXED
   state: IMPLEMENTED_NEEDS_HUMAN
-  acceptance_milestone: PROVIDER_PARITY_AUDIT_REVIEW
-  active_workstream: PROVIDER_PARITY_AND_IMPROVEMENT_AUDIT
-  current_task: PROVIDER_PARITY_IMPLEMENTATION_CLOSURE
-  next_action: HUMAN_REVIEW_OF_MEMBERSHIP_AND_CAPABILITY_TRUTH
+  acceptance_milestone: APPLICATION_IDENTITY_AND_KUGOU_MEDIA_REVIEW
+  active_workstream: APPLICATION_IDENTITY_AND_PRIVACY_HARDENING
+  current_task: IDENTITY_MIGRATION_WITH_KUGOU_STATIC_MEDIA_GATE
+  next_action: HUMAN_REVIEW_OF_IDENTITY_MIGRATION_AND_KUGOU_MEDIA_BOUNDARY
 ---
 
 # Current State
+
+- **2026-09-27 application identity/privacy and KuGou Standard-media gate:**
+  the public cross-platform application identity is now
+  `com.fura.flutterustmusic`, with `Fura Project`/`Fura contributors` public
+  metadata and the existing internal `flutterustmusic` compatibility names
+  retained. Android namespace, Kotlin packages and Rust JNI export migrated
+  atomically; Apple bundle/test identifiers, Linux GTK/desktop/package
+  metadata and Windows version metadata use the same project identity. The
+  secure-vault account namespace, Android notification channel and Linux MPRIS
+  names are also canonicalized without attempting cross-identity credential or
+  sandbox migration. First-party source, identity and sensitive-filename
+  audits pass. A privacy build wrapper gives Flutter's generated plugin
+  registry a stable package URI and remaps Rust build roots; Android native C
+  dependencies and Linux plugin `__FILE__` paths receive matching compiler
+  prefix maps. Locally built Android ARM64 and x64 Release APKs use the new
+  package/JNI identity and pass strict artifact scans. A Linux Release bundle
+  passes the same scan, excludes stale Debug kernel payload and uses only
+  `$ORIGIN`-relative RUNPATHs. Windows and Apple artifacts still require fresh
+  native runners; iOS Simulator remains a Debug-only path and is not claimed
+  as path-private Release evidence. Separately, static comparison of the two
+  independent KuGou client families found no acceptable proven Standard-media
+  contract: `/v5/url` still depends on disputed app/signature and
+  device/install-shaped fields, while `/v6/priv_url` remains an unsafe
+  HTTP/device/encrypted family. The prior 40/40 live window stayed closed, so
+  no resolver, capability, BuiltInProvider, Bridge, Settings or UI integration
+  was added. `KUGOU_UI_PRODUCTION_GATE = BLOCKED_BY_MEDIA`; Git-history privacy
+  remains a separate Human decision. No commit, push, tag or release occurred.
 
 - **2026-09-24 Provider parity implementation closure candidate:** the existing
   KuGou Core, QQ CDN dispatch cache and NetEase lyric-v1/YRC work remain in

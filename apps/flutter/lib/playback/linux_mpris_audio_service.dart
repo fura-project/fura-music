@@ -707,7 +707,7 @@ class _ProjectMprisMetadata {
   });
 
   factory _ProjectMprisMetadata.empty() => _ProjectMprisMetadata(
-    trackId: DBusObjectPath('/dev/axiaobo/flutterustmusic/track/none'),
+    trackId: DBusObjectPath('/com/fura/flutterustmusic/track/none'),
     title: 'No track',
   );
 
@@ -719,8 +719,7 @@ class _ProjectMprisMetadata {
   final String? album;
   final List<String>? genre;
 
-  bool get hasTrack =>
-      trackId.value != '/dev/axiaobo/flutterustmusic/track/none';
+  bool get hasTrack => trackId.value != '/com/fura/flutterustmusic/track/none';
 
   DBusValue toValue() {
     if (!hasTrack) return DBusDict.stringVariant({});
@@ -741,7 +740,7 @@ DBusObjectPath _trackIdFor(String mediaId) {
       .encode(utf8.encode(mediaId))
       .replaceAll('-', '_')
       .replaceAll('=', '');
-  return DBusObjectPath('/dev/axiaobo/flutterustmusic/track/t$encoded');
+  return DBusObjectPath('/com/fura/flutterustmusic/track/t$encoded');
 }
 
 String _safeBusSuffix(String value) => value

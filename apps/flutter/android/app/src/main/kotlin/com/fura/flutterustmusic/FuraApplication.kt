@@ -1,4 +1,4 @@
-package dev.axiaobo.flutterustmusic
+package com.fura.flutterustmusic
 
 import android.app.Application
 import android.content.Context

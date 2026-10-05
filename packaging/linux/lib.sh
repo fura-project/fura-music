@@ -5,7 +5,7 @@ packaging_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "$packaging_dir/../.." && pwd)
 
 app_name=flutterustmusic
-app_id=dev.axiaobo.flutterustmusic
+app_id=com.fura.flutterustmusic
 native_app_root=/usr/lib/flutterustmusic
 desktop_file="$packaging_dir/assets/${app_id}.desktop"
 launcher_file="$packaging_dir/assets/flutterustmusic"
@@ -273,9 +273,12 @@ validate_distribution_assets() {
   require_command desktop-file-validate
   require_command file
   desktop-file-validate "$desktop_file"
+  grep -qx 'Name=fura music' "$desktop_file" || die 'desktop Name does not match the product'
   file "$icon_file" | grep -q 'PNG image data' || die 'desktop icon is not a PNG image'
   grep -qx 'Exec=flutterustmusic' "$desktop_file" || die 'desktop Exec does not match the launcher'
   grep -qx "Icon=$app_id" "$desktop_file" || die 'desktop Icon does not match the application ID'
+  grep -qx "StartupWMClass=$app_id" "$desktop_file" || \
+    die 'desktop StartupWMClass does not match the application ID'
 }
 
 normalize_bundle() {

@@ -7,7 +7,7 @@ project(runner LANGUAGES CXX)
 set(BINARY_NAME "flutterustmusic")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "dev.axiaobo.flutterustmusic")
+set(APPLICATION_ID "com.fura.flutterustmusic")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -43,6 +43,11 @@ function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_14)
   target_compile_options(${TARGET} PRIVATE -Wall -Werror)
   target_compile_options(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-O3>")
+  target_compile_options(${TARGET} PRIVATE
+    "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=/fura-source"
+    "-fdebug-prefix-map=${CMAKE_SOURCE_DIR}=/fura-source"
+    "-fmacro-prefix-map=${CMAKE_SOURCE_DIR}=/fura-source"
+  )
   target_compile_definitions(${TARGET} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:NDEBUG>")
 endfunction()
 
@@ -73,6 +78,18 @@ set_target_properties(${BINARY_NAME}
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+
+# Flutter's generated plugin targets link against the build-tree engine path.
+# The bundle copies those target files verbatim, so give them their final
+# same-directory lookup policy before linking instead of retaining an absolute
+# build RUNPATH.
+foreach(plugin ${FLUTTER_PLUGIN_LIST})
+  set_target_properties(${plugin}_plugin
+    PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH "$ORIGIN"
+  )
+endforeach()
 
 
 # === Installation ===
@@ -118,8 +135,16 @@ set(FLUTTER_ASSET_DIR_NAME "flutter_assets")
 install(CODE "
   file(REMOVE_RECURSE \"${INSTALL_BUNDLE_DATA_DIR}/${FLUTTER_ASSET_DIR_NAME}\")
   " COMPONENT Runtime)
-install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
-  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+  install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
+    DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
+else()
+  # A Debug kernel can remain in Flutter's shared incremental asset directory.
+  # It is not part of an AOT bundle and contains debugger source URIs.
+  install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
+    DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime
+    PATTERN "kernel_blob.bin" EXCLUDE)
+endif()
 
 # Install the AOT library on non-Debug builds only.
 if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")

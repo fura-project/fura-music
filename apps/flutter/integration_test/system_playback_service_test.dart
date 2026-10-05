@@ -37,7 +37,7 @@ void main() {
     final client = DBusClient.session();
     final remote = DBusRemoteObject(
       client,
-      name: projectMprisServiceName('dev.axiaobo.flutterustmusic.playback'),
+      name: projectMprisServiceName('com.fura.flutterustmusic.playback'),
       path: DBusObjectPath(projectMprisObjectPath),
     );
     expect(

@@ -7,8 +7,8 @@ URL:            https://github.com/fura-project/fura-music
 Source0:        flutterustmusic-bundle.tar.gz
 Source1:        flutterustmusic-notices.tar.gz
 Source2:        flutterustmusic
-Source3:        dev.axiaobo.flutterustmusic.desktop
-Source4:        dev.axiaobo.flutterustmusic.png
+Source3:        com.fura.flutterustmusic.desktop
+Source4:        com.fura.flutterustmusic.png
 Source5:        LICENSE
 Source6:        BUILD-INFO.txt
 
@@ -51,9 +51,9 @@ install -d \
 cp -a bundle/. %{buildroot}/usr/lib/flutterustmusic/
 install -m 0755 %{SOURCE2} %{buildroot}/usr/bin/flutterustmusic
 install -m 0644 %{SOURCE3} \
-  %{buildroot}/usr/share/applications/dev.axiaobo.flutterustmusic.desktop
+  %{buildroot}/usr/share/applications/com.fura.flutterustmusic.desktop
 install -m 0644 %{SOURCE4} \
-  %{buildroot}/usr/share/icons/hicolor/512x512/apps/dev.axiaobo.flutterustmusic.png
+  %{buildroot}/usr/share/icons/hicolor/512x512/apps/com.fura.flutterustmusic.png
 install -m 0644 %{SOURCE5} %{buildroot}/usr/share/doc/flutterustmusic/LICENSE
 install -m 0644 %{SOURCE6} %{buildroot}/usr/share/doc/flutterustmusic/BUILD-INFO.txt
 cp -a notices/. %{buildroot}/usr/share/doc/flutterustmusic/
@@ -66,8 +66,8 @@ cp -a notices/. %{buildroot}/usr/share/doc/flutterustmusic/
 %doc /usr/share/doc/flutterustmusic/third-party
 /usr/bin/flutterustmusic
 /usr/lib/flutterustmusic
-/usr/share/applications/dev.axiaobo.flutterustmusic.desktop
-/usr/share/icons/hicolor/512x512/apps/dev.axiaobo.flutterustmusic.png
+/usr/share/applications/com.fura.flutterustmusic.desktop
+/usr/share/icons/hicolor/512x512/apps/com.fura.flutterustmusic.png
 
 %changelog
 * Sun Sep 20 2026 Fura maintainers <noreply@example.invalid> - @VERSION@-@RELEASE@

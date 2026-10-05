@@ -238,7 +238,7 @@ AppPlaybackHost createForegroundAppPlaybackHost({
 /// background on Android 12+.
 @visibleForTesting
 const projectAudioServiceConfig = AudioServiceConfig(
-  androidNotificationChannelId: 'dev.axiaobo.flutterustmusic.playback',
+  androidNotificationChannelId: 'com.fura.flutterustmusic.playback',
   androidNotificationChannelName: 'fura music playback',
   androidNotificationChannelDescription: 'Playback controls for fura music',
   androidNotificationIcon: 'drawable/ic_stat_fura_music',

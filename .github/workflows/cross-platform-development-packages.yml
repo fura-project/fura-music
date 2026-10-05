@@ -24,6 +24,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Audit first-party identity and privacy hygiene
+        run: |
+          python3 scripts/ci/test_privacy_audits.py
+          python3 scripts/ci/audit_privacy_hygiene.py
+          python3 scripts/ci/verify_application_identity.py
+
       - name: Install Rust baseline
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master
         with:
@@ -114,7 +120,8 @@ jobs:
         run: |
           ../../scripts/ci/retry_android_flutter_build.sh \
             build/ci-diagnostics/android-arm64 -- \
-            flutter build apk --release --target-platform android-arm64
+            python3 ../../scripts/ci/build_flutter_with_privacy.py \
+              apk --release --target-platform android-arm64
 
       - name: Verify ARM64 networking and Rust payload
         working-directory: apps/flutter
@@ -124,6 +131,9 @@ jobs:
           test -n "$aapt"
           "$aapt" dump permissions "$apk" | tee build/android-arm64-permissions.txt
           grep -q "android.permission.INTERNET" build/android-arm64-permissions.txt
+          "$aapt" dump badging "$apk" > build/android-arm64-badging.txt
+          grep -q "^package: name='com.fura.flutterustmusic'" \
+            build/android-arm64-badging.txt
           "$aapt" dump xmltree "$apk" AndroidManifest.xml \
             > build/android-arm64-manifest.txt
           apkanalyzer=$(find "$ANDROID_HOME/cmdline-tools" -type f -name apkanalyzer -print \
@@ -134,7 +144,7 @@ jobs:
           ../../scripts/ci/verify_android_media_button_manifest.py \
             build/android-arm64-manifest.xml \
             androidx.media3.session.MediaButtonReceiver
-          grep -q 'dev.axiaobo.flutterustmusic.FuraApplication' \
+          grep -q 'com.fura.flutterustmusic.FuraApplication' \
             build/android-arm64-manifest.txt
           grep -q 'dev.wyrin.flutter_media_session.FlutterMediaSessionService' \
             build/android-arm64-manifest.txt
@@ -155,8 +165,12 @@ jobs:
             > build/librust_lib_flutterustmusic-arm64.so
           readelf -Ws build/librust_lib_flutterustmusic-arm64.so \
             > build/librust_lib_flutterustmusic-arm64-symbols.txt
-          grep -q 'Java_dev_axiaobo_flutterustmusic_FuraApplication_initializeRustlsPlatformVerifier' \
+          grep -q 'Java_com_fura_flutterustmusic_FuraApplication_initializeRustlsPlatformVerifier' \
             build/librust_lib_flutterustmusic-arm64-symbols.txt
+          python3 ../../scripts/ci/audit_artifact_privacy.py \
+            "$apk" \
+            --forbidden-root "$GITHUB_WORKSPACE" \
+            --forbidden-root "$HOME"
 
       - name: Collect ARM64 APK
         working-directory: apps/flutter
@@ -178,7 +192,8 @@ jobs:
         run: |
           ../../scripts/ci/retry_android_flutter_build.sh \
             build/ci-diagnostics/android-x64 -- \
-            flutter build apk --debug --target-platform android-x64
+            python3 ../../scripts/ci/build_flutter_with_privacy.py \
+              apk --release --target-platform android-x64
 
       - name: Upload Android build diagnostics
         if: always()
@@ -192,7 +207,11 @@ jobs:
       - name: Collect Android artifacts
         working-directory: apps/flutter
         run: |
-          cp build/app/outputs/flutter-apk/app-debug.apk build/test-packages/flutterustmusic-android-x64-debug.apk
+          python3 ../../scripts/ci/audit_artifact_privacy.py \
+            build/app/outputs/flutter-apk/app-release.apk \
+            --forbidden-root "$GITHUB_WORKSPACE" \
+            --forbidden-root "$HOME"
+          cp build/app/outputs/flutter-apk/app-release.apk build/test-packages/flutterustmusic-android-x64-development.apk
           cp ../../docs/development/cross-platform-test-packages.md build/test-packages/README.md
           flutter --version > build/test-packages/FLUTTER_VERSION.txt
           rustc --version > build/test-packages/RUST_VERSION.txt
@@ -279,7 +298,14 @@ jobs:
 
       - name: Build Ubuntu Linux Release bundle
         working-directory: apps/flutter
-        run: flutter build linux --release
+        run: python3 ../../scripts/ci/build_flutter_with_privacy.py linux --release
+
+      - name: Audit Ubuntu Release bundle privacy
+        run: |
+          python3 scripts/ci/audit_artifact_privacy.py \
+            apps/flutter/build/linux/x64/release/bundle \
+            --forbidden-root "$GITHUB_WORKSPACE" \
+            --forbidden-root "$HOME"
 
       - name: Build and inspect DEB
         run: |
@@ -314,7 +340,7 @@ jobs:
             gstreamer1-devel gstreamer1-plugins-base-devel \
             gstreamer1-plugins-base gstreamer1-plugins-good gtk3-devel jq \
             libepoxy-devel libsecret-devel mpv-devel ninja-build \
-            patchelf pkgconf-pkg-config rpm-build tar unzip webkit2gtk4.1-devel which xz
+            patchelf pkgconf-pkg-config python3 rpm-build tar unzip webkit2gtk4.1-devel which xz
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -368,7 +394,14 @@ jobs:
 
       - name: Build Fedora Linux Release bundle
         working-directory: apps/flutter
-        run: flutter build linux --release
+        run: python3 ../../scripts/ci/build_flutter_with_privacy.py linux --release
+
+      - name: Audit Fedora Release bundle privacy
+        run: |
+          python3 scripts/ci/audit_artifact_privacy.py \
+            apps/flutter/build/linux/x64/release/bundle \
+            --forbidden-root "$GITHUB_WORKSPACE" \
+            --forbidden-root "$HOME"
 
       - name: Build and inspect RPM
         run: |
@@ -402,7 +435,7 @@ jobs:
           pacman -S --needed --noconfirm \
             clang cmake curl dbus desktop-file-utils file git gst-plugins-base gst-plugins-good \
             gstreamer gtk3 jq libepoxy libsecret mpv ninja patchelf pkgconf \
-            rustup sudo unzip webkit2gtk-4.1 xz
+            python rustup sudo unzip webkit2gtk-4.1 xz
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -455,7 +488,14 @@ jobs:
 
       - name: Build Arch Linux Release bundle
         working-directory: apps/flutter
-        run: flutter build linux --release
+        run: python3 ../../scripts/ci/build_flutter_with_privacy.py linux --release
+
+      - name: Audit Arch Release bundle privacy
+        run: |
+          python3 scripts/ci/audit_artifact_privacy.py \
+            apps/flutter/build/linux/x64/release/bundle \
+            --forbidden-root "$GITHUB_WORKSPACE" \
+            --forbidden-root "$HOME"
 
       - name: Test private non-root package workspace
         run: |
@@ -521,7 +561,14 @@ jobs:
 
       - name: Build AppImage baseline Release bundle
         working-directory: apps/flutter
-        run: flutter build linux --release
+        run: python3 ../../scripts/ci/build_flutter_with_privacy.py linux --release
+
+      - name: Audit AppImage baseline bundle privacy
+        run: |
+          python3 scripts/ci/audit_artifact_privacy.py \
+            apps/flutter/build/linux/x64/release/bundle \
+            --forbidden-root "$GITHUB_WORKSPACE" \
+            --forbidden-root "$HOME"
 
       - name: Test shared Linux bundle normalization
         shell: bash
@@ -562,7 +609,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
-            binutils ca-certificates dbus-x11 git gstreamer1.0-tools passwd \
+            binutils ca-certificates dbus-x11 git gstreamer1.0-tools passwd python3 \
             xauth xdotool xvfb
 
       - name: Check out verification scripts
@@ -590,6 +637,12 @@ jobs:
           dpkg-deb --info "$deb"
           dpkg-deb --contents "$deb"
           scripts/ci/install_local_deb.sh install "$deb"
+          python3 scripts/ci/audit_artifact_privacy.py \
+            /usr/bin/flutterustmusic \
+            /usr/lib/flutterustmusic \
+            /usr/share/applications/com.fura.flutterustmusic.desktop \
+            --forbidden-root "$GITHUB_WORKSPACE" \
+            --forbidden-root "$HOME"
           useradd --create-home --user-group package-tester
           runuser -u package-tester -- env \
             FURA_VERIFY_HOME=/home/package-tester \
@@ -615,7 +668,7 @@ jobs:
       - name: Install clean-room test harness
         run: |
           dnf install --assumeyes \
-            binutils ca-certificates dbus-daemon git shadow-utils xdotool \
+            binutils ca-certificates dbus-daemon git python3 shadow-utils xdotool \
             xorg-x11-server-Xvfb xorg-x11-xauth
 
       - name: Check out verification scripts
@@ -636,6 +689,12 @@ jobs:
           rpm -qip "$rpm_file"
           rpm -qlp "$rpm_file"
           dnf install --assumeyes "$rpm_file"
+          python3 scripts/ci/audit_artifact_privacy.py \
+            /usr/bin/flutterustmusic \
+            /usr/lib/flutterustmusic \
+            /usr/share/applications/com.fura.flutterustmusic.desktop \
+            --forbidden-root "$GITHUB_WORKSPACE" \
+            --forbidden-root "$HOME"
           useradd --create-home --user-group package-tester
           runuser -u package-tester -- env \
             FURA_VERIFY_HOME=/home/package-tester \
@@ -662,7 +721,7 @@ jobs:
         run: |
           pacman -Syu --noconfirm
           pacman -S --needed --noconfirm \
-            binutils ca-certificates dbus git shadow xdotool xorg-server-xvfb xorg-xauth
+            binutils ca-certificates dbus git python shadow xdotool xorg-server-xvfb xorg-xauth
 
       - name: Check out verification scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -682,6 +741,12 @@ jobs:
           pacman -Qip "$package_file"
           pacman -Qlp "$package_file"
           pacman -U --noconfirm "$package_file"
+          python3 scripts/ci/audit_artifact_privacy.py \
+            /usr/bin/flutterustmusic \
+            /usr/lib/flutterustmusic \
+            /usr/share/applications/com.fura.flutterustmusic.desktop \
+            --forbidden-root "$GITHUB_WORKSPACE" \
+            --forbidden-root "$HOME"
           useradd --create-home --user-group package-tester
           runuser -u package-tester -- env \
             FURA_VERIFY_HOME=/home/package-tester \
@@ -739,7 +804,7 @@ jobs:
               libpipewire-0.3-0t64 \
               libwayland-cursor0 libwayland-egl1 \
               libwayland-server0 \
-              passwd xauth xdg-dbus-proxy xdotool xvfb
+              passwd python3 xauth xdg-dbus-proxy xdotool xvfb
           else
             dnf install --assumeyes \
               binutils bubblewrap ca-certificates dbus-daemon file fontconfig git \
@@ -747,7 +812,7 @@ jobs:
               libglvnd-glx \
               libwayland-cursor libwayland-egl \
               libwayland-server pipewire-libs \
-              mesa-dri-drivers shadow-utils xdg-dbus-proxy xdotool \
+              mesa-dri-drivers python3 shadow-utils xdg-dbus-proxy xdotool \
               xorg-x11-server-Xvfb xorg-x11-xauth
           fi
           ldconfig -p | grep -F 'libwayland-cursor.so.0'
@@ -802,6 +867,10 @@ jobs:
           )
           appdir="$portable_directory/extracted/squashfs-root"
           packaging/linux/audit_appimage.sh "$appdir" "$portable_directory/audit"
+          python3 scripts/ci/audit_artifact_privacy.py \
+            "$appdir" \
+            --forbidden-root "$GITHUB_WORKSPACE" \
+            --forbidden-root "$HOME"
           useradd --create-home --user-group package-tester
           chown -R package-tester:package-tester "$portable_directory"
           runuser -u package-tester -- env \
@@ -895,7 +964,24 @@ jobs:
 
       - name: Build Windows Release bundle
         working-directory: apps/flutter
-        run: flutter build windows --release
+        run: python ../../scripts/ci/build_flutter_with_privacy.py windows --release
+
+      - name: Verify Windows identity and artifact privacy
+        working-directory: apps/flutter
+        shell: pwsh
+        run: |
+          $bundle = "build/windows/x64/runner/Release"
+          $metadata = (Get-Item "$bundle/flutterustmusic.exe").VersionInfo
+          if ($metadata.CompanyName -ne "Fura Project") {
+            throw "Windows CompanyName does not match the canonical project identity"
+          }
+          if ($metadata.LegalCopyright -ne "Copyright (C) 2026 Fura contributors.") {
+            throw "Windows copyright does not match the canonical contributor attribution"
+          }
+          python ../../scripts/ci/audit_artifact_privacy.py `
+            $bundle `
+            --forbidden-root $env:GITHUB_WORKSPACE `
+            --forbidden-root $env:USERPROFILE
 
       - name: Package Windows bundle
         working-directory: apps/flutter
@@ -943,7 +1029,18 @@ jobs:
 
       - name: Build macOS Release app
         working-directory: apps/flutter
-        run: flutter build macos --release
+        run: python3 ../../scripts/ci/build_flutter_with_privacy.py macos --release
+
+      - name: Verify macOS identity and artifact privacy
+        working-directory: apps/flutter
+        run: |
+          app=build/macos/Build/Products/Release/flutterustmusic.app
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
+            "$app/Contents/Info.plist")" = 'com.fura.flutterustmusic'
+          python3 ../../scripts/ci/audit_artifact_privacy.py \
+            "$app" \
+            --forbidden-root "$GITHUB_WORKSPACE" \
+            --forbidden-root "$HOME"
 
       - name: Package macOS app
         working-directory: apps/flutter
@@ -991,7 +1088,16 @@ jobs:
 
       - name: Build iOS Simulator app
         working-directory: apps/flutter
-        run: flutter build ios --simulator --debug
+        run: python3 ../../scripts/ci/build_flutter_with_privacy.py ios --simulator --debug
+
+      - name: Verify iOS identity and artifact privacy
+        working-directory: apps/flutter
+        run: |
+          app=build/ios/iphonesimulator/Runner.app
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
+            "$app/Info.plist")" = 'com.fura.flutterustmusic'
+          python3 ../../scripts/ci/audit_artifact_privacy.py \
+            "$app"
 
       - name: Package iOS Simulator app
         working-directory: apps/flutter

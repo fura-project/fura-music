@@ -9,7 +9,7 @@ These artifacts are not releases. They retain the current generated application 
 | Artifact | Intended use | Important boundary |
 | --- | --- | --- |
 | `flutterustmusic-android-arm64-development.apk` | Physical ARM64 Android phone or tablet | Built in Release mode but signed with the repository's development/debug key. It is not a production APK. |
-| `flutterustmusic-android-x64-debug.apk` | x64 Android Emulator | Debug-only emulator package; it does not prove ARM64 physical-device behavior. |
+| `flutterustmusic-android-x64-development.apk` | x64 Android Emulator | Release-mode development package, selected so the distributed artifact does not carry Debug kernel source paths. It does not prove ARM64 physical-device behavior. |
 | `flutterustmusic-*-ubuntu24.04-amd64.deb` | Ubuntu 24.04 x86_64 | Native package containing the complete private Flutter bundle. APT resolves its Ubuntu runtime dependencies; it is not claimed to support every Debian release. |
 | `flutterustmusic-*.fc43-x86_64.rpm` | Fedora 43 x86_64 | Native RPM with automatic ELF requirements plus the media/plugin runtime requirements that are loaded outside ordinary ELF linkage. It is not a generic package for every RPM distribution. |
 | `flutterustmusic-*-arch-x86_64.pkg.tar.zst` | Current Arch Linux x86_64 | Real pacman package built by non-root `makepkg` in the recorded rolling Arch environment. Rolling-repository ABI drift is outside the seven-day artifact window. |

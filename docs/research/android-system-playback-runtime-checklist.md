@@ -59,10 +59,10 @@ Clear old logs before each scenario and retain only Fura's structured,
 redacted events:
 
 ```text
-adb shell am force-stop dev.axiaobo.flutterustmusic
+adb shell am force-stop com.fura.flutterustmusic
 adb logcat -c
 adb install -r <variant.apk>
-adb shell am start -n dev.axiaobo.flutterustmusic/.MainActivity
+adb shell am start -n com.fura.flutterustmusic/.MainActivity
 adb logcat -b crash -v threadtime -d
 adb logcat -v threadtime -d | rg \
   'FURA_DIAGNOSTIC|AndroidRuntime|FATAL EXCEPTION|libc|DEBUG|flutter|media_kit|mpv|flutter_media_session|MediaSession'
@@ -103,7 +103,7 @@ Before exercising controls, capture the single-session boundary with:
 
 ```text
 adb shell dumpsys media_session
-adb shell dumpsys activity services dev.axiaobo.flutterustmusic
+adb shell dumpsys activity services com.fura.flutterustmusic
 adb shell dumpsys notification
 ```
 
