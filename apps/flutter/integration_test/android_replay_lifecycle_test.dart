@@ -291,6 +291,152 @@ void main() {
     }
   }, skip: !Platform.isAndroid);
 
+  testWidgets(
+    'Android delayed focus acknowledgement cannot release a newer lease',
+    (tester) async {
+      debugPrint('FURA_DIAGNOSTIC synthetic_case phase=focus_delay_started');
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final bytes = _lifecycleFixture();
+      final requests = server.listen(
+        (request) => unawaited(_serve(request, bytes)),
+      );
+      final focus = _DelayedReleaseFocus();
+      final player = _CountedNativePlayer();
+      final engine = MediaKitForegroundAudioEngine(
+        player: player,
+        audioFocusManager: focus,
+        focusTimeout: const Duration(milliseconds: 250),
+      );
+      var nativeErrors = 0;
+      final errors = player.errors.listen((_) => nativeErrors++);
+      ForegroundAudioSession? old;
+      ForegroundAudioSession? next;
+      try {
+        await tester.runAsync(() async {
+          final uri = Uri.parse(
+            'http://127.0.0.1:${server.port}/synthetic.mp3',
+          );
+          old = await engine.loadRemote(uri);
+          await old!.setVolume(0);
+          await old!.play();
+          final watch = Stopwatch()..start();
+          await expectLater(
+            old!.pause().timeout(const Duration(seconds: 3)),
+            throwsA(isA<ForegroundAudioException>()),
+          );
+          watch.stop();
+          expect(watch.elapsed, lessThan(const Duration(seconds: 3)));
+          expect(focus.releases, 1);
+          next = await engine.loadRemote(uri);
+          await expectLater(
+            next!.play(),
+            throwsA(isA<ForegroundAudioException>()),
+          );
+          expect(focus.activations, 1);
+          // The delay is in a test seam after real audio_session abandonment,
+          // not a claim that Android reproduced the historic 40-second delay.
+          focus.acknowledge.complete();
+          await Future<void>.delayed(Duration.zero);
+          final progress = next!.positionMs.firstWhere((value) => value > 0);
+          await next!.setVolume(0);
+          await next!.play();
+          expect(
+            await progress.timeout(const Duration(seconds: 5)),
+            greaterThan(0),
+          );
+          await old!.dispose();
+          expect(focus.activations, 2);
+          expect(
+            focus.releases,
+            1,
+            reason: 'stale lease must not abandon newer focus',
+          );
+          final playsBeforeRace = player.plays;
+          final playing = next!.play();
+          final releasing = (next! as ForegroundCompletionFocusSession)
+              .releaseCompletionFocus();
+          await expectLater(playing, throwsA(isA<ForegroundAudioException>()));
+          await releasing;
+          expect(
+            player.plays,
+            playsBeforeRace,
+            reason: 'revoked result must not submit native play',
+          );
+          expect(nativeErrors, 0);
+          debugPrint(
+            'FURA_DIAGNOSTIC synthetic_focus outcome=success activations=2 staleRelease=0 revisionRaceRejected=1 callerElapsedMs=${watch.elapsedMilliseconds}',
+          );
+        });
+      } finally {
+        if (!focus.acknowledge.isCompleted) focus.acknowledge.complete();
+        await old?.dispose();
+        await next?.dispose();
+        await engine.dispose();
+        await errors.cancel();
+        await requests.cancel();
+        await server.close(force: true);
+      }
+    },
+    skip: !Platform.isAndroid,
+  );
+
+  testWidgets('Android audioplayers rollback shares the bounded focus policy', (
+    tester,
+  ) async {
+    debugPrint('FURA_DIAGNOSTIC synthetic_case phase=rollback_focus_started');
+    // Android MediaPlayer honors the app's cleartext prohibition. Do not relax
+    // TLS policy to reuse mpv's test-only loopback HTTP fixture. Supply the same
+    // synthetic bytes through a local-file test seam, not a production resolver.
+    final directory = await Directory.systemTemp.createTemp('fura-focus-');
+    final file = File('${directory.path}/synthetic.mp3');
+    await file.writeAsBytes(_lifecycleFixture(), flush: true);
+    final focus = _DelayedReleaseFocus();
+    final engine = AudioplayersForegroundAudioEngine(
+      audioFocusManager: focus,
+      playerFactory: () => _LocalFixtureAudioplayers(file.path),
+      focusTimeout: const Duration(milliseconds: 250),
+    );
+    ForegroundAudioSession? session;
+    try {
+      await tester.runAsync(() async {
+        session = await engine.loadRemote(
+          Uri.parse('https://synthetic.invalid/source.mp3'),
+        );
+        await session!.setVolume(0);
+        await session!.play();
+        await expectLater(
+          session!.pause().timeout(const Duration(seconds: 3)),
+          throwsA(isA<ForegroundAudioException>()),
+        );
+        await expectLater(
+          session!.play(),
+          throwsA(isA<ForegroundAudioException>()),
+        );
+        expect(focus.activations, 1);
+        focus.acknowledge.complete();
+        await Future<void>.delayed(Duration.zero);
+        final progress = session!.positionMs.firstWhere((value) => value > 0);
+        await session!.play();
+        expect(
+          await progress.timeout(const Duration(seconds: 5)),
+          greaterThan(0),
+        );
+        await session!.dispose();
+        expect(focus.activations, 2);
+        expect(focus.releases, 2);
+        debugPrint(
+          'FURA_DIAGNOSTIC synthetic_rollback_focus outcome=success activations=2 releases=2',
+        );
+      });
+    } finally {
+      if (!focus.acknowledge.isCompleted) focus.acknowledge.complete();
+      await session?.dispose();
+      await engine.dispose();
+      await file.delete();
+      await directory.delete();
+    }
+  }, skip: !Platform.isAndroid);
+
   testWidgets('Android incomplete source survives bounded transfer outage', (
     tester,
   ) async {
@@ -402,6 +548,32 @@ void _assertHealthy(
       anyOf(TrackPlaybackStage.engineError, TrackPlaybackStage.resolutionError),
     ),
   );
+}
+
+class _LocalFixtureAudioplayers extends PlatformAudioplayersAudioPlayer {
+  _LocalFixtureAudioplayers(this._path);
+  final String _path;
+  @override
+  Future<void> setSourceUrl(String source, {required String mimeType}) =>
+      super.setSourceUrl(_path, mimeType: mimeType);
+}
+
+class _DelayedReleaseFocus implements ForegroundAudioFocusManager {
+  final _platform = const AudioSessionForegroundAudioFocusManager();
+  final acknowledge = Completer<void>();
+  int activations = 0;
+  int releases = 0;
+  @override
+  Future<bool> setActive(bool active) async {
+    if (active) {
+      activations++;
+    } else {
+      releases++;
+    }
+    final result = await _platform.setActive(active);
+    if (!active && releases == 1) await acknowledge.future;
+    return result;
+  }
 }
 
 class _CountedNativePlayer implements MediaKitAudioPlayer {

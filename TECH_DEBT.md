@@ -401,4 +401,43 @@ Do not build a generic Provider cache framework without a further need.
 **Trigger condition:** Reproducible physical-device rapid-switch blocking with
 coarse timing evidence, or an independently authorized resolution-latency task.
 
+## TD-018 — Uninterruptible platform focus calls and historical native latency
+
+**Status:** Open; caller bounds and lease isolation verified offline and in
+Debug/Release Waydroid five-case gates. Exact historical native delay and
+physical-device acceptance remain open in the lifecycle audit.
+
+**Problem:** audio_session 0.2.4 exposes no cancellation/settlement-reset API for
+`setActive`. Dart `Future.timeout` cannot cancel its platform request. A pending
+release must keep the shared focus slot reserved: releasing that slot on timeout
+would let late abandonment remove a newer session's focus. Explicit false/error
+release also cannot establish that platform ownership was cleared.
+
+**Why accepted:** The playback reliability continuation fixes the unbounded
+caller cleanup without starting a second focus owner: a raw pending request is
+reserved, late activation is compensated, and only an acknowledged release
+permits subsequent activation. Confirmed release failure remains fail-closed
+for that engine rather than automatically issuing competing requests/retries.
+
+**Impact:** Controls return coarse bounded failures instead of hanging on focus.
+If the platform never acknowledges, playback cannot safely resume in that owner;
+a native Player rebuild does not bypass the focus reservation. Late successful
+settlement permits a subsequent explicit play, never automatic resume/reopen.
+
+**Risk:** The old ~5.5 s native play / ~40 s focus-release observation remains
+negative evidence. Its outer trace cannot distinguish SDK lock/async mpv reply,
+Android method-channel/AudioManager latency and host scheduling. Neither host
+swap correlation nor a later PASS proves that historical native cause.
+
+**Suggested solution:** Obtain native/main-thread traces during an actual next
+failure or a verified upstream cancellation/settlement acknowledgement. Preserve
+single ownership and secret-safe diagnostics; do not unblock by resetting a
+boolean, creating another manager, reopening at EOF or weakening the deadline.
+
+**Trigger condition:** A fresh reproducible native delay with in-flight traces,
+physical-device focus failure, or a public SDK cancellation/acknowledgement API.
+No deliberate host/swap exhaustion or dependency fork is justified merely to
+force the historical symptom. Persistent media cache and Provider concurrency
+remain separate TD-016/TD-017 work, not tasks selected by this continuation.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

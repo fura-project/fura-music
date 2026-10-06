@@ -6,6 +6,86 @@ import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 
 void main() {
+  test(
+    'native play timeout remains bounded when focus release hangs',
+    () async {
+      final release = Completer<bool>();
+      final focus = _FakeFocusManager()..releaseGate = release.future;
+      final player = _FakeMediaKitPlayer()..playGate = Completer<void>().future;
+      final engine = MediaKitForegroundAudioEngine(
+        player: player,
+        audioFocusManager: focus,
+        controlTimeout: const Duration(milliseconds: 20),
+        focusTimeout: const Duration(milliseconds: 20),
+      );
+      final session = await engine.loadRemote(
+        Uri.parse('https://audio.example.test/probe.mp3'),
+      );
+      await expectLater(
+        session.play().timeout(const Duration(milliseconds: 150)),
+        throwsA(isA<ForegroundAudioException>()),
+      );
+      expect(focus.values, [true, false]);
+      release.complete(true);
+      await session.dispose();
+      await engine.dispose();
+    },
+  );
+
+  test('pending old focus release prevents a replacement activation', () async {
+    final release = Completer<bool>();
+    final focus = _FakeFocusManager()..releaseGate = release.future;
+    final player = _FakeMediaKitPlayer();
+    final engine = MediaKitForegroundAudioEngine(
+      player: player,
+      audioFocusManager: focus,
+    );
+    final old = await engine.loadRemote(
+      Uri.parse('https://audio.example.test/old.mp3'),
+    );
+    await old.play();
+    final disposal = old.dispose();
+    await Future<void>.delayed(Duration.zero);
+    final next = await engine.loadRemote(
+      Uri.parse('https://audio.example.test/next.mp3'),
+    );
+    await expectLater(next.play(), throwsA(isA<ForegroundAudioException>()));
+    expect(focus.values, [true, false]);
+    release.complete(true);
+    await disposal;
+    await next.play();
+    await (old as ForegroundCompletionFocusSession).releaseCompletionFocus();
+    expect(focus.values, [true, false, true]);
+    await next.dispose();
+    await engine.dispose();
+  });
+
+  test('disposed session cannot play after late focus activation', () async {
+    final activation = Completer<bool>();
+    final focus = _FakeFocusManager()..activationGate = activation.future;
+    final player = _FakeMediaKitPlayer();
+    final engine = MediaKitForegroundAudioEngine(
+      player: player,
+      audioFocusManager: focus,
+    );
+    final session = await engine.loadRemote(
+      Uri.parse('https://audio.example.test/probe.mp3'),
+    );
+    final playing = session.play();
+    final assertion = expectLater(
+      playing,
+      throwsA(isA<ForegroundAudioException>()),
+    );
+    await Future<void>.delayed(Duration.zero);
+    final disposal = session.dispose();
+    activation.complete(true);
+    await assertion;
+    await disposal;
+    expect(player.playCalls, 0);
+    expect(focus.values, [true, false]);
+    await engine.dispose();
+  });
+
   test('operation and rebuild diagnostics contain categories, never native errors or sources', () async {
     final messages = <String>[];
     final previous = debugPrint;
@@ -594,10 +674,14 @@ class _FakeFocusManager implements ForegroundAudioFocusManager {
 
   final bool allowActivation;
   final List<bool> values = [];
+  Future<bool>? activationGate;
+  Future<bool>? releaseGate;
 
   @override
   Future<bool> setActive(bool active) async {
     values.add(active);
+    final gate = active ? activationGate : releaseGate;
+    if (gate != null) return gate;
     return !active || allowActivation;
   }
 }

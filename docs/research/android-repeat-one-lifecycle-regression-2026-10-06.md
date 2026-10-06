@@ -446,3 +446,286 @@ observation is explicitly retained for that review; passing a quieter same-APK
 run does not prove why it failed or prove the original problem fixed. No mobile
 cache-budget change, per-key Provider-cache refactor or new Provider/session
 feature was added.
+
+## Autonomous focus failure-path continuation — 2026-10-06
+
+Starting HEAD, local `origin/main`, and fresh read-only remote main were
+`33d27585195eb6a10fab75e9be2ee4a9fba1fcad`; initial worktree clean. Human
+authorized the existing Android playback reliability direction, not Provider,
+refresh, persistent-cache, UI, Git or new-runtime work. The earlier checkpoint's
+baseline exhaustion does **not** close its retained negative latency evidence.
+
+### Selected finite tasks and before-fix reproduction
+
+1. **Bound caller focus lifecycle without unsafe late cleanup.** Concrete
+   provenance: the recorded ~5.5 s play timeout / ~40 s focus release. Inspection
+   showed MediaKit's bounded `_serialize('play')` catch awaiting unbounded
+   `_deactivateFocus`; pause/stop `finally`, disposal and activation had the same
+   shared boundary, including the audioplayers rollback engine.
+2. **Revoke a same-source acquisition result before native dispatch.** During
+   the first task's diff/concurrency review, a further deterministic failing
+   test showed release beginning after `activate()` returned a completed Future
+   but before its play continuation/native dispatch. This was selected as a
+   separate finite task, not dismissed by the first Android PASS.
+
+Before changing production code, injected never-completing native play plus
+pending release (20 ms native deadline, 150 ms test watchdog) threw the **test
+watchdog TimeoutException**, not the required coarse engine exception. Separate
+tests showed a new source activating while old disposal/release was pending,
+and a disposed source invoking native play after late focus activation. All
+three failed on the starting implementation. The later same-source test also
+failed: native play count increased while release was still pending. Its failed
+trace is retained in `acquire-release-race-before.log`, not overwritten by PASS.
+
+### Ownership and bounded policy
+
+`ForegroundAudioFocusOwner` is a small shared engine-lifetime arbiter over the
+existing `ForegroundAudioFocusManager`; it does not introduce another Android
+focus requester or system edge. Main constructs only one selected music engine.
+Each source gets a lease, and release/close changes that lease's revision.
+Both engines check its revision after activation; MediaKit checks again inside
+the actual serialized native play closure. Stale play failure cannot release a
+newer revision, and stale source cleanup cannot abandon another source's lease.
+
+- Default focus caller budget: **5 s per phase**, aligned with the existing
+  MediaKit control budget. It is not a service TTL or a total-control 5 s claim.
+  Native control remains 5 s, open 15 s. A native play timeout followed by focus
+  cleanup may consume both bounded phases (roughly 10 s plus scheduling), rather
+  than wait indefinitely. Wall-clock bounds assume the Dart isolate can run.
+- A deadline does **not** free the raw platform slot or cancel the Future.
+  New activation is rejected while old platform work/compensation is pending.
+  Concurrent same-lease activation is single-flight, not a queue of requests.
+- Late activation after timeout/disposal is compensated by one release before
+  the slot becomes reusable. Late acknowledged release permits a subsequent
+  explicit action; it does not automatically resume/reopen/resolve.
+- A release returning false or throwing leaves ownership unconfirmed and the
+  engine fail-closed. Repeated cleanup does not automatically retry it. No
+  native Player rebuild bypasses that reservation. This public-SDK limitation
+  is TD-018, not silently reported as successful platform cancellation.
+- Error/disposal cleanup observes the bounded failure without leaking an
+  unhandled asynchronous exception or overriding the original typed native
+  failure. Active pause/stop/release failure remains typed; disposal still
+  finishes its terminal stream/player cleanup.
+
+The change does not add native-operation deadlines to unrelated audioplayers
+methods. Its shared **focus** waits are bounded; no claim is made that all its
+plugin Futures are now cancellable or bounded. Rust Queue, Bridge, retained
+seek/play, Player/source cache budgets and Provider resolution are unchanged.
+
+### Pinned SDK inspection and causal boundary
+
+Local audio_session **0.2.4** implements Android deactivate by awaiting
+`AndroidAudioManager.abandonAudioFocus`; its Kotlin handler calls
+`AudioManagerCompat.abandonAudioFocusRequest` synchronously then returns the
+method-channel result. Its `AudioSession.instance` does platform configuration
+I/O on first construction, not each subsequent lookup. There is no public
+operation cancellation/settlement-reset API. The old trace locates the long
+Fura wait at focus release; it cannot determine whether the native call,
+method-channel delivery or scheduling caused it.
+
+Local media_kit **1.2.6** play takes its SDK lock, awaits initialization, then
+sets `pause=false`. An acknowledged retained-source seek sets completed=false,
+so its completed compatibility branch should not run. In async configuration,
+`_setProperty` awaits a Completer completed by `MPV_EVENT_SET_PROPERTY_REPLY`.
+The historical outer play trace does not distinguish SDK lock wait from async
+reply delivery. No private SDK patch, unredacted native trace or invented
+native/scheduler root cause is claimed. Future in-flight native traces are
+required to close that specific historical cause (TD-018).
+
+### Validation checkpoint
+
+Final runtime results are recorded below after candidate execution. Evidence
+directory: `/tmp/fura-focus-regression-20261006-plb8R1` (outside Git). The first
+four-case Debug candidate passed before the additional revision fix; its logs
+are retained with `debug-first-pass-*`, but are not final-candidate acceptance.
+Current final candidate adds the revoked-result race and real Android
+audioplayers focus regression to the existing D replay/stall/network harness.
+Only synthetic local media is used: no Provider request, credential, account
+content or production localhost proxy.
+
+### New negative evidence from validation (retained separately)
+
+- The first revision-corrected five-case Debug run passed the D replay,
+  injected seek recovery, focus-acknowledgement/revision and transfer cases, but
+  **failed as a suite**: the additional audioplayers case timed out in source
+  preparation after ~30 s, before any focus activation. It is retained under
+  `debug-http-fixture-failed-*`. It is not a focus PASS or relabelled full PASS.
+  The installed APK targetSdk=36 has no USES_CLEARTEXT_TRAFFIC flag and no
+  network-security configuration. Android explicitly documents that
+  [target API 28+ defaults to disallowing cleartext and MediaPlayer honors it](https://developer.android.com/guide/topics/manifest/application-element#usesCleartextTraffic).
+  This establishes that mpv's loopback-HTTP fixture is unsuitable for that
+  platform component; no missing focus callback can explain a failure before
+  activation. Without a native exception trace, it does not establish every
+  intermediate step inside that preparation timeout.
+  The bounded focus oracle now supplies the same synthetic MP3 bytes from an
+  app-private temporary file through the existing player test seam. It still
+  invokes real Android MediaPlayer, real audio_session, actual pause/resume and
+  position advancement. It does not relax manifest/TLS policy, advertise a
+  production file resolver, ignore native errors or claim remote A transport
+  acceptance. Only the test-owned file/directory are deleted afterward.
+- The **local Debug fixture APK** artifact audit finds build-path/personal-marker
+  strings in `kernel_blob.bin`. Both the earlier audit and the final candidate
+  audit exit nonzero, retained in `debug-artifact-privacy.log` and
+  `debug-final-artifact-privacy.log`. The **Release fixture** audit also fails:
+  `libapp.so` contains exactly two personal-root source-location strings, both
+  `file:` URIs for integration-test sources. Its failed audit is retained in
+  `release-fixture-artifact-privacy.log`. Debug/test source-location metadata is
+  not a distributable-privacy PASS. Both fixture APKs stay local, outside Git;
+  no credential/account/media source data is involved. Ordinary distributable
+  artifact audits are separate, never inferred from source lint or a fixture.
+- The Waydroid Debug/Release screencaps contain a real fixture window/label but also
+  text/GPU rendering artifacts. It proves a rendered fixture exists, not clean
+  visual acceptance. No Flutter rendering/UI code is changed by this Core task;
+  `vo=null` music Player has no video surface/controller. A GPU-driver/rendering
+  diagnosis is outside the authorized focus/replay change. The screenshot is
+  retained rather than substituted with a clean mock/reference image.
+- At this continuation's runtime startup the existing container was FROZEN:
+  ADB appeared offline/unresponsive despite a running session. Normal full-UI
+  launch unfreezes it and Android API/ABI queries then succeed. No image/init,
+  data reset or host policy edit occurred. This environment finding is not
+  evidence that the historical play/focus delay was caused by container freeze.
+
+### Final candidate Android runtime evidence
+
+Existing Waydroid 1.6.3, Android 13 / API 33, native x86_64 is the only Android
+runtime used. No physical phone is connected. No AVD/image installation, user
+data reset, stored-account operation or host-network/focus policy change is
+performed. Builds and runtime gates are separated; only this task's verified
+idle Gradle daemon is stopped before the runtime gate, not unrelated processes.
+
+Both **Debug and Release five-case suites PASS** on the final production
+candidate. The integration entrypoint uses no FURA defines: requested/effective
+D, one Dart entrypoint, audio_service plugin registration false, and the real
+flutter_media_session edge available. The music Player, Android audio_session,
+typed Bridge and Rust Queue are real; resolution and media are synthetic.
+
+| Observable in normal retained-source soak | Debug | Release |
+| --- | ---: | ---: |
+| Actual EOF events / replay actions | 101 / 100 | 101 / 100 |
+| Initial resolutions / initial opens | 1 / 1 | 1 / 1 |
+| Repeat resolutions / repeat opens / repeat stops | 0 / 0 / 0 | 0 / 0 / 0 |
+| Total seek / play / stop | 100 / 101 / 0 | 100 / 101 / 0 |
+| Normal Player rebuild / native errors / extra fixture HTTP requests | 0 / 0 / 0 | 0 / 0 / 0 |
+| Replays while actual Activity is backgrounded | 2 | 2 |
+| Actual pause / resume callbacks | 22 / 22 | 22 / 22 |
+| Fully cached replays while fixture server is closed | 20 | 20 |
+
+Each suite also passes the following independently asserted failure/restore
+cases; these are not folded into normal-soak counts:
+
+- An injected never-completing native seek hits its one-second test deadline;
+  the operation tail remains usable and one explicit load retires/rebuilds the
+  real Player and advances position. No EOF-driven recovery or resolver retry.
+- Delayed focus acknowledgement uses a test seam **after the real platform
+  release**: its 250 ms caller budget returns a typed failure in 254 ms Debug /
+  252 ms Release. Replacement activation is blocked until acknowledgement;
+  subsequent explicit play advances. Old disposal produces zero stale release.
+  A same-source release revokes a pending play result before native dispatch.
+- Actual Android audioplayers/MediaPlayer plays the app-private synthetic MP3;
+  pending release acknowledgement blocks resume, late acknowledgement permits
+  explicit resume with position advance. Two activations and two releases;
+  no alternate system edge or remote-media acceptance is implied.
+- An incomplete ~166-second source initially delivers only 65,536 bytes,
+  withholds the rest for three seconds, then restores it. Playback progresses
+  and seek beyond 60 seconds consumes the restored tail: open=1, play=1,
+  nativeErrors=0. This is not Wi-Fi/cellular or whole-device offline evidence.
+
+`debug-final-diagnostics.log`, `debug-final-observations.log`,
+`debug-local-fixture-final-gate.log`, `release-final-diagnostics.log`,
+`release-final-observations.log` and `release-final-gate.log` retain the actual
+results. After Release terminal cleanup, dumpsys observes zero active Fura
+focus entries and zero media sessions. The checkpoint-100 snapshot races
+terminal cleanup and is not used as proof of terminal focus release.
+
+Memory samples below are KiB, not a physical-device cache-budget acceptance:
+
+| Mode / checkpoint | Total PSS | Total RSS | Native heap PSS |
+| --- | ---: | ---: | ---: |
+| Debug start | 411838 | 476396 | 37208 |
+| Debug 10 | 369524 | 435840 | 34780 |
+| Debug 30 | 373905 | 441088 | 38276 |
+| Debug 100 | 375964 | 443396 | 38528 |
+| Release start | 169416 | 227552 | 33268 |
+| Release 10 | 170758 | 235840 | 27988 |
+| Release 30 | 173837 | 240252 | 28240 |
+| Release 100 | 173993 | 240600 | 28268 |
+
+The short silent fixture is muted. It proves native decoding, position,
+retained-source lifecycle and state/focus ownership, **not audible output** or
+long/high-quality/OEM memory behavior. No cache-budget change is justified by
+these bounded samples.
+
+### Ordinary startup, artifact provenance and closure checks
+
+Ordinary **A Debug** passes one cold start with audioplayers/audio_service,
+AudioServicePlugin registration true, system-edge success and first frame.
+Ordinary **no-define D Release** passes three independent cold starts with
+media_kit/flutter_media_session, registration false, available system controls,
+one Dart startup and first frame. The ordinary D Release, not a fixture, is left
+installed. These are startup/ownership checks, not authenticated or audible
+remote Track acceptance.
+
+All four artifacts use the same starting HEAD **plus this uncommitted candidate**,
+native x86_64, the existing Flutter 3.47.1 / Dart 3.13.1 and pinned dependencies.
+No global toolchain/JDK/host policy was changed. They are not ARM64 phone packages.
+
+| Local artifact under `/tmp/fura-focus-regression-20261006-plb8R1` | SHA256 |
+| --- | --- |
+| fura-focus-D-fixture-x64-debug.apk | 9e7c13154a917d9c1f47c516a34314639d4ccac814150b6b8721fbfe9552e376 |
+| fura-focus-D-fixture-x64-release.apk | 4807c719d69a157cc14fe4b2807a21c583e7684b6daa590440e63070c4891245 |
+| fura-focus-A-ordinary-x64-debug.apk | a07a87c1ca207eb80c4fb41e8c7a62b6e1020272199cabe9f6e03942d4a28665 |
+| fura-focus-D-ordinary-x64-release.apk | 314d3f2683c18714546f558acd193fc3d598b4673827c0a93c209ae2de2f49de |
+
+The ordinary D Release **passes** the artifact build-path/personal-marker scan
+(`ordinary-release-artifact-privacy.log`). Ordinary A Debug also retains source
+paths in `kernel_blob.bin` and **fails** that scan
+(`ordinary-debug-artifact-privacy.log`); it stays a local diagnostic APK. Fixture
+and Debug privacy failures do not become PASS because the ordinary Release
+passes. No build artifact or private runtime evidence is added to Git.
+
+Final checks: `dart format --output=none --set-exit-if-changed` over six changed
+Dart files, whole-app `dart analyze` (no issues), all **267** affected playback
+and startup diagnostic tests, source privacy hygiene, application identity,
+five existing privacy-audit tests and `git diff --check`. The final rerun is
+`playback-tests-closure.log`, analysis `analyze-closure.log`. Failure or success
+is established by exit code, not only a log grep. No Rust/Bridge contract change,
+FRB regeneration, remote CI execution or service/account acceptance is claimed.
+
+### Negative-evidence exhaustion and exact remaining boundary
+
+| Finding | Classification | Evidence / remaining prerequisite |
+| --- | --- | --- |
+| Bounded native failure followed by unbounded focus cleanup | FIXED_AND_VERIFIED | Failing before-fix deterministic test; bounded typed failure after fix; shared A/D tests and real Android delayed-ack cases |
+| Late activation/disposal or old release overlaps replacement | FIXED_AND_VERIFIED | Raw slot reservation, one compensating release, stale lease isolation; deterministic and Android checks |
+| Acquisition result revoked before actual native play | FIXED_AND_VERIFIED | Separately failing race; revision checks before actual dispatch; no native play on revoked result |
+| Exact historical ~5.5 s play / ~40 s focus-release native cause | PRECISE_BLOCKER | Old outer trace has no in-flight SDK lock/mpv-reply/AudioManager/main-thread trace; current runs do not reproduce that internal delay. Fresh in-flight native evidence is required; no host-load causal claim |
+| Raw platform call never acknowledges or release returns false/error | PRECISE_BLOCKER | audio_session 0.2.4 has no public cancellation/settlement-reset acknowledgement. Caller is bounded and ownership fail-closed; safe automatic recovery needs actual settlement or a verified upstream API (TD-018) |
+| Audioplayers cleartext HTTP test preparation timeout | OUT_OF_SCOPE_WITH_EVIDENCE | targetSdk 36 disallows cleartext for MediaPlayer; focus was never reached. Test-owned local MP3 restores the intended real native focus oracle; remote A transport remains unclaimed |
+| Local Debug / integration-entrypoint APK source paths | OUT_OF_SCOPE_WITH_EVIDENCE | Test/source-location metadata findings remain failed local audits; ordinary distributable D Release independently passes. No fixture distribution is authorized |
+| Waydroid fixture glyph/rendering artifacts | OUT_OF_SCOPE_WITH_EVIDENCE | Actual Debug/Release screencaps retained; Core focus/replay scope changes no renderer, UI or video surface |
+| Existing Waydroid FROZEN / ADB unavailable | FIXED_AND_VERIFIED | Normal full-UI launch unfreezes the existing runtime; API/ABI queries and actual Android gates pass, no reset/init |
+| Original physical freeze, OEM/lock/phone-call/Bluetooth/cellular, long/entitled quality/cache budget | REQUIRES_HUMAN_DEVICE_EXTERNAL_EVIDENCE | Only native x86_64 Waydroid is connected; original phone and those real lifecycle sources are unavailable |
+
+The authorized finite fixes are machine-verified. Final diff/failure review found
+no additional independent, currently executable evidence-backed task within this
+direction. The next trigger is fresh native-delay evidence or physical-device
+lifecycle acceptance, not Provider/auth/cache/UI work or artificial host swap
+exhaustion. This does **not** declare the original phone freeze fixed.
+
+Machine-actionable work remaining:
+
+- Historical internal delay diagnosis: blocked by missing fresh in-flight native
+  lock/reply/main-thread evidence; an outer historical duration cannot recover it.
+- Never-acknowledged focus recovery: blocked by absent public platform
+  cancellation/settlement acknowledgement; unsafe lease reset/retry is rejected.
+- Physical lifecycle acceptance: device/OEM/audio-routing/real cellular evidence
+  required; Waydroid counters cannot substitute.
+
+Execution mode: AUTONOMOUS_DEVELOPMENT
+Work domain: CORE
+Gate: DEVICE_REQUIRED
+
+Implementation-checkpoint Git state: no commit, push, reset, restore or clean.
+Human subsequently authorized publication with `提交git`, under the standing
+commit-and-push instruction. That authorization does not change any runtime,
+physical-device or negative-evidence acceptance above.

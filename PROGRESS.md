@@ -2,14 +2,46 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: CORE
-  state: ANDROID_WAYDROID_BASELINE_PASS_PHYSICAL_PENDING
+  state: ANDROID_FOCUS_MACHINE_VERIFIED_PENDING_DEVICE
   acceptance_milestone: ANDROID_REPEAT_ONE_LIFECYCLE_STABILITY
   active_workstream: ANDROID_PLAYBACK_LIFECYCLE_REGRESSION
-  current_task: WAYDROID_EVIDENCE_COMPLETE_WITH_CONTENTION_FAILURE_RETAINED
-  next_action: HUMAN_PHYSICAL_ANDROID_LIFECYCLE_AND_CONTENTION_REVIEW
+  current_task: BOUNDED_FOCUS_LEASE_AND_LATE_CLEANUP_REGRESSION
+  next_action: PHYSICAL_LIFECYCLE_AND_FRESH_NATIVE_DELAY_EVIDENCE
 ---
 
 # Current State
+
+- **2026-10-06 autonomous playback reliability continuation:** Human authorized
+  only the existing Android retained-source/stall workstream. Starting HEAD,
+  local and live remote main were `33d27585195eb6a10fab75e9be2ee4a9fba1fcad`,
+  worktree clean. The earlier 5.5 s native play timeout plus ~40 s focus release
+  was selected as concrete provenance, not dismissed by the baseline rerun.
+  Deterministic tests proved unbounded focus cleanup, overlapping replacement
+  activation, and play after disposal/late activation. A shared engine-lifetime
+  focus arbiter now reserves the raw platform operation across caller timeouts;
+  per-source leases forbid stale cleanup and compensate late activation.
+  A second finite, failing regression proved that release could invalidate a
+  same-source activation result before native play. Lease revisions are checked
+  after acquisition and inside MediaKit's actual serialized play closure.
+  Queue/replay/source caches, Providers and UI are unchanged. Final Android
+  Debug/Release five-case runtime gates pass: resolve=1/open=1, 100 retained
+  replays, no repeat stop/rebuild/extra HTTP; real background crosses two EOFs,
+  twenty Activity cycles, delayed focus acknowledgement, real audioplayers
+  focus and incomplete-transfer restoration pass. Ordinary A Debug starts and
+  no-define D Release passes three cold starts with one available system edge.
+  All 267 affected offline tests, analysis/format and source privacy pass.
+  Ordinary D Release artifact privacy passes; local Debug/test APK source-path
+  findings remain failures, not distributable acceptance. The exact old native
+  delay cause still needs fresh in-flight native traces; audio_session exposes
+  no safe cancellation/settlement reset for a never-acknowledged call (TD-018).
+  Physical/OEM/Bluetooth/cellular/phone-focus and long/high-quality memory
+  claims remain device-gated. No further independent evidence-backed machine
+  task was found in this authorized direction after final failure/diff review;
+  these precise blockers are recorded, not generalized as full completion.
+  The implementation checkpoint performed no commit/push/reset/restore/clean.
+  Human subsequently authorized Git publication with `提交git`, under the
+  standing commit-and-push instruction. Publication does not change the
+  physical-device gate or close the historical native-delay finding.
 
 - **2026-10-06 Agent governance correction:** Human retained execution modes
   and redefined them by task-selection authority. `HUMAN_DIRECTED` means

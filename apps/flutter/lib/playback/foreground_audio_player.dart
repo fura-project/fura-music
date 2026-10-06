@@ -47,6 +47,194 @@ class AudioSessionForegroundAudioFocusManager
       (await AudioSession.instance).setActive(active);
 }
 
+/// One engine-lifetime arbiter around the existing audio_session owner. A
+/// caller deadline never cancels the platform Future: keep the raw operation
+/// reserved until it settles (including compensation for a late activation).
+/// Do not activate a new lease while old platform cleanup can still release it.
+class ForegroundAudioFocusOwner {
+  ForegroundAudioFocusOwner(
+    this._manager, {
+    this.timeout = const Duration(seconds: 5),
+  });
+
+  final ForegroundAudioFocusManager _manager;
+  final Duration timeout;
+  ForegroundAudioFocusLease? _owner;
+  _FocusOperation? _operation;
+  bool _uncertain = false;
+  int _generation = 0;
+  int _cycle = 0;
+
+  ForegroundAudioFocusLease createLease() =>
+      ForegroundAudioFocusLease._(this, ++_generation);
+
+  Future<bool> _activate(ForegroundAudioFocusLease lease) {
+    if (lease._closed || _uncertain) return _unavailable();
+    final pending = _operation;
+    if (pending != null) {
+      if (identical(pending.lease, lease) &&
+          pending.active &&
+          !pending.cancelled) {
+        return pending.result;
+      }
+      _log(lease, 'activate', 'pending_platform');
+      return _unavailable();
+    }
+    if (identical(_owner, lease)) return Future.value(true);
+    if (_owner != null) return _unavailable();
+    return _start(lease, true).result;
+  }
+
+  Future<void> _release(ForegroundAudioFocusLease lease) async {
+    if (_uncertain) {
+      throw const ForegroundAudioException(
+        ForegroundAudioFailure.coreUnavailable,
+      );
+    }
+    final pending = _operation;
+    if (pending != null && identical(pending.lease, lease)) {
+      pending.cancelled = true;
+      // Wait for raw activation + its compensation, not just the caller's
+      // already timed-out result. This wait is bounded independently.
+      await _bounded(pending, pending.settled);
+      return;
+    }
+    if (!identical(_owner, lease)) return;
+    await _start(lease, false).result;
+  }
+
+  _FocusOperation _start(ForegroundAudioFocusLease lease, bool active) {
+    final operation = _FocusOperation(lease, active, ++_cycle);
+    _operation = operation;
+    operation.settled = _run(operation);
+    operation.result = _bounded(operation, operation.settled);
+    return operation;
+  }
+
+  Future<bool> _bounded(_FocusOperation operation, Future<bool> raw) =>
+      raw.timeout(
+        timeout,
+        onTimeout: () {
+          operation.cancelled = true;
+          _log(operation.lease, operation.phase, 'timeout', operation);
+          throw const ForegroundAudioException(
+            ForegroundAudioFailure.coreUnavailable,
+          );
+        },
+      );
+
+  Future<bool> _run(_FocusOperation operation) async {
+    final lease = operation.lease;
+    if (operation.active) _log(lease, 'activate', 'started', operation);
+    try {
+      if (!operation.active) {
+        await _releasePlatform(operation);
+        return true;
+      }
+      bool activated;
+      try {
+        activated = await _manager.setActive(true);
+      } on Object {
+        // An exception does not prove the platform failed before activation.
+        await _releasePlatform(operation);
+        throw const ForegroundAudioException(
+          ForegroundAudioFailure.coreUnavailable,
+        );
+      }
+      if (!activated) {
+        _log(lease, 'activate', 'rejected', operation);
+        return false;
+      }
+      _owner = lease;
+      if (operation.cancelled || lease._closed) {
+        _log(lease, 'activate', 'late_cleanup', operation);
+        await _releasePlatform(operation);
+        throw const ForegroundAudioException(
+          ForegroundAudioFailure.coreUnavailable,
+        );
+      }
+      _log(lease, 'activate', 'success', operation);
+      return true;
+    } finally {
+      if (identical(_operation, operation)) _operation = null;
+    }
+  }
+
+  Future<void> _releasePlatform(_FocusOperation operation) async {
+    _log(operation.lease, 'release', 'started', operation);
+    try {
+      if (!await _manager.setActive(false)) {
+        throw const ForegroundAudioException(
+          ForegroundAudioFailure.coreUnavailable,
+        );
+      }
+      _owner = null;
+      _log(operation.lease, 'release', 'success', operation);
+    } on Object {
+      // No acknowledgement means ownership is unknown. Fail closed rather
+      // than create a competing request or retry an unclassified side effect.
+      _uncertain = true;
+      _log(operation.lease, 'release', 'unconfirmed', operation);
+      throw const ForegroundAudioException(
+        ForegroundAudioFailure.coreUnavailable,
+      );
+    }
+  }
+
+  Future<bool> _unavailable() => Future.error(
+    const ForegroundAudioException(ForegroundAudioFailure.coreUnavailable),
+  );
+
+  void _log(
+    ForegroundAudioFocusLease lease,
+    String phase,
+    String outcome, [
+    _FocusOperation? operation,
+  ]) => debugPrint(
+    'FURA_DIAGNOSTIC audio_focus generation=${lease.generation} '
+    'cycle=${operation?.cycle ?? _cycle} phase=$phase '
+    'elapsedMs=${operation?.elapsed.elapsedMilliseconds ?? 0} outcome=$outcome',
+  );
+}
+
+class _FocusOperation {
+  _FocusOperation(this.lease, this.active, this.cycle);
+  final ForegroundAudioFocusLease lease;
+  final bool active;
+  final int cycle;
+  final Stopwatch elapsed = Stopwatch()..start();
+  bool cancelled = false;
+  late final Future<bool> settled;
+  late final Future<bool> result;
+  String get phase => active ? 'activate' : 'release';
+}
+
+/// Per-source authority; stale releases are no-ops, including after replacement.
+class ForegroundAudioFocusLease {
+  ForegroundAudioFocusLease._(this._owner, this.generation);
+  final ForegroundAudioFocusOwner _owner;
+  final int generation;
+  bool _closed = false;
+  int _revision = 0;
+  int get revision => _revision;
+  bool get isActive =>
+      !_closed &&
+      !_owner._uncertain &&
+      _owner._operation == null &&
+      identical(_owner._owner, this);
+  bool isCurrent(int revision) => isActive && revision == _revision;
+  Future<bool> activate() => _owner._activate(this);
+  Future<void> release() {
+    ++_revision;
+    return _owner._release(this);
+  }
+
+  Future<void> close() {
+    _closed = true;
+    return release();
+  }
+}
+
 @visibleForTesting
 final projectAudioplayersAudioContext = audio.AudioContext(
   android: const audio.AudioContextAndroid(
@@ -143,8 +331,11 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
   AudioplayersForegroundAudioEngine({
     ForegroundAudioFocusManager? audioFocusManager,
     AudioplayersAudioPlayer Function()? playerFactory,
-  }) : _audioFocusManager =
-           audioFocusManager ?? const AudioSessionForegroundAudioFocusManager(),
+    Duration focusTimeout = const Duration(seconds: 5),
+  }) : _audioFocusOwner = ForegroundAudioFocusOwner(
+         audioFocusManager ?? const AudioSessionForegroundAudioFocusManager(),
+         timeout: focusTimeout,
+       ),
        _playerFactory = playerFactory ?? PlatformAudioplayersAudioPlayer.new {
     // AudioPlayerException includes player.source in its string form. QQ media
     // URIs can carry authorization, so plugin-owned logging is disabled before
@@ -152,7 +343,7 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
     audio.AudioLogger.logLevel = audio.AudioLogLevel.none;
   }
 
-  final ForegroundAudioFocusManager _audioFocusManager;
+  final ForegroundAudioFocusOwner _audioFocusOwner;
   final AudioplayersAudioPlayer Function() _playerFactory;
 
   @override
@@ -167,7 +358,7 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
 
     final session = _AudioplayersForegroundAudioSession(
       _playerFactory(),
-      _audioFocusManager,
+      _audioFocusOwner.createLease(),
     );
     try {
       await session.prepare(source, format);
@@ -189,11 +380,11 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
 
 class _AudioplayersForegroundAudioSession
     implements ForegroundAudioSession, ForegroundCompletionFocusSession {
-  _AudioplayersForegroundAudioSession(this._player, this._audioFocusManager) {
+  _AudioplayersForegroundAudioSession(this._player, this._focus) {
     _stateSubscription = _player.states.listen((state) {
       if (_disposed) return;
       if (state == audio.PlayerState.stopped) {
-        unawaited(_deactivateFocus());
+        unawaited(_releaseFocusBestEffort());
       }
       _states.add(switch (state) {
         audio.PlayerState.stopped => ForegroundAudioState.stopped,
@@ -214,7 +405,7 @@ class _AudioplayersForegroundAudioSession
   }
 
   final AudioplayersAudioPlayer _player;
-  final ForegroundAudioFocusManager _audioFocusManager;
+  final ForegroundAudioFocusLease _focus;
   final StreamController<ForegroundAudioState> _states =
       StreamController.broadcast();
   final StreamController<ForegroundAudioFailure> _failures =
@@ -224,7 +415,6 @@ class _AudioplayersForegroundAudioSession
   late final StreamSubscription<Object?> _eventSubscription;
   late final StreamSubscription<Duration> _positionSubscription;
   bool _disposed = false;
-  bool _focusActive = false;
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -263,8 +453,9 @@ class _AudioplayersForegroundAudioSession
       );
     }
     var activated = false;
+    final focusRevision = _focus.revision;
     try {
-      activated = _focusActive || await _audioFocusManager.setActive(true);
+      activated = await _focus.activate();
       if (!activated) {
         _logEngineFailure(
           phase: 'focus_activate',
@@ -273,10 +464,17 @@ class _AudioplayersForegroundAudioSession
         );
         throw const ForegroundAudioException(ForegroundAudioFailure.playback);
       }
-      _focusActive = true;
+      if (_disposed || !_focus.isCurrent(focusRevision)) {
+        throw const ForegroundAudioException(
+          ForegroundAudioFailure.coreUnavailable,
+        );
+      }
       await _player.resume();
       _logEngineSuccess(phase: 'play');
     } on ForegroundAudioException {
+      if (activated && _focus.revision == focusRevision) {
+        await _releaseFocusBestEffort();
+      }
       rethrow;
     } on Object catch (error) {
       _logEngineFailure(
@@ -284,7 +482,9 @@ class _AudioplayersForegroundAudioSession
         failure: ForegroundAudioFailure.playback,
         error: error,
       );
-      if (activated) await _deactivateFocus();
+      if (activated && _focus.revision == focusRevision) {
+        await _releaseFocusBestEffort();
+      }
       throw const ForegroundAudioException(ForegroundAudioFailure.playback);
     }
   }
@@ -358,10 +558,12 @@ class _AudioplayersForegroundAudioSession
   }
 
   Future<void> _deactivateFocus() async {
-    if (!_focusActive) return;
-    _focusActive = false;
+    await _focus.release();
+  }
+
+  Future<void> _releaseFocusBestEffort() async {
     try {
-      await _audioFocusManager.setActive(false);
+      await _deactivateFocus();
     } on Object catch (error) {
       _logEngineFailure(
         phase: 'focus_deactivate',
@@ -376,7 +578,7 @@ class _AudioplayersForegroundAudioSession
 
   void _emitFailure(ForegroundAudioFailure failure) {
     if (!_disposed && !_failures.isClosed) {
-      unawaited(_deactivateFocus());
+      unawaited(_releaseFocusBestEffort());
       _failures.add(failure);
     }
   }
@@ -385,10 +587,13 @@ class _AudioplayersForegroundAudioSession
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    final release = _focus.close();
+    // Attach an error handler before cancelling subscriptions.
+    final cleanup = release.then<void>((_) {}, onError: (Object _) {});
     await _stateSubscription.cancel();
     await _eventSubscription.cancel();
     await _positionSubscription.cancel();
-    await _deactivateFocus();
+    await cleanup;
     try {
       await _player.dispose();
     } on Object {

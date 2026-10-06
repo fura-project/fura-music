@@ -21,6 +21,96 @@ void _runForegroundAudioEngineContract(
   _EngineHarness Function() createHarness,
 ) {
   group('$name shared contract', () {
+    test(
+      'release after activation result revokes the pending native play',
+      () async {
+        final harness = createHarness();
+        final release = Completer<bool>();
+        harness.focus.releaseGate = release.future;
+        final session = await harness.engine.loadRemote(
+          Uri.parse('https://audio.example.test/probe.mp3'),
+        );
+        await session.play();
+        final playing = session.play();
+        final releasing = (session as ForegroundCompletionFocusSession)
+            .releaseCompletionFocus()
+            .then<void>((_) {}, onError: (Object _) {});
+        try {
+          await expectLater(
+            playing.timeout(const Duration(milliseconds: 300)),
+            throwsA(isA<ForegroundAudioException>()),
+          );
+          expect(harness.playCalls, 1);
+        } finally {
+          release.complete(true);
+          await releasing;
+          await session.dispose();
+          await harness.engine.dispose();
+        }
+      },
+    );
+
+    test('focus activation is bounded and dispose revokes late play', () async {
+      final harness = createHarness();
+      final activation = Completer<bool>();
+      harness.focus.activationGate = activation.future;
+      final old = await harness.engine.loadRemote(
+        Uri.parse('https://audio.example.test/old.mp3'),
+      );
+      await expectLater(
+        old.play().timeout(const Duration(milliseconds: 300)),
+        throwsA(isA<ForegroundAudioException>()),
+      );
+      await old.dispose().timeout(const Duration(milliseconds: 300));
+      expect(harness.playCalls, 0);
+      activation.complete(true);
+      await Future<void>.delayed(Duration.zero);
+      expect(harness.focusValues, [true, false]);
+      harness.focus.activationGate = null;
+      final next = await harness.engine.loadRemote(
+        Uri.parse('https://audio.example.test/next.mp3'),
+      );
+      await next.play();
+      await (old as ForegroundCompletionFocusSession).releaseCompletionFocus();
+      expect(harness.focusValues, [true, false, true]);
+      await next.dispose();
+      await harness.engine.dispose();
+    });
+
+    test(
+      'pause release timeout is typed and blocks late cleanup overlap',
+      () async {
+        final harness = createHarness();
+        final release = Completer<bool>();
+        harness.focus.releaseGate = release.future;
+        final old = await harness.engine.loadRemote(
+          Uri.parse('https://audio.example.test/old.mp3'),
+        );
+        await old.play();
+        await expectLater(
+          old.pause().timeout(const Duration(milliseconds: 300)),
+          throwsA(isA<ForegroundAudioException>()),
+        );
+        final next = await harness.engine.loadRemote(
+          Uri.parse('https://audio.example.test/next.mp3'),
+        );
+        await expectLater(
+          next.play(),
+          throwsA(isA<ForegroundAudioException>()),
+        );
+        await old.dispose().timeout(const Duration(milliseconds: 300));
+        expect(harness.focusValues, [true, false]);
+        release.complete(true);
+        await Future<void>.delayed(Duration.zero);
+        await next.play();
+        await (old as ForegroundCompletionFocusSession)
+            .releaseCompletionFocus();
+        expect(harness.focusValues, [true, false, true]);
+        await next.dispose();
+        await harness.engine.dispose();
+      },
+    );
+
     test('open play pause resume seek volume stop and dispose', () async {
       final harness = createHarness();
       final session = await harness.engine.loadRemote(
@@ -143,6 +233,7 @@ void _runForegroundAudioEngineContract(
 
 abstract class _EngineHarness {
   ForegroundAudioEngine get engine;
+  _ContractFocusManager get focus;
   List<Uri> get opened;
   int get playCalls;
   int get pauseCalls;
@@ -168,9 +259,11 @@ class _AudioplayersHarness implements _EngineHarness {
         return player;
       },
       audioFocusManager: focus,
+      focusTimeout: const Duration(milliseconds: 20),
     );
   }
 
+  @override
   final focus = _ContractFocusManager();
   final List<_FakeAudioplayersPlayer> players = [];
 
@@ -301,10 +394,12 @@ class _MediaKitHarness implements _EngineHarness {
     engine = MediaKitForegroundAudioEngine(
       player: player,
       audioFocusManager: focus,
+      focusTimeout: const Duration(milliseconds: 20),
     );
   }
 
   late final _FakeMediaKitContractPlayer player;
+  @override
   late final _ContractFocusManager focus;
 
   @override
@@ -416,10 +511,14 @@ class _FakeMediaKitContractPlayer implements MediaKitAudioPlayer {
 
 class _ContractFocusManager implements ForegroundAudioFocusManager {
   final List<bool> values = [];
+  Future<bool>? activationGate;
+  Future<bool>? releaseGate;
 
   @override
   Future<bool> setActive(bool active) async {
     values.add(active);
+    final gate = active ? activationGate : releaseGate;
+    if (gate != null) return gate;
     return true;
   }
 }

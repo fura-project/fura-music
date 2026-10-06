@@ -117,14 +117,17 @@ class MediaKitForegroundAudioEngine implements ForegroundAudioEngine {
     ForegroundAudioFocusManager? audioFocusManager,
     this.openTimeout = const Duration(seconds: 15),
     this.controlTimeout = const Duration(seconds: 5),
+    Duration focusTimeout = const Duration(seconds: 5),
   }) : _playerFactory = playerFactory ?? PlatformMediaKitAudioPlayer.new,
        _player = player ?? (playerFactory ?? PlatformMediaKitAudioPlayer.new)(),
-       _audioFocusManager =
-           audioFocusManager ?? const AudioSessionForegroundAudioFocusManager();
+       _audioFocusOwner = ForegroundAudioFocusOwner(
+         audioFocusManager ?? const AudioSessionForegroundAudioFocusManager(),
+         timeout: focusTimeout,
+       );
 
   final MediaKitAudioPlayer Function() _playerFactory;
   MediaKitAudioPlayer _player;
-  final ForegroundAudioFocusManager _audioFocusManager;
+  final ForegroundAudioFocusOwner _audioFocusOwner;
   final Duration openTimeout;
   final Duration controlTimeout;
   Future<void> _operationTail = Future<void>.value();
@@ -163,7 +166,7 @@ class MediaKitForegroundAudioEngine implements ForegroundAudioEngine {
       }
       return _MediaKitForegroundAudioSession(
         player,
-        _audioFocusManager,
+        _audioFocusOwner.createLease(),
         (phase, operation) => _serialize(phase, generation, operation),
       );
     } on ForegroundAudioException {
@@ -296,11 +299,7 @@ class MediaKitForegroundAudioEngine implements ForegroundAudioEngine {
 
 class _MediaKitForegroundAudioSession
     implements ForegroundAudioSession, ForegroundCompletionFocusSession {
-  _MediaKitForegroundAudioSession(
-    this._player,
-    this._audioFocusManager,
-    this._serialize,
-  ) {
+  _MediaKitForegroundAudioSession(this._player, this._focus, this._serialize) {
     _subscriptions.addAll([
       _player.playing.listen((playing) {
         if (_disposed) return;
@@ -322,7 +321,7 @@ class _MediaKitForegroundAudioSession
         }
         _lastState = ForegroundAudioState.completed;
         _logMediaKit(
-          'playback_completed focus=${_focusActive ? 'retained' : 'inactive'}',
+          'playback_completed focus=${_focus.isActive ? 'retained' : 'inactive'}',
         );
         _states.add(ForegroundAudioState.completed);
       }, onError: (Object _) => _emitFailure()),
@@ -338,7 +337,7 @@ class _MediaKitForegroundAudioSession
   }
 
   final MediaKitAudioPlayer _player;
-  final ForegroundAudioFocusManager _audioFocusManager;
+  final ForegroundAudioFocusLease _focus;
   final Future<void> Function(String, Future<void> Function()) _serialize;
   final StreamController<ForegroundAudioState> _states =
       StreamController.broadcast();
@@ -347,7 +346,6 @@ class _MediaKitForegroundAudioSession
   final StreamController<int> _positions = StreamController.broadcast();
   final List<StreamSubscription<Object?>> _subscriptions = [];
   ForegroundAudioState _lastState = ForegroundAudioState.stopped;
-  bool _focusActive = false;
   bool _disposed = false;
 
   @override
@@ -363,26 +361,38 @@ class _MediaKitForegroundAudioSession
   Future<void> play() async {
     _ensureActive();
     var activated = false;
+    final focusRevision = _focus.revision;
     try {
-      if (!_focusActive) {
-        _logMediaKit('audio_focus phase=activate outcome=started');
-      }
-      activated = _focusActive || await _audioFocusManager.setActive(true);
+      activated = await _focus.activate();
       if (!activated) {
         _logMediaKit('audio_focus phase=activate outcome=rejected');
         throw const ForegroundAudioException(ForegroundAudioFailure.playback);
       }
-      if (!_focusActive) {
-        _logMediaKit('audio_focus phase=activate outcome=success');
+      _ensureActive();
+      if (!_focus.isCurrent(focusRevision)) {
+        throw const ForegroundAudioException(
+          ForegroundAudioFailure.coreUnavailable,
+        );
       }
-      _focusActive = true;
       _lastState = ForegroundAudioState.playing;
-      await _serialize('play', _player.play);
+      await _serialize('play', () {
+        _ensureActive();
+        if (!_focus.isCurrent(focusRevision)) {
+          throw const ForegroundAudioException(
+            ForegroundAudioFailure.coreUnavailable,
+          );
+        }
+        return _player.play();
+      });
     } on ForegroundAudioException {
-      if (activated) await _deactivateFocus();
+      if (activated && _focus.revision == focusRevision) {
+        await _releaseFocusBestEffort();
+      }
       rethrow;
     } on Object {
-      if (activated) await _deactivateFocus();
+      if (activated && _focus.revision == focusRevision) {
+        await _releaseFocusBestEffort();
+      }
       throw const ForegroundAudioException(ForegroundAudioFailure.playback);
     }
   }
@@ -463,17 +473,17 @@ class _MediaKitForegroundAudioSession
   void _emitFailure() {
     if (_disposed || _failures.isClosed) return;
     _logMediaKit('native_player_failure outcome=reported');
-    unawaited(_deactivateFocus());
+    unawaited(_releaseFocusBestEffort());
     _failures.add(ForegroundAudioFailure.playback);
   }
 
   Future<void> _deactivateFocus() async {
-    if (!_focusActive) return;
-    _focusActive = false;
-    _logMediaKit('audio_focus phase=release outcome=started');
+    await _focus.release();
+  }
+
+  Future<void> _releaseFocusBestEffort() async {
     try {
-      await _audioFocusManager.setActive(false);
-      _logMediaKit('audio_focus phase=release outcome=success');
+      await _deactivateFocus();
     } on Object {
       _logMediaKit('audio_focus phase=release outcome=failure');
       // Focus release is best effort and remains secret-free.
@@ -487,11 +497,12 @@ class _MediaKitForegroundAudioSession
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    final cleanup = _focus.close().then<void>((_) {}, onError: (Object _) {});
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
     _subscriptions.clear();
-    await _deactivateFocus();
+    await cleanup;
     await _states.close();
     await _failures.close();
     await _positions.close();
