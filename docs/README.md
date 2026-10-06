@@ -27,8 +27,10 @@ these documents should preserve durable contracts and review boundaries.
 - [`agent/ui-development.md`](agent/ui-development.md) — Flutter Shell,
   Material 3, adaptive layout and Human visual-review rules.
 
-Repository-level `AGENTS.md` remains authoritative for execution mode, commit,
-push and final-report requirements.
+Repository-level `AGENTS.md` remains authoritative for task scope and
+continuation authority, evidence exhaustion, commit, push and final-report
+requirements. No execution modes are selected or persisted; dated historical
+labels do not override current task authority.
 
 ## Architecture decisions
 

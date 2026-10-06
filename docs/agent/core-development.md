@@ -2,12 +2,12 @@
 
 Use this guide for QQ Music and NetEase protocol, Provider and Domain behavior, authentication and credential semantics, media resolution, Queue rules, lyric parsing/timing, remote mutation semantics, recommendation capability, Settings business models, reusable non-visual logic, Rust platform-neutral behavior, and typed Bridge contracts. A small Flutter adapter needed to expose a capability remains Core work; visual design does not.
 
-The shared authority, execution-mode, security, Git, and reporting rules in [`AGENTS.md`](../../AGENTS.md) always apply.
+The shared task-authority, evidence-exhaustion, security, Git, and reporting rules in [`AGENTS.md`](../../AGENTS.md) always apply. There is no execution-mode selector.
 
 ## Ownership and authority
 
 ```text
-Human defines product boundary and execution mode.
+Human defines product boundary, task scope and any continuation authority.
 Evidence plus architecture define correctness.
 The Agent designs the bounded implementation.
 ```
@@ -16,23 +16,22 @@ Inside an authorized capability, implementation details such as Rust models, Pro
 
 Keep raw QQ/NetEase models and protocol behavior inside their respective clients; keep Provider identity opaque outside the owning Provider; keep reusable business behavior in Rust; keep the Bridge typed, coarse, cancellable, provider-neutral, and free of product business rules.
 
-## Execution-mode interpretation
+## Execution inside the authorized scope
 
-### CORE + AUTONOMOUS_DEVELOPMENT
-
-Core may use the evidence-driven loop that supports forward development:
+The Agent executes the authorized Core task exhaustively with the same engineering rigor for implementation, regression, research or validation:
 
 ```text
-implement -> test/evidence -> fix -> verify -> next finite authorized task
+inspect -> reproduce/research -> implement -> test/runtime verify
+-> investigate failures -> review diff -> record evidence/blockers
 ```
 
-The next task still needs current product authority and concrete evidence. Do not manufacture capability work to continue.
+Only explicit Human continuation authority permits selecting another finite task within the specified direction. Each selection needs current product authority and concrete provenance. Do not manufacture capability work to continue or infer such authority from a pending gate.
 
-### CORE + HUMAN_GATED_REGRESSION
+### Regression scope and independent evidence
 
 Assume existing Core behavior is the baseline. Investigate only reproduced bugs, compatibility failures, Human-reported incorrect behavior, failing regressions, and evidence-backed correctness defects.
 
-Start with targeted reproduction and evidence. Fix the smallest proven cause and verify that exact behavior. Do not expand capability coverage, redesign APIs, perform speculative architecture work, or clean up nearby code while fixing the regression. Completion of the bounded regression is a valid `COMPLETE` gate.
+Start with targeted reproduction and evidence. Fix the smallest proven cause and verify that exact behavior. Do not expand capability coverage, redesign APIs, perform speculative architecture work, or clean up nearby code while fixing the regression. A live/account/device gate blocks its dependent acceptance only: exhaust independent authorized machine work and negative-evidence investigation before reporting the exact remaining blocker. A passing rerun does not erase an observed failure, and `COMPLETE` requires the reported task's actual acceptance boundary.
 
 ## Evidence and correctness
 

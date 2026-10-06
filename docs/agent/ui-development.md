@@ -2,7 +2,7 @@
 
 Use this guide for Flutter page composition, visual hierarchy, layout, adaptive behavior, Material 3 presentation, visual states, interaction, accessibility, and implementation of approved Stitch/Figma designs.
 
-The shared authority, execution-mode, security, Git, and reporting rules in [`AGENTS.md`](../../AGENTS.md) always apply.
+The shared task-authority, evidence-exhaustion, security, Git, and reporting rules in [`AGENTS.md`](../../AGENTS.md) always apply. There is no execution-mode selector.
 
 ## Visual authority
 
@@ -46,24 +46,23 @@ Before requesting review, inspect canonical desktop and compact renders for requ
 
 Work one approved page at a time. Do not begin an adjacent page while the current page awaits Human visual acceptance. Preserve accepted shared Shell geometry and behavior—including Sidebar, Top Bar, persistent desktop Player, mobile Mini Player, Bottom Navigation, and primary navigation—unless the Human requests a change or a concrete accessibility, responsive, platform, or correctness defect proves it necessary.
 
-## Execution-mode interpretation
+## Execution and visual acceptance
 
-### UI + AUTONOMOUS_DEVELOPMENT
-
-The Agent may implement and machine-verify an approved visual task, but aesthetics remain Human-gated. The loop ends at a canonical candidate:
+The Agent fully implements and machine-verifies the approved visual task, but aesthetics remain Human-owned:
 
 ```text
-implement -> targeted verification -> render -> HUMAN_REVIEW
+implement -> targeted verification -> render -> investigate failures
+-> review evidence -> exhaust independent machine work -> HUMAN_REVIEW
 ```
 
-Do not autonomously correct the render, accept it, or begin another page.
+`HUMAN_REVIEW` blocks visual acceptance, not remaining tests, overflow/interaction investigations or other independent machine work within the approved scope. Do not redesign a render based on preference, self-accept it, or begin an adjacent page. Apply the negative-evidence exhaustion rule even when a later canonical render passes. Continuation on another independent task needs explicit Human authority and cannot bypass the one-approved-page boundary.
 
-### UI + HUMAN_GATED_REGRESSION
+### Regression scope
 
 Assume accepted visual structure is stable. Regression work may address only reproduced overflow/clipping, broken responsive behavior, incorrect visual state, a missing supported surface, wrong semantic data binding, interaction/focus/keyboard failures, or exact Human-reported visual differences.
 
 - For **M** defects: reproduce, make the smallest correction, and run targeted verification.
-- For **H** differences: render actual evidence, batch small findings where practical, stop for Human review, then apply only the exact requested correction and render again.
+- For **H** differences: render actual evidence, batch small findings where practical, leave visual acceptance to the Human, then apply only the exact requested correction and render again. Continue independent authorized machine work while that claim is pending.
 - For **D** questions: stop the affected scope and request the exact product decision.
 
 Do not reopen an entire page or accepted shared Shell area because one local defect exists.
@@ -156,7 +155,7 @@ The page review checks component alignment and density, hierarchy, shared-style 
 - **H:** send aesthetic or layout preference to the Human instead of autonomously redesigning;
 - **D:** pause only the affected scope for the new product or capability decision.
 
-An unblocked `agy` conclusion is not Human acceptance. A suggestion without supporting material is pending verification, not a defect. By default, perform one preflight and one rendered review per component; use another consultation only for a concrete finding. Do not loop indefinitely, and apply the repository rule to stop and report after three materially similar failures.
+An unblocked `agy` conclusion is not Human acceptance. A suggestion without supporting material is pending verification, not a defect. By default, perform one preflight and one rendered review per component; use another consultation only for a concrete finding. After three materially similar failures, stop repeating that consultation approach and record its blocker; assess independent authorized tests or bounded alternatives before declaring the task exhausted.
 
 ### Review records and unavailable tooling
 

@@ -1,6 +1,5 @@
 ---
 execution:
-  mode: AUTONOMOUS_DEVELOPMENT
   work_domain: CORE
   state: ANDROID_WAYDROID_BASELINE_PASS_PHYSICAL_PENDING
   acceptance_milestone: ANDROID_REPEAT_ONE_LIFECYCLE_STABILITY
@@ -10,6 +9,20 @@ execution:
 ---
 
 # Current State
+
+- **2026-10-06 Agent governance correction:** the Human's latest instruction
+  removes all execution modes, rather than introducing a renamed two-mode
+  scheme. Current task scope and explicit continuation authority now govern
+  work directly under `AGENTS.md`; no `execution.mode` is persisted. All task
+  types use the same engineering rigor. Acceptance gates block only dependent
+  claims/actions, and negative machine evidence must be investigated to a
+  precise evidence/authority boundary before asserting exhaustion. Historical
+  mode labels and checkpoint results below remain dated evidence, not live
+  execution policy. In particular, the prior playback baseline's `NONE` does
+  not prove that the observed play timeout / delayed focus release has no
+  bounded investigation left. This governance-only task does not reopen or
+  resolve that playback investigation, replace its pending physical gate, or
+  authorize adjacent product work. Playback scheduling fields are retained.
 
 - **2026-10-06 resumed Waydroid Android acceptance:** starting HEAD/local and
   live remote main were `fa73c90e2a40fad08f526cbdd86d7853d8ad35f4`, worktree
