@@ -288,7 +288,7 @@ where
                 HttpRequest::get(MUSICU_URL)
                     .query("data", request)
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .response_body_limit(MAX_RESPONSE_BYTES)
                     .timeout(REQUEST_TIMEOUT),
             )
@@ -312,7 +312,9 @@ struct OfficialPlaylistsRequest {
 impl OfficialPlaylistsRequest {
     const fn new(page: u32, size: u32) -> Self {
         Self {
-            comm: OfficialPlaylistComm { client_type: 24 },
+            comm: OfficialPlaylistComm {
+                client_type: crate::profile::WEB_PUBLIC_TYPE,
+            },
             playlist: OfficialPlaylistsRpc {
                 module: "playlist.PlayListPlazaServer",
                 method: "get_playlist_by_category",

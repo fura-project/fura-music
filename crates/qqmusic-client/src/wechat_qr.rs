@@ -532,10 +532,16 @@ mod tests {
         assert_eq!(requests[1].max_response_body_bytes(), 2 * 1024 * 1024);
         assert_eq!(
             requests[1].headers(),
-            [(
-                "Referer".into(),
-                "https://open.weixin.qq.com/connect/qrconnect".into()
-            )],
+            [
+                (
+                    "User-Agent".into(),
+                    crate::profile::QqProtocolProfile::Web.user_agent().into()
+                ),
+                (
+                    "Referer".into(),
+                    "https://open.weixin.qq.com/connect/qrconnect".into()
+                )
+            ],
         );
     }
 
@@ -643,7 +649,13 @@ mod tests {
         );
         assert_eq!(
             requests[2].headers(),
-            [("Referer".into(), "https://open.weixin.qq.com/".into())]
+            [
+                (
+                    "User-Agent".into(),
+                    crate::profile::QqProtocolProfile::Web.user_agent().into()
+                ),
+                ("Referer".into(), "https://open.weixin.qq.com/".into())
+            ]
         );
         assert_eq!(requests[2].max_response_body_bytes(), 64 * 1024);
         assert_eq!(

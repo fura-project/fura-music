@@ -19,6 +19,7 @@ use std::sync::Arc;
 pub struct NeteaseProvider<T> {
     client: Arc<NeteaseClient<T>>,
     auth: Arc<auth::AuthOwner>,
+    media_cache: tokio::sync::Mutex<provider_api::MediaResolutionCache>,
 }
 impl<T> NeteaseProvider<T> {
     #[must_use]
@@ -26,6 +27,7 @@ impl<T> NeteaseProvider<T> {
         Self {
             client: Arc::new(client),
             auth: Arc::new(auth::AuthOwner::new()),
+            media_cache: tokio::sync::Mutex::new(provider_api::MediaResolutionCache::default()),
         }
     }
 }

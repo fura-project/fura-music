@@ -414,7 +414,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .header("Cookie", credential.musicu_cookie_header())
                     .body(body)
                     .response_body_limit(MAX_RESPONSE_BYTES)
@@ -452,7 +452,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .header("Cookie", credential.musicu_cookie_header())
                     .body(body)
                     .response_body_limit(MAX_RESPONSE_BYTES)
@@ -483,12 +483,12 @@ impl<'a> DailyRecommendationRequest<'a> {
             comm: DailyRecommendationComm {
                 account_id: credential.music_id(),
                 format: "json",
-                client_type: 20,
-                client_version: 1770,
+                client_type: crate::profile::WEB_LEGACY_TYPE,
+                client_version: crate::profile::WEB_LEGACY_VERSION,
                 csrf_token: 5381,
                 input_charset: "utf-8",
                 output_charset: "utf-8",
-                platform: "wk_v17",
+                platform: crate::profile::WEB_LEGACY_PLATFORM,
                 user_id: "",
                 guid: "",
             },

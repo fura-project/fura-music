@@ -163,6 +163,7 @@ async fn request_json<T: Transport>(
     let response = transport
         .send(Request {
             url: endpoint.into(),
+            profile: crate::profile::KuGouProtocolProfile::Public,
         })
         .await?;
     match response.status {

@@ -321,7 +321,16 @@ class QueuePlaybackController extends ChangeNotifier {
 
   Future<void> _completeCurrent(int terminalToken) async {
     final result = _gateway.completeCurrent();
-    if (_disposed || !_accept(result)) return;
+    if (_disposed) return;
+    if (!_accept(result)) {
+      await _playback.releaseCompletionFocus();
+      return;
+    }
+    if (result.completionAction == PlaybackCompletionAction.replayCurrent) {
+      _completionHandled = false;
+      await _playback.replayCurrent();
+      return;
+    }
     if (result.playbackRequested) {
       _completionHandled = false;
       final current = _snapshot.current;
@@ -332,6 +341,7 @@ class QueuePlaybackController extends ChangeNotifier {
       }
       return;
     }
+    await _playback.releaseCompletionFocus();
     final collectionClaimed = await _continueCollectionFromTerminal(
       terminalToken,
     );

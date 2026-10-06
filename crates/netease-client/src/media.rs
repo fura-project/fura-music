@@ -452,7 +452,10 @@ mod tests {
         }
         assert_eq!(
             request.headers(),
-            &[("Referer".into(), "https://music.163.com/".into())]
+            &[
+                ("User-Agent".into(), "Mozilla/5.0".into()),
+                ("Referer".into(), "https://music.163.com/".into())
+            ]
         );
         let payload = decode_eapi_payload(&request.form()[0].1);
         assert_eq!(payload["ids"], "[7]");

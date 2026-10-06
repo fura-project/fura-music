@@ -223,7 +223,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .body(body)
                     .response_body_limit(MAX_RESPONSE_BYTES)
                     .timeout(REQUEST_TIMEOUT),
@@ -250,8 +250,8 @@ impl<'a> ArtistAlbumsRequest<'a> {
     const fn new(artist_mid: &'a str, offset: u32, size: u32) -> Self {
         Self {
             comm: ArtistAlbumsComm {
-                client_type: 24,
-                client_version: 0,
+                client_type: crate::profile::WEB_PUBLIC_TYPE,
+                client_version: crate::profile::WEB_PUBLIC_VERSION,
             },
             artist_albums: ArtistAlbumsRpc {
                 module: "music.musichallAlbum.AlbumListServer",

@@ -226,7 +226,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .header("Cookie", credential.musicu_cookie_header())
                     .body(body)
                     .response_body_limit(MAX_RESPONSE_BYTES)
@@ -260,8 +260,8 @@ impl<'a> PlaylistTrackRequest<'a> {
     ) -> Self {
         Self {
             comm: PlaylistTrackComm {
-                client_version: 4_747_474,
-                client_type: 24,
+                client_version: crate::profile::WEB_LIBRARY_VERSION,
+                client_type: crate::profile::WEB_PUBLIC_TYPE,
                 format: "json",
                 account_id: credential.music_id(),
                 auth_key: credential.music_key(),

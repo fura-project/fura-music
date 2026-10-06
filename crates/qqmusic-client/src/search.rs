@@ -281,7 +281,10 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header(
+                        "Referer",
+                        crate::profile::QqProtocolProfile::Desktop.referer(),
+                    )
                     .body(body)
                     .response_body_limit(MAX_SEARCH_RESPONSE_BYTES)
                     .timeout(SEARCH_TIMEOUT),
@@ -307,12 +310,12 @@ impl<'a> TrackSearchRequest<'a> {
     const fn new(query: &'a str, page: u32, size: u32) -> Self {
         Self {
             comm: TrackSearchComm {
-                client_type: "19",
-                client_version: "1859",
+                client_type: crate::profile::DESKTOP_TYPE_TEXT,
+                client_version: crate::profile::DESKTOP_SEARCH_VERSION,
                 format: "json",
                 input_charset: "utf-8",
                 output_charset: "utf-8",
-                platform: "yqq.json",
+                platform: crate::profile::WEB_JSON_PLATFORM,
                 need_new_code: 1,
             },
             search: TrackSearchRpc {
@@ -658,12 +661,28 @@ mod tests {
         assert_eq!(requests[0].max_response_body_bytes(), 2 * 1024 * 1024);
         let body: Value = serde_json::from_slice(requests[0].body_bytes().expect("request body"))
             .expect("request JSON");
-        assert_eq!(body["comm"]["ct"], "19");
-        assert_eq!(body["search"]["module"], "music.search.SearchCgiService");
-        assert_eq!(body["search"]["method"], "DoSearchForQQMusicDesktop");
-        assert_eq!(body["search"]["param"]["query"], "synthetic query");
-        assert_eq!(body["search"]["param"]["page_num"], 2);
-        assert_eq!(body["search"]["param"]["num_per_page"], 5);
+        // Full pre-extraction request golden, including JSON value types.
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "comm":{"ct":"19","cv":"1859","format":"json",
+                    "inCharset":"utf-8","outCharset":"utf-8","platform":"yqq.json","needNewCode":1},
+                "search":{"module":"music.search.SearchCgiService","method":"DoSearchForQQMusicDesktop",
+                    "param":{"query":"synthetic query","num_per_page":5,"page_num":2,"search_type":0}}
+            })
+        );
+        assert_eq!(
+            requests[0].headers(),
+            &[
+                (
+                    "User-Agent".to_owned(),
+                    concat!("flutterustmusic/", env!("CARGO_PKG_VERSION")).to_owned()
+                ),
+                ("Content-Type".to_owned(), "application/json".to_owned()),
+                ("Origin".to_owned(), "https://y.qq.com".to_owned()),
+                ("Referer".to_owned(), "https://y.qq.com/".to_owned()),
+            ]
+        );
         let debug = format!("{page:?} {:?}", requests[0]);
         assert!(!debug.contains("synthetic query"));
         assert!(!debug.contains("Synthetic track"));

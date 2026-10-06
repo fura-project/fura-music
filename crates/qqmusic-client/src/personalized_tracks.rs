@@ -399,7 +399,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .header("Cookie", credential.musicu_cookie_header())
                     .body(body)
                     .response_body_limit(MAX_RESPONSE_BYTES)
@@ -445,7 +445,7 @@ where
                     .query("_", cache_buster)
                     .query("sign", sign)
                     .query("data", data)
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .response_body_limit(MAX_RESPONSE_BYTES)
                     .timeout(REQUEST_TIMEOUT),
             )
@@ -476,7 +476,7 @@ impl RelatedTracksRequest {
                 input_charset: "utf8",
                 output_charset: "utf-8",
                 notice: 0,
-                platform: "yqq",
+                platform: crate::profile::WEB_PLATFORM,
                 need_new_code: 0,
             },
             simsongs: RelatedTracksRpc {
@@ -530,8 +530,8 @@ impl<'a> PersonalizedTracksRequest<'a> {
             comm: PersonalizedTracksComm {
                 account_id: credential.music_id(),
                 format: "json",
-                client_type: 19,
-                client_version: 0,
+                client_type: crate::profile::DESKTOP_TYPE,
+                client_version: crate::profile::DESKTOP_COMPAT_VERSION,
                 auth_key: credential.music_key(),
                 login_type: credential.login_type().value(),
             },

@@ -2,6 +2,14 @@ use std::fmt;
 
 use crate::TrackSummary;
 
+/// EOF intent is owned by the Queue, not inferred from presentation repeat mode.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PlaybackCompletionAction {
+    None,
+    ReplayCurrent,
+    PlayCurrent,
+}
+
 /// Provider-neutral ordered playback intent.
 ///
 /// Queue entries are position-based and deliberately retain duplicate track
@@ -235,11 +243,15 @@ impl PlaybackQueue {
     /// Applies automatic completion. Repeat-one requests replay of the same
     /// position; otherwise completion follows the active order and repeat-all
     /// wrapping rules.
-    pub fn complete_current(&mut self) -> bool {
+    pub fn complete_current(&mut self) -> PlaybackCompletionAction {
         if self.current_index.is_some() && self.repeat_mode == PlaybackRepeatMode::One {
-            return true;
+            return PlaybackCompletionAction::ReplayCurrent;
         }
-        self.advance()
+        if self.advance() {
+            PlaybackCompletionAction::PlayCurrent
+        } else {
+            PlaybackCompletionAction::None
+        }
     }
 
     /// Appends one positional entry. The first appended entry becomes current.
@@ -668,8 +680,14 @@ mod tests {
         assert!(!queue.rewind());
         assert_eq!(queue.current().expect("current").title(), "one");
         assert!(queue.advance());
-        assert!(queue.complete_current());
-        assert!(!queue.complete_current());
+        assert_eq!(
+            queue.complete_current(),
+            super::PlaybackCompletionAction::PlayCurrent
+        );
+        assert_eq!(
+            queue.complete_current(),
+            super::PlaybackCompletionAction::None
+        );
         assert_eq!(queue.current().expect("current").title(), "three");
     }
 
@@ -746,7 +764,10 @@ mod tests {
                 .expect("queue");
 
         assert!(queue.set_repeat_mode(PlaybackRepeatMode::One));
-        assert!(queue.complete_current());
+        assert_eq!(
+            queue.complete_current(),
+            super::PlaybackCompletionAction::ReplayCurrent
+        );
         assert_eq!(queue.current_index(), Some(2));
         assert!(!queue.advance());
         assert!(queue.rewind());
@@ -866,7 +887,10 @@ mod tests {
         assert_eq!(queue.repeat_mode(), PlaybackRepeatMode::All);
         assert!(queue.has_previous());
         assert!(queue.has_next());
-        assert!(queue.complete_current());
+        assert_eq!(
+            queue.complete_current(),
+            super::PlaybackCompletionAction::PlayCurrent
+        );
         assert_eq!(queue.current_index(), Some(0));
     }
 

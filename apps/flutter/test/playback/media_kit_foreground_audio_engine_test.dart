@@ -6,6 +6,162 @@ import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart'
 
 void main() {
   test(
+    'EOF replay retains source and focus; terminal completion releases it',
+    () async {
+      final player = _FakeMediaKitPlayer();
+      final focus = _FakeFocusManager();
+      final engine = MediaKitForegroundAudioEngine(
+        player: player,
+        audioFocusManager: focus,
+      );
+      final session = await engine.loadRemote(
+        Uri.parse('https://audio.example.test/repeat.mp3'),
+      );
+      await session.play();
+      for (var cycle = 0; cycle < 100; cycle++) {
+        player.emitCompleted();
+        await Future<void>.delayed(Duration.zero);
+        await session.seekToMs(0);
+        await session.play();
+      }
+      expect(player.opened, hasLength(1));
+      expect(player.stopCalls, 0);
+      expect(player.disposeCalls, 0);
+      expect(player.seekPositions, List.filled(100, Duration.zero));
+      expect(focus.values, [true]);
+      await (session as ForegroundCompletionFocusSession)
+          .releaseCompletionFocus();
+      expect(focus.values, [true, false]);
+      await session.dispose();
+      await engine.dispose();
+    },
+  );
+
+  test(
+    'stalled native operation is bounded and concurrent recovery retires once',
+    () async {
+      final pending = Completer<void>();
+      final first = _FakeMediaKitPlayer()..openGate = pending.future;
+      final replacement = _FakeMediaKitPlayer();
+      var factories = 0;
+      final engine = MediaKitForegroundAudioEngine(
+        player: first,
+        playerFactory: () {
+          factories++;
+          return replacement;
+        },
+        audioFocusManager: _FakeFocusManager(),
+        openTimeout: const Duration(milliseconds: 20),
+        controlTimeout: const Duration(milliseconds: 20),
+      );
+      await expectLater(
+        engine.loadRemote(Uri.parse('https://audio.example.test/stall.mp3')),
+        throwsA(isA<ForegroundAudioException>()),
+      );
+      final sessions = await Future.wait([
+        engine.loadRemote(
+          Uri.parse('https://audio.example.test/recovery-one.mp3'),
+        ),
+        engine.loadRemote(
+          Uri.parse('https://audio.example.test/recovery-two.mp3'),
+        ),
+      ]);
+      expect(first.disposeCalls, 1);
+      expect(factories, 1);
+      expect(engine.debugPlayer, same(replacement));
+      // A late completion of the abandoned native Future cannot install a new
+      // session or move the operation tail back onto the retired Player.
+      pending.complete();
+      for (final session in sessions) {
+        await session.dispose();
+      }
+      await engine.dispose();
+      expect(first.disposeCalls, 1);
+      expect(replacement.disposeCalls, 1);
+    },
+  );
+
+  test('failed retirement never overlaps a replacement Player', () async {
+    final first = _FakeMediaKitPlayer()
+      ..openGate = Completer<void>().future
+      ..disposeGate = Completer<void>().future;
+    var factories = 0;
+    final engine = MediaKitForegroundAudioEngine(
+      player: first,
+      playerFactory: () {
+        factories++;
+        return _FakeMediaKitPlayer();
+      },
+      openTimeout: const Duration(milliseconds: 20),
+      controlTimeout: const Duration(milliseconds: 20),
+    );
+    await expectLater(
+      engine.loadRemote(Uri.parse('https://audio.example.test/stall.mp3')),
+      throwsA(isA<ForegroundAudioException>()),
+    );
+    await expectLater(
+      engine.loadRemote(Uri.parse('https://audio.example.test/retry.mp3')),
+      throwsA(isA<ForegroundAudioException>()),
+    );
+    expect(factories, 0);
+    await engine.dispose();
+    expect(first.disposeCalls, 1);
+  });
+
+  test('control stall releases focus and cannot rebuild without a budget', () async {
+    final pause = Completer<void>();
+    final first = _FakeMediaKitPlayer()..pauseGate = pause.future;
+    final replacement = _FakeMediaKitPlayer();
+    final focus = _FakeFocusManager();
+    var factories = 0;
+    final engine = MediaKitForegroundAudioEngine(
+      player: first,
+      playerFactory: () {
+        factories++;
+        return replacement;
+      },
+      audioFocusManager: focus,
+      openTimeout: const Duration(milliseconds: 20),
+      controlTimeout: const Duration(milliseconds: 20),
+    );
+    final session = await engine.loadRemote(
+      Uri.parse('https://audio.example.test/control.mp3'),
+    );
+    await session.play();
+    await expectLater(
+      session.pause(),
+      throwsA(isA<ForegroundAudioException>()),
+    );
+    expect(focus.values, [true, false]);
+    // Queued controls finish with a coarse error instead of waiting forever
+    // behind the native pause. Only an explicit load retires the failed Player.
+    await expectLater(
+      session.seekToMs(0),
+      throwsA(isA<ForegroundAudioException>()),
+    );
+    await session.dispose();
+    final recovered = await engine.loadRemote(
+      Uri.parse('https://audio.example.test/recovered.mp3'),
+    );
+    expect(factories, 1);
+    expect(first.disposeCalls, 1);
+    pause.complete();
+    replacement.pauseGate = Completer<void>().future;
+    await recovered.play();
+    await expectLater(
+      recovered.pause(),
+      throwsA(isA<ForegroundAudioException>()),
+    );
+    await expectLater(
+      engine.loadRemote(Uri.parse('https://audio.example.test/no-third.mp3')),
+      throwsA(isA<ForegroundAudioException>()),
+    );
+    expect(factories, 1);
+    await recovered.dispose();
+    await engine.dispose();
+  });
+
+  test(
     'reuses one Player across source replacement and terminal disposal',
     () async {
       final player = _FakeMediaKitPlayer();
@@ -198,6 +354,9 @@ class _FakeMediaKitPlayer implements MediaKitAudioPlayer {
   final List<Duration> seekPositions = [];
   final List<double> volumes = [];
   Object? openFailure;
+  Future<void>? openGate;
+  Future<void>? pauseGate;
+  Future<void>? disposeGate;
   int playCalls = 0;
   int pauseCalls = 0;
   int stopCalls = 0;
@@ -220,13 +379,17 @@ class _FakeMediaKitPlayer implements MediaKitAudioPlayer {
     opened.add(source);
     final failure = openFailure;
     if (failure != null) throw failure;
+    await openGate;
   }
 
   @override
   Future<void> play() async => playCalls += 1;
 
   @override
-  Future<void> pause() async => pauseCalls += 1;
+  Future<void> pause() async {
+    pauseCalls += 1;
+    await pauseGate;
+  }
 
   @override
   Future<void> stop() async => stopCalls += 1;
@@ -240,6 +403,7 @@ class _FakeMediaKitPlayer implements MediaKitAudioPlayer {
   @override
   Future<void> dispose() async {
     disposeCalls += 1;
+    await disposeGate;
     await _playing.close();
     await _completed.close();
     await _position.close();

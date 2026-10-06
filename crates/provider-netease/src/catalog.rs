@@ -494,6 +494,16 @@ impl<T: Transport> MediaSourceResolver for NeteaseMediaSourceResolver<'_, T> {
     ) -> Result<ResolvedMediaSource, MediaResolutionError> {
         let id = identity(track.provider(), track.opaque())
             .map_err(|_| MediaResolutionError::Unavailable)?;
+        let mut cache = self.provider.media_cache.lock().await;
+        let generation = self.provider.auth.generation();
+        let started = std::time::Instant::now();
+        if let Some(source) = cache.get(&track, preferred, generation, started) {
+            return if self.provider.auth.generation() == generation {
+                Ok(source)
+            } else {
+                Err(MediaResolutionError::Replaced)
+            };
+        }
         let media = self
             .provider
             .resolve_source(
@@ -521,7 +531,10 @@ impl<T: Transport> MediaSourceResolver for NeteaseMediaSourceResolver<'_, T> {
                     _ => MediaResolutionError::ServiceUnavailable,
                 },
             })?;
-        ResolvedMediaSource::new(
+        if self.provider.auth.generation() != generation {
+            return Err(MediaResolutionError::Replaced);
+        }
+        let source = ResolvedMediaSource::new(
             track,
             media.uri(),
             match media.format {
@@ -536,6 +549,8 @@ impl<T: Transport> MediaSourceResolver for NeteaseMediaSourceResolver<'_, T> {
             },
             media.valid_for_seconds,
         )
-        .map_err(|_| MediaResolutionError::InvalidResponse)
+        .map_err(|_| MediaResolutionError::InvalidResponse)?;
+        cache.insert(source.clone(), preferred, generation, started);
+        Ok(source)
     }
 }

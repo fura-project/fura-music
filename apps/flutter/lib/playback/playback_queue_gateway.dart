@@ -16,6 +16,8 @@ enum PlaybackOrder { sequential, shuffle }
 
 enum PlaybackRepeatMode { off, all, one }
 
+enum PlaybackCompletionAction { none, replayCurrent, playCurrent }
+
 class PlaybackQueueSnapshot {
   PlaybackQueueSnapshot({
     required List<PlaylistTrackSummary> tracks,
@@ -58,11 +60,13 @@ class PlaybackQueueResult {
   const PlaybackQueueResult({
     this.snapshot,
     this.playbackRequested = false,
+    this.completionAction,
     this.failure,
   });
 
   final PlaybackQueueSnapshot? snapshot;
   final bool playbackRequested;
+  final PlaybackCompletionAction? completionAction;
   final PlaybackQueueFailure? failure;
 
   @override
@@ -324,7 +328,9 @@ PlaybackQueueResult mapBridgePlaybackQueueUpdate(
   final bridgeSnapshot = update.snapshot;
   final bridgeFailure = update.failure;
   if (bridgeFailure != null) {
-    if (bridgeSnapshot != null || update.playbackRequested) {
+    if (bridgeSnapshot != null ||
+        update.playbackRequested ||
+        update.completionAction != null) {
       return const PlaybackQueueResult(
         failure: PlaybackQueueFailure.invalidResponse,
       );
@@ -390,6 +396,15 @@ PlaybackQueueResult mapBridgePlaybackQueueUpdate(
       failure: PlaybackQueueFailure.invalidResponse,
     );
   }
+  final action = update.completionAction;
+  if (action != null &&
+      (update.playbackRequested !=
+              (action != bridge_queue.PlaybackCompletionAction.none) ||
+          (update.playbackRequested && currentIndex == null))) {
+    return const PlaybackQueueResult(
+      failure: PlaybackQueueFailure.invalidResponse,
+    );
+  }
   return PlaybackQueueResult(
     snapshot: PlaybackQueueSnapshot(
       tracks: tracks,
@@ -400,6 +415,15 @@ PlaybackQueueResult mapBridgePlaybackQueueUpdate(
       repeatMode: repeatMode,
     ),
     playbackRequested: update.playbackRequested,
+    completionAction: switch (update.completionAction) {
+      null => null,
+      bridge_queue.PlaybackCompletionAction.none =>
+        PlaybackCompletionAction.none,
+      bridge_queue.PlaybackCompletionAction.replayCurrent =>
+        PlaybackCompletionAction.replayCurrent,
+      bridge_queue.PlaybackCompletionAction.playCurrent =>
+        PlaybackCompletionAction.playCurrent,
+    },
   );
 }
 

@@ -7,12 +7,18 @@ pub const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 /// `Debug`; only the transport may inspect the complete URI.
 pub struct Request {
     pub(crate) url: String,
+    pub(crate) profile: crate::profile::KuGouProtocolProfile,
 }
 
 impl Request {
     #[must_use]
     pub fn url(&self) -> &str {
         &self.url
+    }
+
+    #[must_use]
+    pub fn headers(&self) -> [(&'static str, &'static str); 2] {
+        self.profile.headers()
     }
 }
 
@@ -73,11 +79,11 @@ impl Transport for HttpsTransport {
             return Err(Error::InputBound);
         }
 
-        let mut response = self
-            .client
-            .get(request.url)
-            .header(reqwest::header::ACCEPT, "application/json,text/plain;q=0.9")
-            .header(reqwest::header::USER_AGENT, "fura-music/0.1")
+        let mut builder = self.client.get(&request.url);
+        for (name, value) in request.headers() {
+            builder = builder.header(name, value);
+        }
+        let mut response = builder
             .send()
             .await
             .map_err(|_| Error::TemporaryNetworkFailure)?;

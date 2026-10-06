@@ -282,7 +282,7 @@ where
                     .query("sin", offset.to_string())
                     .query("ein", inclusive_end.to_string())
                     .query("format", "json")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .header("Cookie", credential.musicu_cookie_header())
                     .response_body_limit(MAX_RESPONSE_BYTES)
                     .timeout(REQUEST_TIMEOUT),

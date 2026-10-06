@@ -134,7 +134,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .body(body)
                     .response_body_limit(MAX_EXCHANGE_RESPONSE_BYTES)
                     .timeout(EXCHANGE_TIMEOUT),
@@ -162,10 +162,10 @@ impl<'a> ExchangeRequest<'a> {
     const fn new(code: &'a str) -> Self {
         Self {
             comm: ExchangeComm {
-                cv: 13_020_508,
-                version: 13_020_508,
-                client_type: "11",
-                app_id: "qqmusic",
+                cv: crate::profile::WEB_MODERN_VERSION,
+                version: crate::profile::WEB_MODERN_VERSION,
+                client_type: crate::profile::WEB_MODERN_TYPE,
+                app_id: crate::profile::WEB_APP_ID,
                 format: "json",
                 input_charset: "utf-8",
                 output_charset: "utf-8",

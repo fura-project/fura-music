@@ -11,7 +11,7 @@ import 'library.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `failed`, `map_position_error`, `map_snapshot`, `next_queue_seed`, `with_queue`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 PlaybackQueueHandle createPlaybackQueue() =>
     RustLib.instance.api.crateApiQueueCreatePlaybackQueue();
@@ -49,6 +49,8 @@ abstract class PlaybackQueueHandle implements RustOpaqueInterface {
 
   PlaybackQueueUpdate snapshot();
 }
+
+enum PlaybackCompletionAction { none, replayCurrent, playCurrent }
 
 enum PlaybackOrder { sequential, shuffle }
 
@@ -96,17 +98,22 @@ class PlaybackQueueSnapshot {
 class PlaybackQueueUpdate {
   final PlaybackQueueSnapshot? snapshot;
   final bool playbackRequested;
+  final PlaybackCompletionAction? completionAction;
   final PlaybackQueueFailure? failure;
 
   const PlaybackQueueUpdate({
     this.snapshot,
     required this.playbackRequested,
+    this.completionAction,
     this.failure,
   });
 
   @override
   int get hashCode =>
-      snapshot.hashCode ^ playbackRequested.hashCode ^ failure.hashCode;
+      snapshot.hashCode ^
+      playbackRequested.hashCode ^
+      completionAction.hashCode ^
+      failure.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -115,6 +122,7 @@ class PlaybackQueueUpdate {
           runtimeType == other.runtimeType &&
           snapshot == other.snapshot &&
           playbackRequested == other.playbackRequested &&
+          completionAction == other.completionAction &&
           failure == other.failure;
 }
 

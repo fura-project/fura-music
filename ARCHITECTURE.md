@@ -21,6 +21,32 @@ Rust application/core API
 
 There is no runtime HTTP sidecar between Flutter and the Rust core.
 
+### Playback/profile/session checkpoint — 2026-10-06
+
+Rust Queue completion is a typed `None` / `ReplayCurrent` / `PlayCurrent`
+decision. Replay retains the source/session and calls seek(0)/play; it does not
+ask a Provider to resolve again. MediaKit keeps one normal engine-lifetime Player
+and bounded current-source packet memory, operation deadlines/generation guards
+and one explicit-load retirement/rebuild budget. MV still owns its separate
+disposable Player. The Human test default requests stack D; Linux effectively
+uses MediaKit plus project MPRIS and iOS uses MediaKit plus audio_service. This
+does not accept those native runtimes or supersede the explicit A rollback.
+
+Providers own sixteen-entry memory-only resolution caches keyed by exact TrackId,
+preferred quality and monotonic session generation, with hard server validity.
+QQ CDN dispatch retains its separate public TTL cache. Neither authorization
+URLs nor media byte caches are durable storage. Provider-specific profile
+modules own existing wire constants/headers; HTTP transport does not select a
+Provider UA or silently rotate profiles. Credentials remain separate private
+QQ/NetEase types, never a shared profile or a UI-owned session.
+
+One-shot client refresh candidates exist but production refresh scheduling,
+coordinator/install and secure-vault rotation are not implemented. KuGou has
+only Public Core/profile and no production media/inventory/UI integration. See
+[the dated audit](docs/research/provider-playback-session-audit-2026-10-06.md)
+for concrete blockers and acceptance, and TD-015/TD-016 for continuation/storage
+gaps. No fictional ProviderCoordinator crate or runtime framework was added.
+
 HD-026 keeps localization entirely in Flutter presentation. Official
 `gen_l10n` catalogs supply English and Simplified Chinese copy, while Settings
 schema v4 persists a `system`, `english`, or `simplifiedChinese` preference.
@@ -38,7 +64,11 @@ HD-023 authorizes exactly two built-in Providers. `BuiltInProvider` has determin
 - The bridge adapts calls and data ownership. It does not contain product business rules.
 - Provider implementations depend on provider interfaces and project domain models.
 - `QQMusicProvider` maps raw protocol results from `QQMusicClient` into stable project domain models.
-- `QQMusicClient` owns transport, request construction, cookies, session details, signing/QIMEI when required, and raw protocol models. It does not know Flutter.
+- `QQMusicClient` owns Provider-private profiles, request construction, cookies,
+  session details and raw protocol models; transport owns bounded HTTP/TLS.
+  Existing evidenced signing is capability-specific, not permission to add
+  QIMEI, device/profile rotation or private official signing material. It does
+  not know Flutter.
 
 ## Current modules
 

@@ -106,11 +106,21 @@ The cache taxonomy is intentionally semantic rather than one generic manager:
   dispatch; logout does not clear it.
 - **Account snapshot cache:** liked IDs, favorite Albums and recent history;
   owned by one authenticated generation and discarded on replacement.
-- **Short-lived authorization cache:** any future VKey/media source cache must
-  be bound to account generation plus a hard server TTL. No such generic cache
-  is introduced here.
+- **Short-lived authorization cache:** QQ and NetEase now own sixteen-entry
+  memory-only resolution LRUs keyed by exact Provider TrackId, preferred quality
+  and session generation, with hard server TTL and conservative remaining
+  validity. The small value in provider-api owns no credentials or IO; each
+  Provider owns its single-flight lock and generation check. Logout/credential
+  replacement invalidates old sources. No URL is written to disk.
 - **Presentation cache:** Flutter-derived display/artwork state; owned only by
   the UI layer and never treated as protocol authority.
+
+Playback packet memory is a separate source-lifetime NativePlayer cache, serving
+seek/replay without a new resolve/open. Repeat-one follows the Rust completion
+action, not the Settings-selected Provider. No cross-session byte storage,
+automatic credential rotation, third KuGou inventory or public browse-only
+Provider is implied by these caches. Current continuation gates are recorded in
+the [2026-10-06 audit](../research/provider-playback-session-audit-2026-10-06.md).
 
 Development request-cost tracing is opt-in with
 `FURA_PROVIDER_DIAGNOSTIC=1`. It reports only Provider, operation category,

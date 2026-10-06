@@ -325,7 +325,7 @@ where
                     .query("needmusiccrit", "0")
                     .query("pagenum", page_number.to_string())
                     .query("pagesize", size.to_string())
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .response_body_limit(MAX_RESPONSE_BYTES)
                     .timeout(REQUEST_TIMEOUT),
             )

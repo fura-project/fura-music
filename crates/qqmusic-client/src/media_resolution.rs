@@ -636,7 +636,7 @@ fn musicu_request(body: Vec<u8>, cookie: Option<&str>) -> HttpRequest {
     let request = HttpRequest::post(MUSICU_URL)
         .header("Content-Type", "application/json")
         .header("Origin", "https://y.qq.com")
-        .header("Referer", "https://y.qq.com/")
+        .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
         .body(body)
         .response_body_limit(MAX_MEDIA_RESPONSE_BYTES)
         .timeout(MEDIA_REQUEST_TIMEOUT);
@@ -957,8 +957,8 @@ impl<'a> CompatibleVkeyRequest<'a> {
             comm: CompatibleVkeyComm {
                 user_id: credential.music_id(),
                 format: "json",
-                client_type: 19,
-                client_version: 0,
+                client_type: crate::profile::DESKTOP_TYPE_BYTE,
+                client_version: crate::profile::DESKTOP_COMPAT_VERSION_BYTE,
                 auth_key: credential.music_key(),
             },
             request: CompatibleVkeyRpc {
@@ -971,7 +971,7 @@ impl<'a> CompatibleVkeyRequest<'a> {
                     song_mid: [song_mid],
                     song_type: [0],
                     login_flag: 1,
-                    platform: "20",
+                    platform: crate::profile::DESKTOP_MEDIA_PLATFORM,
                 },
             },
         }
@@ -1036,10 +1036,10 @@ struct AnonymousComm {
 impl AnonymousComm {
     const fn new() -> Self {
         Self {
-            cv: 13_020_508,
-            version: 13_020_508,
-            client_type: "11",
-            app_id: "qqmusic",
+            cv: crate::profile::WEB_MODERN_VERSION,
+            version: crate::profile::WEB_MODERN_VERSION,
+            client_type: crate::profile::WEB_MODERN_TYPE,
+            app_id: crate::profile::WEB_APP_ID,
             format: "json",
             input_charset: "utf-8",
             output_charset: "utf-8",
@@ -1078,10 +1078,10 @@ struct AuthenticatedComm<'a> {
 impl<'a> AuthenticatedComm<'a> {
     fn new(credential: &'a Credential) -> Self {
         Self {
-            cv: 13_020_508,
-            version: 13_020_508,
-            client_type: "11",
-            app_id: "qqmusic",
+            cv: crate::profile::WEB_MODERN_VERSION,
+            version: crate::profile::WEB_MODERN_VERSION,
+            client_type: crate::profile::WEB_MODERN_TYPE,
+            app_id: crate::profile::WEB_APP_ID,
             format: "json",
             input_charset: "utf-8",
             output_charset: "utf-8",

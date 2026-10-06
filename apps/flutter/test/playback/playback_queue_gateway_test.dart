@@ -8,6 +8,35 @@ import 'package:flutterustmusic/src/rust/api/library.dart' as bridge_library;
 import 'package:flutterustmusic/src/rust/api/queue.dart' as bridge_queue;
 
 void main() {
+  test(
+    'typed completion actions survive the Bridge and reject contradictions',
+    () {
+      for (final action in bridge_queue.PlaybackCompletionAction.values) {
+        final requested = action != bridge_queue.PlaybackCompletionAction.none;
+        bridge_queue.PlaybackQueueUpdate update(bool request) =>
+            bridge_queue.PlaybackQueueUpdate(
+              snapshot: bridge_queue.PlaybackQueueSnapshot(
+                tracks: [_bridgeTrack('one')],
+                currentIndex: 0,
+                hasPrevious: false,
+                hasNext: false,
+                order: bridge_queue.PlaybackOrder.sequential,
+                repeatMode: bridge_queue.PlaybackRepeatMode.one,
+              ),
+              playbackRequested: request,
+              completionAction: action,
+            );
+        final result = mapBridgePlaybackQueueUpdate(update(requested));
+        expect(result.failure, isNull);
+        expect(result.completionAction?.name, action.name);
+        expect(
+          mapBridgePlaybackQueueUpdate(update(!requested)).failure,
+          PlaybackQueueFailure.invalidResponse,
+        );
+      }
+    },
+  );
+
   test('maps valid positional duplicates and redacts diagnostics', () {
     final duplicate = _bridgeTrack('same');
     final gateway = RustPlaybackQueueGateway(

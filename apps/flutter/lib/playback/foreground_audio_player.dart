@@ -67,6 +67,12 @@ abstract interface class ForegroundAudioSession {
   Future<void> dispose();
 }
 
+/// Optional focus handoff for engines that retain a source at EOF. The Queue
+/// decides replay versus terminal completion before releasing audio focus.
+abstract interface class ForegroundCompletionFocusSession {
+  Future<void> releaseCompletionFocus();
+}
+
 /// Narrow testable seam around one audioplayers source-lifetime AudioPlayer.
 ///
 /// The production wrapper is intentionally mechanical. This seam lets both
@@ -181,12 +187,12 @@ class AudioplayersForegroundAudioEngine implements ForegroundAudioEngine {
   }
 }
 
-class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
+class _AudioplayersForegroundAudioSession
+    implements ForegroundAudioSession, ForegroundCompletionFocusSession {
   _AudioplayersForegroundAudioSession(this._player, this._audioFocusManager) {
     _stateSubscription = _player.states.listen((state) {
       if (_disposed) return;
-      if (state == audio.PlayerState.stopped ||
-          state == audio.PlayerState.completed) {
+      if (state == audio.PlayerState.stopped) {
         unawaited(_deactivateFocus());
       }
       _states.add(switch (state) {
@@ -258,7 +264,7 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
     }
     var activated = false;
     try {
-      activated = await _audioFocusManager.setActive(true);
+      activated = _focusActive || await _audioFocusManager.setActive(true);
       if (!activated) {
         _logEngineFailure(
           phase: 'focus_activate',
@@ -364,6 +370,9 @@ class _AudioplayersForegroundAudioSession implements ForegroundAudioSession {
       );
     }
   }
+
+  @override
+  Future<void> releaseCompletionFocus() => _deactivateFocus();
 
   void _emitFailure(ForegroundAudioFailure failure) {
     if (!_disposed && !_failures.isClosed) {

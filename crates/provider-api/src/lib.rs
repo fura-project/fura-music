@@ -4,6 +4,8 @@ use std::fmt;
 use std::future::Future;
 
 mod lyric_alignment;
+mod media_cache;
+pub use media_cache::MediaResolutionCache;
 
 pub use lyric_alignment::{
     AuxiliaryLyricLine, LyricAuxiliaryAlignment, LyricAuxiliaryAlignmentStats,

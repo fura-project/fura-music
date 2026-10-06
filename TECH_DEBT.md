@@ -300,4 +300,69 @@ a second Dart Queue.
 problem, before a user-facing persistent Roam control is accepted, or when a
 separate Human Decision defines Queue provenance and retention behavior.
 
+## TD-015 — Refresh foundations lack atomic Provider/vault continuation
+
+**Status:** Triggered
+
+**Problem:** One-shot QQ/NetEase Client refresh candidates do not implement
+Provider scheduling/single-flight, latest-generation install, read retry-once,
+stale/offline/verification state or rotation across the Rust owner and platform
+vault. The current secure-vault adapter serializes a single key but cannot
+atomically acknowledge a rotated credential with the Provider generation.
+
+**Why accepted:** Current QQ refresh Web-profile compatibility and NetEase's
+MUSIC_R_U versus minimal-cookie eligibility are not accepted real-session
+contracts. Automatically rotating a credential now would risk losing the only
+durable valid token or repeatedly probing unsupported profiles. The bounded
+offline protocol candidates remain unadvertised and uninstalled.
+
+**Impact:** Replay/cache stability is improved, but the requested P0 automatic
+login continuation is not delivered. Owning definitive rejection retains the
+previous production behavior until the coordinator is implemented.
+
+**Risk:** Best-effort install-B/write-B can leave memory B and durable A after
+rotation; stale refresh may overwrite logout/new account, and automatic write
+replay may duplicate remote mutations. Network failure must not become logout.
+
+**Suggested solution:** Verify a narrow acceptable refresh material/profile
+contract, then stage a same-account candidate behind Provider-owned single-flight,
+durably write/ack opaque rotation, recheck generation and commit installation.
+Use a minimum recoverable journal/handshake and preserve logout dominance; test
+ten reads/one refresh, rejection/offline, late response, rotation/restart,
+read-once retry and mutation no-replay before production promotion.
+
+**Trigger condition:** The 2026-10-06 session-continuation task triggered this
+item. Resume production implementation after its bounded protocol/material gate
+is accepted; see `docs/research/provider-playback-session-audit-2026-10-06.md`.
+
+## TD-016 — Persistent media-object cache and native retirement bounds
+
+**Status:** Open
+
+**Problem:** Source-lifetime packet memory and generation-aware resolution TTL
+do not provide validated cross-session media objects. NativePlayer 1.2.6 also
+schedules final native handle destruction after retirement rather than returning
+a confirmed native-handle destruction acknowledgement.
+
+**Why accepted:** Replay already reuses one source and is verified without new
+HTTP requests. Persisting mpv packet files without integrity/disk quota, adding
+a duplicate downloader or a localhost proxy would violate this task's boundary.
+One explicit-load rebuild is permitted only after SDK retirement succeeds.
+
+**Impact:** No offline/cross-session media cache is promised. Normal replacement
+uses one active music Player; recovery may briefly retain a stopped native handle.
+
+**Risk:** Mistaking packet cache for durable playable bytes could publish partial
+or secret-bearing files, expand disk use or bypass account/entitlement ownership.
+Calling delayed native cleanup instantaneous would overstate resource evidence.
+
+**Suggested solution:** First prove a single-fetch, clear-direct-stream complete
+object handoff and retirement acknowledgement through public SDK capabilities.
+Then use Provider/Track/actual-quality/format/entitlement identity, bounded LRU,
+atomic temp publication and integrity checks without URL persistence or proxy.
+
+**Trigger condition:** A measured persistent replay/download requirement, native
+recovery leak, or verified upstream handoff/retirement API. Mobile native stall
+and account-entitlement evidence remain prerequisites before broader acceptance.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

@@ -374,6 +374,46 @@ async fn selected_media_quality_maps_requested_and_actual_netease_levels() {
 }
 
 #[tokio::test]
+async fn source_cache_single_flights_same_track_and_logout_invalidates_public_sources() {
+    let media = json!({"code":200,"data":[{"id":1,"code":200,"url":"https://fixture.invalid/source","type":"mp3","expi":600,"freeTrialInfo":null,"level":"standard"}]});
+    let (p, calls) = provider(vec![media.clone(), media.clone(), media]);
+    let p = Arc::new(p);
+    let mut reads = tokio::task::JoinSet::new();
+    for _ in 0..10 {
+        let p = Arc::clone(&p);
+        reads.spawn(async move {
+            p.media_source_resolver()
+                .resolve_media(track(), AudioQuality::Standard)
+                .await
+        });
+    }
+    while let Some(result) = reads.join_next().await {
+        assert_eq!(result.unwrap().unwrap().quality(), AudioQuality::Standard);
+    }
+    let resolver = p.media_source_resolver();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    for _ in 0..10 {
+        resolver
+            .resolve_media(track(), AudioQuality::Standard)
+            .await
+            .unwrap();
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    // Preferred quality is part of the key even when upstream returns Standard.
+    resolver
+        .resolve_media(track(), AudioQuality::High)
+        .await
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    p.sign_out();
+    resolver
+        .resolve_media(track(), AudioQuality::Standard)
+        .await
+        .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test]
 async fn ranking_omissions_preserve_cursor_even_when_entire_window_is_unavailable() {
     let detail = json!({"code":200,"playlist":{"id":4,"name":"Ranking","trackCount":3,"trackIds":[{"id":1},{"id":5},{"id":7}]}});
     let (p, calls) = provider(vec![

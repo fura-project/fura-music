@@ -10301,6 +10301,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlaybackCompletionAction dco_decode_box_autoadd_playback_completion_action(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_playback_completion_action(raw);
+  }
+
+  @protected
   PlaybackQueueFailure dco_decode_box_autoadd_playback_queue_failure(
     dynamic raw,
   ) {
@@ -11211,6 +11219,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlaybackCompletionAction?
+  dco_decode_opt_box_autoadd_playback_completion_action(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_playback_completion_action(raw);
+  }
+
+  @protected
   PlaybackQueueFailure? dco_decode_opt_box_autoadd_playback_queue_failure(
     dynamic raw,
   ) {
@@ -11717,6 +11734,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlaybackCompletionAction dco_decode_playback_completion_action(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return PlaybackCompletionAction.values[raw as int];
+  }
+
+  @protected
   PlaybackOrder dco_decode_playback_order(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return PlaybackOrder.values[raw as int];
@@ -11748,12 +11771,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlaybackQueueUpdate dco_decode_playback_queue_update(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return PlaybackQueueUpdate(
       snapshot: dco_decode_opt_box_autoadd_playback_queue_snapshot(arr[0]),
       playbackRequested: dco_decode_bool(arr[1]),
-      failure: dco_decode_opt_box_autoadd_playback_queue_failure(arr[2]),
+      completionAction: dco_decode_opt_box_autoadd_playback_completion_action(
+        arr[2],
+      ),
+      failure: dco_decode_opt_box_autoadd_playback_queue_failure(arr[3]),
     );
   }
 
@@ -14592,6 +14618,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlaybackCompletionAction sse_decode_box_autoadd_playback_completion_action(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_playback_completion_action(deserializer));
+  }
+
+  @protected
   PlaybackQueueFailure sse_decode_box_autoadd_playback_queue_failure(
     SseDeserializer deserializer,
   ) {
@@ -15769,6 +15803,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlaybackCompletionAction?
+  sse_decode_opt_box_autoadd_playback_completion_action(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_playback_completion_action(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   PlaybackQueueFailure? sse_decode_opt_box_autoadd_playback_queue_failure(
     SseDeserializer deserializer,
   ) {
@@ -16528,6 +16576,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PlaybackCompletionAction sse_decode_playback_completion_action(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return PlaybackCompletionAction.values[inner];
+  }
+
+  @protected
   PlaybackOrder sse_decode_playback_order(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
@@ -16573,12 +16630,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       deserializer,
     );
     var var_playbackRequested = sse_decode_bool(deserializer);
+    var var_completionAction =
+        sse_decode_opt_box_autoadd_playback_completion_action(deserializer);
     var var_failure = sse_decode_opt_box_autoadd_playback_queue_failure(
       deserializer,
     );
     return PlaybackQueueUpdate(
       snapshot: var_snapshot,
       playbackRequested: var_playbackRequested,
+      completionAction: var_completionAction,
       failure: var_failure,
     );
   }
@@ -19992,6 +20052,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_playback_completion_action(
+    PlaybackCompletionAction self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_playback_completion_action(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_playback_queue_failure(
     PlaybackQueueFailure self,
     SseSerializer serializer,
@@ -21084,6 +21153,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_playback_completion_action(
+    PlaybackCompletionAction? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_playback_completion_action(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_playback_queue_failure(
     PlaybackQueueFailure? self,
     SseSerializer serializer,
@@ -21820,6 +21902,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_playback_completion_action(
+    PlaybackCompletionAction self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_playback_order(PlaybackOrder self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
@@ -21859,6 +21950,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       serializer,
     );
     sse_encode_bool(self.playbackRequested, serializer);
+    sse_encode_opt_box_autoadd_playback_completion_action(
+      self.completionAction,
+      serializer,
+    );
     sse_encode_opt_box_autoadd_playback_queue_failure(self.failure, serializer);
   }
 

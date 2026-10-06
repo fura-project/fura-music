@@ -178,6 +178,12 @@ class TrackPlaybackController extends ChangeNotifier {
 
   Future<void> pause() => canPause ? _playback.pause() : Future.value();
 
+  Future<void> replayCurrent() => _stage == TrackPlaybackStage.completed
+      ? _playback.replayCurrent()
+      : Future.value();
+
+  Future<void> releaseCompletionFocus() => _playback.releaseCompletionFocus();
+
   Future<void> resume() => canResume ? _playback.resume() : Future.value();
 
   Future<void> seekToMs(int positionMs) {

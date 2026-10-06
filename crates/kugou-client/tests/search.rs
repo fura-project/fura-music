@@ -19,6 +19,13 @@ impl Transport for FakeTransport {
         assert_eq!(uri.scheme(), "https");
         assert_eq!(uri.host_str(), Some("songsearch.kugou.com"));
         assert_eq!(uri.path(), "/song_search_v2");
+        assert_eq!(
+            request.headers(),
+            [
+                ("Accept", "application/json,text/plain;q=0.9"),
+                ("User-Agent", "fura-music/0.1"),
+            ]
+        );
         let names = uri
             .query_pairs()
             .map(|(name, _)| name.into_owned())

@@ -1,15 +1,45 @@
 ---
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
-  work_domain: MIXED
-  state: IMPLEMENTED_NEEDS_HUMAN
-  acceptance_milestone: APPLICATION_IDENTITY_AND_KUGOU_MEDIA_REVIEW
-  active_workstream: APPLICATION_IDENTITY_AND_PRIVACY_HARDENING
-  current_task: IDENTITY_MIGRATION_WITH_KUGOU_STATIC_MEDIA_GATE
-  next_action: HUMAN_REVIEW_OF_IDENTITY_MIGRATION_AND_KUGOU_MEDIA_BOUNDARY
+  work_domain: CORE
+  state: PARTIALLY_IMPLEMENTED_PROTOCOL_GATED
+  acceptance_milestone: PLAYBACK_CACHE_AND_PROVIDER_SESSION_CONTINUATION
+  active_workstream: PROVIDER_PLAYBACK_PROFILE_SESSION_UPGRADE
+  current_task: REPLAY_CACHE_PROFILE_EXTRACTION_AND_REFRESH_FOUNDATIONS
+  next_action: BOUNDED_HUMAN_REFRESH_EVIDENCE_THEN_COORDINATOR_VAULT_IMPLEMENTATION
 ---
 
 # Current State
+
+- **2026-10-06 playback/cache, profiles and refresh checkpoint:** starting HEAD
+  and local `origin/main` were `ee8dc24697bd506155d3e16f72c4a36209efd347`
+  with a clean worktree; all new changes remain uncommitted on that HEAD.
+  Rust Queue completion now distinguishes replay, next/wrap and terminal
+  actions. Repeat-one seeks and plays the retained source, with no repeated
+  Provider resolution/open/focus acquisition. NativePlayer has a bounded
+  source-lifetime memory packet cache, phase deadlines and one bounded explicit
+  reload recovery; it is not cross-session media storage. QQ/NetEase resolution
+  uses a sixteen-entry server-TTL, preferred-quality/generation-scoped memory
+  cache with single-flight reads. QQ now guards authenticated read snapshots
+  with a monotonic generation, including identical re-login. Provider-private
+  Web/Desktop/Public profile modules move constants/headers out of transport
+  defaults without intentionally changing existing request payloads. One-shot
+  QQ WeChat and NetEase WEAPI refresh Client candidates have synthetic rotation,
+  rejection/bounds/redaction tests, but are not installed or scheduled by the
+  Providers. Automatic refresh, retry-once and durable vault rotation are
+  **not implemented**: QQ's acceptable Web outer refresh profile still lacks
+  live corroboration, and current NetEase EAPI evidence requires MUSIC_R_U
+  whereas the existing minimal credential holds only MUSIC_U/__csrf. No
+  CookieJar/device/profile rotation was used to hide this gap. KuGou Public
+  remains intact and `BLOCKED_BY_MEDIA`, without a third production Provider.
+  Real Linux tests passed 100 MediaKit source replacements, 100 pause/resume,
+  100 EOF replays with no additional HTTP fixture request, separate MV decode/
+  controls and default D-request Fura MPRIS registration. Mobile/background/
+  Bluetooth, real-account refresh/media and vault restart remain unverified.
+  The detailed implementation/evidence/remaining acceptance is in
+  `docs/research/provider-playback-session-audit-2026-10-06.md`; the overall
+  self-healing session objective is not complete. No commit, push, reset,
+  restore, clean or stored-account automation occurred.
 
 - **2026-09-27 application identity/privacy and KuGou Standard-media gate:**
   the public cross-platform application identity is now
@@ -1257,7 +1287,13 @@ execution:
 
 # Current Scheduling
 
-- Active regression acceptance: Human review of `/tmp/fura-ui-review-002dr3b6/run.sh`: inspect single-color rows, scroll the title into/out of the top-search slot, and enter/exit Settings plus an ordinary playlist to judge canvas continuity and motion. Canonical synthetic desktop/compact renders and targeted regression checks have passed. The preceding corrected QQ read has a Human success report. No further account automation or adjacent UI/Core work is scheduled.
+- Current Core task is the 2026-10-06 Provider/playback/profile/session workstream
+  recorded above. The playback/cache/profile candidate is retained; production
+  refresh and KuGou media wait on their specific protocol/security gates. After
+  refresh evidence is accepted, coordinator, generation install, vault rotation
+  and the full refresh acceptance matrix still require implementation. Pending
+  historical UI/runtime reviews below remain pending, not superseding this
+  explicit Core authorization. No account automation, commit or push is allowed.
 
 # Pending Liked Pagination Acceptance
 

@@ -129,6 +129,36 @@ class ForegroundPlaybackController extends ChangeNotifier {
     }
   }
 
+  /// Replays the retained source without resolution, stop, load or disposal.
+  Future<void> replayCurrent() async {
+    final session = _session;
+    final generation = _generation;
+    if (session == null || _stage != ForegroundPlaybackStage.completed) return;
+    _setStage(ForegroundPlaybackStage.loading);
+    try {
+      await session.seekToMs(0);
+      if (!_isSessionCurrent(generation, session)) return;
+      _setPosition(0);
+      await session.play();
+      if (_isSessionCurrent(generation, session)) {
+        _setStage(ForegroundPlaybackStage.playing);
+      }
+    } on ForegroundAudioException catch (error) {
+      _failSession(generation, session, error.failure);
+    } on Object {
+      _failSession(generation, session, ForegroundAudioFailure.coreUnavailable);
+    }
+  }
+
+  Future<void> releaseCompletionFocus() async {
+    final session = _session;
+    if (_stage == ForegroundPlaybackStage.completed &&
+        session is ForegroundCompletionFocusSession) {
+      await (session as ForegroundCompletionFocusSession)
+          .releaseCompletionFocus();
+    }
+  }
+
   Future<void> seekToMs(int positionMs) async {
     final session = _session;
     final generation = _generation;

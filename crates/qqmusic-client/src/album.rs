@@ -249,7 +249,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .body(body)
                     .response_body_limit(MAX_RESPONSE_BYTES)
                     .timeout(REQUEST_TIMEOUT),
@@ -276,12 +276,12 @@ impl<'a> AlbumTracksRequest<'a> {
     const fn new(album_mid: &'a str, offset: u32, size: u32) -> Self {
         Self {
             comm: AlbumComm {
-                client_type: "19",
-                client_version: "1859",
+                client_type: crate::profile::DESKTOP_TYPE_TEXT,
+                client_version: crate::profile::DESKTOP_SEARCH_VERSION,
                 format: "json",
                 input_charset: "utf-8",
                 output_charset: "utf-8",
-                platform: "yqq.json",
+                platform: crate::profile::WEB_JSON_PLATFORM,
                 need_new_code: 1,
             },
             album_songs: AlbumTracksRpc {

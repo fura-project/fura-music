@@ -4,7 +4,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use music_domain::{
-    InvalidPlaybackQueue, PlaybackOrder as DomainPlaybackOrder, PlaybackQueue,
+    InvalidPlaybackQueue, PlaybackCompletionAction as DomainCompletionAction,
+    PlaybackOrder as DomainPlaybackOrder, PlaybackQueue,
     PlaybackRepeatMode as DomainPlaybackRepeatMode,
 };
 
@@ -28,6 +29,13 @@ pub enum PlaybackRepeatMode {
     Off,
     All,
     One,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PlaybackCompletionAction {
+    None,
+    ReplayCurrent,
+    PlayCurrent,
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -58,6 +66,7 @@ impl fmt::Debug for PlaybackQueueSnapshot {
 pub struct PlaybackQueueUpdate {
     pub snapshot: Option<PlaybackQueueSnapshot>,
     pub playback_requested: bool,
+    pub completion_action: Option<PlaybackCompletionAction>,
     pub failure: Option<PlaybackQueueFailure>,
 }
 
@@ -67,6 +76,7 @@ impl fmt::Debug for PlaybackQueueUpdate {
             .debug_struct("PlaybackQueueUpdate")
             .field("has_snapshot", &self.snapshot.is_some())
             .field("playback_requested", &self.playback_requested)
+            .field("completion_action", &self.completion_action)
             .field("failure", &self.failure)
             .finish()
     }
@@ -204,7 +214,17 @@ impl PlaybackQueueHandle {
 
     #[flutter_rust_bridge::frb(sync)]
     pub fn complete_current(&self) -> PlaybackQueueUpdate {
-        self.with_queue(|queue| Ok(queue.complete_current()))
+        let Ok(mut queue) = self.queue.lock() else {
+            return failed(PlaybackQueueFailure::CoreUnavailable);
+        };
+        let action = match queue.complete_current() {
+            DomainCompletionAction::None => PlaybackCompletionAction::None,
+            DomainCompletionAction::ReplayCurrent => PlaybackCompletionAction::ReplayCurrent,
+            DomainCompletionAction::PlayCurrent => PlaybackCompletionAction::PlayCurrent,
+        };
+        let mut update = map_snapshot(&queue, action != PlaybackCompletionAction::None);
+        update.completion_action = Some(action);
+        update
     }
 
     #[flutter_rust_bridge::frb(sync)]
@@ -269,6 +289,7 @@ fn map_snapshot(queue: &PlaybackQueue, playback_requested: bool) -> PlaybackQueu
             },
         }),
         playback_requested,
+        completion_action: None,
         failure: None,
     }
 }
@@ -277,6 +298,7 @@ const fn failed(failure: PlaybackQueueFailure) -> PlaybackQueueUpdate {
     PlaybackQueueUpdate {
         snapshot: None,
         playback_requested: false,
+        completion_action: None,
         failure: Some(failure),
     }
 }
@@ -299,8 +321,8 @@ fn next_queue_seed() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        PlaybackOrder, PlaybackQueueFailure, PlaybackQueueHandle, PlaybackRepeatMode,
-        create_playback_queue,
+        PlaybackCompletionAction, PlaybackOrder, PlaybackQueueFailure, PlaybackQueueHandle,
+        PlaybackRepeatMode, create_playback_queue,
     };
     use crate::api::album::CatalogAlbumSummary;
     use crate::api::artist::CatalogArtistSummary;
@@ -501,9 +523,26 @@ mod tests {
         let completed = queue.complete_current();
         assert!(completed.playback_requested);
         assert_eq!(
+            completed.completion_action,
+            Some(PlaybackCompletionAction::ReplayCurrent)
+        );
+        assert_eq!(
             completed.snapshot.expect("completion").current_index,
             Some(0)
         );
+        queue.set_repeat_mode(PlaybackRepeatMode::Off);
+        assert_eq!(
+            queue.complete_current().completion_action,
+            Some(PlaybackCompletionAction::PlayCurrent)
+        );
+        queue.set_order(PlaybackOrder::Sequential);
+        queue.select(2);
+        let terminal = queue.complete_current();
+        assert_eq!(
+            terminal.completion_action,
+            Some(PlaybackCompletionAction::None)
+        );
+        assert!(!terminal.playback_requested);
     }
 
     fn queue_with_three() -> PlaybackQueueHandle {

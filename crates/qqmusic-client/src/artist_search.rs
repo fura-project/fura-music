@@ -269,7 +269,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .body(body)
                     .response_body_limit(MAX_SEARCH_RESPONSE_BYTES)
                     .timeout(SEARCH_TIMEOUT),

@@ -235,7 +235,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .body(body)
                     .response_body_limit(MAX_RESPONSE_BYTES)
                     .timeout(REQUEST_TIMEOUT),
@@ -262,8 +262,8 @@ impl NewSongsRequest {
     const fn new(category: QqMusicNewSongCategory) -> Self {
         Self {
             comm: NewSongsComm {
-                client_type: 24,
-                client_version: 4_747_474,
+                client_type: crate::profile::WEB_PUBLIC_TYPE,
+                client_version: crate::profile::WEB_LIBRARY_VERSION,
                 format: "json",
             },
             new_song: NewSongsRpc {

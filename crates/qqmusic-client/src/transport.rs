@@ -34,7 +34,10 @@ impl HttpRequest {
             method: HttpMethod::Get,
             url: url.into(),
             query: Vec::new(),
-            headers: Vec::new(),
+            headers: vec![(
+                "User-Agent".into(),
+                crate::profile::QqProtocolProfile::Web.user_agent().into(),
+            )],
             body: None,
             response_body_limit: DEFAULT_RESPONSE_BODY_LIMIT,
             timeout: None,
@@ -48,7 +51,10 @@ impl HttpRequest {
             method: HttpMethod::Post,
             url: url.into(),
             query: Vec::new(),
-            headers: Vec::new(),
+            headers: vec![(
+                "User-Agent".into(),
+                crate::profile::QqProtocolProfile::Web.user_agent().into(),
+            )],
             body: None,
             response_body_limit: DEFAULT_RESPONSE_BODY_LIMIT,
             timeout: None,
@@ -64,7 +70,10 @@ impl HttpRequest {
 
     #[must_use]
     pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
-        self.headers.push((name.into(), value.into()));
+        let name = name.into();
+        self.headers
+            .retain(|(existing, _)| !existing.eq_ignore_ascii_case(&name));
+        self.headers.push((name, value.into()));
         self
     }
 
@@ -310,7 +319,6 @@ impl ReqwestTransport {
     pub fn new() -> Result<Self, reqwest::Error> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
-            .user_agent(concat!("flutterustmusic/", env!("CARGO_PKG_VERSION")))
             .resolve(
                 "localhost.ptlogin2.qq.com",
                 SocketAddr::from(([127, 0, 0, 1], 0)),
@@ -318,7 +326,6 @@ impl ReqwestTransport {
             .build()?;
         let no_redirect_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
-            .user_agent(concat!("flutterustmusic/", env!("CARGO_PKG_VERSION")))
             .resolve(
                 "localhost.ptlogin2.qq.com",
                 SocketAddr::from(([127, 0, 0, 1], 0)),

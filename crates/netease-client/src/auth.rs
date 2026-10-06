@@ -7,14 +7,11 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const WEB_QR_USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0";
-const MOBILE_LOGIN_USER_AGENT: &str = "neteasemusic/9.5.37 (iPhone; iOS 18.7.2; Scale/3.00)";
-const MOBILE_LOGIN_BASE: &str = "https://interface3.music.163.com/eapi/";
-const MOBILE_LOGIN_OS: &str = "iPhone OS";
-const MOBILE_LOGIN_OS_VERSION: &str = "18.7.2";
-const MOBILE_LOGIN_APP_VERSION: &str = "9.5.37";
-const MOBILE_LOGIN_BUILD_VERSION: &str = "7010";
+use crate::profile::{
+    INTERFACE3_EAPI_BASE as MOBILE_LOGIN_BASE, MOBILE_LOGIN_APP_VERSION,
+    MOBILE_LOGIN_BUILD_VERSION, MOBILE_LOGIN_OS, MOBILE_LOGIN_OS_VERSION, MOBILE_LOGIN_USER_AGENT,
+    WEB_QR_USER_AGENT,
+};
 
 fn qr_debug(message: std::fmt::Arguments<'_>) {
     if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
@@ -245,6 +242,62 @@ impl std::fmt::Debug for Credential {
     }
 }
 impl Credential {
+    fn refreshed_from_cookies(&self, cookies: &[String]) -> Result<Self, Error> {
+        if cookies.len() > 32 || cookies.iter().any(|c| c.len() > 8192) {
+            return Err(Error::ResponseBound);
+        }
+        let mut replacement = self.clone();
+        let mut known = BTreeMap::new();
+        for cookie in cookies {
+            let mut parts = cookie.split(';');
+            let (name, value) = parts
+                .next()
+                .and_then(|p| p.split_once('='))
+                .ok_or(Error::ResponseShapeMismatch)?;
+            let name = name.trim();
+            if !matches!(name, "MUSIC_U" | "__csrf") {
+                continue;
+            }
+            let value = value.trim();
+            if known.insert(name, value).is_some_and(|old| old != value) {
+                return Err(Error::ResponseShapeMismatch);
+            }
+            for attribute in parts {
+                if let Some((attribute, value)) = attribute.trim().split_once('=') {
+                    if attribute.eq_ignore_ascii_case("domain")
+                        && !matches!(
+                            value.to_ascii_lowercase().as_str(),
+                            "music.163.com" | ".music.163.com"
+                        )
+                    {
+                        return Err(Error::ResponseShapeMismatch);
+                    }
+                    if attribute.eq_ignore_ascii_case("max-age") {
+                        let seconds = value
+                            .trim()
+                            .parse::<i64>()
+                            .map_err(|_| Error::ResponseShapeMismatch)?;
+                        if seconds <= 0 {
+                            return Err(Error::CredentialRejected);
+                        }
+                    }
+                }
+            }
+            match name {
+                "MUSIC_U" => {
+                    if value.is_empty() {
+                        return Err(Error::CredentialRejected);
+                    }
+                    replacement.music_u = value.into();
+                }
+                "__csrf" => replacement.csrf = value.into(),
+                _ => unreachable!(),
+            }
+        }
+        replacement.validate()?;
+        Ok(replacement)
+    }
+
     fn validate(&self) -> Result<(), Error> {
         if self.version != 1
             || self.provider != "netease-cloud-music"
@@ -304,30 +357,11 @@ impl Credential {
     pub(crate) fn media_context(&self) -> Result<(String, Value), Error> {
         self.validate()?;
         let request_id = format!("{}_{}", unix_millis()?, random_chars(b"0123456789", 4)?);
-        let fields = [
-            ("osver", "undefined".to_owned()),
-            ("deviceId", "undefined".to_owned()),
-            ("appver", "8.0.0".to_owned()),
-            ("versioncode", "140".to_owned()),
-            ("mobilename", "undefined".to_owned()),
-            ("buildver", "1623435496".to_owned()),
-            ("resolution", "1920x1080".to_owned()),
-            ("__csrf", self.csrf.clone()),
-            ("os", "pc".to_owned()),
-            ("channel", "undefined".to_owned()),
-            ("requestId", request_id),
-            ("MUSIC_U", self.music_u.clone()),
-        ];
-        let cookie = fields
-            .iter()
-            .map(|(name, value)| format!("{name}={value}"))
-            .collect::<Vec<_>>()
-            .join("; ");
-        let header = fields
-            .into_iter()
-            .map(|(name, value)| (name.to_owned(), Value::String(value)))
-            .collect::<serde_json::Map<_, _>>();
-        Ok((cookie, Value::Object(header)))
+        Ok(crate::profile::desktop_media_context(
+            &self.music_u,
+            &self.csrf,
+            request_id,
+        ))
     }
     fn from_cookie_sources(cookie: &str, body_cookie: Option<&str>) -> Result<Self, Error> {
         if cookie.len() > 8192 || body_cookie.is_some_and(|value| value.len() > 32 * 1024) {
@@ -368,6 +402,181 @@ impl Credential {
         };
         value.validate()?;
         Ok(value)
+    }
+}
+
+impl<T: Transport> NeteaseClient<T> {
+    /// Explicit one-shot WEAPI refresh foundation. Only known Cookie fields
+    /// are accepted. Callers must verify account/media and durably persist the
+    /// result; this does not install a session or automatically retry a write.
+    /// Current evidence disagrees on WEAPI/EAPI and `MUSIC_R_U` requirements.
+    /// The minimal `MUSIC_U`/`__csrf` credential is not proven refreshable; this
+    /// candidate is deliberately not connected to production auto-refresh.
+    /// # Errors
+    /// Fails closed on rejection, unknown business codes and malformed rotation.
+    pub async fn refresh_credential(&self, credential: &Credential) -> Result<Credential, Error> {
+        credential.validate()?;
+        let (_, cookies) = self
+            .request(
+                "/api/login/token/refresh",
+                json!({}),
+                false,
+                Some(&credential.cookie()),
+            )
+            .await?;
+        credential.refreshed_from_cookies(&cookies)
+    }
+}
+
+#[cfg(test)]
+mod refresh_tests {
+    use super::*;
+    use crate::Response;
+    use std::sync::Mutex;
+    struct Fake {
+        requests: Mutex<Vec<Request>>,
+        code: i64,
+        cookies: Vec<String>,
+    }
+    impl Transport for Fake {
+        fn send(
+            &self,
+            r: Request,
+        ) -> impl std::future::Future<Output = Result<Response, Error>> + Send {
+            self.requests.lock().unwrap().push(r);
+            std::future::ready(Ok(Response {
+                status: 200,
+                body: serde_json::to_vec(&json!({"code":self.code})).unwrap(),
+                set_cookies: self.cookies.clone(),
+            }))
+        }
+    }
+    fn credential() -> Credential {
+        Credential::from_browser_cookie_header(b"MUSIC_U=synthetic-old; __csrf=synthetic-csrf")
+            .unwrap()
+    }
+    #[tokio::test]
+    async fn refresh_is_one_weapi_attempt_and_only_rotates_known_cookie_fields() {
+        let client = NeteaseClient::new(Fake {
+            requests: Mutex::new(vec![]),
+            code: 200,
+            cookies: vec![
+                "MUSIC_U=synthetic-new; Domain=.music.163.com; Secure; HttpOnly".into(),
+                "__csrf=synthetic-new-csrf; Path=/".into(),
+                "browser_device=must-not-persist; Path=/".into(),
+            ],
+        });
+        let old = credential();
+        let refreshed = client.refresh_credential(&old).await.unwrap();
+        assert_eq!(refreshed.music_u, "synthetic-new");
+        assert_ne!(old, refreshed);
+        assert_eq!(
+            Credential::import(&refreshed.export().unwrap()).unwrap(),
+            refreshed
+        );
+        assert!(
+            !String::from_utf8(refreshed.export().unwrap())
+                .unwrap()
+                .contains("browser_device")
+        );
+        assert!(!format!("{refreshed:?}").contains("synthetic-new"));
+        let requests = client.transport.requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(
+            requests[0].url(),
+            "https://music.163.com/weapi/login/token/refresh"
+        );
+        assert_eq!(
+            requests[0]
+                .form()
+                .iter()
+                .map(|(n, _)| n.as_str())
+                .collect::<Vec<_>>(),
+            ["params", "encSecKey"]
+        );
+        assert_eq!(
+            requests[0].cookie(),
+            Some("MUSIC_U=synthetic-old; __csrf=synthetic-csrf")
+        );
+    }
+    #[test]
+    fn conflicting_cross_domain_deleted_oversized_and_unknown_cookies_fail_closed() {
+        let old = credential();
+        for (cookies, expected) in [
+            (
+                vec!["MUSIC_U=a".into(), "MUSIC_U=b".into()],
+                Error::ResponseShapeMismatch,
+            ),
+            (
+                vec!["MUSIC_U=a; Domain=evil.test".into()],
+                Error::ResponseShapeMismatch,
+            ),
+            (
+                vec!["MUSIC_U=; Max-Age=0".into()],
+                Error::CredentialRejected,
+            ),
+            (
+                vec!["MUSIC_U=a; Max-Age=-1".into()],
+                Error::CredentialRejected,
+            ),
+            (
+                vec!["MUSIC_U=a; Max-Age=unknown".into()],
+                Error::ResponseShapeMismatch,
+            ),
+            (vec!["MUSIC_U=a".into(); 33], Error::ResponseBound),
+        ] {
+            assert_eq!(old.refreshed_from_cookies(&cookies), Err(expected));
+        }
+        assert_eq!(
+            old.refreshed_from_cookies(&["unrelated=ignored".into()])
+                .unwrap(),
+            old
+        );
+    }
+
+    #[tokio::test]
+    async fn rejection_and_unclassified_codes_do_not_install_cookies_or_retry() {
+        for (code, expected) in [
+            (301, Error::CredentialRejected),
+            (8821, Error::UpstreamUnknown),
+        ] {
+            let client = NeteaseClient::new(Fake {
+                requests: Mutex::new(vec![]),
+                code,
+                cookies: vec!["MUSIC_U=must-not-install".into()],
+            });
+            let old = credential();
+            let retained = old.clone();
+            assert_eq!(client.refresh_credential(&old).await, Err(expected));
+            assert_eq!(old, retained);
+            assert_eq!(client.transport.requests.lock().unwrap().len(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn network_failure_retains_the_credential_without_another_attempt() {
+        struct NetworkFailure(std::sync::atomic::AtomicUsize);
+        impl Transport for NetworkFailure {
+            fn send(
+                &self,
+                _: Request,
+            ) -> impl std::future::Future<Output = Result<Response, Error>> + Send {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                std::future::ready(Err(Error::TemporaryNetworkFailure))
+            }
+        }
+        let client = NeteaseClient::new(NetworkFailure(std::sync::atomic::AtomicUsize::new(0)));
+        let old = credential();
+        let retained = old.clone();
+        assert_eq!(
+            client.refresh_credential(&old).await,
+            Err(Error::TemporaryNetworkFailure)
+        );
+        assert_eq!(old, retained);
+        assert_eq!(
+            client.transport.0.load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
     }
 }
 /// Raw key stays inside Rust; only its locally encoded image is presented.
@@ -551,7 +760,8 @@ impl<T: Transport> NeteaseClient<T> {
                 ),
                 form: crate::crypto::eapi(path, &text)?,
                 cookie: Some(cookie.into()),
-                headers: mobile_login_headers(device_id),
+                headers: crate::profile::NeteaseProtocolProfile::DesktopEapi
+                    .headers(mobile_login_headers(device_id)),
             })
             .await?;
         sms_debug(format_args!(

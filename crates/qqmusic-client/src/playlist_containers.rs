@@ -281,7 +281,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .header("Cookie", credential.musicu_cookie_header())
                     .body(body)
                     .response_body_limit(MAX_RESPONSE_BYTES)
@@ -322,7 +322,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .header("Cookie", credential.musicu_cookie_header())
                     .body(body)
                     .response_body_limit(MAX_RESPONSE_BYTES)
@@ -356,8 +356,8 @@ impl<'a> CreatePlaylistRequest<'a> {
     fn new(credential: &'a Credential, name: &'a str) -> Self {
         Self {
             comm: PlaylistWriteComm {
-                client_version: 4_747_474,
-                client_type: 24,
+                client_version: crate::profile::WEB_LIBRARY_VERSION,
+                client_type: crate::profile::WEB_PUBLIC_TYPE,
                 format: "json",
                 account_id: credential.music_id(),
                 auth_key: credential.music_key(),
@@ -411,8 +411,8 @@ impl<'a> DeletePlaylistRequest<'a> {
     fn new(credential: &'a Credential, directory_id: u64) -> Self {
         Self {
             comm: PlaylistWriteComm {
-                client_version: 4_747_474,
-                client_type: 24,
+                client_version: crate::profile::WEB_LIBRARY_VERSION,
+                client_type: crate::profile::WEB_PUBLIC_TYPE,
                 format: "json",
                 account_id: credential.music_id(),
                 auth_key: credential.music_key(),

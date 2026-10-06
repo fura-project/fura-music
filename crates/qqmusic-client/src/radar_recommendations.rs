@@ -226,7 +226,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .header("Cookie", credential.musicu_cookie_header())
                     .body(body)
                     .response_body_limit(MAX_RESPONSE_BYTES)
@@ -255,8 +255,8 @@ impl<'a> RadarRequest<'a> {
             comm: RadarComm {
                 account_id: credential.music_id(),
                 format: "json",
-                client_type: 19,
-                client_version: 0,
+                client_type: crate::profile::DESKTOP_TYPE,
+                client_version: crate::profile::DESKTOP_COMPAT_VERSION,
                 auth_key: credential.music_key(),
                 login_type: credential.login_type().value(),
             },

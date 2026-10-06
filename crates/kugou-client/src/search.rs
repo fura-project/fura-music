@@ -152,6 +152,7 @@ impl<T: Transport> KuGouClient<T> {
             .transport
             .send(Request {
                 url: endpoint.into(),
+                profile: crate::profile::KuGouProtocolProfile::Public,
             })
             .await?;
         match response.status {

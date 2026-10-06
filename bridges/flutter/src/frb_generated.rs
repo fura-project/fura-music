@@ -11222,6 +11222,19 @@ impl SseDecode
     }
 }
 
+impl SseDecode for Option<crate::api::queue::PlaybackCompletionAction> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::queue::PlaybackCompletionAction>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::queue::PlaybackQueueFailure> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11915,6 +11928,19 @@ impl SseDecode for Option<Vec<u8>> {
     }
 }
 
+impl SseDecode for crate::api::queue::PlaybackCompletionAction {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::queue::PlaybackCompletionAction::None,
+            1 => crate::api::queue::PlaybackCompletionAction::ReplayCurrent,
+            2 => crate::api::queue::PlaybackCompletionAction::PlayCurrent,
+            _ => unreachable!("Invalid variant for PlaybackCompletionAction: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::queue::PlaybackOrder {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11967,11 +11993,14 @@ impl SseDecode for crate::api::queue::PlaybackQueueUpdate {
         let mut var_snapshot =
             <Option<crate::api::queue::PlaybackQueueSnapshot>>::sse_decode(deserializer);
         let mut var_playbackRequested = <bool>::sse_decode(deserializer);
+        let mut var_completionAction =
+            <Option<crate::api::queue::PlaybackCompletionAction>>::sse_decode(deserializer);
         let mut var_failure =
             <Option<crate::api::queue::PlaybackQueueFailure>>::sse_decode(deserializer);
         return crate::api::queue::PlaybackQueueUpdate {
             snapshot: var_snapshot,
             playback_requested: var_playbackRequested,
+            completion_action: var_completionAction,
             failure: var_failure,
         };
     }
@@ -15457,6 +15486,28 @@ impl
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::queue::PlaybackCompletionAction {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::None => 0.into_dart(),
+            Self::ReplayCurrent => 1.into_dart(),
+            Self::PlayCurrent => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::queue::PlaybackCompletionAction
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::queue::PlaybackCompletionAction>
+    for crate::api::queue::PlaybackCompletionAction
+{
+    fn into_into_dart(self) -> crate::api::queue::PlaybackCompletionAction {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::queue::PlaybackOrder {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -15530,6 +15581,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::queue::PlaybackQueueUpdate {
         [
             self.snapshot.into_into_dart().into_dart(),
             self.playback_requested.into_into_dart().into_dart(),
+            self.completion_action.into_into_dart().into_dart(),
             self.failure.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -19732,6 +19784,16 @@ impl SseEncode
     }
 }
 
+impl SseEncode for Option<crate::api::queue::PlaybackCompletionAction> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::queue::PlaybackCompletionAction>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::queue::PlaybackQueueFailure> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -20282,6 +20344,23 @@ impl SseEncode for Option<Vec<u8>> {
     }
 }
 
+impl SseEncode for crate::api::queue::PlaybackCompletionAction {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::queue::PlaybackCompletionAction::None => 0,
+                crate::api::queue::PlaybackCompletionAction::ReplayCurrent => 1,
+                crate::api::queue::PlaybackCompletionAction::PlayCurrent => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for crate::api::queue::PlaybackOrder {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -20332,6 +20411,10 @@ impl SseEncode for crate::api::queue::PlaybackQueueUpdate {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<crate::api::queue::PlaybackQueueSnapshot>>::sse_encode(self.snapshot, serializer);
         <bool>::sse_encode(self.playback_requested, serializer);
+        <Option<crate::api::queue::PlaybackCompletionAction>>::sse_encode(
+            self.completion_action,
+            serializer,
+        );
         <Option<crate::api::queue::PlaybackQueueFailure>>::sse_encode(self.failure, serializer);
     }
 }

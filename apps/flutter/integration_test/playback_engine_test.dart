@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
@@ -218,7 +219,9 @@ void main() {
     ForegroundAudioSession? session;
 
     try {
-      for (final path in ['first.mp3', 'second.mp3']) {
+      await _recordSoakMetrics(0);
+      for (var replacement = 0; replacement < 100; replacement++) {
+        final path = 'synthetic-$replacement.mp3';
         session = await engine.loadRemote(
           Uri.parse(
             'http://${server.address.address}:${server.port}/$path'
@@ -234,6 +237,16 @@ void main() {
           ForegroundAudioState.playing,
           session.play,
         );
+        await _expectStateAfter(
+          session,
+          ForegroundAudioState.paused,
+          session.pause,
+        );
+        await _expectStateAfter(
+          session,
+          ForegroundAudioState.playing,
+          session.play,
+        );
         await tester.pump(const Duration(milliseconds: 300));
         expect(
           await progressed.timeout(const Duration(seconds: 5)),
@@ -243,6 +256,9 @@ void main() {
         await session.dispose();
         session = null;
         expect(engine.debugPlayer, same(enginePlayer));
+        if ([9, 19, 49, 99].contains(replacement)) {
+          await _recordSoakMetrics(replacement + 1);
+        }
       }
     } finally {
       await session?.dispose();
@@ -251,6 +267,75 @@ void main() {
       await server.close(force: true);
     }
   }, skip: !Platform.isLinux);
+
+  testWidgets('media_kit EOF replay retains the cached synthetic remote source', (
+    tester,
+  ) async {
+    final fixture = base64Decode(_silentMp3Base64);
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    var requestCount = 0;
+    final requests = server.listen((request) {
+      requestCount++;
+      unawaited(_serveFixture(request, fixture, ContentType('audio', 'mpeg')));
+    });
+    final engine = MediaKitForegroundAudioEngine();
+    ForegroundAudioSession? session;
+    try {
+      session = await engine.loadRemote(
+        Uri.parse('http://${server.address.address}:${server.port}/repeat.mp3'),
+      );
+      await session.setVolume(0);
+      var completed = session.states.firstWhere(
+        (state) => state == ForegroundAudioState.completed,
+      );
+      await session.play();
+      await completed.timeout(const Duration(seconds: 10));
+      final initialRequests = requestCount;
+      expect(initialRequests, greaterThan(0));
+      for (var cycle = 0; cycle < 100; cycle++) {
+        completed = session.states.firstWhere(
+          (state) => state == ForegroundAudioState.completed,
+        );
+        final progressed = session.positionMs.firstWhere(
+          (position) => position > 0,
+        );
+        await session.seekToMs(0);
+        await session.play();
+        await progressed.timeout(const Duration(seconds: 5));
+        await completed.timeout(const Duration(seconds: 10));
+        expect(
+          requestCount,
+          initialRequests,
+          reason: 'EOF replay must not reopen the synthetic HTTP source',
+        );
+      }
+      debugPrint(
+        'FURA_DIAGNOSTIC synthetic_eof_soak completions=100 '
+        'extraHttpRequests=${requestCount - initialRequests} activeMusicPlayers=1',
+      );
+    } finally {
+      await session?.dispose();
+      await engine.dispose();
+      await requests.cancel();
+      await server.close(force: true);
+    }
+  }, skip: !Platform.isLinux);
+}
+
+Future<void> _recordSoakMetrics(int replacements) async {
+  // Linux-only synthetic integration evidence. Never log the source or the
+  // rest of /proc/self/status; Player count is the identity assertion above,
+  // not a claim that an SDK-retired mpv handle is already destroyed.
+  final status = await File('/proc/self/status').readAsLines();
+  int value(String field) => int.parse(
+    status
+        .firstWhere((line) => line.startsWith('$field:'))
+        .split(RegExp(r'\s+'))[1],
+  );
+  debugPrint(
+    'FURA_DIAGNOSTIC synthetic_media_soak replacements=$replacements '
+    'activeMusicPlayers=1 rssMiB=${value('VmRSS') ~/ 1024} threads=${value('Threads')}',
+  );
 }
 
 Future<void> _serveFixture(

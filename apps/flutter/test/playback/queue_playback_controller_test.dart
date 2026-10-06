@@ -163,7 +163,7 @@ void main() {
   );
 
   test(
-    'repeat-one completion replays the Rust-selected position once',
+    '100 repeat-one completions resolve and open once, replay retained source',
     () async {
       final gateway = _ScriptedQueueGateway(
         replaceResults: [
@@ -174,27 +174,43 @@ void main() {
             repeatMode: PlaybackRepeatMode.one,
           ),
         ],
-        completionResults: [
-          _result(
+        completionResults: List.generate(
+          100,
+          (_) => _result(
             [first],
             0,
             changed: true,
             repeatMode: PlaybackRepeatMode.one,
+            completionAction: PlaybackCompletionAction.replayCurrent,
           ),
-        ],
+        ),
       );
       final firstSession = _FakeAudioSession();
-      final controller = _controller(
-        gateway,
-        _FakeMediaGateway(['first', 'first-again']),
-        _FakeAudioEngine([firstSession, _FakeAudioSession()]),
-      );
+      final media = _FakeMediaGateway(['first']);
+      final audio = _FakeAudioEngine([firstSession]);
+      final controller = _controller(gateway, media, audio);
 
       await controller.replaceAndPlay([first], 0);
-      firstSession.emit(ForegroundAudioState.completed);
-      await _flush();
+      for (var cycle = 0; cycle < 100; cycle++) {
+        firstSession.emit(ForegroundAudioState.completed);
+        await _flush();
+        expect(controller.playback.stage, TrackPlaybackStage.playing);
+        if (cycle == 98) {
+          // Exact 100-play-cycle acceptance: initial play + 99 EOF replays.
+          expect(media.requests.length, 1);
+          expect(audio._next, 1);
+          expect(firstSession.playCalls, 100);
+          expect(firstSession.seekPositions.length, 99);
+          expect(firstSession.stopCalls, 0);
+        }
+      }
 
-      expect(gateway.completionCalls, 1);
+      expect(gateway.completionCalls, 100);
+      expect(media.requests, [first.opaqueId]);
+      expect(audio._next, 1);
+      expect(firstSession.seekPositions, List.filled(100, 0));
+      expect(firstSession.playCalls, 101);
+      expect(firstSession.stopCalls, 0);
       expect(controller.current, same(first));
       expect(controller.playback.stage, TrackPlaybackStage.playing);
       controller.dispose();
@@ -1421,6 +1437,7 @@ PlaybackQueueResult _result(
   bool changed = false,
   PlaybackOrder order = PlaybackOrder.sequential,
   PlaybackRepeatMode repeatMode = PlaybackRepeatMode.off,
+  PlaybackCompletionAction? completionAction,
 }) => PlaybackQueueResult(
   snapshot: PlaybackQueueSnapshot(
     tracks: tracks,
@@ -1436,6 +1453,7 @@ PlaybackQueueResult _result(
     repeatMode: repeatMode,
   ),
   playbackRequested: changed,
+  completionAction: completionAction,
 );
 
 QueuePlaybackController _controller(
@@ -1924,6 +1942,8 @@ class _FakeAudioSession implements ForegroundAudioSession {
   final StreamController<int> _positions = StreamController.broadcast();
   final List<int> seekPositions = [];
   int pauseCalls = 0;
+  int playCalls = 0;
+  int stopCalls = 0;
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -1935,7 +1955,10 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Stream<int> get positionMs => _positions.stream;
 
   @override
-  Future<void> play() async => emit(ForegroundAudioState.playing);
+  Future<void> play() async {
+    playCalls++;
+    emit(ForegroundAudioState.playing);
+  }
 
   @override
   Future<void> pause() async {
@@ -1953,7 +1976,10 @@ class _FakeAudioSession implements ForegroundAudioSession {
   Future<void> setVolume(double volume) async {}
 
   @override
-  Future<void> stop() async => emit(ForegroundAudioState.stopped);
+  Future<void> stop() async {
+    stopCalls++;
+    emit(ForegroundAudioState.stopped);
+  }
 
   @override
   Future<void> dispose() async {

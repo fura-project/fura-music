@@ -450,7 +450,7 @@ fn ranking_request(body: Vec<u8>) -> HttpRequest {
     HttpRequest::post(MUSICU_URL)
         .header("Content-Type", "application/json")
         .header("Origin", "https://y.qq.com")
-        .header("Referer", "https://y.qq.com/")
+        .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
         .body(body)
         .response_body_limit(MAX_RESPONSE_BYTES)
         .timeout(REQUEST_TIMEOUT)

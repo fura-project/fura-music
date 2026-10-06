@@ -2,6 +2,37 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Active Core workstream — playback/cache, Client profiles and session continuation (2026-10-06)
+
+**Goal:** source-retaining completion/repeat, bounded playback/resolution caches,
+explicit Provider-private protocol profiles and safe QQ/NetEase session
+continuation. KuGou may become a production Provider only after its ordinary,
+entitlement-respecting clear HTTPS media gate passes.
+
+**Sequence:** audit → playback/cache → profiles → QQ → NetEase → KuGou →
+refresh/persistence integration → soak. Infrastructure implementation is serial.
+
+**Current checkpoint:** replay/cache/profile extraction and one-shot synthetic
+refresh Client candidates are implemented. Real Linux music/MV/MPRIS checks
+pass. Persistent byte cache and production automatic refresh are not completed.
+QQ's refresh Web profile and NetEase's minimal refresh-Cookie requirements need
+bounded maintainer-operated evidence before activation; afterward the Provider
+coordinator and atomic vault install still need implementation and regression.
+KuGou device/session/media remains blocked without an ordinary safe contract.
+See [the source audit and acceptance matrix](docs/research/provider-playback-session-audit-2026-10-06.md).
+
+**Boundaries:** no sidecar/proxy, raw JSON Bridge, profile/risk rotation,
+unclassified hardware identity, private app secret, package spoofing, protected
+media unlock, cross-Provider source or unsafe mutation replay. No real stored
+account automation, unrelated UI/platform changes, commit or push. Mobile and
+real-session completion cannot be inferred from Linux synthetic playback.
+
+**Next gate:** accept the specific refresh protocol/material evidence, then
+implement refresh single-flight/latest-generation install, safe durable rotation,
+read retry-once and mutation no-replay semantics. Human subsequently validates
+real credentials and physical mobile soak. This is a partial checkpoint, not
+completion of the P0 self-healing login objective.
+
 ## Human Review Workstream — long-list continuation and Roam completion (HD-035)
 
 **Goal:** make every long-list continuation correct after row omission and exact

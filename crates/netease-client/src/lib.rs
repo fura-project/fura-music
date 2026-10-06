@@ -9,6 +9,7 @@ mod crypto;
 mod lyrics;
 mod media;
 mod music_video;
+mod profile;
 mod read;
 mod transport;
 pub use catalog::*;
@@ -90,7 +91,7 @@ impl<T: Transport> NeteaseClient<T> {
             true,
             cookie,
             headers,
-            Some("https://interface3.music.163.com/eapi/"),
+            Some(profile::INTERFACE3_EAPI_BASE),
         )
         .await
     }
@@ -110,15 +111,20 @@ impl<T: Transport> NeteaseClient<T> {
         {
             return Err(Error::InputBound);
         }
+        let profile = if eapi {
+            profile::NeteaseProtocolProfile::DesktopEapi
+        } else {
+            profile::NeteaseProtocolProfile::WebWeapi
+        };
         let text = request_payload(&mut payload, eapi, cookie)?;
         let (base, form) = if eapi {
             (
-                eapi_base.unwrap_or("https://interface.music.163.com/eapi/"),
+                eapi_base.unwrap_or(profile.base()),
                 crypto::eapi(path, &text)?,
             )
         } else {
             (
-                "https://music.163.com/weapi/",
+                profile.base(),
                 crypto::weapi(&text, &crypto::random_key()?)?,
             )
         };
@@ -131,7 +137,7 @@ impl<T: Transport> NeteaseClient<T> {
                 ),
                 form,
                 cookie: cookie.map(str::to_owned),
-                headers,
+                headers: profile.headers(headers),
             })
             .await?;
         if response.body.len() > MAX_RESPONSE_BYTES {

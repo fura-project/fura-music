@@ -158,7 +158,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .header("Cookie", credential.musicu_cookie_header())
                     .body(body)
                     .response_body_limit(MAX_VERIFICATION_RESPONSE_BYTES)
@@ -187,10 +187,10 @@ impl<'a> VerificationRequest<'a> {
     fn new(credential: &'a Credential) -> Self {
         Self {
             comm: VerificationComm {
-                cv: 13_020_508,
-                version: 13_020_508,
-                client_type: "11",
-                app_id: "qqmusic",
+                cv: crate::profile::WEB_MODERN_VERSION,
+                version: crate::profile::WEB_MODERN_VERSION,
+                client_type: crate::profile::WEB_MODERN_TYPE,
+                app_id: crate::profile::WEB_APP_ID,
                 format: "json",
                 input_charset: "utf-8",
                 output_charset: "utf-8",

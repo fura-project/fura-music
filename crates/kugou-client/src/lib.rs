@@ -5,6 +5,7 @@
 
 mod catalog;
 mod lyrics;
+mod profile;
 mod search;
 mod transport;
 

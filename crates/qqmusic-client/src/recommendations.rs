@@ -249,7 +249,7 @@ where
                 HttpRequest::post(MUSICU_URL)
                     .header("Content-Type", "application/json")
                     .header("Origin", "https://y.qq.com")
-                    .header("Referer", "https://y.qq.com/")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
                     .body(body)
                     .response_body_limit(MAX_RESPONSE_BYTES)
                     .timeout(REQUEST_TIMEOUT),
@@ -277,14 +277,14 @@ impl RecommendedPlaylistsRequest {
     const fn new(offset: u32, size: u32) -> Self {
         Self {
             comm: RecommendationComm {
-                client_type: 20,
-                client_version: 1770,
+                client_type: crate::profile::WEB_LEGACY_TYPE,
+                client_version: crate::profile::WEB_LEGACY_VERSION,
                 token: 5381,
                 uin: "0",
                 format: "json",
                 input_charset: "utf-8",
                 output_charset: "utf-8",
-                platform: "wk_v17",
+                platform: crate::profile::WEB_LEGACY_PLATFORM,
                 uid: "",
                 guid: "",
             },

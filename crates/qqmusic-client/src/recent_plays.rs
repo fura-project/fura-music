@@ -429,7 +429,7 @@ where
             .query("sign", sign)
             .header("Content-Type", "application/json")
             .header("Origin", "https://y.qq.com")
-            .header("Referer", "https://y.qq.com/")
+            .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
             .header("Cookie", credential.musicu_cookie_header())
             .body(body)
             .response_body_limit(MAX_RECENT_PLAYS_RESPONSE_BYTES)
@@ -473,19 +473,19 @@ impl<'a> RecentPlaysRequest<'a> {
         let csrf_token = credential_music_key_hash(credential.music_key());
         Self {
             comm: RecentPlaysComm {
-                cv: 4_747_474,
-                client_type: 11,
+                cv: crate::profile::WEB_LIBRARY_VERSION,
+                client_type: crate::profile::WEB_RECENT_TYPE,
                 format: "json",
                 input_charset: "utf-8",
                 output_charset: "utf-8",
                 notice: 0,
-                platform: "yqq.json",
+                platform: crate::profile::WEB_JSON_PLATFORM,
                 need_new_code: 0,
                 user_id: credential.music_id(),
                 account_id: credential.music_id(),
                 auth_key: credential.music_key(),
                 login_type: credential.login_type().value(),
-                app_id: "qqmusic",
+                app_id: crate::profile::WEB_APP_ID,
                 csrf_token,
                 legacy_csrf_token: csrf_token,
             },

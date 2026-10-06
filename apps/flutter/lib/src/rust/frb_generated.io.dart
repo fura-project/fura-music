@@ -989,6 +989,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlaybackCompletionAction dco_decode_box_autoadd_playback_completion_action(
+    dynamic raw,
+  );
+
+  @protected
   PlaybackQueueFailure dco_decode_box_autoadd_playback_queue_failure(
     dynamic raw,
   );
@@ -1413,6 +1418,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlaybackCompletionAction?
+  dco_decode_opt_box_autoadd_playback_completion_action(dynamic raw);
+
+  @protected
   PlaybackQueueFailure? dco_decode_opt_box_autoadd_playback_queue_failure(
     dynamic raw,
   );
@@ -1658,6 +1667,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  PlaybackCompletionAction dco_decode_playback_completion_action(dynamic raw);
 
   @protected
   PlaybackOrder dco_decode_playback_order(dynamic raw);
@@ -2877,6 +2889,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlaybackCompletionAction sse_decode_box_autoadd_playback_completion_action(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlaybackQueueFailure sse_decode_box_autoadd_playback_queue_failure(
     SseDeserializer deserializer,
   );
@@ -3411,6 +3428,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PlaybackCompletionAction?
+  sse_decode_opt_box_autoadd_playback_completion_action(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlaybackQueueFailure? sse_decode_opt_box_autoadd_playback_queue_failure(
     SseDeserializer deserializer,
   );
@@ -3694,6 +3717,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  PlaybackCompletionAction sse_decode_playback_completion_action(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlaybackOrder sse_decode_playback_order(SseDeserializer deserializer);
@@ -5161,6 +5189,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_playback_completion_action(
+    PlaybackCompletionAction self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_playback_queue_failure(
     PlaybackQueueFailure self,
     SseSerializer serializer,
@@ -5752,6 +5786,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_playback_completion_action(
+    PlaybackCompletionAction? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_playback_queue_failure(
     PlaybackQueueFailure? self,
     SseSerializer serializer,
@@ -6049,6 +6089,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
     Uint8List? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_playback_completion_action(
+    PlaybackCompletionAction self,
     SseSerializer serializer,
   );
 

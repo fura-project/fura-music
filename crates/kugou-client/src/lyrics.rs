@@ -138,6 +138,7 @@ async fn send<T: Transport>(transport: &T, endpoint: url::Url) -> Result<Vec<u8>
     let response = transport
         .send(Request {
             url: endpoint.into(),
+            profile: crate::profile::KuGouProtocolProfile::Public,
         })
         .await?;
     match response.status {
