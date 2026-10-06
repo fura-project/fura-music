@@ -2,14 +2,41 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: CORE
-  state: ANDROID_PLAYBACK_DEVICE_REQUIRED
+  state: ANDROID_WAYDROID_BASELINE_PASS_PHYSICAL_PENDING
   acceptance_milestone: ANDROID_REPEAT_ONE_LIFECYCLE_STABILITY
   active_workstream: ANDROID_PLAYBACK_LIFECYCLE_REGRESSION
-  current_task: REPLAY_STALL_REGRESSION_AND_SECRET_SAFE_DIAGNOSTICS
-  next_action: AUTHORIZED_PHYSICAL_ANDROID_30_EOF_BACKGROUND_LOCK_NETWORK_ACCEPTANCE
+  current_task: WAYDROID_EVIDENCE_COMPLETE_WITH_CONTENTION_FAILURE_RETAINED
+  next_action: HUMAN_PHYSICAL_ANDROID_LIFECYCLE_AND_CONTENTION_REVIEW
 ---
 
 # Current State
+
+- **2026-10-06 resumed Waydroid Android acceptance:** starting HEAD/local and
+  live remote main were `fa73c90e2a40fad08f526cbdd86d7853d8ad35f4`, worktree
+  clean. Existing Waydroid 1.6.3 / Android 13 API 33 / native x86_64 was normally
+  started and Human-authorized for ADB without init, image/data reset or host
+  policy change. Real Rust Queue/default-D MediaKit/focus/system-edge Debug
+  and Release gates passed 101 EOFs/100 replays with resolve=1, open=1,
+  seek=100, play=101, stop=0, normal rebuild/nativeErrors/extra HTTP=0.
+  Actual Activity background crosses two EOFs; twenty pause/resume cycles,
+  twenty cached-offline replays, incomplete-transfer restore and an injected
+  seek timeout followed by one explicit bounded native recovery pass. A real
+  ownership omission was found: manifest-disabled audio_service still spawned
+  an extra cached Dart engine on Activity attachment. Registration is now
+  gated before attachment with the existing native stack flag; A rollback is
+  retained and D has one entrypoint/MediaSession/focus owner. Startup/stack
+  diagnostics now reach logcat without DevTools, including Release. Ordinary
+  A Debug starts, and ordinary no-define D Debug/Release each pass three cold
+  starts; ordinary D Release is left installed, not the fixture APK. The final
+  baseline passes, but a parallel-build/near-full-host-swap Debug trial really
+  failed at play timeout and delayed focus release; that negative evidence
+  and unconfirmed cause are retained, not relabelled PASS. Physical phone,
+  Bluetooth/cellular/OEM/focus acceptance and the original freeze remain
+  pending/unverified. Playback Queue/replay/cache, Provider/refresh and UI
+  design are unchanged. Exact artifacts, memory, counter evidence and scope
+  are in `docs/research/android-repeat-one-lifecycle-regression-2026-10-06.md`.
+  Current baseline machine work is exhausted; Human physical review remains.
+  No commit, push, reset, restore, clean or account automation occurred.
 
 - **2026-10-06 Android retained-source lifecycle regression:** HEAD and local
   `origin/main` both start at `9098912210289d7bdb504f26d4a0c50dad0767f2`, with

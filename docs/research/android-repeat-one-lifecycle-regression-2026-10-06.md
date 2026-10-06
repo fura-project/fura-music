@@ -1,8 +1,10 @@
 # Android retained-source replay lifecycle regression — 2026-10-06
 
-Status: **DEVICE_REQUIRED**. This checkpoint does not accept physical Android
-playback stability, background/lock, network transition, Bluetooth or mobile
-memory. The previous physical-device failure is not superseded by Linux tests.
+Initial checkpoint: **DEVICE_REQUIRED**, for physical-device acceptance only.
+The historical checkpoint below is preserved. The resumed Waydroid machine
+acceptance at the end of this document supersedes the earlier assumption that
+all Android runtime work had to stop without a physical phone. Neither Linux
+nor Waydroid evidence accepts the original physical-device failure.
 
 ## Baseline and scope
 
@@ -194,3 +196,253 @@ inherently forced to wait for the old HTTP timeout. No physical rapid-switch
 latency was reproduced and no Provider code was changed. TD-017 records a future
 short critical section/per-key single-flight remedy only if measured latency
 or an authorized parallel-consumer requirement triggers the debt.
+
+## Resumed Waydroid machine acceptance — 2026-10-06
+
+Starting HEAD, local `origin/main` and a fresh read-only remote query were all
+`fa73c90e2a40fad08f526cbdd86d7853d8ad35f4`; the initial worktree was clean.
+The candidate is `9098912 + fa73c90`, followed by the uncommitted changes
+described here. No physical ADB device was present.
+
+The existing Waydroid 1.6.3 installation was started normally, without init,
+image download, reset, data removal or host configuration changes. Human
+authorized its previously unauthorized ADB connection. Its runtime is Android
+13/API 33, native `x86_64` (supported `x86_64,x86`), with Mesa/minigbm graphics.
+The APK identity remains `com.fura.flutterustmusic`; installation uses `-r`,
+not uninstall or `pm clear`. No account login or Provider playback was used.
+
+### Real default-D startup defect found during testing
+
+The original ordinary no-define D Debug APK reached a visible Home window, but
+the integration entrypoint ran twice and media_kit's NativeReferenceHolder
+reported an invalid empty pointer string. The pinned audio_service 0.18.19
+source explains the extra engine: `onAttachedToActivity` unconditionally calls
+`getFlutterEngine`, which constructs a cached FlutterEngine and executes the
+default Dart entrypoint if absent. Disabling its manifest service/receiver does
+not prevent plugin registration or this attachment behavior.
+
+Removing an already-attached AudioServicePlugin in `configureFlutterEngine`
+was tested and rejected: attachment had already happened, and a late browser
+callback produced a native NullPointerException. That removal is not retained.
+The final correction gates **registration before attachment** with the existing
+`BuildConfig.USE_AUDIO_SERVICE_SYSTEM_EDGE`. A build-owned generated registrant
+copy preserves all other Flutter-generated registrations; the original input
+is unchanged. [AGP's public generated-source API](https://developer.android.com/reference/tools/gradle-api/9.1/com/android/build/api/variant/SourceDirectories)
+owns the task output. The transform fails closed unless it finds exactly one
+known audio_service registration. A/B and invalid-define rollback still enable
+it; C/D do not instantiate it. Both dependencies and rollback declarations are
+retained. MainActivity adds only coarse registration and pause/resume markers.
+
+The corrected D APK's compiled registrant no longer constructs
+AudioServicePlugin. The real integration entrypoint runs once and the marker
+reports `audioService=false`. This proves a local ownership defect and its
+correction, **not the root cause of the original phone's occasional freeze**.
+
+### Harness and evidence boundaries
+
+`integration_test/android_replay_lifecycle_test.dart` uses the real Rust Queue,
+typed Bridge, Queue/Track/Foreground controllers, media_kit native Player,
+audio_session focus owner and flutter_media_session system edge. Only media
+resolution/lyrics are synthetic. One app-owned loopback HTTP fixture replaces
+account and Provider traffic; it is test-only and is not a shipping proxy.
+Native forwarding counters count actual operations, not simulated completions.
+Rust's Queue selects repeat-one and the finite terminal transition.
+
+The fixture repeats complete silent MPEG frames under one ID3 header, not a
+native playlist/loop or manufactured EOF. Independent FFmpeg `-v error -xerror`
+decode passes. The short source is about 2.6 seconds; this is not a long-song,
+High/Lossless or physical audio-hardware acceptance test. The integration
+binding uses `fullyLive` so host-driven Activity resume renders frames during
+the real-time soak; the default fade-pointer test policy initially prevented
+resume completion. No production Flutter state machine was changed for that.
+
+The normal gate asserts 101 real EOFs/100 retained-source replays, one initial
+resolution/open, no repeated HTTP fetch, no native errors and no rebuild. The
+observer drives actual Android Home/Activity transitions, waits for two EOFs
+while backgrounded, performs 20 pause/resume cycles plus one confirmation, and
+samples only this application's memory, focus and MediaSession. A separate
+test injects a never-completing control Future at the native-player forwarding
+seam; it proves timeout/queue release/one explicit recovery on Android, not a
+reproduction of a C++ driver deadlock.
+
+Cached-network testing closes only the fixture server for 20 EOF replays, then
+restores it. Incomplete-source testing withholds only the fixture response for
+three seconds, restores it and consumes a later portion. An initial 2 KiB
+prefix test timed out before initial position advance: it withheld data before
+the intended playback outage. The revised fixture provides enough MPEG data
+for startup while keeping the source incomplete; it does not weaken native
+error/position/open assertions or change mpv's production cache settings.
+
+### Local build reproducibility
+
+The host's Unicode SDK path caused an unrelated Gradle property decoding
+failure; a command-local launcher uses the existing ASCII SDK symlink. The
+normal Gradle engine download was also extremely slow. Exact Debug/Release
+engine jars were fetched directly from official Flutter HTTPS storage, checked
+against the GCS MD5, tested as ZIPs, and their `libflutter.so` SHA256 compared
+with the installed **same** 3.47.1 SDK. A command-local Gradle init script makes
+those artifacts available through a temporary Maven directory. It is not a
+mirror policy, SDK/toolchain upgrade or repository/global configuration change.
+Subsequent builds use the normal Gradle cache and existing privacy Rust flags.
+No default-D FURA defines are injected. Current repaired APKs therefore contain
+`fa73c90` plus this uncommitted Android registration correction, not pure HEAD.
+
+Detailed logs, hashes and screenshots remain outside the repository under
+`/tmp/fura-waydroid-replay-20261006-lxU1AA`. Only FURA_DIAGNOSTIC categories are
+retained from logcat; no media URI, credential or account data is collected.
+Screenshots show the synthetic test window. Waydroid/Mesa text-rendering noise
+is not treated as Human-approved UI or physical-driver evidence.
+
+### Completed Android playback machine results
+
+Both the final Debug and Release integration suites passed all three cases on
+the real Waydroid Android runtime. Each repeat gate observed **101 actual EOFs
+and 100 replays**, rather than manufacturing completion or looping natively.
+
+| Metric, before terminal cleanup | Debug | Release |
+| --- | ---: | ---: |
+| Resolution gateway calls (synthetic result, no Provider request) | 1 | 1 |
+| Actual native Player opens | 1 | 1 |
+| Retained-source zero seeks | 100 | 100 |
+| Plays, including initial play | 101 | 101 |
+| Source stops | 0 | 0 |
+| Unexpected Player rebuilds | 0 | 0 |
+| Native error events | 0 | 0 |
+| Additional fixture HTTP requests | 0 | 0 |
+| Flutter pause/resume callbacks | 22/22 | 22/24 |
+| EOF replays while genuinely backgrounded | 2 | 2 |
+
+Debug's final observer waits for each Android/Flutter lifecycle acknowledgement,
+not an arbitrary rapid shell loop. Release completed twenty actual Activity
+cycles plus confirmations; three additional slower cycles were used because
+some Dart callbacks coalesced during rapid switching. No replay/focus policy
+was changed to meet these counts. Native snapshots show one Fura MediaSession
+and one active focus owner while playing. Both suites leave zero MediaSessions
+and zero Fura active focus entries after controller/host/engine disposal.
+
+The fixture-offline interval covers twenty real EOF replays (30 through 50)
+without additional resolution/open/HTTP. The incomplete-source case sends only
+the first 64 KiB, withholds the rest for three seconds, then restores it. Native
+position advances, the response finishes, and a seek/play beyond sixty seconds
+consumes the restored portion. Both builds retain open=1/play=1/nativeErrors=0
+for that case; it is not evidence about cellular radio or provider/CDN recovery.
+
+The injected never-completing seek times out at about one second, releases
+focus, refuses more controls on the stalled session, then recovers through one
+explicit new load. Real native position advances after that bounded rebuild.
+Open/pause/seek/play never-Future, failed/hung retirement and no-second-rebuild
+boundaries are additionally covered by the unchanged deterministic unit suite.
+
+Android memory samples below are KiB, not physical-phone acceptance. Native
+heap uses the coarse App Summary private-memory figure. Release experienced
+host swapping, so its resident-memory decrease is not a leak-free proof.
+
+| Build / replays | Total PSS | Total RSS | Native heap summary |
+| --- | ---: | ---: | ---: |
+| Debug / start | 411222 | 474968 | 35416 |
+| Debug / 10 | 365820 | 433668 | 33300 |
+| Debug / 30 | 376012 | 446236 | 36116 |
+| Debug / 100 | 377930 | 448640 | 37736 |
+| Release / start | 132991 | 243464 | 30736 |
+| Release / 10 | 52684 | 107168 | 27144 |
+| Release / 30 | 57285 | 84408 | 21800 |
+| Release / 100 | 72516 | 91484 | 17348 |
+
+The short synthetic source shows no obvious unbounded replay-only trend in
+these samples. It cannot accept long/High/Lossless mobile memory or the existing
+64 MiB forward/backward packet budgets. Those values remain unchanged.
+
+### Negative runs retained, not relabelled PASS
+
+- An initial Release run stopped with Waydroid's **whole container FROZEN**;
+  after wakeup Android could not find the activity service. Normal session
+  stop/start and full-UI launch restored the existing runtime. No init/image/
+  data reset or host policy change was made. The interrupted run is not PASS.
+- One Debug run **did hit a real play timeout** during parallel APK compilation:
+  replay cycle 21, native cycle 45, `play` elapsed 5494 ms. Focus release then
+  took about forty seconds. The test correctly failed. It is not dismissed as
+  a decoder error or described as no stalls across every trial.
+- At that time the host's 15 GiB swap was nearly exhausted. This task's idle
+  temporary/normal Gradle daemons and Kotlin worker accounted for roughly
+  4.5 GiB resident memory plus 4.9 GiB swap. Only those verified task-created
+  idle JVMs were stopped; no user's unrelated process/cache or global JVM
+  configuration was altered. Available memory rose from about 2.5 to 6.9 GiB.
+- The **identical Debug APK** then passed the complete three-case gate without
+  concurrent builds. This establishes a clean-baseline PASS, not causation:
+  the contention timeout's exact native/scheduler cause and its relevance to
+  the original phone remain unconfirmed. No timeout was enlarged, native error
+  ignored, automatic EOF reopen/retry added, or focus state machine rewritten.
+
+The source-lifetime replay model and cache were not changed in this task.
+Machine baseline is PASS; the contention trial is a separate failed observation
+and remains a stability risk for physical follow-up.
+
+### Ordinary APK diagnostics and restart boundary
+
+The original ordinary APK exposed native markers but not Dart startup/stack
+messages in logcat: the latter used only `dart:developer.log`. Existing emitters
+now use stdout-capable `debugPrint` with the same secret-free fields; main's
+post-initialization stack includes actual system-controls availability. A
+one-shot post-frame marker confirms framework first-frame completion without
+a guessed startup sleep. Native resumed/window checks complement that marker.
+There is no new diagnostics service or runtime framework.
+
+Explicit rollback A Debug has been rebuilt and run: audioService registration
+is true, requested/effective A is printed, system edge init succeeds and the
+first frame appears. Ordinary no-define D Debug **and Release** each passed
+three cold restarts: registration=false, requested/effective D, available
+system controls and one Dart entrypoint. Release logcat actually contains
+startup/selection/runtime-stack and first-frame messages without a VM-service
+connection. These are startup/ownership checks, not A account/media playback
+acceptance. The final installed package is ordinary D Release, not the fixture
+entrypoint. The existing app data and Waydroid installation are preserved.
+
+### Artifact provenance and checks
+
+All artifacts below use native x86_64 and the same starting HEAD plus the
+uncommitted changes described above. Harness APKs use the integration entrypoint;
+ordinary APKs use `lib/main.dart`. No-define D is not implemented with a hidden
+FURA define. These x64 APKs are **not ARM64 physical-phone test packages**.
+
+| Artifact in the external evidence directory | SHA256 |
+| --- | --- |
+| flutterustmusic-replay-D-x64-debug.apk | ed59fd624e3fa5a9e95ecb4d182b940b7cc08b493382e9b6094b5b756c2f81a5 |
+| flutterustmusic-replay-D-x64-release.apk | d3258fe5a062281bc4df40e0725434e65db04c8f8cb6ca1617b904bf7c7700e0 |
+| flutterustmusic-ordinary-A-final-x64-debug.apk | cf28c3ab3c63f3bec8bbaca28328c3e891f26e84e5404db9e1f0dc788dc98074 |
+| flutterustmusic-ordinary-D-final-x64-debug.apk | f15621fb095ecf925fa2f8812be2b39d631f3423a757c87a1918746c1e86d1eb |
+| flutterustmusic-ordinary-D-final-x64-release.apk | 59bc5ba486d605d1cbef2064047a75a3c0755c12939bc0d739953dbf677f99e1 |
+
+The native payload includes the Rust bridge, libmpv and media_kit Android helper;
+the package identity/ABI and merged receiver/service states were checked. D's
+compiled registrant has no AudioServicePlugin construction; A retains it.
+The fixture entrypoint and ordinary startup checks each run exactly once.
+Final ordinary builds also limit only their command-local Gradle JVM heap,
+without editing project/global settings; no replay gate runs concurrently with
+them. Generated Gradle problem reports were moved to the external evidence
+directory rather than staged or discarded.
+
+Offline checks include all 248 existing playback tests, three startup diagnostic
+tests including the actual stdout sink, the targeted native/Queue tests, strict
+fixture decode, Dart analysis/format, identity/privacy checks and diff whitespace.
+No Rust/Bridge/Provider production change, FRB regeneration, real-account media
+test, GitHub Actions run, commit, push, reset, restore or clean is claimed.
+
+### Final acceptance split
+
+| Gate | Result |
+| --- | --- |
+| Waydroid Android runtime baseline | PASS — Debug and Release suites, ordinary startup/restart |
+| Host-contention Debug trial | FAIL — play timeout and delayed focus release; exact cause unconfirmed |
+| Physical Android lifecycle gate | PENDING_HUMAN |
+| Bluetooth / OEM / physical lockscreen / phone focus | PENDING_HUMAN |
+| Network | PARTIAL — cached offline and incomplete synthetic transfer recovery pass; real cellular remains pending |
+| Original physical-device freeze | UNVERIFIED |
+| Machine-actionable baseline work remaining | NONE |
+
+The remaining physical plan is still the original phone's normal/long/entitled
+quality Tracks, ≥30 EOFs, background/lock, focus interruptions, Bluetooth and
+Wi-Fi/cellular, with secret-free phase/counter evidence. The contention
+observation is explicitly retained for that review; passing a quieter same-APK
+run does not prove why it failed or prove the original problem fixed. No mobile
+cache-budget change, per-key Provider-cache refactor or new Provider/session
+feature was added.

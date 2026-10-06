@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
@@ -146,10 +144,9 @@ Future<void> main(List<String> arguments) async {
     logStartupPhase(phase: 'system_edge_init', outcome: 'failed');
     Error.throwWithStackTrace(error, stackTrace);
   }
-  developer.log(
+  debugPrint(
     'FURA_DIAGNOSTIC playback_stack '
     '${playbackStack.diagnosticLine(platform: defaultTargetPlatform, systemControlsAvailable: playbackHost.systemControlsAvailable)}',
-    name: 'fura_music.playback',
   );
 
   // Keep the selected system-media edge initialization ahead of account
@@ -189,6 +186,9 @@ Future<void> main(List<String> arguments) async {
   );
 
   logStartupPhase(phase: 'run_app', outcome: 'started');
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    logStartupPhase(phase: 'first_frame', outcome: 'success');
+  });
   runApp(
     MusicApp(
       bootstrap: bootstrap,

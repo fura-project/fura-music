@@ -8,6 +8,14 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 
 class MainActivity : FlutterActivity() {
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        Log.i(
+            diagnosticTag,
+            "phase=system_edge_plugin_registration audioService=${flutterEngine.plugins.has(AudioServicePlugin::class.java)}",
+        )
+    }
+
     override fun provideFlutterEngine(context: Context): FlutterEngine? =
         if (BuildConfig.USE_AUDIO_SERVICE_SYSTEM_EDGE) {
             AudioServicePlugin.getFlutterEngine(context)
@@ -27,6 +35,16 @@ class MainActivity : FlutterActivity() {
             )
             throw error
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.i(diagnosticTag, "phase=activity_paused outcome=success")
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.i(diagnosticTag, "phase=activity_resumed outcome=success")
     }
 
     companion object {

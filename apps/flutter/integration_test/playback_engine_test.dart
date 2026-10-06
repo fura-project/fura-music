@@ -354,6 +354,10 @@ void main() {
   }, skip: !Platform.isLinux);
 }
 
+// Shared synthetic fixture for platform runtime acceptance. No account/media
+// response is involved, and this helper is not imported by production code.
+List<int> syntheticSilentMp3Fixture() => base64Decode(_silentMp3Base64);
+
 Future<void> _recordSoakMetrics(int replacements) async {
   // Linux-only synthetic integration evidence. Never log the source or the
   // rest of /proc/self/status; Player count is the identity assertion above,

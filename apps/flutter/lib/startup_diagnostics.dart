@@ -1,9 +1,5 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/playback/playback_stack_experiment.dart';
-
-const _startupLogName = 'fura_music.startup';
 
 @visibleForTesting
 String startupPhaseDiagnostic({
@@ -12,10 +8,9 @@ String startupPhaseDiagnostic({
 }) => 'FURA_DIAGNOSTIC startup phase=$phase outcome=$outcome';
 
 void logStartupPhase({required String phase, required String outcome}) {
-  developer.log(
-    startupPhaseDiagnostic(phase: phase, outcome: outcome),
-    name: _startupLogName,
-  );
+  // Android logcat must work without a DevTools/VM-service attachment, also
+  // in Release. Emit only the existing coarse locally constructed fields.
+  debugPrint(startupPhaseDiagnostic(phase: phase, outcome: outcome));
 }
 
 @visibleForTesting
@@ -36,8 +31,7 @@ void logPlaybackStackSelected({
   required PlaybackStackSelection selection,
   required TargetPlatform platform,
 }) {
-  developer.log(
+  debugPrint(
     playbackStackSelectedDiagnostic(selection: selection, platform: platform),
-    name: _startupLogName,
   );
 }

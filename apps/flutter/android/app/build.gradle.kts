@@ -1,4 +1,5 @@
 import java.util.Base64
+import org.gradle.api.tasks.compile.JavaCompile
 
 plugins {
     id("com.android.application")
@@ -119,4 +120,49 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// Manifest-disabled audio_service still creates a cached FlutterEngine from
+// onAttachedToActivity. Guard registration before attachment, not by removing
+// an already-connected plugin. Preserve Flutter's generated input and every
+// other plugin; compile a build-owned copy with the existing stack selection.
+val flutterRegistrant =
+    layout.projectDirectory.file("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java")
+abstract class ScopePlaybackPluginRegistrant : DefaultTask() {
+    @get:InputFile
+    abstract val inputRegistrant: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val source = inputRegistrant.get().asFile.readText()
+        val registration =
+            "flutterEngine.getPlugins().add(new com.ryanheise.audioservice.AudioServicePlugin());"
+        check(source.split(registration).size == 2) {
+            "Expected exactly one audio_service registration in Flutter's generated registrant"
+        }
+        val output = outputDirectory.file("io/flutter/plugins/GeneratedPluginRegistrant.java").get().asFile
+        output.parentFile.mkdirs()
+        output.writeText(
+            source.replace(
+                registration,
+                "if (com.fura.flutterustmusic.BuildConfig.USE_AUDIO_SERVICE_SYSTEM_EDGE) { $registration }",
+            ),
+        )
+    }
+}
+val scopePlaybackPluginRegistrant =
+    tasks.register<ScopePlaybackPluginRegistrant>("scopePlaybackPluginRegistrant") {
+        inputRegistrant.set(flutterRegistrant)
+        outputDirectory.set(layout.buildDirectory.dir("generated/fura"))
+    }
+tasks.withType<JavaCompile>().configureEach {
+    exclude { it.file == flutterRegistrant.asFile }
+}
+androidComponents.onVariants { variant ->
+    variant.sources.java?.addGeneratedSourceDirectory(scopePlaybackPluginRegistrant) {
+        it.outputDirectory
+    }
 }
