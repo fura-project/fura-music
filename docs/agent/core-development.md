@@ -2,12 +2,12 @@
 
 Use this guide for QQ Music and NetEase protocol, Provider and Domain behavior, authentication and credential semantics, media resolution, Queue rules, lyric parsing/timing, remote mutation semantics, recommendation capability, Settings business models, reusable non-visual logic, Rust platform-neutral behavior, and typed Bridge contracts. A small Flutter adapter needed to expose a capability remains Core work; visual design does not.
 
-The shared task-authority, evidence-exhaustion, security, Git, and reporting rules in [`AGENTS.md`](../../AGENTS.md) always apply. There is no execution-mode selector.
+The shared execution-mode, task-authority, evidence-exhaustion, security, Git, and reporting rules in [`AGENTS.md`](../../AGENTS.md) always apply. The only current modes are `HUMAN_DIRECTED` and `AUTONOMOUS_DEVELOPMENT`; mode is persisted in `PROGRESS.md` and only Human may switch it.
 
 ## Ownership and authority
 
 ```text
-Human defines product boundary, task scope and any continuation authority.
+Human defines product boundary, task scope and execution mode.
 Evidence plus architecture define correctness.
 The Agent designs the bounded implementation.
 ```
@@ -16,16 +16,26 @@ Inside an authorized capability, implementation details such as Rust models, Pro
 
 Keep raw QQ/NetEase models and protocol behavior inside their respective clients; keep Provider identity opaque outside the owning Provider; keep reusable business behavior in Rust; keep the Bridge typed, coarse, cancellable, provider-neutral, and free of product business rules.
 
-## Execution inside the authorized scope
+## Execution-mode interpretation
 
-The Agent executes the authorized Core task exhaustively with the same engineering rigor for implementation, regression, research or validation:
+### CORE + HUMAN_DIRECTED
+
+Human chooses the current Core WHAT: task, scope, objective, acceptance boundary and exclusions. The Agent determines HOW and exhausts applicable inspection, reproduction, research, implementation, diagnostics, tests, authorized runtime/CI checks, failure/lifecycle/concurrency/memory investigation and diff/blocker review. Do not select another Core task after completing it. This is not passive, lower effort, regression-only or limited to the commands Human enumerated.
+
+### CORE + AUTONOMOUS_DEVELOPMENT
+
+Human authorizes the Core direction. The Agent may select successive finite evidence-backed Core WHATs only inside that direction, using the provenance requirements in `AGENTS.md`. Each selected task must be executed just as exhaustively as a Human-directed task. Do not invent capabilities, Providers, framework work or adjacent cleanup merely to continue.
+
+### Shared execution and evidence
+
+The Agent executes the authorized Core task exhaustively with identical reasoning depth, engineering rigor, testing, evidence standards, failure investigation, security and acceptance honesty in both modes, for implementation, regression, research or validation:
 
 ```text
 inspect -> reproduce/research -> implement -> test/runtime verify
 -> investigate failures -> review diff -> record evidence/blockers
 ```
 
-Only explicit Human continuation authority permits selecting another finite task within the specified direction. Each selection needs current product authority and concrete provenance. Do not manufacture capability work to continue or infer such authority from a pending gate.
+Acceptance gates do not select or switch mode. In either mode, a Human/live/device gate blocks its dependent claim, not independent authorized machine work. `AUTONOMOUS_DEVELOPMENT` additionally permits the next task within the already-authorized direction; `HUMAN_DIRECTED` does not. Negative-evidence exhaustion and machine-actionable remainder reporting are mandatory in both.
 
 ### Regression scope and independent evidence
 

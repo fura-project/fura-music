@@ -1,6 +1,6 @@
 # Repository Agent Guide
 
-This repository does not use execution modes. The latest Human authorization defines the task or direction, its scope and acceptance boundary. **Work domain** identifies the changing layer; **acceptance gate** identifies what evidence or decision is still missing. Neither is an execution-intensity setting or permission to choose unrelated work.
+This repository separates **execution mode**, **work domain** and **acceptance gate**. Execution mode answers only who chooses the next unit of work: Human or Agent. Work domain identifies the changing layer; acceptance gate identifies what prevents acceptance. The latest Human authorization defines the task or direction, its scope and acceptance boundary. Execution mode never sets execution intensity or authorizes unrelated work.
 
 ## Task startup
 
@@ -25,21 +25,44 @@ Classify every task as one work domain:
 
 For a new or materially changed UI interaction component, follow the `agy` component preflight and rendered-review workflow in the UI guide. It supplements machine verification and never replaces Human visual authority or Core correctness evidence.
 
-## Task authority and execution
+## Execution modes and task authority
 
-Human defines WHAT: the current task or authorized direction, objective, scope, acceptance boundary, exclusions, and necessary product/architecture constraints. The Agent determines implementation HOW and exhausts the bounded, authorized machine-actionable work. Engineering rigor, reasoning depth, testing, failure investigation, security and acceptance honesty do not vary by task label.
+The only current execution modes are `HUMAN_DIRECTED` and `AUTONOMOUS_DEVELOPMENT`. Their sole difference is who selects the next WHAT; single-task execution quality is identical.
 
-Within that scope, take responsibility for inspection, reproduction, task-specific evidence research, implementation, secret-safe diagnostics, regression tests, automated checks, available authorized runtimes, generated-code and applicable CI verification, lifecycle/concurrency/memory and failure-path investigation, diff review, and blocker/debt documentation. This is not limited to the shell commands the Human happened to enumerate. It does not authorize unsafe live traffic, real-account operations, new runtimes, remote writes or other actions outside the task's existing authority.
+### HUMAN_DIRECTED
 
-By default, completing one Human-defined task does not authorize choosing a different product task. Only an explicit Human instruction to continue selecting work within a specified direction permits successive finite tasks. Each selection still needs concrete provenance and its own scope and acceptance boundary. A Roadmap entry or historical authorization is not a blanket grant to work on every adjacent feature. Do not invent work merely to continue.
+Human chooses WHAT. Agent determines HOW and executes that WHAT exhaustively. Agent does not choose a different WHAT afterward.
 
-There is no persisted mode, mode-switch command, replacement mode enum, or equivalent hidden selector. Changes to task scope or continuation authority come from the Human's actual instructions, not a gate, regression, domain change, completion or blocker. `HUMAN_GATED_REGRESSION`, `AUTONOMOUS_DEVELOPMENT` and `HUMAN_DIRECTED` are not current execution modes. Dated historical uses of these labels remain evidence of their original instructions, not current execution policy.
+Human defines the task, scope, objective, acceptance boundary, explicit exclusions and necessary product/architecture constraints. The Agent independently completes all applicable machine-actionable work inside that scope. This mode is not passive, lower effort, conservative, regression-only, limited to enumerated shell commands, or permission to stop at the first Human/device gate. After the Human-defined task is exhausted, do not select another product task.
 
-`PROGRESS.md` records scheduling, work domain, task and acceptance state, not `execution.mode`. An optional descriptive `task_type` may identify implementation, regression, research, validation, migration or maintenance; it does not change authority or rigor and does not need to be backfilled into historical checkpoints.
+### AUTONOMOUS_DEVELOPMENT
+
+Human authorizes the DIRECTION. Agent chooses successive WHATs inside that authorized direction. Each selected WHAT is executed exhaustively.
+
+After completing a finite task, the Agent may select the next finite evidence-backed task within the authorized direction. Each selection needs its own scope, acceptance boundary and concrete provenance: an accepted Roadmap objective or Human Decision, reproduced defect, failing regression, measured compatibility/performance issue, documented architecture gap, triggered technical debt, or missing acceptance evidence for an already-authorized capability. Do not invent a new Provider, product capability, recommendation semantic, speculative framework, unnecessary architecture rewrite, unrelated cleanup or work merely to continue working. A Roadmap entry or historical authorization is not a blanket grant to work on every adjacent feature.
+
+The autonomous loop is: inspect -> select one finite evidence-backed task -> define acceptance -> implement -> test/runtime verify -> inspect diff -> investigate negative evidence -> record result/debt -> select the next authorized task. A blocked claim does not prevent independent authorized work, but it does not widen the direction.
+
+### Identical execution requirements
+
+Execution mode never changes reasoning depth, engineering rigor, testing requirements, evidence standards, failure investigation depth, security requirements or acceptance honesty. Neither Human-directed nor autonomous work is a lower-effort path. The Agent determines implementation HOW and exhausts the bounded, authorized machine-actionable work in both modes. The negative-evidence exhaustion and machine-actionable remainder rules below apply identically to both modes.
+
+Within that scope, take responsibility for inspection, reproduction, task-specific evidence research, implementation, secret-safe diagnostics, regression tests, automated checks, available authorized runtimes (including Waydroid/emulator evidence where applicable), generated-code and applicable CI verification, lifecycle/concurrency/memory/performance and failure-path investigation, diff review, and blocker/debt documentation. This is not limited to the shell commands the Human happened to enumerate. Neither mode authorizes unsafe live traffic, real-account operations, new runtimes, remote writes or other actions outside the task's existing authority.
+
+### Persistence and Human-only switching
+
+Persist the current mode under `execution.mode` in `PROGRESS.md`. It remains effective until the Human explicitly changes it. Only the Human may switch:
+
+- `进入人工执行模式` or `进入 Human Directed 模式` -> `HUMAN_DIRECTED`.
+- `进入自我迭代模式` or `进入自主开发模式` -> `AUTONOMOUS_DEVELOPMENT`.
+
+Do not switch automatically because a task finishes, a regression appears, `HUMAN_REVIEW` or `DEVICE_REQUIRED` appears, the domain changes, or a blocker appears. Editing governance rules is not a mode switch.
+
+`HUMAN_GATED_REGRESSION` is retired as an execution mode. Regression is a task type, not a mode. `PROGRESS.md` records the current mode, scheduling, work domain, task and acceptance state. An optional descriptive `task_type` may identify implementation, regression, research, validation, migration or maintenance; it does not change authority or rigor and does not need to be backfilled into historical checkpoints. Historical mode labels in dated checkpoints, research and Human Decisions remain evidence, not definitions of current selectable modes.
 
 ## Authority and architecture
 
-- `PROJECT.md` and accepted Human Decisions define the product; `ARCHITECTURE.md` and accepted ADRs define ownership; `ROADMAP.md` records authorized direction; `PROGRESS.md` records current scheduling and acceptance state. The latest explicit Human task controls its scope and exclusions.
+- `PROJECT.md` and accepted Human Decisions define the product; `ARCHITECTURE.md` and accepted ADRs define ownership; `ROADMAP.md` records authorized direction; `PROGRESS.md` records the persisted execution mode, current scheduling and acceptance state. The latest explicit Human task controls its scope and exclusions.
 - Pending Human Decisions block only their recorded scope. Historical reviews are dated evidence, not current execution instructions.
 - QQ Music remains first-class. Do not add a Provider, product category, or generic media-aggregation direction without Human product authority.
 - Flutter owns presentation. Rust owns reusable protocol, Domain, and business behavior. QQ Music protocol must not leak into Dart, Flutter widget concepts must not leak into Rust, Providers remain UI-free, and the typed in-process Bridge stays coarse, cancellable, provider-neutral, and free of product business rules.
@@ -68,11 +91,13 @@ Regression is a task type, not an execution mode. Preserve the working baseline 
 
 ## Acceptance gates and stopping
 
-An acceptance gate states what prevents a particular claim from being accepted, not who chooses work or how hard the Agent works. `HUMAN_REVIEW`, `DEVICE_REQUIRED` and `HUMAN_DECISION` block only the dependent claim or action. Missing physical-device evidence cannot be replaced by emulator success; missing visual authority cannot be invented. Neither prevents bounded independent machine work already authorized within the task. Continue such work using available authorized runtimes and checks.
+Execution mode is independent of acceptance gate. An acceptance gate states what prevents a particular claim from being accepted, not who chooses work or how hard the Agent works. `HUMAN_REVIEW`, `DEVICE_REQUIRED` and `HUMAN_DECISION` block only the dependent claim or action. Missing physical-device evidence cannot be replaced by emulator success; missing visual authority cannot be invented. Neither prevents bounded independent machine work already authorized within the task. Continue such work using available authorized runtimes and checks in both modes.
+
+`Execution mode: HUMAN_DIRECTED` with `Gate: HUMAN_REVIEW` means Human selected the current task, its machine work must still be exhausted, and a particular acceptance needs Human evidence. `Execution mode: AUTONOMOUS_DEVELOPMENT` with `Gate: HUMAN_REVIEW` means a claim awaits Human evidence while other independent tasks inside the authorized direction may continue. A gate never selects or switches mode.
 
 Before ending a task, inventory its remaining work and negative evidence. Stop only when all authorized machine-actionable work is complete and the remaining claims require Human/device/external evidence, a precise blocker prevents further safe progress, or the next action would exceed authority. A blocker in one branch does not stop independent authorized branches. A precise blocker is not a generic `DEVICE_REQUIRED` label: name the failed prerequisite, checks/alternatives actually tried, proof boundary and the exact input or authorization needed.
 
-Do not start another page, Provider, feature, milestone, probe or refactor merely because a branch awaits acceptance. Further task selection requires explicit continuation authority as described above; visual authority and the one-approved-page boundary still apply.
+Do not start another page, Provider, feature, milestone, probe or refactor merely because a branch awaits acceptance. In `HUMAN_DIRECTED`, do not select another WHAT after the current task. In `AUTONOMOUS_DEVELOPMENT`, successive tasks require the already-authorized direction and concrete provenance described above; visual authority and the one-approved-page boundary still apply.
 
 ## Negative evidence exhaustion
 
@@ -107,9 +132,10 @@ Scope this statement to the reported task; it is not a whole-project acceptance 
 
 ## Required final-report footer
 
-Every final task report, including a report with no code changes, must include the machine-actionable remainder above and end with these two fields. Report the actual work domain and acceptance gate; neither grants continuation authority. Do not emit an execution-mode field. A `COMPLETE` gate requires all acceptance required by the reported task, not merely compilation or a happy-path check.
+Every final task report, including a report with no code changes, must include the machine-actionable remainder above and end with these three fields. Report the persisted execution mode, actual work domain and acceptance gate. Reporting them does not authorize a mode switch or expand task scope. A `COMPLETE` gate requires all acceptance required by the reported task, not merely compilation or a happy-path check.
 
 ```text
+Execution mode: <HUMAN_DIRECTED | AUTONOMOUS_DEVELOPMENT>
 Work domain: <CORE | UI | MIXED>
 Gate: <CONTINUE | HUMAN_REVIEW | HUMAN_DECISION | DEVICE_REQUIRED | COMPLETE | BLOCKED>
 ```

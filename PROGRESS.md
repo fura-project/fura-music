@@ -1,5 +1,6 @@
 ---
 execution:
+  mode: AUTONOMOUS_DEVELOPMENT
   work_domain: CORE
   state: ANDROID_WAYDROID_BASELINE_PASS_PHYSICAL_PENDING
   acceptance_milestone: ANDROID_REPEAT_ONE_LIFECYCLE_STABILITY
@@ -10,11 +11,16 @@ execution:
 
 # Current State
 
-- **2026-10-06 Agent governance correction:** the Human's latest instruction
-  removes all execution modes, rather than introducing a renamed two-mode
-  scheme. Current task scope and explicit continuation authority now govern
-  work directly under `AGENTS.md`; no `execution.mode` is persisted. All task
-  types use the same engineering rigor. Acceptance gates block only dependent
+- **2026-10-06 Agent governance correction:** Human retained execution modes
+  and redefined them by task-selection authority. `HUMAN_DIRECTED` means
+  Human selects WHAT and Agent determines HOW and exhausts that task without
+  selecting another WHAT afterward. `AUTONOMOUS_DEVELOPMENT` means Human
+  authorizes a direction and Agent may select successive finite evidence-backed
+  WHATs inside it. Both use identical engineering rigor. The mode-free policy
+  in `6b0efc` was incorrect and is superseded by this correction. The current
+  persisted mode remains `AUTONOMOUS_DEVELOPMENT`; this governance correction
+  is not a mode switch. `HUMAN_GATED_REGRESSION` is no longer a current mode;
+  regression is a task type. Acceptance gates block only dependent
   claims/actions, and negative machine evidence must be investigated to a
   precise evidence/authority boundary before asserting exhaustion. Historical
   mode labels and checkpoint results below remain dated evidence, not live

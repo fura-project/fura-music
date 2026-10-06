@@ -2,7 +2,7 @@
 
 Use this guide for Flutter page composition, visual hierarchy, layout, adaptive behavior, Material 3 presentation, visual states, interaction, accessibility, and implementation of approved Stitch/Figma designs.
 
-The shared task-authority, evidence-exhaustion, security, Git, and reporting rules in [`AGENTS.md`](../../AGENTS.md) always apply. There is no execution-mode selector.
+The shared execution-mode, task-authority, evidence-exhaustion, security, Git, and reporting rules in [`AGENTS.md`](../../AGENTS.md) always apply. The only current modes are `HUMAN_DIRECTED` and `AUTONOMOUS_DEVELOPMENT`; mode is persisted in `PROGRESS.md` and only Human may switch it.
 
 ## Visual authority
 
@@ -46,16 +46,26 @@ Before requesting review, inspect canonical desktop and compact renders for requ
 
 Work one approved page at a time. Do not begin an adjacent page while the current page awaits Human visual acceptance. Preserve accepted shared Shell geometry and behavior—including Sidebar, Top Bar, persistent desktop Player, mobile Mini Player, Bottom Navigation, and primary navigation—unless the Human requests a change or a concrete accessibility, responsive, platform, or correctness defect proves it necessary.
 
-## Execution and visual acceptance
+## Execution-mode interpretation and visual acceptance
 
-The Agent fully implements and machine-verifies the approved visual task, but aesthetics remain Human-owned:
+### UI + HUMAN_DIRECTED
+
+Human chooses the current UI task/page and its scope and acceptance boundary. The Agent implements and machine-verifies it completely, determines implementation HOW within the approved visual contract, and exhausts applicable failure investigations. Human retains visual acceptance. Do not independently choose another page/task after completing this WHAT; this mode is not lower effort or permission to stop at the first review/device gate.
+
+### UI + AUTONOMOUS_DEVELOPMENT
+
+Human authorizes the UI direction. The Agent may select successive finite authorized UI tasks, each with concrete product/design provenance and the same complete implementation, verification and failure investigation as Human-directed work. Human visual authority, approved-design requirements and the one-approved-page boundary remain unchanged: do not begin an adjacent page while the current page awaits visual acceptance. Further page selection requires acceptance of the current page and provenance within the authorized direction, not a mode label alone.
+
+### Shared execution and acceptance
+
+Both modes use identical reasoning depth, engineering rigor, testing requirements, evidence standards, failure investigation, security and acceptance honesty. The Agent fully implements and machine-verifies the approved visual task, but aesthetics remain Human-owned:
 
 ```text
 implement -> targeted verification -> render -> investigate failures
 -> review evidence -> exhaust independent machine work -> HUMAN_REVIEW
 ```
 
-`HUMAN_REVIEW` blocks visual acceptance, not remaining tests, overflow/interaction investigations or other independent machine work within the approved scope. Do not redesign a render based on preference, self-accept it, or begin an adjacent page. Apply the negative-evidence exhaustion rule even when a later canonical render passes. Continuation on another independent task needs explicit Human authority and cannot bypass the one-approved-page boundary.
+`HUMAN_REVIEW` and `DEVICE_REQUIRED` block their dependent acceptance claims, not remaining tests, overflow/interaction investigations or other independent machine work within the approved scope. Do not redesign a render based on preference, self-accept it, or begin an adjacent page. Apply negative-evidence exhaustion and machine-actionable remainder reporting in both modes, even when a later canonical render passes. Gates do not switch mode. Successive task selection in `AUTONOMOUS_DEVELOPMENT` stays inside the Human-authorized direction and cannot bypass the one-approved-page boundary; `HUMAN_DIRECTED` does not authorize another WHAT.
 
 ### Regression scope
 

@@ -27,10 +27,14 @@ these documents should preserve durable contracts and review boundaries.
 - [`agent/ui-development.md`](agent/ui-development.md) — Flutter Shell,
   Material 3, adaptive layout and Human visual-review rules.
 
-Repository-level `AGENTS.md` remains authoritative for task scope and
-continuation authority, evidence exhaustion, commit, push and final-report
-requirements. No execution modes are selected or persisted; dated historical
-labels do not override current task authority.
+Repository-level `AGENTS.md` remains authoritative for execution mode, task
+scope, evidence exhaustion, commit, push and final-report requirements. The
+only current modes are `HUMAN_DIRECTED` (Human selects WHAT) and
+`AUTONOMOUS_DEVELOPMENT` (Agent selects successive WHATs within a
+Human-authorized direction). Both require identical engineering rigor; mode
+does not determine acceptance gate. Persist the mode in `PROGRESS.md` until
+Human explicitly switches it. Dated historical labels do not redefine the
+current selectable modes or override task scope.
 
 ## Architecture decisions
 
