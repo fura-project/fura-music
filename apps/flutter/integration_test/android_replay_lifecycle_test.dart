@@ -36,6 +36,96 @@ void main() {
   );
   MediaKit.ensureInitialized();
 
+  for (final mediaKit in [true, false]) {
+    testWidgets(
+      'Android pending pause/resume (${mediaKit ? 'mediaKit' : 'audioplayers'})',
+      (tester) async {
+        final directory = await Directory.systemTemp.createTemp('fura-pause-');
+        final file = File('${directory.path}/synthetic.mp3');
+        await file.writeAsBytes(_lifecycleFixture(), flush: true);
+        final focus = _DelayedReleaseFocus()..acknowledge.complete();
+        final acknowledged = Completer<void>();
+        final paused = Completer<void>();
+        _CountedNativePlayer? mpv;
+        _PausedAcknowledgementAudioplayers? audio;
+        var nativeErrors = 0;
+        late final StreamSubscription<Object?> errors;
+        final ForegroundAudioEngine engine;
+        if (mediaKit) {
+          mpv = _CountedNativePlayer(
+            localSource: Uri.file(file.path),
+            pauseAcknowledgement: acknowledged.future,
+            pauseEntered: paused,
+          );
+          engine = MediaKitForegroundAudioEngine(
+            player: mpv,
+            audioFocusManager: focus,
+          );
+          errors = mpv.errors.listen((_) => nativeErrors++);
+        } else {
+          audio = _PausedAcknowledgementAudioplayers(
+            file.path,
+            acknowledged.future,
+            paused,
+          );
+          engine = AudioplayersForegroundAudioEngine(
+            playerFactory: () => audio!,
+            audioFocusManager: focus,
+          );
+          errors = audio.events.listen(
+            (_) {},
+            onError: (Object _) => nativeErrors++,
+          );
+        }
+        ForegroundAudioSession? session;
+        try {
+          await tester.runAsync(() async {
+            session = await engine.loadRemote(
+              Uri.parse('https://synthetic.invalid/source.mp3'),
+            );
+            await session!.setVolume(0);
+            await session!.play();
+            final pausing = session!.pause();
+            await paused.future.timeout(const Duration(seconds: 5));
+            var resumed = false;
+            final resuming = session!.play().then((_) => resumed = true);
+            await Future<void>.delayed(Duration.zero);
+            expect(resumed, isFalse);
+            expect(mpv?.plays ?? audio!.plays, 1);
+            expect(focus.activations, 1);
+            expect(focus.releases, 0);
+            acknowledged.complete();
+            await pausing;
+            await resuming;
+            expect(mpv?.plays ?? audio!.plays, 2);
+            expect(focus.activations, 2);
+            expect(focus.releases, 1);
+            expect(
+              await session!.positionMs
+                  .firstWhere((value) => value > 0)
+                  .timeout(const Duration(seconds: 5)),
+              greaterThan(0),
+            );
+            expect(nativeErrors, 0);
+            debugPrint(
+              'FURA_DIAGNOSTIC synthetic_pause_handoff '
+              'engine=${mediaKit ? 'mediaKit' : 'audioplayers'} '
+              'outcome=success plays=2 activations=2 releases=1 nativeErrors=0',
+            );
+          });
+        } finally {
+          if (!acknowledged.isCompleted) acknowledged.complete();
+          await session?.dispose();
+          await engine.dispose();
+          await errors.cancel();
+          await file.delete();
+          await directory.delete();
+        }
+      },
+      skip: !Platform.isAndroid,
+    );
+  }
+
   testWidgets('Android D Rust Queue replay and lifecycle machine gate', (
     tester,
   ) async {
@@ -558,6 +648,29 @@ class _LocalFixtureAudioplayers extends PlatformAudioplayersAudioPlayer {
       super.setSourceUrl(_path, mimeType: mimeType);
 }
 
+class _PausedAcknowledgementAudioplayers extends _LocalFixtureAudioplayers {
+  _PausedAcknowledgementAudioplayers(
+    super.path,
+    this.acknowledgement,
+    this.entered,
+  );
+  final Future<void> acknowledgement;
+  final Completer<void> entered;
+  int plays = 0;
+  @override
+  Future<void> resume() {
+    plays++;
+    return super.resume();
+  }
+
+  @override
+  Future<void> pause() async {
+    await super.pause();
+    entered.complete();
+    await acknowledgement;
+  }
+}
+
 class _DelayedReleaseFocus implements ForegroundAudioFocusManager {
   final _platform = const AudioSessionForegroundAudioFocusManager();
   final acknowledge = Completer<void>();
@@ -577,8 +690,16 @@ class _DelayedReleaseFocus implements ForegroundAudioFocusManager {
 }
 
 class _CountedNativePlayer implements MediaKitAudioPlayer {
-  _CountedNativePlayer({this.hangSeek = false});
+  _CountedNativePlayer({
+    this.hangSeek = false,
+    this.localSource,
+    this.pauseAcknowledgement,
+    this.pauseEntered,
+  });
   final bool hangSeek;
+  final Uri? localSource;
+  final Future<void>? pauseAcknowledgement;
+  final Completer<void>? pauseEntered;
   final _native = PlatformMediaKitAudioPlayer();
   int opens = 0;
   int seeks = 0;
@@ -595,7 +716,7 @@ class _CountedNativePlayer implements MediaKitAudioPlayer {
   @override
   Future<void> open(Uri source) {
     opens++;
-    return _native.open(source);
+    return _native.open(localSource ?? source);
   }
 
   @override
@@ -612,7 +733,12 @@ class _CountedNativePlayer implements MediaKitAudioPlayer {
   }
 
   @override
-  Future<void> pause() => _native.pause();
+  Future<void> pause() async {
+    await _native.pause();
+    pauseEntered?.complete();
+    await pauseAcknowledgement;
+  }
+
   @override
   Future<void> stop() {
     stops++;

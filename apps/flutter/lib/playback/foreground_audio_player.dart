@@ -216,6 +216,7 @@ class ForegroundAudioFocusLease {
   final int generation;
   bool _closed = false;
   int _revision = 0;
+  Future<void>? _quiescence;
   int get revision => _revision;
   bool get isActive =>
       !_closed &&
@@ -223,7 +224,53 @@ class ForegroundAudioFocusLease {
       _owner._operation == null &&
       identical(_owner._owner, this);
   bool isCurrent(int revision) => isActive && revision == _revision;
-  Future<bool> activate() => _owner._activate(this);
+  bool get isReleasing => _quiescence != null;
+
+  Future<bool> activate() async {
+    final revision = _revision;
+    final quiescence = _quiescence;
+    if (quiescence != null) {
+      try {
+        await quiescence.timeout(_owner.timeout);
+      } on Object {
+        // Waiting is bounded, but the raw control/release remains reserved.
+        throw const ForegroundAudioException(
+          ForegroundAudioFailure.coreUnavailable,
+        );
+      }
+    }
+    if (_closed || revision != _revision) {
+      // Do not acquire on behalf of an intent revoked while awaiting pause.
+      throw const ForegroundAudioException(
+        ForegroundAudioFailure.coreUnavailable,
+      );
+    }
+    return _owner._activate(this);
+  }
+
+  /// Pause/stop must settle AND abandon focus before a newer play acquires it.
+  /// Revocation happens synchronously, not in a late native continuation.
+  Future<void> releaseAfter(Future<void> Function() operation) {
+    _revision += 1;
+    final previous = _quiescence;
+    final pending = () async {
+      if (previous != null) await previous;
+      try {
+        await operation();
+      } finally {
+        await _owner._release(this);
+      }
+    }();
+    _quiescence = pending;
+    void clear() {
+      if (identical(_quiescence, pending)) _quiescence = null;
+    }
+
+    // Attach the failure observer before callers can dispose or time out.
+    pending.then<void>((_) => clear(), onError: (Object _) => clear());
+    return pending;
+  }
+
   Future<void> release() {
     ++_revision;
     return _owner._release(this);
@@ -383,7 +430,7 @@ class _AudioplayersForegroundAudioSession
   _AudioplayersForegroundAudioSession(this._player, this._focus) {
     _stateSubscription = _player.states.listen((state) {
       if (_disposed) return;
-      if (state == audio.PlayerState.stopped) {
+      if (state == audio.PlayerState.stopped && !_focus.isReleasing) {
         unawaited(_releaseFocusBestEffort());
       }
       _states.add(switch (state) {
@@ -491,15 +538,13 @@ class _AudioplayersForegroundAudioSession
 
   @override
   Future<void> pause() async {
-    try {
+    await _focus.releaseAfter(() async {
       await _invoke(
         _player.pause,
         ForegroundAudioFailure.playback,
         phase: 'pause',
       );
-    } finally {
-      await _deactivateFocus();
-    }
+    });
   }
 
   @override
@@ -528,15 +573,13 @@ class _AudioplayersForegroundAudioSession
 
   @override
   Future<void> stop() async {
-    try {
+    await _focus.releaseAfter(() async {
       await _invoke(
         _player.stop,
         ForegroundAudioFailure.playback,
         phase: 'stop',
       );
-    } finally {
-      await _deactivateFocus();
-    }
+    });
   }
 
   Future<void> _invoke(

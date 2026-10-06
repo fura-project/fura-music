@@ -13,6 +13,86 @@ final unavailable = isA<ForegroundAudioException>().having(
 );
 
 void main() {
+  test('release revokes an activation waiting for native quiescence before acquisition', () async {
+    final control = Completer<void>();
+    final manager = _Focus();
+    final owner = ForegroundAudioFocusOwner(manager, timeout: deadline);
+    final lease = owner.createLease();
+    await lease.activate();
+    final pausing = lease.releaseAfter(() => control.future);
+    final activating = expectLater(lease.activate(), throwsA(unavailable));
+    await lease.release();
+    control.complete();
+    await pausing;
+    await activating;
+    expect(manager.calls, [true, false]);
+    expect(lease.isActive, isFalse);
+    await lease.close();
+  });
+
+  test(
+    'pause failure is observed before a waiting activation, and releases focus',
+    () async {
+      final control = Completer<void>();
+      final manager = _Focus();
+      final owner = ForegroundAudioFocusOwner(manager, timeout: deadline);
+      final lease = owner.createLease();
+      await lease.activate();
+      final releasing = expectLater(
+        lease.releaseAfter(() => control.future),
+        throwsA(unavailable),
+      );
+      final activating = expectLater(lease.activate(), throwsA(unavailable));
+      control.completeError(
+        const ForegroundAudioException(ForegroundAudioFailure.coreUnavailable),
+      );
+      await Future.wait([releasing, activating]);
+      expect(manager.calls, [true, false]);
+      expect(lease.isActive, isFalse);
+      await lease.close();
+    },
+  );
+
+  test(
+    'a failed release never lets a waiting resume reclaim uncertain focus',
+    () async {
+      final control = Completer<void>();
+      final manager = _Focus();
+      final owner = ForegroundAudioFocusOwner(manager, timeout: deadline);
+      final lease = owner.createLease();
+      await lease.activate();
+      manager.allowRelease = false;
+      final releasing = expectLater(
+        lease.releaseAfter(() => control.future),
+        throwsA(unavailable),
+      );
+      final activating = expectLater(lease.activate(), throwsA(unavailable));
+      control.complete();
+      await Future.wait([releasing, activating]);
+      await expectLater(lease.activate(), throwsA(unavailable));
+      expect(manager.calls, [true, false]);
+    },
+  );
+
+  test('late old native pause cannot release a replacement lease', () async {
+    final control = Completer<void>();
+    final manager = _Focus();
+    final owner = ForegroundAudioFocusOwner(manager, timeout: deadline);
+    final old = owner.createLease();
+    final next = owner.createLease();
+    await old.activate();
+    final releasing = old.releaseAfter(() => control.future);
+    final activating = expectLater(old.activate(), throwsA(unavailable));
+    await old.close();
+    expect(await next.activate(), isTrue);
+    control.complete();
+    await releasing;
+    await activating;
+    expect(next.isActive, isTrue);
+    expect(manager.calls, [true, false, true]);
+    await next.close();
+  });
+
   test(
     'activation timeout compensates late success before a new lease',
     () async {

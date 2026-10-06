@@ -440,4 +440,21 @@ No deliberate host/swap exhaustion or dependency fork is justified merely to
 force the historical symptom. Persistent media cache and Provider concurrency
 remain separate TD-016/TD-017 work, not tasks selected by this continuation.
 
+**2026-10-07 independent re-audit:** The previous machine-exhaustion conclusion
+was not inherited. Failing deterministic tests found a same-source pause/stop
+acknowledgement race: resume could precede the old focus release, losing its
+new focus. Both engines now revoke the old play intent synchronously and await
+native-control settlement plus focus release before acquisition, with the
+existing focus deadline bounding that wait. Disposal/release also revokes an
+activation waiting on this barrier before it can request platform focus.
+MediaKit additionally revalidates queued pause/seek/volume/stop at native
+dispatch, rejecting controls from a terminal session. These finite fixes do
+not cancel a raw native Future, free a pending platform slot, change deadlines,
+or diagnose the historical native delay. Audioplayers' native-control Futures
+retain their backend lifecycle; the new shared deadline bounds the resume
+wait, not every Audioplayers operation. Exact before/after and final Android
+evidence are appended to the lifecycle audit. This debt remains open only for
+the stated upstream/fresh-evidence/physical prerequisites, not those repaired
+interleavings.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

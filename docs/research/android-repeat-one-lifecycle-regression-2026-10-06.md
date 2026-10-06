@@ -729,3 +729,248 @@ Implementation-checkpoint Git state: no commit, push, reset, restore or clean.
 Human subsequently authorized publication with `提交git`, under the standing
 commit-and-push instruction. That authorization does not change any runtime,
 physical-device or negative-evidence acceptance above.
+
+## Independent autonomous reliability audit — 2026-10-07
+
+### Starting facts and task selection
+
+Starting HEAD, tracked `origin/main`, and a fresh read-only remote main query
+all resolve to `b52823e3416bede738ddbabcbc36773821b8224b`
+(`fix(playback): bound audio focus lifecycle and reject stale play`). The initial
+worktree is clean. Mode remains `AUTONOMOUS_DEVELOPMENT`, domain `CORE`; no
+governance definition, publication authority or neighboring product scope was
+changed. All changes described here are an uncommitted candidate on that HEAD.
+
+The previous conclusion of machine exhaustion was treated as an input, not a
+premise. The re-audit followed acquisition, pause/stop, completion, release,
+disposal, native serialization and late continuations through both backends
+and the public ForegroundPlaybackController. Queue authority and the retained
+`ReplayCurrent -> seek(0) -> play()` path remain unchanged.
+
+| Independent inventory | Concrete evidence / decision |
+| --- | --- |
+| Same-source pause/stop acknowledgement versus newer resume | Selected task 1: native paused state can precede pause Future settlement, and focus release was outside the native command tail |
+| Queued controls versus terminal MediaKit session | Selected task 2: entry-time validity did not revoke already queued pause/seek/volume/stop before actual dispatch |
+| Acquisition/release/timeout/disposal and replacement | Re-ran shared failure-path contracts; retained raw-operation reservation and late compensation; found a separate barrier revision race while reviewing task 1 and fixed it before final runtime |
+| EOF replay and completion storm/stale completion | Existing Queue/controller tests retained; affected Android native gate rerun rather than reimplementing Queue or cache |
+| Historical ~5.5 s play / ~40 s release internal cause | Old durations still cannot identify the blocked native await; inspect current deadlines/reservations without asserting a causal diagnosis |
+| Never-acknowledged platform focus operation | Public audio_session API still has no safe cancellation/settlement-reset acknowledgement; reservation cannot be discarded to manufacture recovery |
+| Physical OEM/Bluetooth/cellular/phone-focus/long-quality memory | Only authorized native x86_64 Waydroid is available; real phone acceptance remains device-gated |
+
+### Task 1 — native pause/stop and focus handoff must settle together
+
+Two new shared-contract tests fail on the starting production implementation
+(`pause-before.log`): Audioplayers executes a second native resume before the
+pending pause acknowledges, while MediaKit can serialize native pause/play but
+then release focus after that newer play. The latter yields focus calls
+`[true, false]`, not the required `[true, false, true]`. This is not a theoretical
+ordering invented solely for a fake: local media_kit 1.2.6 emits playing=false
+before awaiting its native pause property, and audioplayers 6.8.1 publishes
+paused before awaiting position-updater shutdown. The controller therefore can
+legitimately expose `canResume` while pause acknowledgement is still pending.
+
+The per-source focus lease now has a small native-quiescence barrier:
+
+1. Pause/stop synchronously revokes the earlier play revision.
+2. Native control and its existing bounded focus release settle together.
+3. A newer play waits for that barrier with the existing focus deadline.
+4. Before requesting platform activation, it rechecks closure and revision.
+
+Both backends use this same public lifecycle rule, without forcing a shared
+native-operation implementation. A failed wait returns a coarse typed failure;
+it does not cancel the raw native Future or silently resume later. A caller
+must explicitly retry after settlement. Audioplayers' native pause/stop Futures
+are not newly claimed to have a backend timeout: the shared resume wait is
+bounded, whereas MediaKit retains its existing native operation deadline.
+
+Candidate diff review found one additional failing interleaving: explicit
+release revokes a resume waiting behind native pause, then the pause settles.
+Without the pre-acquisition revision check, that stale resume could request
+focus even though native play is subsequently rejected. The deterministic
+before-fix failure is retained in `quiescence-revision-before.log`; after the
+fix there is no second activation and focus remains inactive. The earlier
+intermediate Debug runtime PASS is not used as final verification of this fix.
+
+Shared tests additionally prove controller-level resume from an early paused
+event, pause and stop handoff, disposal revocation, bounded waiting, late old
+pause isolation from a replacement lease, failed native pause, and unconfirmed
+release refusing reactivation. They retain the previous raw focus reservation,
+late compensation and actual native-play revision checks. No focus deadline,
+cache limit, Player recovery budget or automatic retry policy changed.
+
+### Task 2 — terminal sessions must reject queued native controls
+
+Four before-fix tests queue pause/seek/volume/stop behind a blocked native seek,
+dispose the source session, then release the blocked command. All four fail:
+the old queued controls still succeed and reach the shared Player. An initial
+test attempt omitted the fake focus manager and failed before the target path;
+that log is retained but is not the defect oracle. The corrected before-fix
+tests (`dispatch-before-corrected.log`) prove the actual dispatch omission.
+
+A narrow session `_control` wrapper now checks session validity inside the
+existing serialized native closure. It does not replace the engine queue or
+promise cancellation of an operation already dispatched. All four terminal
+commands now reject without another native call; a subsequent explicit source
+load/play still succeeds. Play already had dispatch-time lease checks. The
+A rollback backend is covered by the shared lifecycle contract and has no
+equivalent shared engine command tail to reimplement.
+
+### Final deterministic and Android runtime evidence
+
+Evidence is outside Git at `/tmp/fura-playback-audit-20261007-hgZFOM`. Before-fix
+failures, the intermediate candidate, final APKs, exit-code-bearing runs,
+redacted diagnostics, memory/focus snapshots and screencaps are retained.
+No source URI, account, credential or Provider request is used: the fixtures
+are short, muted, synthetic MP3s. No stored-account flow was automated.
+
+Final affected tests:
+
+- `flutter test test/playback test/startup_diagnostics_test.dart --reporter expanded`:
+  **285 passed**, exit 0 (`playback-tests-final.log`). This includes the shared
+  A/D contract, 100 retained replays, controller failure/stale-result handling,
+  native stall/retirement bounds, and all new handoff/terminal-dispatch cases.
+- Whole-app `dart analyze`: no issues, exit 0 (`analyze-closure.log`).
+- Format check on the six changed Dart files: no changes, exit 0.
+- Existing source privacy hygiene, application identity verification and five
+  privacy-audit tests pass. Rust/Bridge/Queue and dependency versions did not
+  change; no FRB regeneration or remote CI success is claimed.
+
+Existing Waydroid 1.6.3 / Android 13 API 33 / native x86_64 runs the final
+candidate's seven-case gate in **Debug and Release**. Both new cases use the
+real plugin/native Player and real audio_session focus, delaying only a
+test-owned acknowledgement after actual native pause. Both prove native
+position advancement after resume, with plays=2, activations=2, releases=1,
+nativeErrors=0. This is not a fake native playback pass.
+
+| Final machine observation | Debug | Release |
+| --- | --- | --- |
+| Complete seven-case suite / runner exit | PASS / 0 | PASS / 0 |
+| EOFs / retained replays | 101 / 100 | 101 / 100 |
+| Provider resolution / Player.open | 1 / 1 | 1 / 1 |
+| Replay seeks / all plays | 100 / 101 | 100 / 101 |
+| Repeat stops / normal rebuilds / native error-stream events | 0 / 0 / 0 | 0 / 0 / 0 |
+| Extra HTTP fixture requests | 0 | 0 |
+| Activity paused/resumed callbacks | 22 / 22 | 22 / 22 |
+| EOFs crossed while actually backgrounded | 2 | 2 |
+| Cached-offline retained replays | 20 | 20 |
+| Incomplete transfer restored; open/play/nativeErrors | PASS; 1/1/0 | PASS; 1/1/0 |
+| Restored position before/after (ms) | 30 / 3124 | 33 / 3126 |
+| Delayed focus caller elapsed / stale releases | 253 ms / 0 | 251 ms / 0 |
+| Injected stalled native operation, one explicit bounded recovery | PASS | PASS |
+| Same-source native pause/resume handoff, both engines | PASS | PASS |
+| Post-suite active Fura focus / MediaSession | 0 / 0 | 0 / 0 |
+
+The repeat counts exclude other explicitly labeled handoff/stall/transport
+cases. The counters are not a claim that every underlying CDN range request
+disappears. Activity transitions are real; the network interruption controls
+the synthetic server, not real Wi-Fi/cellular handoff. Both final screenshots
+show the actual fixture window, with the previously observed Waydroid/Mesa
+glyph corruption retained rather than called visual acceptance.
+
+| Memory sample (KiB) | PSS | RSS | Native heap allocated |
+| --- | --- | --- | --- |
+| Debug start | 414694 | 474400 | 39388 |
+| Debug 30 replays | 416062 | 479640 | 38040 |
+| Debug 100 replays | 386654 | 450632 | 39812 |
+| Release start | 169397 | 230212 | 31832 |
+| Release 30 replays | 170893 | 239100 | 29604 |
+| Release 100 replays | 171560 | 239992 | 29636 |
+
+These short samples do not show continuously growing native allocation, but
+do not settle long/high-quality ARM64 phone cache/RSS behavior or audible
+Bluetooth/OEM output. No cache-budget tuning is inferred from them.
+
+All APKs use starting HEAD **plus the uncommitted final candidate**, not a
+published source revision. Final fixture SHA256:
+
+| File | SHA256 |
+| --- | --- |
+| fura-audit-D-fixture-x64-debug.apk | 793902bcfa6497e3a3a472b5f3e9e8150af55661f48c70d0292c2d27e31b2b81 |
+| fura-audit-D-fixture-x64-release.apk | e15d8d60453d13d948589294065dc5cdbec209e772af647f287483f8995e8506 |
+
+`debug-intermediate` predates the barrier revision fix and is not final proof.
+Final runtime records are `debug-final` and `release-final`; Release success
+requires the suite and observer exit status, not merely parsing a success line.
+
+### New negative evidence and remaining scope boundary
+
+The first direct-Gradle Release fixture build failed at Java plugin registration:
+the reused local config-only helper retained a Debug integration-test registry,
+while Release's plugin classpath excludes that dev dependency. Local Flutter
+SDK plugin-injection and Gradle PluginHandler source establish this mismatch.
+The normal repository privacy wrapper's full Flutter Release lifecycle generates
+the appropriate registry and builds successfully; the resulting final Release
+APK passes the native gate. No production Gradle/plugin policy was changed to
+hide the local-helper failure (`build-release-fixture-registration-failed.log`
+versus `build-release-sdk.log`).
+
+Both local fixture APKs still **FAIL** distributable privacy scans: Debug
+`kernel_blob.bin` and Release `libapp.so` retain test/source-location metadata.
+They remain local diagnostic artifacts, not production distributions. Source
+privacy passing does not erase those failures.
+
+The Debug driver also reports the pre-existing OpenSL unknown-configuration-key
+diagnostic. The installed libmpv contains `androidGetAudioLatency`; upstream
+[mpv's optional latency query](https://github.com/mpv-player/mpv/blob/v0.40.0/audio/out/ao_opensles.c)
+does not fail initialization when this query is unsupported, and
+[AOSP's configuration handler](https://android.googlesource.com/platform/frameworks/wilhelm/+/e5736050c6771ce58c54be118dcf13d3edb61630/src/android/AudioPlayer_to_android.cpp)
+rejects unknown keys. The same diagnostic appears in the prior baseline.
+Inference: these observations are consistent with an unsupported optional
+upstream query, not proof of a new Fura focus defect. No exact installed native
+call stack or physical audible-output acceptance is claimed; the logs are
+retained, no upstream audio backend is rewritten, and phone output remains gated.
+
+| Finding | Classification / closure |
+| --- | --- |
+| Pause/stop acknowledgement lets newer resume lose focus | FIXED_AND_VERIFIED: failing before-fix shared tests, controller regressions, final native A/D handoff in Debug/Release |
+| Disposed MediaKit session dispatches queued controls | FIXED_AND_VERIFIED: four corrected before-fix failures and final dispatch/replacement tests |
+| Stale activation acquires after quiescence intent revoked | FIXED_AND_VERIFIED: candidate before-fix failure; pre-acquisition revision check; final tests/runtime |
+| Local helper's stale Debug registrant in Release | FIXED_AND_VERIFIED for validation tooling: normal full SDK build; production Gradle unchanged |
+| Local fixture privacy/source paths and glyph corruption | OUT_OF_SCOPE_WITH_EVIDENCE: diagnostic-only fixture, retained failed scan/screenshots; no distributable or visual claim |
+| OpenSL optional configuration diagnostic | OUT_OF_SCOPE_WITH_EVIDENCE for this ownership patch: pre-existing upstream optional-query evidence; physical audio remains unverified |
+| Historical internal play/focus delay | PRECISE_BLOCKER: absent fresh in-flight native lock/reply/AudioManager/main-thread trace |
+| Never-settling/unconfirmed platform focus ownership | PRECISE_BLOCKER: no public cancellation/settlement acknowledgement; raw slot remains reserved, not bypassed |
+| Original phone freeze and OEM/lock/Bluetooth/cellular/phone-focus/long-quality memory | REQUIRES_HUMAN_DEVICE_EXTERNAL_EVIDENCE: no physical Android device available |
+
+After both finite tasks, the final failure-path/diff review rechecked early
+events, caller timeout, late control/release, disposal, replacement, native
+dispatch and recovery. Raw focus operations remain reserved; old releases
+cannot affect a replacement; queued revoked native commands do not run; native
+retirement must acknowledge before a replacement Player is constructed. The
+new raw-quiescence Future has an immediate failure observer and cannot silently
+launch a timed-out or revoked resume on later settlement. No remaining
+independent, currently executable evidence-backed fix was selected inside the
+authorized direction. This is a scoped machine conclusion, not proof that the
+original phone freeze or historical native cause has been resolved.
+
+The ordinary no-define D x86_64 Release APK was also built using the repository
+privacy wrapper, not the fixture entrypoint. SHA256:
+`d5223b4304c4fb72470bc697e7dda769b38af8dbc33e16b4dc95547d9a333908`.
+Its distributable artifact privacy scan passes. It replaces the test entrypoint
+with `adb install -r`, preserving application data; the ordinary app is not
+launched, avoiding stored credential restore/account access. This is build,
+privacy and installation proof only, not a new ordinary startup or real-Track
+acceptance result. No physical Android device or remote candidate CI was run.
+
+Machine-actionable work remaining:
+
+- Historical native delay root cause: fresh in-flight native lock/reply/
+  AudioManager/main-thread evidence is absent; current outer logs cannot
+  recover the missing internal stack. No artificial host exhaustion is used.
+- Never-acknowledged focus recovery: public audio_session has no safe cancel/
+  settlement-reset acknowledgement; actual settlement or verified upstream
+  support is required before another owner can safely activate.
+- Physical lifecycle and original freeze acceptance: original phone/OEM,
+  Bluetooth hardware, cellular handoff, phone-focus, locks/power management and
+  long/high-quality memory evidence are not available in native x86_64 Waydroid.
+- New remote candidate CI: this worktree is uncommitted/unpublished and Human
+  has not authorized commit, push or remote execution for this candidate.
+
+Execution mode: AUTONOMOUS_DEVELOPMENT
+Work domain: CORE
+Gate: DEVICE_REQUIRED
+
+Final implementation Git state: nine expected modified files (two production
+playback adapters, four test/fixture files, PROGRESS, TECH_DEBT and this audit),
+HEAD/origin main unchanged. No commit, push, reset, restore, clean, rebase or
+force-push performed. Governance definitions and unrelated work are preserved.

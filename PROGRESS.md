@@ -2,14 +2,47 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: CORE
-  state: ANDROID_FOCUS_MACHINE_VERIFIED_PENDING_DEVICE
+  state: ANDROID_HANDOFF_DISPATCH_MACHINE_VERIFIED_PENDING_DEVICE
   acceptance_milestone: ANDROID_REPEAT_ONE_LIFECYCLE_STABILITY
   active_workstream: ANDROID_PLAYBACK_LIFECYCLE_REGRESSION
-  current_task: BOUNDED_FOCUS_LEASE_AND_LATE_CLEANUP_REGRESSION
+  current_task: NATIVE_CONTROL_QUIESCENCE_AND_TERMINAL_DISPATCH_REGRESSION
   next_action: PHYSICAL_LIFECYCLE_AND_FRESH_NATIVE_DELAY_EVIDENCE
 ---
 
 # Current State
+
+- **2026-10-07 independent autonomous reliability audit:** starting HEAD,
+  tracked and live remote main were
+  `b52823e3416bede738ddbabcbc36773821b8224b`, worktree clean. The previous
+  exhaustion conclusion was not inherited. Two finite, before-fix failing
+  tasks were selected: same-source pause/stop versus newer resume could lose
+  focus after successful play, and disposed MediaKit sessions could dispatch
+  queued pause/seek/volume/stop. Both engines now await native quiescence plus
+  focus release before resume, under the existing focus deadline, with closure
+  and revision rechecked before acquisition. Diff review additionally exposed
+  and fixed a revoked waiting activation acquiring focus after the barrier.
+  MediaKit terminal controls revalidate inside actual native dispatch. Raw
+  platform reservations, late compensation, Queue/replay/cache budgets and
+  recovery limits remain unchanged. Final candidate passes 285 playback/startup
+  tests, whole-app analysis/format, source privacy and identity checks. Debug
+  and Release seven-case Waydroid gates each prove resolve=1/open=1, 100 retained
+  replays, no repeat stop/rebuild/native errors/extra HTTP, native A/D handoff,
+  background EOFs, Activity cycling, cached offline replay, delayed focus and
+  incomplete-transfer restoration; terminal focus/MediaSession count is zero.
+  Local helper Release registration failure was diagnosed and resolved using
+  the normal full Flutter build, without production Gradle changes. Fixture
+  APK source-path privacy failures and Waydroid glyph corruption remain local
+  diagnostic limitations, not accepted distributions/visual results. Ordinary
+  no-define D Release builds and passes artifact privacy; it is restored with
+  install-r without launching stored-account flows. The old internal native
+  delay still needs fresh in-flight traces, never-acknowledged focus recovery
+  still needs settlement/upstream acknowledgement, and physical OEM/lock/
+  Bluetooth/cellular/phone-focus/long-quality memory claims remain gated.
+  No further independently evidenced executable fix was selected after final
+  ownership/failure-path review. Exact before/after logs, final APK checksums,
+  memory observations and remaining prerequisites are in the lifecycle audit;
+  TD-018 retains those unresolved boundaries. No governance, Provider, Bridge,
+  Rust, UI or dependency change; no commit/push/reset/restore/clean.
 
 - **2026-10-06 autonomous playback reliability continuation:** Human authorized
   only the existing Android retained-source/stall workstream. Starting HEAD,

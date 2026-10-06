@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart' as audio;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 
 void main() {
@@ -21,6 +22,128 @@ void _runForegroundAudioEngineContract(
   _EngineHarness Function() createHarness,
 ) {
   group('$name shared contract', () {
+    test(
+      'controller resume after paused event survives pending acknowledgement',
+      () async {
+        final harness = createHarness();
+        final nativePause = Completer<void>();
+        harness.holdPause(nativePause.future);
+        final controller = ForegroundPlaybackController(harness.engine);
+        await controller.playRemote(
+          Uri.parse('https://audio.example.test/probe.mp3'),
+        );
+        final pausing = controller.pause();
+        await Future<void>.delayed(Duration.zero);
+        expect(controller.stage, ForegroundPlaybackStage.paused);
+        final resuming = controller.resume();
+        await Future<void>.delayed(Duration.zero);
+        expect(harness.playCalls, 1);
+        nativePause.complete();
+        await Future.wait([pausing, resuming]);
+        expect(controller.stage, ForegroundPlaybackStage.playing);
+        expect(controller.failure, isNull);
+        expect(harness.playCalls, 2);
+        expect(harness.focusValues, [true, false, true]);
+        await controller.stop();
+        controller.dispose();
+        await Future<void>.delayed(Duration.zero);
+      },
+    );
+
+    for (final stop in [false, true]) {
+      test(
+        'resume waits for pending ${stop ? 'stop' : 'pause'} and its focus release',
+        () async {
+          final harness = createHarness();
+          final nativePause = Completer<void>();
+          if (stop) {
+            harness.holdStop(nativePause.future);
+          } else {
+            harness.holdPause(nativePause.future);
+          }
+          final session = await harness.engine.loadRemote(
+            Uri.parse('https://audio.example.test/probe.mp3'),
+          );
+          await session.play();
+          final pausing = stop ? session.stop() : session.pause();
+          await Future<void>.delayed(Duration.zero);
+          Object? resumeFailure;
+          final resuming = session.play().then<void>(
+            (_) {},
+            onError: (Object error) => resumeFailure = error,
+          );
+          try {
+            await Future<void>.delayed(Duration.zero);
+            expect(stop ? harness.stopCalls : harness.pauseCalls, 1);
+            expect(harness.playCalls, 1, reason: 'pause has not settled yet');
+            nativePause.complete();
+            await pausing;
+            await resuming;
+            expect(resumeFailure, isNull);
+            expect(harness.playCalls, 2);
+            expect(harness.focusValues, [true, false, true]);
+          } finally {
+            if (!nativePause.isCompleted) nativePause.complete();
+            await pausing;
+            await resuming;
+            await session.dispose();
+            await harness.engine.dispose();
+          }
+        },
+      );
+    }
+
+    test('dispose revokes resume waiting behind native pause', () async {
+      final harness = createHarness();
+      final nativePause = Completer<void>();
+      harness.holdPause(nativePause.future);
+      final session = await harness.engine.loadRemote(
+        Uri.parse('https://audio.example.test/probe.mp3'),
+      );
+      await session.play();
+      final pausing = session.pause();
+      await Future<void>.delayed(Duration.zero);
+      final resuming = expectLater(
+        session.play(),
+        throwsA(isA<ForegroundAudioException>()),
+      );
+      await session.dispose();
+      nativePause.complete();
+      await pausing;
+      await resuming;
+      expect(harness.playCalls, 1);
+      expect(harness.focusValues, [true, false]);
+      await harness.engine.dispose();
+    });
+
+    test(
+      'resume wait is bounded without releasing a pending native pause',
+      () async {
+        final harness = createHarness();
+        final nativePause = Completer<void>();
+        harness.holdPause(nativePause.future);
+        final session = await harness.engine.loadRemote(
+          Uri.parse('https://audio.example.test/probe.mp3'),
+        );
+        await session.play();
+        final pausing = session.pause();
+        await Future<void>.delayed(Duration.zero);
+        await expectLater(
+          session.play().timeout(const Duration(milliseconds: 300)),
+          throwsA(isA<ForegroundAudioException>()),
+        );
+        expect(harness.playCalls, 1);
+        expect(harness.focusValues, [true]);
+        nativePause.complete();
+        await pausing;
+        await session.play();
+        expect(harness.playCalls, 2);
+        expect(harness.focusValues, [true, false, true]);
+        await session.dispose();
+        await harness.engine.dispose();
+      },
+    );
+
     test(
       'release after activation result revokes the pending native play',
       () async {
@@ -248,6 +371,8 @@ abstract class _EngineHarness {
   void emitPosition(Duration position);
   void emitCompletion();
   void emitFailure();
+  void holdPause(Future<void> gate);
+  void holdStop(Future<void> gate);
 }
 
 class _AudioplayersHarness implements _EngineHarness {
@@ -255,6 +380,8 @@ class _AudioplayersHarness implements _EngineHarness {
     engine = AudioplayersForegroundAudioEngine(
       playerFactory: () {
         final player = _FakeAudioplayersPlayer();
+        player.pauseGate = _pauseGate;
+        player.stopGate = _stopGate;
         players.add(player);
         return player;
       },
@@ -321,6 +448,15 @@ class _AudioplayersHarness implements _EngineHarness {
   @override
   void emitFailure() =>
       _current.eventsController.addError(StateError('synthetic'));
+
+  @override
+  void holdPause(Future<void> gate) => _pauseGate = gate;
+
+  Future<void>? _pauseGate;
+  Future<void>? _stopGate;
+
+  @override
+  void holdStop(Future<void> gate) => _stopGate = gate;
 }
 
 class _FakeAudioplayersPlayer implements AudioplayersAudioPlayer {
@@ -334,6 +470,8 @@ class _FakeAudioplayersPlayer implements AudioplayersAudioPlayer {
   int pauseCalls = 0;
   int stopCalls = 0;
   int disposeCalls = 0;
+  Future<void>? pauseGate;
+  Future<void>? stopGate;
 
   @override
   Stream<audio.PlayerState> get states => statesController.stream;
@@ -364,6 +502,7 @@ class _FakeAudioplayersPlayer implements AudioplayersAudioPlayer {
   Future<void> pause() async {
     pauseCalls += 1;
     statesController.add(audio.PlayerState.paused);
+    await pauseGate;
   }
 
   @override
@@ -376,6 +515,7 @@ class _FakeAudioplayersPlayer implements AudioplayersAudioPlayer {
   Future<void> stop() async {
     stopCalls += 1;
     statesController.add(audio.PlayerState.stopped);
+    await stopGate;
   }
 
   @override
@@ -445,6 +585,12 @@ class _MediaKitHarness implements _EngineHarness {
 
   @override
   void emitFailure() => player.errorsController.add('synthetic');
+
+  @override
+  void holdPause(Future<void> gate) => player.pauseGate = gate;
+
+  @override
+  void holdStop(Future<void> gate) => player.stopGate = gate;
 }
 
 class _FakeMediaKitContractPlayer implements MediaKitAudioPlayer {
@@ -459,6 +605,8 @@ class _FakeMediaKitContractPlayer implements MediaKitAudioPlayer {
   int pauseCalls = 0;
   int stopCalls = 0;
   int disposeCalls = 0;
+  Future<void>? pauseGate;
+  Future<void>? stopGate;
 
   @override
   Stream<bool> get playing => playingController.stream;
@@ -485,12 +633,14 @@ class _FakeMediaKitContractPlayer implements MediaKitAudioPlayer {
   Future<void> pause() async {
     pauseCalls += 1;
     playingController.add(false);
+    await pauseGate;
   }
 
   @override
   Future<void> stop() async {
     stopCalls += 1;
     playingController.add(false);
+    await stopGate;
   }
 
   @override

@@ -401,13 +401,11 @@ class _MediaKitForegroundAudioSession
   Future<void> pause() async {
     _ensureActive();
     try {
-      await _serialize('pause', _player.pause);
+      await _focus.releaseAfter(() => _control('pause', _player.pause));
     } on ForegroundAudioException {
       rethrow;
     } on Object {
       throw const ForegroundAudioException(ForegroundAudioFailure.playback);
-    } finally {
-      await _deactivateFocus();
     }
   }
 
@@ -418,7 +416,7 @@ class _MediaKitForegroundAudioSession
       throw const ForegroundAudioException(ForegroundAudioFailure.playback);
     }
     try {
-      await _serialize(
+      await _control(
         'seek',
         () => _player.seek(Duration(milliseconds: positionMs)),
       );
@@ -436,7 +434,7 @@ class _MediaKitForegroundAudioSession
       throw const ForegroundAudioException(ForegroundAudioFailure.playback);
     }
     try {
-      await _serialize('volume', () => _player.setVolume(volume * 100));
+      await _control('volume', () => _player.setVolume(volume * 100));
     } on ForegroundAudioException {
       rethrow;
     } on Object {
@@ -448,7 +446,7 @@ class _MediaKitForegroundAudioSession
   Future<void> stop() async {
     if (_disposed) return;
     try {
-      await _serialize('stop', _player.stop);
+      await _focus.releaseAfter(() => _control('stop', _player.stop));
       if (!_disposed) {
         _lastState = ForegroundAudioState.stopped;
         _states.add(ForegroundAudioState.stopped);
@@ -457,8 +455,6 @@ class _MediaKitForegroundAudioSession
       rethrow;
     } on Object {
       throw const ForegroundAudioException(ForegroundAudioFailure.playback);
-    } finally {
-      await _deactivateFocus();
     }
   }
 
@@ -469,6 +465,14 @@ class _MediaKitForegroundAudioSession
       );
     }
   }
+
+  Future<void> _control(String phase, Future<void> Function() operation) =>
+      _serialize(phase, () {
+        // Entry-time validity is insufficient while another native operation
+        // occupies the engine tail. Disposal revokes queued controls too.
+        _ensureActive();
+        return operation();
+      });
 
   void _emitFailure() {
     if (_disposed || _failures.isClosed) return;

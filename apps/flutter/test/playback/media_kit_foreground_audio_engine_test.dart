@@ -6,6 +6,51 @@ import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 
 void main() {
+  for (final phase in ['pause', 'seek', 'volume', 'stop']) {
+    test(
+      'disposed session rejects queued $phase before native dispatch',
+      () async {
+        final blocked = Completer<void>();
+        final player = _FakeMediaKitPlayer()..seekGate = blocked.future;
+        final engine = MediaKitForegroundAudioEngine(
+          player: player,
+          audioFocusManager: _FakeFocusManager(),
+        );
+        final old = await engine.loadRemote(
+          Uri.parse('https://audio.example.test/old.mp3'),
+        );
+        await old.play();
+        final inFlight = old.seekToMs(10);
+        await Future<void>.delayed(Duration.zero);
+        final queued = switch (phase) {
+          'pause' => old.pause(),
+          'seek' => old.seekToMs(20),
+          'volume' => old.setVolume(0.5),
+          _ => old.stop(),
+        };
+        final assertion = expectLater(
+          queued,
+          throwsA(isA<ForegroundAudioException>()),
+        );
+        await old.dispose();
+        blocked.complete();
+        await inFlight;
+        await assertion;
+        expect(player.pauseCalls, 0);
+        expect(player.stopCalls, 0);
+        expect(player.seekPositions, [const Duration(milliseconds: 10)]);
+        expect(player.volumes, isEmpty);
+        final next = await engine.loadRemote(
+          Uri.parse('https://audio.example.test/next.mp3'),
+        );
+        await next.play();
+        expect(player.playCalls, 2);
+        await next.dispose();
+        await engine.dispose();
+      },
+    );
+  }
+
   test(
     'native play timeout remains bounded when focus release hangs',
     () async {
