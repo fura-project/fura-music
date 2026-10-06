@@ -280,10 +280,33 @@ void main() {
     });
     final engine = MediaKitForegroundAudioEngine();
     ForegroundAudioSession? session;
+    StreamSubscription<ForegroundAudioState>? stateSubscription;
+    var completionCount = 0;
+    // A direct-session cache test can still reach EOF after a native error;
+    // record that separately rather than treating EOF as an error-free full
+    // controller/physical-device acceptance. Never print native message text.
+    final nativeErrors = <String, int>{};
+    final errorSubscription = engine.debugPlayer.errors.listen((message) {
+      final text = message.toLowerCase();
+      final category = text.contains('seek')
+          ? 'seek'
+          : text.contains('audio') &&
+                (text.contains('device') || text.contains('output'))
+          ? 'audio_output'
+          : text.contains('decod')
+          ? 'decode'
+          : text.startsWith('tcp:')
+          ? 'transport'
+          : 'other';
+      nativeErrors.update(category, (count) => count + 1, ifAbsent: () => 1);
+    });
     try {
       session = await engine.loadRemote(
         Uri.parse('http://${server.address.address}:${server.port}/repeat.mp3'),
       );
+      stateSubscription = session.states.listen((state) {
+        if (state == ForegroundAudioState.completed) completionCount++;
+      });
       await session.setVolume(0);
       var completed = session.states.firstWhere(
         (state) => state == ForegroundAudioState.completed,
@@ -310,10 +333,19 @@ void main() {
         );
       }
       debugPrint(
-        'FURA_DIAGNOSTIC synthetic_eof_soak completions=100 '
-        'extraHttpRequests=${requestCount - initialRequests} activeMusicPlayers=1',
+        'FURA_DIAGNOSTIC synthetic_eof_soak replays=100 completions=$completionCount '
+        'extraHttpRequests=${requestCount - initialRequests} activeMusicPlayers=1 '
+        'nativeErrorCategories=$nativeErrors',
+      );
+      expect(completionCount, 101, reason: 'initial EOF + 100 replay EOFs');
+      expect(
+        nativeErrors,
+        isEmpty,
+        reason: 'EOF progression alone does not prove error-free replay',
       );
     } finally {
+      await errorSubscription.cancel();
+      await stateSubscription?.cancel();
       await session?.dispose();
       await engine.dispose();
       await requests.cancel();
@@ -406,7 +438,10 @@ const _silentM4aBase64 =
 const _silentFlacBase64 =
     'ZkxhQwAAACIQABAAAAANAAANAfQA8AAAD6BYEBJJx2tzW9dM5TArAJMXhAAAKCAAAAByZWZlcmVuY2UgbGliRkxBQyAxLjUuMCAyMDI1MDIxMQAAAAD/+HQIAA+fggAAAFLj';
 
-// 0.5 seconds of silent 8 kHz mono MP3 generated with FFmpeg 9.0. It lives in
-// test code so no playback fixture is shipped in the application bundle.
+// 0.5 seconds of silent 8 kHz mono MP3 generated with FFmpeg 9.0, no Xing
+// header in the pipe output. Independently decode-checked with -xerror.
+// The previous fixture had a malformed frame and emitted a decoder failure
+// each EOF; reaching EOF alone must not hide that failure/focus release.
+// This fixture lives only in test code, not the application bundle.
 const _silentMp3Base64 =
-    'SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYzLjEuMTAwAAAAAAAAAAAAAAD/4zjAAAAAAAAAAAAASW5mbwAAAA8AAAAJAAADYABVVVVVVVVVVVVVVWpqampqampqampqgICAgICAgICAgICVlZWVlZWVlZWVlaqqqqqqqqqqqqqqwMDAwMDAwMDAwMDV1dXV1dXV1dXV1erq6urq6urq6urq//////////////8AAAAATGF2YzYzLjEuAAAAAAAAAAAAAAAAJAJgAAAAAAAAA2C8msofAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4xjEAAAAA0gAAAAATEFNRTQuMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVX/4xjEOwAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVX/4xjEdgAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVX/4xjEsQAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVX/4xjExAAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVX/4xjExAAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjExAAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjExAAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjExAAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=';
+    'SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYzLjEuMTAxAAAAAAAAAAAAAAD/4yjEAAAAA0gAAAAATEFNRVVVVUxBTUU0LjBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4yjEfAAAA0gAAAAAVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4yjEfAAAA0gAAAAAVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4yjEfAAAA0gAAAAAVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4yjEfAAAA0gAAAAAVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4yjEfAAAA0gAAAAAVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4yjEfAAAA0gAAAAAVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4yjEfAAAA0gAAAAAVVVVVVVVVUxBTUU0LjBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4yjEfAAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=';

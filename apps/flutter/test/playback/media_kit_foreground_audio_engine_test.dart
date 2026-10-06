@@ -1,17 +1,72 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 
 void main() {
+  test('operation and rebuild diagnostics contain categories, never native errors or sources', () async {
+    final messages = <String>[];
+    final previous = debugPrint;
+    debugPrint = (String? message, {int? wrapWidth}) {
+      if (message != null) messages.add(message);
+    };
+    addTearDown(() => debugPrint = previous);
+    final first = _FakeMediaKitPlayer()..openGate = Completer<void>().future;
+    final replacement = _FakeMediaKitPlayer()
+      ..openFailure = StateError('native-private-error-cookie-token');
+    final engine = MediaKitForegroundAudioEngine(
+      player: first,
+      playerFactory: () => replacement,
+      controlTimeout: const Duration(milliseconds: 20),
+      openTimeout: const Duration(milliseconds: 20),
+    );
+    final uri = Uri.parse(
+      'https://audio.example.test/private-track?vkey=signed-secret',
+    );
+    await expectLater(
+      engine.loadRemote(uri),
+      throwsA(isA<ForegroundAudioException>()),
+    );
+    await expectLater(
+      engine.loadRemote(uri),
+      throwsA(isA<ForegroundAudioException>()),
+    );
+    await engine.dispose();
+    final trace = messages.join('\n');
+    expect(trace, contains('phase=open elapsedMs=0 outcome=started'));
+    expect(trace, contains('engine_stall generation=0 cycle=1'));
+    expect(
+      trace,
+      contains('engine_rebuild generation=1 rebuildCount=1 outcome=success'),
+    );
+    expect(trace, contains('outcome=failure'));
+    for (final secret in [
+      'https:',
+      'audio.example.test',
+      'private-track',
+      'signed-secret',
+      'native-private-error',
+      'cookie',
+      'token',
+    ]) {
+      expect(trace, isNot(contains(secret)));
+    }
+  });
+
   test(
     'EOF replay retains source and focus; terminal completion releases it',
     () async {
       final player = _FakeMediaKitPlayer();
       final focus = _FakeFocusManager();
+      var rebuilds = 0;
       final engine = MediaKitForegroundAudioEngine(
         player: player,
+        playerFactory: () {
+          rebuilds++;
+          return _FakeMediaKitPlayer();
+        },
         audioFocusManager: focus,
       );
       final session = await engine.loadRemote(
@@ -28,6 +83,8 @@ void main() {
       expect(player.stopCalls, 0);
       expect(player.disposeCalls, 0);
       expect(player.seekPositions, List.filled(100, Duration.zero));
+      expect(player.playCalls, 101);
+      expect(rebuilds, 0);
       expect(focus.values, [true]);
       await (session as ForegroundCompletionFocusSession)
           .releaseCompletionFocus();
@@ -80,6 +137,111 @@ void main() {
       expect(replacement.disposeCalls, 1);
     },
   );
+
+  test(
+    'duplicate EOF and trailing paused events produce one completion per cycle',
+    () async {
+      final player = _FakeMediaKitPlayer();
+      final focus = _FakeFocusManager();
+      final engine = MediaKitForegroundAudioEngine(
+        player: player,
+        audioFocusManager: focus,
+      );
+      final session = await engine.loadRemote(
+        Uri.parse('https://audio.example.test/repeat.mp3'),
+      );
+      final states = <ForegroundAudioState>[];
+      final subscription = session.states.listen(states.add);
+      await session.play();
+      for (var cycle = 0; cycle < 100; cycle++) {
+        // The SDK publishes playing=false before completed=true at EOF.
+        player.emitPlaying(false);
+        player.emitCompleted();
+        await Future<void>.delayed(Duration.zero);
+        player.emitCompleted();
+        player.emitPlaying(false);
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          states.where((state) => state == ForegroundAudioState.completed),
+          hasLength(cycle + 1),
+        );
+        expect(states.last, ForegroundAudioState.completed);
+        await session.seekToMs(0);
+        player.emitCompleted(false);
+        await session.play();
+        player.emitPlaying(true);
+        await Future<void>.delayed(Duration.zero);
+        expect(states.last, ForegroundAudioState.playing);
+      }
+      expect(player.opened, hasLength(1));
+      expect(player.seekPositions, List.filled(100, Duration.zero));
+      expect(player.playCalls, 101);
+      expect(player.stopCalls, 0);
+      expect(focus.values, [true]);
+      await subscription.cancel();
+      await session.dispose();
+      await engine.dispose();
+    },
+  );
+
+  for (final phase in ['seek', 'play']) {
+    test(
+      '$phase stall during EOF replay is bounded and explicit load recovers once',
+      () async {
+        final pending = Completer<void>();
+        final first = _FakeMediaKitPlayer();
+        final replacement = _FakeMediaKitPlayer();
+        final focus = _FakeFocusManager();
+        var factories = 0;
+        final engine = MediaKitForegroundAudioEngine(
+          player: first,
+          playerFactory: () {
+            factories++;
+            return replacement;
+          },
+          audioFocusManager: focus,
+          controlTimeout: const Duration(milliseconds: 20),
+        );
+        final session = await engine.loadRemote(
+          Uri.parse('https://audio.example.test/stall.mp3'),
+        );
+        await session.play();
+        first.emitCompleted();
+        await Future<void>.delayed(Duration.zero);
+        if (phase == 'seek') {
+          first.seekGate = pending.future;
+        } else {
+          await session.seekToMs(0);
+          first.playGate = pending.future;
+        }
+        await expectLater(
+          phase == 'seek' ? session.seekToMs(0) : session.play(),
+          throwsA(isA<ForegroundAudioException>()),
+        );
+        // The controller's error cleanup calls stop; it must not hang behind
+        // a failed native control, and it releases the retained EOF focus.
+        await expectLater(
+          session.stop(),
+          throwsA(isA<ForegroundAudioException>()),
+        );
+        expect(focus.values, [true, false]);
+        await session.dispose();
+        expect(factories, 0, reason: 'no automatic replay/source recovery');
+        final recovered = await engine.loadRemote(
+          Uri.parse('https://audio.example.test/recovered.mp3'),
+        );
+        await recovered.play();
+        expect(first.disposeCalls, 1);
+        expect(factories, 1);
+        pending.complete();
+        await recovered.pause();
+        await recovered.play();
+        expect(replacement.playCalls, 2);
+        await recovered.dispose();
+        await engine.dispose();
+      },
+    );
+  }
 
   test('failed retirement never overlaps a replacement Player', () async {
     final first = _FakeMediaKitPlayer()
@@ -356,6 +518,8 @@ class _FakeMediaKitPlayer implements MediaKitAudioPlayer {
   Object? openFailure;
   Future<void>? openGate;
   Future<void>? pauseGate;
+  Future<void>? seekGate;
+  Future<void>? playGate;
   Future<void>? disposeGate;
   int playCalls = 0;
   int pauseCalls = 0;
@@ -383,7 +547,10 @@ class _FakeMediaKitPlayer implements MediaKitAudioPlayer {
   }
 
   @override
-  Future<void> play() async => playCalls += 1;
+  Future<void> play() async {
+    playCalls += 1;
+    await playGate;
+  }
 
   @override
   Future<void> pause() async {
@@ -395,7 +562,10 @@ class _FakeMediaKitPlayer implements MediaKitAudioPlayer {
   Future<void> stop() async => stopCalls += 1;
 
   @override
-  Future<void> seek(Duration position) async => seekPositions.add(position);
+  Future<void> seek(Duration position) async {
+    seekPositions.add(position);
+    await seekGate;
+  }
 
   @override
   Future<void> setVolume(double percent) async => volumes.add(percent);
@@ -412,7 +582,7 @@ class _FakeMediaKitPlayer implements MediaKitAudioPlayer {
 
   void emitPlaying(bool value) => _playing.add(value);
 
-  void emitCompleted() => _completed.add(true);
+  void emitCompleted([bool value = true]) => _completed.add(value);
 
   void emitPosition(Duration value) => _position.add(value);
 

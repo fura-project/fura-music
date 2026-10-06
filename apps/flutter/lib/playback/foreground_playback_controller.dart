@@ -27,6 +27,7 @@ class ForegroundPlaybackController extends ChangeNotifier {
   int _positionMs = 0;
   double _volume = 1;
   int _generation = 0;
+  int _replayCycle = 0;
   int _seekGeneration = 0;
   int _volumeGeneration = 0;
   int? _pendingSeekGeneration;
@@ -134,18 +135,30 @@ class ForegroundPlaybackController extends ChangeNotifier {
     final session = _session;
     final generation = _generation;
     if (session == null || _stage != ForegroundPlaybackStage.completed) return;
+    final cycle = ++_replayCycle;
     _setStage(ForegroundPlaybackStage.loading);
     try {
+      _logReplay(generation, cycle, 'seek', 'started');
       await session.seekToMs(0);
-      if (!_isSessionCurrent(generation, session)) return;
+      if (!_isSessionCurrent(generation, session)) {
+        _logReplay(generation, cycle, 'seek', 'replaced');
+        return;
+      }
+      _logReplay(generation, cycle, 'seek', 'success');
       _setPosition(0);
+      _logReplay(generation, cycle, 'play', 'started');
       await session.play();
       if (_isSessionCurrent(generation, session)) {
+        _logReplay(generation, cycle, 'play', 'success');
         _setStage(ForegroundPlaybackStage.playing);
+      } else {
+        _logReplay(generation, cycle, 'play', 'replaced');
       }
     } on ForegroundAudioException catch (error) {
+      _logReplay(generation, cycle, 'replay', 'failure');
       _failSession(generation, session, error.failure);
     } on Object {
+      _logReplay(generation, cycle, 'replay', 'failure');
       _failSession(generation, session, ForegroundAudioFailure.coreUnavailable);
     }
   }
@@ -357,3 +370,9 @@ class ForegroundPlaybackController extends ChangeNotifier {
     }
   }
 }
+
+void _logReplay(int generation, int cycle, String phase, String outcome) =>
+    debugPrint(
+      'FURA_DIAGNOSTIC replay_current generation=$generation cycle=$cycle '
+      'phase=$phase outcome=$outcome',
+    );

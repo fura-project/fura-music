@@ -2,14 +2,32 @@
 execution:
   mode: AUTONOMOUS_DEVELOPMENT
   work_domain: CORE
-  state: PARTIALLY_IMPLEMENTED_PROTOCOL_GATED
-  acceptance_milestone: PLAYBACK_CACHE_AND_PROVIDER_SESSION_CONTINUATION
-  active_workstream: PROVIDER_PLAYBACK_PROFILE_SESSION_UPGRADE
-  current_task: REPLAY_CACHE_PROFILE_EXTRACTION_AND_REFRESH_FOUNDATIONS
-  next_action: BOUNDED_HUMAN_REFRESH_EVIDENCE_THEN_COORDINATOR_VAULT_IMPLEMENTATION
+  state: ANDROID_PLAYBACK_DEVICE_REQUIRED
+  acceptance_milestone: ANDROID_REPEAT_ONE_LIFECYCLE_STABILITY
+  active_workstream: ANDROID_PLAYBACK_LIFECYCLE_REGRESSION
+  current_task: REPLAY_STALL_REGRESSION_AND_SECRET_SAFE_DIAGNOSTICS
+  next_action: AUTHORIZED_PHYSICAL_ANDROID_30_EOF_BACKGROUND_LOCK_NETWORK_ACCEPTANCE
 ---
 
 # Current State
+
+- **2026-10-06 Android retained-source lifecycle regression:** HEAD and local
+  `origin/main` both start at `9098912210289d7bdb504f26d4a0c50dad0767f2`, with
+  a clean worktree. `adb devices -l` lists no device: physical acceptance is
+  **DEVICE_REQUIRED**, not PASS. Only playback diagnostics, targeted offline
+  regressions and their evidence/debt are in scope. Repeat-one follows Rust's
+  typed replay action directly into the retained session's seek/play, without
+  resolution/open. No playback-state or cache-budget fix has been justified by
+  the tests so far. The trace now includes Queue action, replay phases, native
+  operation result, retained/released focus and bounded-rebuild category on
+  stdout for Android logcat; it contains no source or native-error body. TD-017
+  records Provider-wide resolution head-of-line blocking without refactoring it.
+  The prior QQ/NetEase refresh, KuGou media and persistent-cache work is not being
+  continued. Physical background/lock/network/Bluetooth and mobile memory remain
+  unverified; no emulator can replace this gate. Detailed results are recorded
+  in `docs/research/android-repeat-one-lifecycle-regression-2026-10-06.md`.
+  No commit, push, reset, restore, clean or stored-account automation is allowed
+  by this task.
 
 - **2026-10-06 playback/cache, profiles and refresh checkpoint:** starting HEAD
   and local `origin/main` were `ee8dc24697bd506155d3e16f72c4a36209efd347`

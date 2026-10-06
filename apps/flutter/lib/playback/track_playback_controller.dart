@@ -1,5 +1,3 @@
-import 'dart:developer' as developer;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
@@ -162,8 +160,7 @@ class TrackPlaybackController extends ChangeNotifier {
       outcome: 'success',
       provider: safeProvider,
       detail:
-          'scheme=${_safeScheme(source.uri.scheme)} '
-          'host=${_safeHost(source.uri.host)} format=${source.format.name} '
+          'format=${source.format.name} '
           'quality=${source.quality.name} ttl=${source.validForSeconds}',
     );
     await _playback.playRemote(
@@ -275,11 +272,9 @@ void _logPlaybackResolution({
   required String provider,
   String? detail,
 }) {
-  developer.log(
+  debugPrint(
     'FURA_DIAGNOSTIC media_playback phase=$phase outcome=$outcome '
     'provider=$provider${detail == null ? '' : ' $detail'}',
-    name: 'fura_music.playback',
-    level: outcome == 'failure' ? 1000 : 0,
   );
 }
 
@@ -288,14 +283,3 @@ String _safeProviderName(String? providerId) => switch (providerId) {
   'netease-cloud-music' => 'netease',
   _ => 'other',
 };
-
-String _safeScheme(String value) => switch (value) {
-  'http' => 'http',
-  'https' => 'https',
-  _ => 'other',
-};
-
-String _safeHost(String value) =>
-    RegExp(r'^[A-Za-z0-9.-]{1,253}$').hasMatch(value)
-    ? value.toLowerCase()
-    : 'unrecognized';

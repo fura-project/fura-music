@@ -327,11 +327,15 @@ class QueuePlaybackController extends ChangeNotifier {
       return;
     }
     if (result.completionAction == PlaybackCompletionAction.replayCurrent) {
+      debugPrint(
+        'FURA_DIAGNOSTIC queue_completion_action action=replay_current',
+      );
       _completionHandled = false;
       await _playback.replayCurrent();
       return;
     }
     if (result.playbackRequested) {
+      debugPrint('FURA_DIAGNOSTIC queue_completion_action action=play_current');
       _completionHandled = false;
       final current = _snapshot.current;
       if (current == null) {
@@ -341,6 +345,7 @@ class QueuePlaybackController extends ChangeNotifier {
       }
       return;
     }
+    debugPrint('FURA_DIAGNOSTIC queue_completion_action action=none');
     await _playback.releaseCompletionFocus();
     final collectionClaimed = await _continueCollectionFromTerminal(
       terminalToken,

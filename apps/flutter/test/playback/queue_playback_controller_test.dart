@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/home/related_track_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -165,6 +166,12 @@ void main() {
   test(
     '100 repeat-one completions resolve and open once, replay retained source',
     () async {
+      final trace = <String>[];
+      final previous = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) {
+        if (message != null) trace.add(message);
+      };
+      addTearDown(() => debugPrint = previous);
       final gateway = _ScriptedQueueGateway(
         replaceResults: [
           _result(
@@ -213,6 +220,159 @@ void main() {
       expect(firstSession.stopCalls, 0);
       expect(controller.current, same(first));
       expect(controller.playback.stage, TrackPlaybackStage.playing);
+      expect(
+        trace.where(
+          (line) =>
+              line.contains('media_playback phase=resolve outcome=started'),
+        ),
+        hasLength(1),
+      );
+      expect(
+        trace.where(
+          (line) =>
+              line.contains('queue_completion_action action=replay_current'),
+        ),
+        hasLength(100),
+      );
+      for (final forbidden in [
+        'https:',
+        first.title,
+        first.opaqueId,
+        'vkey=',
+      ]) {
+        expect(trace.join('\n'), isNot(contains(forbidden)));
+      }
+      controller.dispose();
+    },
+  );
+
+  for (final phase in ['seek', 'play']) {
+    test('replay $phase failure never re-resolves or reopens', () async {
+      final gateway = _ScriptedQueueGateway(
+        replaceResults: [
+          _result([first], 0, changed: true),
+        ],
+        completionResults: [
+          _result(
+            [first],
+            0,
+            changed: true,
+            repeatMode: PlaybackRepeatMode.one,
+            completionAction: PlaybackCompletionAction.replayCurrent,
+          ),
+        ],
+      );
+      final session = _FakeAudioSession();
+      final audio = _FakeAudioEngine([session]);
+      final media = _FakeMediaGateway(['first']);
+      final controller = _controller(gateway, media, audio);
+      await controller.replaceAndPlay([first], 0);
+      if (phase == 'seek') {
+        session.seekFailure = const ForegroundAudioException(
+          ForegroundAudioFailure.playback,
+        );
+      } else {
+        session.playFailure = const ForegroundAudioException(
+          ForegroundAudioFailure.playback,
+        );
+      }
+      session.emit(ForegroundAudioState.completed);
+      await _flush();
+      expect(controller.playback.stage, TrackPlaybackStage.engineError);
+      expect(
+        controller.playback.engineFailure,
+        ForegroundAudioFailure.playback,
+      );
+      expect(media.requests, [first.opaqueId]);
+      expect(audio._next, 1);
+      expect(gateway.completionCalls, 1);
+      expect(session.seekPositions, [0]);
+      expect(session.playCalls, phase == 'seek' ? 1 : 2);
+      expect(session.stopCalls, 1, reason: 'failed session cleanup only');
+      expect(session.disposeCalls, 1);
+      controller.dispose();
+    });
+  }
+
+  for (final phase in ['seek', 'play']) {
+    test('late replay $phase cannot change a replacement Track', () async {
+      final gateway = _ScriptedQueueGateway(
+        replaceResults: [
+          _result([first, second], 0, changed: true),
+        ],
+        completionResults: [
+          _result(
+            [first, second],
+            0,
+            changed: true,
+            completionAction: PlaybackCompletionAction.replayCurrent,
+          ),
+        ],
+        selectResults: [
+          _result([first, second], 1, changed: true),
+        ],
+      );
+      final pending = Completer<void>();
+      final firstSession = _FakeAudioSession();
+      final secondSession = _FakeAudioSession();
+      final audio = _FakeAudioEngine([firstSession, secondSession]);
+      final media = _FakeMediaGateway(['first', 'second']);
+      final controller = _controller(gateway, media, audio);
+      await controller.replaceAndPlay([first, second], 0);
+      if (phase == 'seek') {
+        firstSession.seekGate = pending.future;
+      } else {
+        firstSession.playGate = pending.future;
+      }
+      firstSession.emit(ForegroundAudioState.completed);
+      await _flush();
+      expect(firstSession.seekPositions, [0]);
+      await controller.select(1);
+      expect(firstSession.focusReleaseCalls, 1);
+      secondSession.emitPosition(250);
+      await _flush();
+      pending.complete();
+      await _flush();
+      expect(firstSession.playCalls, phase == 'seek' ? 1 : 2);
+      expect(secondSession.playCalls, 1);
+      expect(controller.playback.track, same(second));
+      expect(controller.playback.positionMs, 250);
+      expect(controller.playback.stage, TrackPlaybackStage.playing);
+      expect(media.requests, [first.opaqueId, second.opaqueId]);
+      expect(audio._next, 2);
+      expect(gateway.completionCalls, 1);
+      controller.dispose();
+    });
+  }
+
+  test(
+    'failed completion result releases retained focus without replay',
+    () async {
+      final gateway = _ScriptedQueueGateway(
+        replaceResults: [
+          _result([first], 0, changed: true),
+        ],
+        completionResults: [
+          const PlaybackQueueResult(
+            failure: PlaybackQueueFailure.coreUnavailable,
+          ),
+        ],
+      );
+      final session = _FakeAudioSession();
+      final audio = _FakeAudioEngine([session]);
+      final media = _FakeMediaGateway(['first']);
+      final controller = _controller(gateway, media, audio);
+      await controller.replaceAndPlay([first], 0);
+      session.emit(ForegroundAudioState.completed);
+      await _flush();
+      session.emitPosition(1000);
+      await _flush();
+      expect(session.focusReleaseCalls, 1);
+      expect(session.seekPositions, isEmpty);
+      expect(session.playCalls, 1);
+      expect(gateway.completionCalls, 1);
+      expect(media.requests, [first.opaqueId]);
+      expect(audio._next, 1);
       controller.dispose();
     },
   );
@@ -1665,6 +1825,7 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
     this.extensionResults = const [],
     this.removeResults = const [],
     this.clearResults = const [],
+    this.selectResults = const [],
   });
 
   final List<PlaybackQueueResult> replaceResults;
@@ -1676,6 +1837,7 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
   final List<PlaybackQueueResult> extensionResults;
   final List<PlaybackQueueResult> removeResults;
   final List<PlaybackQueueResult> clearResults;
+  final List<PlaybackQueueResult> selectResults;
   int _replace = 0;
   int _advance = 0;
   int _rewind = 0;
@@ -1685,6 +1847,7 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
   int _extension = 0;
   int _remove = 0;
   int _clear = 0;
+  int _select = 0;
 
   int get completionCalls => _completion;
   int get extensionCalls => _extension;
@@ -1730,7 +1893,7 @@ class _ScriptedQueueGateway implements PlaybackQueueGateway {
   ) => extensionResults[_extension++];
 
   @override
-  PlaybackQueueResult select(int index) => throw StateError('not scripted');
+  PlaybackQueueResult select(int index) => selectResults[_select++];
 }
 
 class _CancellationQueueGateway implements PlaybackQueueGateway {
@@ -1934,7 +2097,8 @@ class _FakeAudioEngine implements ForegroundAudioEngine {
   }) async => sessions[_next++];
 }
 
-class _FakeAudioSession implements ForegroundAudioSession {
+class _FakeAudioSession
+    implements ForegroundAudioSession, ForegroundCompletionFocusSession {
   final StreamController<ForegroundAudioState> _states =
       StreamController.broadcast();
   final StreamController<ForegroundAudioFailure> _failures =
@@ -1944,6 +2108,12 @@ class _FakeAudioSession implements ForegroundAudioSession {
   int pauseCalls = 0;
   int playCalls = 0;
   int stopCalls = 0;
+  int disposeCalls = 0;
+  int focusReleaseCalls = 0;
+  Object? seekFailure;
+  Object? playFailure;
+  Future<void>? seekGate;
+  Future<void>? playGate;
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -1957,6 +2127,10 @@ class _FakeAudioSession implements ForegroundAudioSession {
   @override
   Future<void> play() async {
     playCalls++;
+    final failure = playFailure;
+    if (failure != null) throw failure;
+    await playGate;
+    if (_states.isClosed) return;
     emit(ForegroundAudioState.playing);
   }
 
@@ -1969,6 +2143,10 @@ class _FakeAudioSession implements ForegroundAudioSession {
   @override
   Future<void> seekToMs(int positionMs) async {
     seekPositions.add(positionMs);
+    final failure = seekFailure;
+    if (failure != null) throw failure;
+    await seekGate;
+    if (_positions.isClosed) return;
     emitPosition(positionMs);
   }
 
@@ -1978,11 +2156,16 @@ class _FakeAudioSession implements ForegroundAudioSession {
   @override
   Future<void> stop() async {
     stopCalls++;
+    await releaseCompletionFocus();
     emit(ForegroundAudioState.stopped);
   }
 
   @override
+  Future<void> releaseCompletionFocus() async => focusReleaseCalls++;
+
+  @override
   Future<void> dispose() async {
+    disposeCalls++;
     await _states.close();
     await _failures.close();
     await _positions.close();

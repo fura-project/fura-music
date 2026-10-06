@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
@@ -189,6 +188,10 @@ class MediaKitForegroundAudioEngine implements ForegroundAudioEngine {
         );
       }
       final elapsed = Stopwatch()..start();
+      _logMediaKit(
+        'media_operation generation=$generation cycle=$cycle phase=$phase '
+        'elapsedMs=0 outcome=started',
+      );
       try {
         await operation().timeout(
           phase == 'open' ? openTimeout : controlTimeout,
@@ -198,16 +201,25 @@ class MediaKitForegroundAudioEngine implements ForegroundAudioEngine {
             ForegroundAudioFailure.coreUnavailable,
           );
         }
+        _logMediaKit(
+          'media_operation generation=$generation cycle=$cycle phase=$phase '
+          'elapsedMs=${elapsed.elapsedMilliseconds} outcome=success',
+        );
       } on TimeoutException {
         _stalled = true;
-        developer.log(
-          'FURA_DIAGNOSTIC media_operation generation=$generation cycle=$cycle '
-          'phase=$phase elapsedMs=${elapsed.elapsedMilliseconds} result=timeout',
-          name: 'fura_music.playback',
+        _logMediaKit(
+          'engine_stall generation=$generation cycle=$cycle '
+          'phase=$phase elapsedMs=${elapsed.elapsedMilliseconds} outcome=timeout',
         );
         throw const ForegroundAudioException(
           ForegroundAudioFailure.coreUnavailable,
         );
+      } on Object {
+        _logMediaKit(
+          'media_operation generation=$generation cycle=$cycle phase=$phase '
+          'elapsedMs=${elapsed.elapsedMilliseconds} outcome=failure',
+        );
+        rethrow;
       }
     });
     _operationTail = result.then<void>(
@@ -230,19 +242,35 @@ class MediaKitForegroundAudioEngine implements ForegroundAudioEngine {
     await _operationTail;
     if (!_stalled) return;
     if (_disposed || _rebuildCount >= 1) {
+      _logMediaKit(
+        'engine_rebuild generation=$_playerGeneration rebuildCount=$_rebuildCount '
+        'outcome=rejected',
+      );
       throw const ForegroundAudioException(
         ForegroundAudioFailure.coreUnavailable,
       );
     }
     ++_rebuildCount;
     ++_playerGeneration;
+    _logMediaKit(
+      'engine_rebuild generation=$_playerGeneration rebuildCount=$_rebuildCount '
+      'outcome=started',
+    );
     try {
       await _retirePlayer().timeout(controlTimeout);
       if (_disposed) return;
       _player = _playerFactory();
       _playerRetirement = null;
       _stalled = false;
+      _logMediaKit(
+        'engine_rebuild generation=$_playerGeneration rebuildCount=$_rebuildCount '
+        'outcome=success',
+      );
     } on Object {
+      _logMediaKit(
+        'engine_rebuild generation=$_playerGeneration rebuildCount=$_rebuildCount '
+        'outcome=failure',
+      );
       throw const ForegroundAudioException(
         ForegroundAudioFailure.coreUnavailable,
       );
@@ -293,6 +321,9 @@ class _MediaKitForegroundAudioSession
           return;
         }
         _lastState = ForegroundAudioState.completed;
+        _logMediaKit(
+          'playback_completed focus=${_focusActive ? 'retained' : 'inactive'}',
+        );
         _states.add(ForegroundAudioState.completed);
       }, onError: (Object _) => _emitFailure()),
       _player.position.listen((position) {
@@ -333,9 +364,16 @@ class _MediaKitForegroundAudioSession
     _ensureActive();
     var activated = false;
     try {
+      if (!_focusActive) {
+        _logMediaKit('audio_focus phase=activate outcome=started');
+      }
       activated = _focusActive || await _audioFocusManager.setActive(true);
       if (!activated) {
+        _logMediaKit('audio_focus phase=activate outcome=rejected');
         throw const ForegroundAudioException(ForegroundAudioFailure.playback);
+      }
+      if (!_focusActive) {
+        _logMediaKit('audio_focus phase=activate outcome=success');
       }
       _focusActive = true;
       _lastState = ForegroundAudioState.playing;
@@ -424,6 +462,7 @@ class _MediaKitForegroundAudioSession
 
   void _emitFailure() {
     if (_disposed || _failures.isClosed) return;
+    _logMediaKit('native_player_failure outcome=reported');
     unawaited(_deactivateFocus());
     _failures.add(ForegroundAudioFailure.playback);
   }
@@ -431,9 +470,12 @@ class _MediaKitForegroundAudioSession
   Future<void> _deactivateFocus() async {
     if (!_focusActive) return;
     _focusActive = false;
+    _logMediaKit('audio_focus phase=release outcome=started');
     try {
       await _audioFocusManager.setActive(false);
+      _logMediaKit('audio_focus phase=release outcome=success');
     } on Object {
+      _logMediaKit('audio_focus phase=release outcome=failure');
       // Focus release is best effort and remains secret-free.
     }
   }
@@ -455,3 +497,8 @@ class _MediaKitForegroundAudioSession
     await _positions.close();
   }
 }
+
+// Only locally constructed phases/categories/counters enter this message.
+// stdout is intentional: dart:developer logs alone require VM service tooling
+// and cannot serve as an Android release logcat acceptance trace.
+void _logMediaKit(String detail) => debugPrint('FURA_DIAGNOSTIC $detail');

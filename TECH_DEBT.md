@@ -365,4 +365,40 @@ atomic temp publication and integrity checks without URL persistence or proxy.
 recovery leak, or verified upstream handoff/retirement API. Mobile native stall
 and account-entitlement evidence remain prerequisites before broader acceptance.
 
+## TD-017 — Provider-wide resolution single-flight has head-of-line blocking
+
+**Status:** Open; no physical-device latency defect reproduced
+
+**Problem:** QQ and NetEase `resolve_media` acquire one Provider-wide cache mutex
+before lookup and retain it across the network await and cache insertion. A
+different Track or quality waits behind the current resolution, including before
+its otherwise cached hit can be checked. Same-key duplicate work is bounded, but
+the lock is not per-key single-flight.
+
+**Why accepted:** The 2026-10-06 Android lifecycle regression audit confirms this
+in `provider-qqmusic/src/lib.rs` and `provider-netease/src/catalog.rs`. Repeat-one
+does not enter resolution at all, so this is not evidence of an EOF replay stall.
+There is no attached physical Android device to establish rapid-navigation cost;
+changing Provider concurrency now would expand the playback regression scope.
+
+**Impact:** Concurrent uncancelled resolutions can delay a different Track/cache
+hit. The current music controller cancels its old Bridge operation on replacement;
+`MediaResolutionHandle::await_resolution` uses `tokio::select!` and drops the old
+Provider future on cancellation, releasing its guard. Thus the production rapid
+switch path does not inherently wait for the old transport timeout. The active
+retained-source EOF path does not take this mutex at all.
+
+**Risk:** Future concurrent/prefetch consumers could expose avoidable queuing
+under slow networking. Local future cancellation releases ownership, but does
+not prove immediate remote transport termination or measured device latency.
+
+**Suggested solution:** If measured user-visible switching latency triggers this
+item, use a short cache-only critical section and bounded per-key single-flight
+for exact Provider/Track/preferred-quality/session-generation keys. Preserve
+generation recheck, account replacement, server TTL and no source persistence.
+Do not build a generic Provider cache framework without a further need.
+
+**Trigger condition:** Reproducible physical-device rapid-switch blocking with
+coarse timing evidence, or an independently authorized resolution-latency task.
+
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.
