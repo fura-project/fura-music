@@ -8,8 +8,11 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 
 class MainActivity : FlutterActivity() {
+    private var settingsChoice: SettingsChoiceChannel? = null
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        settingsChoice?.detach()
+        settingsChoice = SettingsChoiceChannel(this, flutterEngine.dartExecutor.binaryMessenger)
         Log.i(
             diagnosticTag,
             "phase=system_edge_plugin_registration audioService=${flutterEngine.plugins.has(AudioServicePlugin::class.java)}",
@@ -38,13 +41,33 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onPause() {
+        settingsChoice?.resumed = false
+        settingsChoice?.cancel()
         super.onPause()
         Log.i(diagnosticTag, "phase=activity_paused outcome=success")
     }
 
     override fun onResume() {
         super.onResume()
+        settingsChoice?.resumed = true
         Log.i(diagnosticTag, "phase=activity_resumed outcome=success")
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        settingsChoice?.cancel()
+        super.onConfigurationChanged(newConfig)
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        settingsChoice?.detach()
+        settingsChoice = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    override fun onDestroy() {
+        settingsChoice?.detach()
+        settingsChoice = null
+        super.onDestroy()
     }
 
     companion object {

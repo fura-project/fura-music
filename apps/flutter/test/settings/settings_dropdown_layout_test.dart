@@ -10,7 +10,7 @@ import 'package:flutterustmusic/settings/settings_page.dart';
 import 'settings_review_harness.dart';
 
 void main() {
-  for (final width in [320.0, 390.0, 640.0, 1440.0]) {
+  for (final width in [320.0, 390.0, 640.0, 1440.0, 1600.0]) {
     for (final language in ['en', 'zh']) {
       for (final brightness in Brightness.values) {
         for (final scale in [1.0, 2.0]) {
@@ -43,9 +43,9 @@ void main() {
               for (final (key, option) in selectors) {
                 final row = find.byKey(ValueKey(key));
                 await tester.ensureVisible(row);
-                final tile = tester.widget<ListTile>(row);
-                for (final child in [tile.title!, tile.subtitle!]) {
-                  final text = child as Text;
+                for (final text in tester.widgetList<Text>(
+                  find.descendant(of: row, matching: find.byType(Text)),
+                )) {
                   expect(text.maxLines, isNull);
                   expect(text.overflow, isNull);
                 }
@@ -83,7 +83,7 @@ void main() {
                 expect(tester.takeException(), isNull);
               }
             }
-          });
+          }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
         }
       }
     }
@@ -119,7 +119,7 @@ void main() {
     await _capture(tester, boundary, 'motion-close-200ms');
     await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsNothing);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 }
 
 Future<void> _loadReviewFonts(WidgetTester tester) async {

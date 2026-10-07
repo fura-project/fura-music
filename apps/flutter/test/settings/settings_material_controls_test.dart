@@ -2,12 +2,33 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutterustmusic/settings/app_settings.dart';
+import 'package:flutterustmusic/settings/settings_choice_presentation.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 
 import 'settings_review_harness.dart';
 
 void main() {
+  testWidgets(
+    'fallback cancelled before first build cannot leave an orphan route',
+    (tester) async {
+      await tester.pumpWidget(const SettingsReviewHarness());
+      final context = tester.element(
+        find.byKey(const ValueKey('settings-theme-selector')),
+      );
+      final pending = showSettingsSingleChoice(
+        context: context,
+        title: 'Synthetic choice',
+        options: const [SettingsChoiceOption(label: 'One')],
+        selectedIndex: 0,
+      );
+      pending.cancel();
+      await tester.pumpAndSettle();
+      expect(await pending.result, isNull);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
   testWidgets('saving disables every real enum row, not just theme', (
     tester,
   ) async {
@@ -43,7 +64,7 @@ void main() {
       }
       expect(tester.takeException(), isNull);
     }
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   for (final reducedMotion in [false, true]) {
     testWidgets(
@@ -69,15 +90,14 @@ void main() {
         expect(tester.widget<BottomSheet>(sheet).showDragHandle, isTrue);
         expect(route.useSafeArea, isTrue);
         expect(route.isScrollControlled, isTrue);
-        expect(
-          find.byType(RadioListTile<AppThemePreference>),
-          findsNWidgets(3),
-        );
+        expect(find.byType(RadioListTile<int>), findsNWidgets(3));
         // Stock modal route handles motion. No outer animation framework.
         await tester.tapAt(const Offset(8, 8));
         await tester.pumpAndSettle();
         expect(sheet, findsNothing);
       },
+
+      variant: TargetPlatformVariant.only(TargetPlatform.linux),
     );
   }
 
@@ -109,9 +129,9 @@ void main() {
     for (final material in tester.widgetList<Material>(
       find.byKey(const ValueKey('settings-group')),
     )) {
-      expect(material.type, MaterialType.transparency);
-      expect(material.borderRadius, isNull);
+      expect(material.color, scheme.surfaceContainerLow);
+      expect(material.borderRadius, BorderRadius.circular(16));
     }
     expect(find.byType(ExpansionTile), findsNothing);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 }

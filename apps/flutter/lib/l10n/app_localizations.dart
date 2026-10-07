@@ -5315,6 +5315,12 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 section matches ‘{query}’.} other{{count} sections match ‘{query}’.}}'**
   String settingsSearchMatchSummary(int count, String query);
 
+  /// No description provided for @settingsChoiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The native settings dialog is unavailable. Return to the app and try again.'**
+  String get settingsChoiceUnavailable;
+
   /// No description provided for @settingsSaveFailure.
   ///
   /// In en, this message translates to:

@@ -7,7 +7,7 @@ import 'dart:ui'
 
 import 'package:dynamic_color/dynamic_color.dart' show DynamicColorPlugin;
 import 'package:flutter/foundation.dart'
-    show ChangeNotifier, Listenable, ValueKey, debugPrint;
+    show ChangeNotifier, Listenable, ValueKey, debugPrint, TargetPlatform;
 import 'package:flutter/gestures.dart' show PointerHoverEvent, kSecondaryButton;
 import 'package:flutter/material.dart'
     show
@@ -919,6 +919,8 @@ void main() {
       expect(find.text('MY MUSIC'), findsNothing);
       expect(tester.takeException(), isNull);
     },
+
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
   testWidgets(
@@ -9328,7 +9330,7 @@ void main() {
       findsNothing,
     );
     semantics.dispose();
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   testWidgets('applies detected system colors without replacing brand mode', (
     tester,
@@ -9478,6 +9480,8 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     },
+
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
   testWidgets(
@@ -9630,6 +9634,8 @@ void main() {
       }
       expect(tester.takeException(), isNull);
     },
+
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
   testWidgets(
@@ -9925,6 +9931,8 @@ void main() {
       expect(find.byKey(const ValueKey('settings-search')), findsNothing);
       expect(tester.takeException(), isNull);
     },
+
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
   for (final width in [390.0, 1440.0]) {
@@ -10012,7 +10020,7 @@ void main() {
       expect(host.controller.snapshot.tracks, const [track]);
       expect(audio.stopCalls, 0);
       expect(tester.takeException(), isNull);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
   }
 
   testWidgets(
@@ -10220,6 +10228,8 @@ void main() {
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
+
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
   testWidgets('mobile settings hierarchy honors reduced motion', (
@@ -10261,7 +10271,7 @@ void main() {
     expect(find.byKey(const ValueKey('settings-compact-menu')), findsOneWidget);
     expect(find.byKey(const ValueKey('settings-compact-detail')), findsNothing);
     expect(tester.takeException(), isNull);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   testWidgets('signed-out settings shell hides every login affordance', (
     tester,
@@ -10308,7 +10318,7 @@ void main() {
     expect(find.byKey(const ValueKey('sign-out')), findsNothing);
     expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
     expect(tester.takeException(), isNull);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   testWidgets('settings reuses the navigation rail at medium desktop widths', (
     tester,
@@ -10398,7 +10408,7 @@ void main() {
     );
     expect(find.byKey(const ValueKey('sign-in')), findsOneWidget);
     expect(tester.takeException(), isNull);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   testWidgets('settings shell honors reduced motion in both directions', (
     tester,
@@ -10441,7 +10451,7 @@ void main() {
     expect(find.byKey(const ValueKey('settings-search')), findsNothing);
     expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
     expect(tester.takeException(), isNull);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   testWidgets('returns rejected library credentials to sign-in', (
     tester,
@@ -10676,6 +10686,8 @@ void main() {
       expect(find.byKey(const ValueKey('open-recent-plays')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
+
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
   testWidgets(
@@ -11052,6 +11064,8 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     },
+
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
   testWidgets(
@@ -11174,6 +11188,8 @@ void main() {
       expect(find.text(currentTrack.title), findsWidgets);
       expect(tester.takeException(), isNull);
     },
+
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
   for (final provider in AppMusicProvider.values) {
@@ -11448,6 +11464,8 @@ void main() {
           expect(tester.takeException(), isNull);
           semantics.dispose();
         },
+
+        variant: TargetPlatformVariant.only(TargetPlatform.linux),
       );
     }
   }
@@ -11506,6 +11524,8 @@ void main() {
         expect(find.byTooltip(l10n.authCloseTooltip), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
+
+      variant: TargetPlatformVariant.only(TargetPlatform.linux),
     );
   }
 }

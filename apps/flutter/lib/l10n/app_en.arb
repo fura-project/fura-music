@@ -900,6 +900,7 @@
   "@settingsSearchNoMatch": {"description": "Shown when Settings search has no matching category.", "placeholders": {"query": {"type": "String"}}},
   "settingsSearchMatchSummary": "{count, plural, =1{1 section matches ‘{query}’.} other{{count} sections match ‘{query}’.}}",
   "@settingsSearchMatchSummary": {"description": "Summary of the number of matching Settings categories.", "placeholders": {"count": {"type": "int"}, "query": {"type": "String"}}},
+  "settingsChoiceUnavailable": "The native settings dialog is unavailable. Return to the app and try again.",
   "settingsSaveFailure": "Couldn’t save settings on this device.",
   "settingsChooseCategory": "Choose a settings category",
   "settingsCategorySemantics": "{label}. {description}. {summary}",

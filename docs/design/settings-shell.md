@@ -62,7 +62,205 @@ At 390×844:
 
 The Human reported that the earlier opaque-transition fix left an unwanted pale panel behind Settings and playlist detail. The backing now uses the same `Theme.scaffoldBackgroundColor` as the normal content canvas and resting toolbar, while retaining full opacity, clipping and content-only fading for the entire entry/exit transition. Sidebar/player container roles and all accepted geometry remain unchanged. This is one consistent canvas role, not a hard-coded light color; dark mode follows its existing theme. The corrected candidate requires Human visual review.
 
-## Current Settings rows and choice sheets, 2026-10-07
+## Current grouped Settings and native Android choices, 2026-10-07
+
+**Design source:** Human explicitly rejected candidate `a68c320f358fe6fcf36bd8c031d28b923f22ae35`:
+the transparent group was too flat, and a Flutter sheet was not the requested
+Android native dialog. This correction supersedes the dated candidate below,
+not the retained Shell/navigation/search/player ownership above.
+**Status:** implemented candidate, `HUMAN_REVIEW`; no Human visual acceptance.
+
+### Current page grammar
+
+Each real section owns one quiet `surfaceContainerLow` Material surface with
+the existing 16 dp `MusicRadii.content`, no elevation, and its heading outside.
+Rows share that surface and standard state layers; 4 dp inter-row spacing
+replaces hard divider rules. There are no per-row cards, brand-green selected
+panels, permanent radios, accordions, dropdowns or color expansion owner.
+
+The content constraint is 880 dp including 24 dp padding on each side, giving
+an actual 832 dp desktop surface. At 1440 and 1600 dp the title is primary and
+the current value is right-aligned in `onSurfaceVariant`, before the chevron.
+The layout measures both effective text styles with locale, direction and
+text scaler, reserving icon, gaps, padding and chevron space. Compact, long
+and enlarged text stack/wrap rather than shrinking or ellipsizing. Quiet
+icons use `onSurfaceVariant`. Palette preview remains five real 20 dp
+effective-ColorScheme dots: trailing desktop, under the title when compact.
+
+All six enums share the same presentation/index boundary: Theme, Color source,
+Music service, Language, Default quality and Lyric auxiliary mode. Existing
+enum/schema, dynamic-color availability, Provider brand fallback and save
+owner remain unchanged. The row maps the safe returned index to its captured
+enum list; cancel, current value, invalid index, disposed caller or an external
+current-value replacement cannot write. Rows remain disabled during saving,
+with existing failure feedback/rollback. Focus returns after that existing
+save completes and the enabled row rebuilds; Android pause cancellation
+defers focus return until the Activity resumes.
+
+### ANDROID_NATIVE
+
+`settings_choice_presentation.dart` uses the Activity-owned MethodChannel
+`com.fura/settings_choice`, implemented by `SettingsChoiceChannel.kt` and
+owned by `MainActivity`. The payload contains only request correlation, title,
+option labels/supporting text/enabled flags, selected index, optional footer,
+brightness and primary presentation color. No Settings model, enum name,
+Provider object, credential, persistence or business rule enters Android.
+
+The actual component is Android Material Components `BottomSheetDialog`,
+with native `MaterialRadioButton` and `MaterialTextView` rows inside a native
+scroll view. Material owns scrim, shape, motion, system Back, touch feedback
+and insets. One whole-row native radio accessibility target avoids duplicate
+label/button nodes. Result ownership is correlated and exactly-once; an older
+dismiss callback cannot complete a newer request. Pause/configuration change,
+caller disposal and host detach cancel; inactive/destroyed Activity and a
+second pending dialog fail truthfully. Unavailable Android presentation shows
+localized failure feedback, never a silent Flutter replacement.
+
+Material 1.7.0 was already resolved transitively before this task; the app now
+explicitly declares that same version for its direct native API use. Only
+JUnit 4.13.2 is added to the test configuration. There is no dependency graph,
+toolchain, splash/Activity-theme or playback plugin-policy upgrade.
+
+Dialog-only Material 3 light/dark themes receive the minimum brightness and
+selection-accent tokens, not a copied Flutter ColorScheme. Actual rendering
+exposed a white-on-dark defect even though interaction tests passed. Material
+1.7.0's zero-theme constructor re-resolves `bottomSheetDialogTheme`; using
+`BottomSheetDialog(context, theme)` retains the explicit local dark style.
+Corrected native screenshots show a dark tonal surface/light labels on a dark
+Fura page. The original wrong-color images are retained as negative evidence.
+
+### FLUTTER_FALLBACK
+
+Every non-Android target uses one standard Flutter
+`showModalBottomSheet<int>` with RadioGroup/RadioListTile, safe-area padding,
+scrolling, selected focus, Escape and the existing 640 dp width / 90% viewport
+height limits. It is bottom-aligned on desktop as well as compact; it is not
+an Android native implementation. Owned-route cancellation removes only that
+caller's route, including disposal before its first builder runs. No new
+animation, message queue, navigation framework or Settings owner is introduced.
+
+### Current actual evidence
+
+Starting HEAD and tracked origin/main were
+`a68c320f358fe6fcf36bd8c031d28b923f22ae35`, initial worktree clean. Current
+production snapshot is that HEAD plus scoped file-content SHA256
+`dc7f9577170097bdbf299e5be15259df72fcf766374168d6758a1446d19506af`.
+This includes new untracked native/presentation files, not only tracked diff:
+
+```bash
+sha256sum \
+  apps/flutter/lib/settings/settings_page.dart \
+  apps/flutter/lib/settings/settings_choice_presentation.dart \
+  apps/flutter/lib/l10n/app_en.arb apps/flutter/lib/l10n/app_zh.arb \
+  apps/flutter/android/app/build.gradle.kts \
+  apps/flutter/android/app/src/main/kotlin/com/fura/flutterustmusic/MainActivity.kt \
+  apps/flutter/android/app/src/main/kotlin/com/fura/flutterustmusic/SettingsChoiceChannel.kt \
+  apps/flutter/android/app/src/main/kotlin/com/fura/flutterustmusic/SettingsChoiceResult.kt \
+  apps/flutter/android/app/src/main/res/values/settings_choice_styles.xml | sha256sum
+```
+
+Temporary evidence is `/tmp/fura-settings-native-20261007-hqozHY/`, outside Git:
+
+These paths identify the actual inspected implementation checkpoint. The
+temporary directory was no longer present at the subsequent Human-authorized
+Git publication check. Screenshots/logs were not committed, and their current
+readability is not claimed; a new visual comparison requires fresh captures.
+
+| Required state | Actual current image |
+| --- | --- |
+| 1440 desktop Appearance | `1440_zh_light_1x-settings.png` |
+| 1600 desktop Appearance | `1600_zh_light_1x-settings.png` |
+| 390 compact Appearance | `390_zh_light_1x-settings.png` |
+| 390 compact 2x | `390_zh_light_2x-settings.png` |
+| Dark desktop | `1440_zh_dark_1x-settings.png` |
+| Dark compact | `390_zh_dark_1x-settings.png` |
+| Real native Android Theme | `android-native-theme.png` |
+| Real native Android Color source | `android-native-color.png` |
+| Real native Android dark | `android-native-dark.png` |
+| Non-Android desktop Theme fallback | `1440_zh_light_1x-theme.png` |
+
+`settings-shell-desktop-{normal,theme}.png` and
+`settings-shell-compact-{appearance,color}.png` use the retained actual MusicApp
+Shell with synthetic dependencies. Component matrix: 320/390/640/1440/1600 dp,
+English/Chinese, light/dark, 1x/2x; every option remains scroll-reachable.
+Review fonts load only under explicit capture flags, isolated from normal
+regressions. Fallback motion has actual opening 0/125/250 ms and closing
+0/100/200 ms captures, not just a final PNG.
+
+Executed Settings + full MusicApp regression: 226 passes. Native result JVM
+seam: three passes, zero failures; Android Debug compilation succeeds. Native
+channel tests prove safe data, result mapping, stale/disposed suppression,
+duplicate/open guard, truthful unavailable handling and no Flutter sheet.
+Targeted failure tests reproduce and then verify post-save and pause/resume
+focus return; fallback owned-route early-disposal regression also passes.
+
+`settings_choice_runtime_test.dart` runs production Settings with a unique
+disposable SharedPreferences key and synthetic state, without authenticating
+or starting playback. Waydroid 1.6.3 / Android 13 API 33 / native x86_64 Debug
+passes Theme and Color selection/readback/reopen, current/cancel/Back/scrim
+no-write behavior, underlying hit isolation, real Activity pause/resume and
+post-dismiss focus, plus enlarged Flutter rows: `all_success writes=3
+presentation=ANDROID_NATIVE`. The local Linux GTK run passes the same owner
+selection/readback/cancel/large-text paths, Escape and focus:
+`all_success writes=3 presentation=FLUTTER_FALLBACK`. Native captures are real
+portrait freeform Waydroid windows inside host screenshots, not widget renders
+or cropped/fabricated phone frames. Temporary display overrides were restored;
+Waydroid data and accounts were not reset. A pre-existing Waydroid Flutter
+glyph-rendering limitation remains visible beneath the crisp native dialog;
+it is not declared fixed or visually accepted by this Settings task.
+
+### Read-only review and acceptance boundary
+
+Installed Antigravity CLI 1.2.2 / authorized Gemini 3.8 Flash (Low) was used
+interactively in `agy --mode plan`, without production edit permissions or a
+model/configuration change. Preflight read the Human requirement, Settings,
+theme/host sources and rejected-current references. Component review read
+actual desktop/compact/fallback/native images. Its initial generic dark-theme
+claim missed the white-on-dark defect; GPT rejected that claim against actual
+pixels and the Material source. A concrete follow-up read the corrected three
+native captures and acknowledged the corrected dark surface/text state.
+The retained response is the CLI's own
+`brain/e3ed2a84-86cf-4f49-bf12-a6fa2981399f/scratch/review.md`;
+`agy-preflight.log` and `agy-component.log` are temporary operational logs,
+not substitutes for the substantive responses.
+
+After the desktop-app interruption, the incomplete final capture/review was
+not counted as a pass. The integrated desktop capture was rerun to terminal
+PASS, then a separate fresh interactive page session actually read all ten
+supplied images: both integrated desktop, both integrated compact, 1600 light,
+1440 dark, 390 light 2x and the three native captures. Invocation was
+`agy --mode plan --log-file /tmp/fura-settings-native-20261007-hqozHY/agy-page-retry.log
+--add-dir /tmp/fura-settings-native-20261007-hqozHY
+--add-dir <Human-attachment-directory>
+--prompt-interactive <bounded independent page packet>`. Its substantive
+response is `brain/e89bbad5-e156-485a-8862-02358bc40df3/scratch/page-review.md`.
+It identified no concrete new image-supported defect and left desktop density
+and dark palette-dot contrast to Human. GPT does not adopt its inaccurate
+icon-container description or estimated 760–800 dp surface width: actual
+icons have no container and the surface is 832 dp. Its static IPC/behavior
+claims also are not proof; only actual compile/tests/runtime establish those
+behaviors. No change is made merely to follow reviewer aesthetic preference.
+The Human attachment directory is redacted here to avoid publishing a local
+maintainer home path; the actual invocation remains in the temporary log.
+
+Final targeted interaction/native tests pass (28), `dart analyze` has no
+issues, affected Dart formatting is unchanged and `git diff --check` passes.
+The source-privacy check caught a local-home path in the first draft of this
+review record; it was removed and the strict audit rerun, not allowlisted.
+
+Desktop proportion/whitespace, row density/separation, native default tonal
+color and physical-phone touch/insets/motion feel remain Human judgments.
+Static images do not prove focus, persistence or gesture timing; those claims
+use executed tests/runtime only. Waydroid does not establish physical-phone
+acceptance. Windows/macOS/iOS fallback runtime and new remote CI have not run.
+No commit/push/reset/restore/clean or unrelated production change is performed.
+
+## Historical Settings rows and choice sheets candidate, 2026-10-07 (superseded)
+
+The following is preserved dated evidence for the candidate subsequently
+published as `a68c320f` and rejected by Human. Its transparent page grammar and
+all-Flutter presentation are **not current normative design**; they were not
+native Android even at that checkpoint. The current correction above controls.
 
 **Design source:** Human's explicit Settings unification requirement on this
 date. The dated composition above records earlier evidence; the current real

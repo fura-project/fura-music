@@ -28,17 +28,24 @@ void main() {
           await tester.ensureVisible(selector);
           expect(tester.getSize(selector).height, greaterThanOrEqualTo(48));
           final tile = tester.widget<ListTile>(selector);
-          final previousValue = (tile.subtitle! as Text).data;
+          final previousValue = tester
+              .widget<Text>(find.byKey(ValueKey('$selectorKey-current')))
+              .data;
           expect(tile.onTap, isNotNull);
-          expect(tile.subtitle, isA<Text>());
+          expect(find.byKey(ValueKey('$selectorKey-current')), findsOneWidget);
           expect(
             tester.getSemantics(selector).label,
-            contains((tile.title! as Text).data),
+            contains(
+              tester
+                  .widget<Text>(
+                    find
+                        .descendant(of: selector, matching: find.byType(Text))
+                        .first,
+                  )
+                  .data,
+            ),
           );
-          expect(
-            tester.getSemantics(selector).label,
-            contains((tile.subtitle! as Text).data),
-          );
+          expect(tester.getSemantics(selector).label, contains(previousValue));
           await tester.tapAt(
             tester.getTopRight(selector) +
                 Offset(-12, tester.getSize(selector).height / 2),
@@ -62,14 +69,20 @@ void main() {
           await tester.pumpAndSettle();
           expect(sheet, findsNothing);
           expect(
-            (tester.widget<ListTile>(selector).subtitle! as Text).data,
+            tester
+                .widget<Text>(
+                  find
+                      .descendant(of: selector, matching: find.byType(Text))
+                      .last,
+                )
+                .data,
             isNot(previousValue),
           );
           expect(tester.takeException(), isNull);
         }
       }
       semantics.dispose();
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
   }
 
   for (final succeeds in [true, false]) {
@@ -91,12 +104,8 @@ void main() {
       await tester.tap(selector);
       await tester.pumpAndSettle();
       expect(
-        tester
-            .widget<RadioGroup<AppThemePreference>>(
-              find.byType(RadioGroup<AppThemePreference>),
-            )
-            .groupValue,
-        AppThemePreference.system,
+        tester.widget<RadioGroup<int>>(find.byType(RadioGroup<int>)).groupValue,
+        0,
       );
       expect(
         tester
@@ -135,7 +144,7 @@ void main() {
       expect(find.byType(SnackBar), succeeds ? findsNothing : findsOneWidget);
       expect(tester.takeException(), isNull);
       semantics.dispose();
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
   }
 
   testWidgets('keyboard opens row, selects radio and restores focus', (
@@ -153,9 +162,16 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsNothing);
-    expect((tester.widget<ListTile>(selector).subtitle! as Text).data, 'Light');
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('settings-theme-selector-current')),
+          )
+          .data,
+      'Light',
+    );
     expect(focus.hasFocus, isTrue);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   testWidgets('sheet options respect real system safe-area insets', (
     tester,
@@ -175,7 +191,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsNothing);
     expect(tester.takeException(), isNull);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   testWidgets('disposed choice caller cannot apply a late sheet selection', (
     tester,
@@ -195,13 +211,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('settings-theme-selector')), findsNothing);
-    expect(find.byType(BottomSheet), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('settings-theme-light')));
-    await tester.pumpAndSettle();
+    // The disposed caller cancels only its own modal route.
+    expect(find.byType(BottomSheet), findsNothing);
     expect(writes, 0);
     expect(find.byType(BottomSheet), findsNothing);
     expect(tester.takeException(), isNull);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   for (final dismiss in ['escape', 'back', 'scrim', 'current']) {
     testWidgets('$dismiss dismisses without a settings write', (tester) async {
@@ -232,7 +247,7 @@ void main() {
       expect(find.byType(BottomSheet), findsNothing);
       expect(writes, 0);
       expect(tester.widget<ListTile>(selector).focusNode!.hasFocus, isTrue);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
   }
 
   for (final available in [true, false]) {
@@ -243,21 +258,16 @@ void main() {
           SettingsReviewHarness(systemColorsAvailable: available),
         );
         await tester.pumpAndSettle();
-        expect(
-          find.byType(RadioListTile<AppColorSourcePreference>),
-          findsNothing,
-        );
+        expect(find.byType(RadioListTile<int>), findsNothing);
         await tester.tap(
           find.byKey(const ValueKey('settings-color-source-selector')),
         );
         await tester.pumpAndSettle();
         expect(
           tester
-              .widget<RadioGroup<AppColorSourcePreference>>(
-                find.byType(RadioGroup<AppColorSourcePreference>),
-              )
+              .widget<RadioGroup<int>>(find.byType(RadioGroup<int>))
               .groupValue,
-          AppColorSourcePreference.brand,
+          1,
         );
         expect(
           find.byKey(
@@ -288,19 +298,19 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(BottomSheet), findsNothing);
         expect(
-          (tester
-                      .widget<ListTile>(
-                        find.byKey(
-                          const ValueKey('settings-color-source-selector'),
-                        ),
-                      )
-                      .subtitle!
-                  as Text)
+          tester
+              .widget<Text>(
+                find.byKey(
+                  const ValueKey('settings-color-source-selector-current'),
+                ),
+              )
               .data,
           'System colors',
         );
         expect(find.byType(SnackBar), findsNothing);
       },
+
+      variant: TargetPlatformVariant.only(TargetPlatform.linux),
     );
   }
 }

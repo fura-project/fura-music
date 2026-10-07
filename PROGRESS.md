@@ -2,14 +2,64 @@
 execution:
   mode: HUMAN_DIRECTED
   work_domain: UI
-  state: SETTINGS_CHOICE_BOTTOM_SHEETS_MACHINE_VERIFIED
-  acceptance_milestone: SETTINGS_LIST_AND_MODAL_SHEET_HUMAN_REVIEW
+  state: SETTINGS_NATIVE_CHOICES_AND_GROUPED_SURFACES_MACHINE_VERIFIED
+  acceptance_milestone: SETTINGS_GROUPED_SURFACE_AND_ANDROID_NATIVE_HUMAN_REVIEW
   active_workstream: SETTINGS_UI_UNIFICATION
-  current_task: SETTINGS_CHOICE_ROWS_AND_STANDARD_MODAL_SHEETS
-  next_action: HUMAN_REVIEW_SETTINGS_ROWS_AND_MODAL_SHEETS
+  current_task: SETTINGS_GROUPED_SURFACES_AND_NATIVE_ANDROID_CHOICES
+  next_action: HUMAN_REVIEW_GROUPED_SETTINGS_AND_NATIVE_ANDROID_DIALOG
 ---
 
 # Current State
+
+- **2026-10-07 Human visual rejection and native Settings correction:** starting
+  HEAD and tracked origin/main were
+  `a68c320f358fe6fcf36bd8c031d28b923f22ae35`, initial worktree clean. Human
+  rejected that candidate's transparent groups and all-Flutter sheets, without
+  reverting the retained Shell/navigation/search/player structure. Current
+  sections share quiet `surfaceContainerLow` / existing 16 dp radius surfaces;
+  desktop values and real small palette dots trail, measured compact/long/2x
+  values stack. The 880 dp content constraint yields an actual 832 dp desktop
+  group. All six real enums use one presentation-only index seam. Android uses
+  actual Material Components `BottomSheetDialog`, Activity-owned correlated
+  MethodChannel, native radio/text/scroll controls and the already-resolved
+  Material 1.7.0 version. Only safe text/index/enabled and minimum brightness/
+  accent tokens cross; Flutter retains enum truth/persistence. Pause/config/
+  detach/disposal and duplicate/stale completion are bounded; unavailable
+  Android fails truthfully rather than opening Flutter fallback. All other
+  targets use one stock Flutter bottom sheet with owned-route cancellation.
+  Actual investigation exposed post-save and Activity-resume focus loss plus
+  native white-on-dark theme replacement. Before-fix negative evidence is
+  retained; save completion/resume focus and explicit local Material dialog
+  theme fix those defects, verified by deterministic and actual runtime tests.
+  Settings + full MusicApp regressions pass (226); Android Debug compilation
+  and three JVM result/lifecycle seam tests pass. Waydroid 1.6.3 / Android 13
+  API 33 / x86_64 runs actual native Theme/Color, readback/reopen, current/
+  cancel/Back/scrim no-write, underlying hit isolation and Activity pause/resume
+  with focus return, ending `ANDROID_NATIVE` / exactly three fixture writes.
+  Actual Linux GTK selection/readback/cancel/Escape/large-text/focus ends
+  `FLUTTER_FALLBACK` / three writes. Tests use a disposable preference key, not
+  accounts or playback. Actual 1440/1600/390/2x/light/dark, integrated Shell,
+  native and fallback renders are inspected. Interactive read-only agy
+  preflight, rendered component review and fresh integrated-page review ran
+  using the existing authorized model; GPT rejected unsupported generic
+  claims and checked the concrete dark-theme finding against actual pixels.
+  The interrupted final desktop capture/page review was not relabelled PASS;
+  only those incomplete steps were retried serially after Human's memory
+  interruption. Temporary Waydroid display overrides were restored, no data
+  reset occurred. Pre-existing Waydroid Flutter glyph corruption remains a
+  separate limitation, not a Settings visual pass. Human owns final density,
+  whitespace, native tone/physical-phone touch/insets/motion acceptance; new
+  remote CI and other non-Android native runtime targets remain unverified.
+  No Rust, Provider, playback/focus/Queue, auth, Settings schema, other-page
+  production or toolchain upgrade. No commit/push/reset/restore/clean. Current
+  fingerprint, actual image/log paths, review records and superseded historical
+  design: [Settings Shell](docs/design/settings-shell.md). Gate: `HUMAN_REVIEW`.
+  Human subsequently authorized Git publication with `提交git`, under the
+  standing commit-and-push instruction. The remote main and current governance
+  were checked before publication. Publication does not establish visual or
+  physical-phone acceptance. The temporary implementation evidence directory
+  is no longer present at publication time; recorded executed results remain
+  historical evidence, not a claim that those temporary files are still readable.
 
 - **2026-10-07 Human-directed Settings unification:** starting HEAD and tracked
   origin/main were `65a2be28dd4748238adf407a36e4af78ab66e4ec`, worktree clean.

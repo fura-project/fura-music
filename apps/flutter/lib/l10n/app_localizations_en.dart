@@ -3332,6 +3332,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get settingsChoiceUnavailable =>
+      'The native settings dialog is unavailable. Return to the app and try again.';
+
+  @override
   String get settingsSaveFailure => 'Couldn’t save settings on this device.';
 
   @override

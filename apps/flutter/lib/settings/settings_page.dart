@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
+import 'package:flutterustmusic/settings/settings_choice_presentation.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
@@ -233,7 +235,7 @@ class _SettingsPageState extends State<SettingsPage> {
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
+            constraints: const BoxConstraints(maxWidth: 880),
             child: ListView(
               key: const ValueKey('settings-content'),
               padding: const EdgeInsets.fromLTRB(
@@ -389,7 +391,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
             enabled: !_saving,
             onSelected: (theme) =>
-                unawaited(_save(widget.settings.copyWith(theme: theme))),
+                _save(widget.settings.copyWith(theme: theme)),
           ),
           _SettingsChoiceTile<AppColorSourcePreference>(
             controlKey: const ValueKey('settings-color-source-selector'),
@@ -416,38 +418,19 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ],
-            sheetFooter: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-              child: Text(
-                systemScheme == null
-                    ? l10n.settingsColorSourceSystemUnavailable
-                    : l10n.settingsColorSourceSystemAvailable,
-                key: ValueKey(
-                  systemScheme == null
-                      ? 'settings-system-colors-unavailable'
-                      : 'settings-system-colors-available',
-                ),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+            sheetFooter: systemScheme == null
+                ? l10n.settingsColorSourceSystemUnavailable
+                : l10n.settingsColorSourceSystemAvailable,
+            footerKey: ValueKey(
+              systemScheme == null
+                  ? 'settings-system-colors-unavailable'
+                  : 'settings-system-colors-available',
             ),
             enabled: !_saving,
             onSelected: (source) =>
-                unawaited(_save(widget.settings.copyWith(colorSource: source))),
+                _save(widget.settings.copyWith(colorSource: source)),
           ),
-          ListTile(
-            key: const ValueKey('settings-palette-row'),
-            leading: const Icon(Icons.color_lens_outlined),
-            title: Text(l10n.settingsPalettePreviewLabel),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: _SettingsPalettePreview(
-                  scheme: Theme.of(context).colorScheme,
-                ),
-              ),
-            ),
-          ),
+          _SettingsPaletteRow(title: l10n.settingsPalettePreviewLabel),
         ],
       ),
     ];
@@ -478,9 +461,8 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
           enabled: !_saving,
-          onSelected: (provider) => unawaited(
-            _save(widget.settings.copyWith(musicProvider: provider)),
-          ),
+          onSelected: (provider) =>
+              _save(widget.settings.copyWith(musicProvider: provider)),
         ),
       ],
     ),
@@ -516,9 +498,8 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
           enabled: !_saving,
-          onSelected: (locale) => unawaited(
-            _save(widget.settings.copyWith(localePreference: locale)),
-          ),
+          onSelected: (locale) =>
+              _save(widget.settings.copyWith(localePreference: locale)),
         ),
       ],
     ),
@@ -554,9 +535,8 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ],
           enabled: !_saving,
-          onSelected: (quality) => unawaited(
-            _save(widget.settings.copyWith(playbackQuality: quality)),
-          ),
+          onSelected: (quality) =>
+              _save(widget.settings.copyWith(playbackQuality: quality)),
         ),
         _SettingsChoiceTile<LyricAuxiliaryMode>(
           controlKey: const ValueKey('settings-lyric-auxiliary-selector'),
@@ -572,9 +552,8 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
           ],
           enabled: !_saving,
-          onSelected: (mode) => unawaited(
-            _save(widget.settings.copyWith(lyricAuxiliaryMode: mode)),
-          ),
+          onSelected: (mode) =>
+              _save(widget.settings.copyWith(lyricAuxiliaryMode: mode)),
         ),
       ],
     ),
@@ -727,15 +706,17 @@ class _SettingsGroup extends StatelessWidget {
   final List<Widget> children;
   @override
   Widget build(BuildContext context) => Theme(
-    // Settings rows share the plain page canvas, not selected tonal cards.
+    // One quiet surface per section; never one selected-color card per row.
     data: Theme.of(context).copyWith(listTileTheme: const ListTileThemeData()),
     child: Material(
       key: const ValueKey('settings-group'),
-      type: MaterialType.transparency,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: MusicRadii.content,
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           for (var index = 0; index < children.length; index++) ...[
-            if (index > 0) const Divider(height: 1, indent: 56, endIndent: 16),
+            if (index > 0) const SizedBox(height: 4),
             children[index],
           ],
         ],
@@ -756,6 +737,7 @@ class _SettingsChoiceTile<T> extends StatefulWidget {
     required this.onSelected,
     this.currentLabel,
     this.sheetFooter,
+    this.footerKey,
     this.enabled = true,
   });
   final Key controlKey;
@@ -764,107 +746,109 @@ class _SettingsChoiceTile<T> extends StatefulWidget {
   final T current;
   final String? currentLabel;
   final List<_SettingsChoice<T>> choices;
-  final ValueChanged<T> onSelected;
-  final Widget? sheetFooter;
+  final Future<void> Function(T) onSelected;
+  final String? sheetFooter;
+  final Key? footerKey;
   final bool enabled;
   @override
   State<_SettingsChoiceTile<T>> createState() => _SettingsChoiceTileState<T>();
 }
 
-class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>> {
+class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
+    with WidgetsBindingObserver {
   final _focusNode = FocusNode();
   bool _sheetOpen = false;
+  bool _focusReturnPending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _focusReturnPending) {
+      _returnFocus();
+    }
+  }
+
+  void _returnFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.enabled || !_focusReturnPending) return;
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (Theme.of(context).platform == TargetPlatform.android &&
+          lifecycle != null &&
+          lifecycle != AppLifecycleState.resumed) {
+        return;
+      }
+      _focusReturnPending = false;
+      _focusNode.requestFocus();
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  SettingsChoicePresentation? _presentation;
 
   Future<void> _choose() async {
     if (!widget.enabled || _sheetOpen) return;
     _sheetOpen = true;
-    final selection = await showModalBottomSheet<T>(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      isScrollControlled: true,
-      requestFocus: true,
-      // Remain bottom aligned on desktop; use the SDK M3 640 dp width limit.
-      constraints: BoxConstraints(
-        maxWidth: 640,
-        maxHeight: MediaQuery.sizeOf(context).height * 0.9,
-      ),
-      builder: (sheetContext) => Theme(
-        data: Theme.of(sheetContext)
-            .copyWith(listTileTheme: const ListTileThemeData()),
-        child: Shortcuts(
-          shortcuts: const {
-            SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
-          },
-          child: Actions(
-            actions: {
-              DismissIntent: CallbackAction<DismissIntent>(
-                onInvoke: (_) {
-                  Navigator.of(sheetContext).pop();
-                  return null;
-                },
-              ),
-            },
-            child: SafeArea(
-              top: false,
-              child: SingleChildScrollView(
-                key: const ValueKey('settings-choice-sheet'),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-                      child: Semantics(
-                        header: true,
-                        child: Text(
-                          widget.title,
-                          style: Theme.of(sheetContext).textTheme.titleLarge,
-                        ),
-                      ),
-                    ),
-                    RadioGroup<T>(
-                      groupValue: widget.current,
-                      onChanged: (value) {
-                        // Selecting the current radio closes without a write.
-                        Navigator.of(sheetContext).pop(value ?? widget.current);
-                      },
-                      child: Column(
-                        children: [
-                          for (final choice in widget.choices)
-                            RadioListTile<T>(
-                              key: choice.key,
-                              value: choice.value,
-                              toggleable: true,
-                              autofocus: choice.value == widget.current,
-                              title: Text(choice.label),
-                              subtitle: choice.description == null
-                                  ? null
-                                  : Text(choice.description!),
-                            ),
-                        ],
-                      ),
-                    ),
-                    if (widget.sheetFooter != null) widget.sheetFooter!,
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
+    _focusNode.unfocus();
+    final current = widget.current;
+    final values = [for (final choice in widget.choices) choice.value];
+    try {
+      final presentation = showSettingsSingleChoice(
+        context: context,
+        title: widget.title,
+        selectedIndex: values.indexOf(current),
+        options: [
+          for (final choice in widget.choices)
+            SettingsChoiceOption(
+              label: choice.label,
+              supportingText: choice.description,
+              key: choice.key,
             ),
-          ),
-        ),
-      ),
-    );
-    _sheetOpen = false;
+        ],
+        footer: widget.sheetFooter,
+        footerKey: widget.footerKey,
+      );
+      _presentation = presentation;
+      final index = await presentation.result;
+      if (!mounted || _presentation != presentation) return;
+      // An external update while a dialog was open makes its snapshot stale.
+      if (widget.enabled &&
+          widget.current == current &&
+          index != null &&
+          values[index] != current) {
+        await widget.onSelected(values[index]);
+      }
+      if (!mounted) return;
+      _focusReturnPending = true;
+      // Saving disables the row and revokes its focus. Restore only after
+      // the existing owner finishes and the enabled row has been rebuilt.
+      _returnFocus();
+    } on PlatformException catch (_) {
+      _showPresentationUnavailable();
+    } on MissingPluginException catch (_) {
+      _showPresentationUnavailable();
+    } finally {
+      _sheetOpen = false;
+      _presentation = null;
+    }
+  }
+
+  void _showPresentationUnavailable() {
     if (!mounted) return;
     _focusNode.requestFocus();
-    if (widget.enabled && selection != null && selection != widget.current) {
-      widget.onSelected(selection);
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.settingsChoiceUnavailable)),
+    );
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _presentation?.cancel();
     _focusNode.dispose();
     super.dispose();
   }
@@ -874,19 +858,135 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>> {
     final selected = widget.choices.singleWhere(
       (choice) => choice.value == widget.current,
     );
-    return ListTile(
-      key: widget.controlKey,
-      focusNode: _focusNode,
-      enabled: widget.enabled,
-      leading: Icon(widget.icon),
-      title: Text(widget.title),
-      subtitle: Text(widget.currentLabel ?? selected.label),
-      trailing: const ExcludeSemantics(
-        child: Icon(Icons.chevron_right_rounded),
-      ),
-      onTap: widget.enabled ? () => unawaited(_choose()) : null,
+    final theme = Theme.of(context);
+    final value = widget.currentLabel ?? selected.label;
+    final titleStyle = theme.textTheme.bodyLarge!.copyWith(
+      color: widget.enabled ? theme.colorScheme.onSurface : theme.disabledColor,
+    );
+    final valueStyle = theme.textTheme.bodyMedium!.copyWith(
+      color: widget.enabled
+          ? theme.colorScheme.onSurfaceVariant
+          : theme.disabledColor,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final inline = _fitsInline(
+          context,
+          constraints.maxWidth,
+          widget.title,
+          titleStyle,
+          value,
+          valueStyle,
+        );
+        final valueText = Text(
+          value,
+          key: ValueKey('${(widget.controlKey as ValueKey).value}-current'),
+          style: valueStyle,
+        );
+        return ListTile(
+          key: widget.controlKey,
+          focusNode: _focusNode,
+          enabled: widget.enabled,
+          leading: Icon(
+            widget.icon,
+            color: widget.enabled
+                ? theme.colorScheme.onSurfaceVariant
+                : theme.disabledColor,
+          ),
+          title: inline
+              ? Row(
+                  children: [
+                    Expanded(child: Text(widget.title, style: titleStyle)),
+                    const SizedBox(width: 16),
+                    valueText,
+                  ],
+                )
+              : Text(widget.title, style: titleStyle),
+          subtitle: inline ? null : valueText,
+          minVerticalPadding: 12,
+          trailing: const ExcludeSemantics(
+            child: Icon(Icons.chevron_right_rounded),
+          ),
+          onTap: widget.enabled ? () => unawaited(_choose()) : null,
+        );
+      },
     );
   }
+}
+
+/// Measure both actual effective styles, locale and scaler, including the
+/// ListTile's icon/gaps/padding/chevron. Long/2x values stack without ellipsis.
+bool _fitsInline(
+  BuildContext context,
+  double width,
+  String title,
+  TextStyle titleStyle,
+  String value,
+  TextStyle valueStyle,
+) {
+  double measure(String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      locale: Localizations.localeOf(context),
+    )..layout();
+    final result = painter.width;
+    painter.dispose();
+    return result;
+  }
+
+  return width >= 560 &&
+      measure(title, titleStyle) + measure(value, valueStyle) + 144 <= width;
+}
+
+class _SettingsPaletteRow extends StatelessWidget {
+  const _SettingsPaletteRow({required this.title});
+  final String title;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final theme = Theme.of(context);
+      final palette = _SettingsPalettePreview(scheme: theme.colorScheme);
+      final inline =
+          _fitsInline(
+            context,
+            constraints.maxWidth - 100,
+            title,
+            theme.textTheme.bodyLarge!,
+            '',
+            theme.textTheme.bodyMedium!,
+          ) &&
+          constraints.maxWidth >= 560;
+      return ListTile(
+        key: const ValueKey('settings-palette-row'),
+        leading: Icon(
+          Icons.color_lens_outlined,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        title: Text(title),
+        minVerticalPadding: 12,
+        trailing: inline
+            ? SizedBox(
+                width: 124,
+                child: Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: palette,
+                ),
+              )
+            : null,
+        subtitle: inline
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: palette,
+                ),
+              ),
+      );
+    },
+  );
 }
 
 class _SettingsPalettePreview extends StatelessWidget {
