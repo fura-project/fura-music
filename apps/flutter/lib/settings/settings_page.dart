@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
@@ -350,206 +350,117 @@ class _SettingsPageState extends State<SettingsPage> {
       SettingsSection.language => _languageSection(context, compact),
       SettingsSection.playback => _playbackSection(context, compact),
     };
-    if (!compact) return content;
+    return content;
+  }
+
+  List<Widget> _appearanceSection(BuildContext context, bool compact) {
+    final l10n = context.l10n;
+    final systemScheme = Theme.of(context).brightness == Brightness.dark
+        ? widget.systemDarkColorScheme
+        : widget.systemLightColorScheme;
     return [
-      Material(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: MusicRadii.content,
-        clipBehavior: Clip.antiAlias,
-        child: Padding(
-          padding: const EdgeInsets.all(MusicSpacing.contentGap),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: content,
+      _SettingsSectionHeading(
+        label: l10n.settingsAppearanceLabel,
+        headingKey: const ValueKey('settings-appearance-section'),
+      ),
+      _SettingsGroup(
+        children: [
+          _SettingsChoiceTile<AppThemePreference>(
+            controlKey: const ValueKey('settings-theme-selector'),
+            icon: Icons.brightness_auto_rounded,
+            title: l10n.settingsAppearanceCompactLabel,
+            current: widget.settings.theme,
+            choices: [
+              _SettingsChoice(
+                key: const ValueKey('settings-theme-system'),
+                value: AppThemePreference.system,
+                label: l10n.settingsThemeSystem,
+              ),
+              _SettingsChoice(
+                key: const ValueKey('settings-theme-light'),
+                value: AppThemePreference.light,
+                label: l10n.settingsThemeLight,
+              ),
+              _SettingsChoice(
+                key: const ValueKey('settings-theme-dark'),
+                value: AppThemePreference.dark,
+                label: l10n.settingsThemeDark,
+              ),
+            ],
+            enabled: !_saving,
+            onSelected: (theme) =>
+                unawaited(_save(widget.settings.copyWith(theme: theme))),
           ),
-        ),
+          _SettingsChoiceTile<AppColorSourcePreference>(
+            controlKey: const ValueKey('settings-color-source-selector'),
+            icon: Icons.palette_outlined,
+            title: l10n.settingsColorSourceLabel,
+            current: widget.settings.colorSource,
+            currentLabel: _colorSourceSummary(
+              widget.settings.colorSource,
+              l10n,
+            ),
+            choices: [
+              _SettingsChoice(
+                key: const ValueKey('settings-color-source-system'),
+                value: AppColorSourcePreference.system,
+                label: l10n.settingsColorSourceSystem,
+                description: l10n.settingsColorSourceSystemDescription,
+              ),
+              _SettingsChoice(
+                key: const ValueKey('settings-color-source-brand'),
+                value: AppColorSourcePreference.brand,
+                label: l10n.settingsColorSourceBrand,
+                description: l10n.settingsColorSourceBrandDescription(
+                  _providerLabel(widget.settings.musicProvider, l10n),
+                ),
+              ),
+            ],
+            sheetFooter: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+              child: Text(
+                systemScheme == null
+                    ? l10n.settingsColorSourceSystemUnavailable
+                    : l10n.settingsColorSourceSystemAvailable,
+                key: ValueKey(
+                  systemScheme == null
+                      ? 'settings-system-colors-unavailable'
+                      : 'settings-system-colors-available',
+                ),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            enabled: !_saving,
+            onSelected: (source) =>
+                unawaited(_save(widget.settings.copyWith(colorSource: source))),
+          ),
+          ListTile(
+            key: const ValueKey('settings-palette-row'),
+            leading: const Icon(Icons.color_lens_outlined),
+            title: Text(l10n.settingsPalettePreviewLabel),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: _SettingsPalettePreview(
+                  scheme: Theme.of(context).colorScheme,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     ];
   }
 
-  List<Widget> _appearanceSection(BuildContext context, bool compact) => [
-    Text(
-      compact
-          ? context.l10n.settingsAppearanceCompactLabel
-          : context.l10n.settingsAppearanceLabel,
-      key: const ValueKey('settings-appearance-section'),
-      style: Theme.of(context).textTheme.titleLarge
-          ?.copyWith(fontWeight: FontWeight.w700),
-    ),
-    const SizedBox(height: MusicSpacing.itemGap),
-    Text(
-      context.l10n.settingsAppearanceBody,
-      style: Theme.of(context).textTheme.bodyMedium
-          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-    ),
-    const SizedBox(height: MusicSpacing.contentGap),
-    _SettingsGroup(
-      children: [
-        _SettingsDropdownTile<AppThemePreference>(
-          controlKey: const ValueKey('settings-theme-selector'),
-          icon: Icons.brightness_auto_rounded,
-          title: context.l10n.settingsAppearanceCompactLabel,
-          current: widget.settings.theme,
-          choices: [
-            _SettingsChoice(
-              key: const ValueKey('settings-theme-system'),
-              value: AppThemePreference.system,
-              label: context.l10n.settingsThemeSystem,
-            ),
-            _SettingsChoice(
-              key: const ValueKey('settings-theme-light'),
-              value: AppThemePreference.light,
-              label: context.l10n.settingsThemeLight,
-            ),
-            _SettingsChoice(
-              key: const ValueKey('settings-theme-dark'),
-              value: AppThemePreference.dark,
-              label: context.l10n.settingsThemeDark,
-            ),
-          ],
-          enabled: !_saving,
-          onSelected: (theme) =>
-              unawaited(_save(widget.settings.copyWith(theme: theme))),
-        ),
-        Builder(
-          builder: (context) {
-            final brightness = Theme.of(context).brightness;
-            final systemScheme = brightness == Brightness.dark
-                ? widget.systemDarkColorScheme
-                : widget.systemLightColorScheme;
-            final fallback = ColorScheme.fromSeed(
-              seedColor: MusicMaterialTheme.brandSeedFor(
-                widget.settings.musicProvider,
-              ),
-              brightness: brightness,
-              dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
-            );
-            final preview = systemScheme ?? fallback;
-            final status = systemScheme == null
-                ? context.l10n.settingsColorSourceSystemUnavailable
-                : context.l10n.settingsColorSourceSystemAvailable;
-            return Theme(
-              data: Theme.of(context).copyWith(
-                expansionTileTheme: const ExpansionTileThemeData(),
-                listTileTheme: const ListTileThemeData(),
-              ),
-              child: ExpansionTile(
-                key: const ValueKey('settings-color-source-selector'),
-                leading: const Icon(Icons.palette_outlined),
-                title: Text(context.l10n.settingsColorSourceLabel),
-                subtitle: Text(
-                  _colorSourceSummary(
-                    widget.settings.colorSource,
-                    context.l10n,
-                  ),
-                ),
-                enabled: !_saving,
-                // The surrounding SettingsGroup owns the separator. Keep the
-                // SDK component motion, spacing and states without drawing a
-                // second expanded border over that page-level divider.
-                shape: const Border(),
-                collapsedShape: const Border(),
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 4),
-                    child: Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: Text(
-                        context.l10n.settingsColorSourceBody,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ),
-                  RadioGroup<AppColorSourcePreference>(
-                    groupValue: widget.settings.colorSource,
-                    onChanged: (source) {
-                      if (!_saving && source != null) {
-                        unawaited(
-                          _save(widget.settings.copyWith(colorSource: source)),
-                        );
-                      }
-                    },
-                    child: Column(
-                      children: [
-                        RadioListTile<AppColorSourcePreference>(
-                          key: const ValueKey('settings-color-source-system'),
-                          value: AppColorSourcePreference.system,
-                          enabled: !_saving,
-                          title: Text(context.l10n.settingsColorSourceSystem),
-                          subtitle: Text(
-                            context.l10n.settingsColorSourceSystemDescription,
-                          ),
-                        ),
-                        RadioListTile<AppColorSourcePreference>(
-                          key: const ValueKey('settings-color-source-brand'),
-                          value: AppColorSourcePreference.brand,
-                          enabled: !_saving,
-                          title: Text(context.l10n.settingsColorSourceBrand),
-                          subtitle: Text(
-                            context.l10n.settingsColorSourceBrandDescription(
-                              _providerLabel(
-                                widget.settings.musicProvider,
-                                context.l10n,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
-                    child: Row(
-                      key: ValueKey(
-                        systemScheme == null
-                            ? 'settings-system-colors-unavailable'
-                            : 'settings-system-colors-available',
-                      ),
-                      children: [
-                        _ColorSourcePreview(
-                          icon: systemScheme == null
-                              ? Icons.wallpaper_outlined
-                              : Icons.wallpaper_rounded,
-                          background: preview.primaryContainer,
-                          foreground: preview.onPrimaryContainer,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(child: Text(status)),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                    child: _SettingsPalettePreview(scheme: preview),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
-    ),
-  ];
-
   List<Widget> _musicServiceSection(BuildContext context, bool compact) => [
-    Text(
-      context.l10n.settingsMusicServiceLabel,
-      key: const ValueKey('settings-music-service-section'),
-      style: Theme.of(context).textTheme.titleLarge
-          ?.copyWith(fontWeight: FontWeight.w700),
+    _SettingsSectionHeading(
+      label: context.l10n.settingsMusicServiceLabel,
+      headingKey: const ValueKey('settings-music-service-section'),
     ),
-    const SizedBox(height: MusicSpacing.itemGap),
-    Text(
-      context.l10n.settingsMusicServiceBody,
-      style: Theme.of(context).textTheme.bodyMedium
-          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-    ),
-    const SizedBox(height: MusicSpacing.contentGap),
     _SettingsGroup(
       children: [
-        _SettingsDropdownTile<AppMusicProvider>(
+        _SettingsChoiceTile<AppMusicProvider>(
           controlKey: const ValueKey('settings-provider-selector'),
           icon: Icons.library_music_outlined,
           title: context.l10n.settingsMusicServiceLabel,
@@ -576,22 +487,13 @@ class _SettingsPageState extends State<SettingsPage> {
   ];
 
   List<Widget> _languageSection(BuildContext context, bool compact) => [
-    Text(
-      context.l10n.settingsLanguageLabel,
-      key: const ValueKey('settings-language-section'),
-      style: Theme.of(context).textTheme.titleLarge
-          ?.copyWith(fontWeight: FontWeight.w700),
+    _SettingsSectionHeading(
+      label: context.l10n.settingsLanguageLabel,
+      headingKey: const ValueKey('settings-language-section'),
     ),
-    const SizedBox(height: MusicSpacing.itemGap),
-    Text(
-      context.l10n.settingsLanguageBody,
-      style: Theme.of(context).textTheme.bodyMedium
-          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-    ),
-    const SizedBox(height: MusicSpacing.contentGap),
     _SettingsGroup(
       children: [
-        _SettingsDropdownTile<AppLocalePreference>(
+        _SettingsChoiceTile<AppLocalePreference>(
           controlKey: const ValueKey('settings-language-selector'),
           icon: Icons.language_rounded,
           title: context.l10n.settingsLanguageLabel,
@@ -623,24 +525,13 @@ class _SettingsPageState extends State<SettingsPage> {
   ];
 
   List<Widget> _playbackSection(BuildContext context, bool compact) => [
-    Text(
-      compact
-          ? context.l10n.settingsPlaybackCompactLabel
-          : context.l10n.settingsPlaybackSectionLabel,
-      key: const ValueKey('settings-playback-section'),
-      style: Theme.of(context).textTheme.titleLarge
-          ?.copyWith(fontWeight: FontWeight.w700),
+    _SettingsSectionHeading(
+      label: context.l10n.settingsPlaybackSectionLabel,
+      headingKey: const ValueKey('settings-playback-section'),
     ),
-    const SizedBox(height: MusicSpacing.itemGap),
-    Text(
-      context.l10n.settingsPlaybackBody,
-      style: Theme.of(context).textTheme.bodyMedium
-          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-    ),
-    const SizedBox(height: MusicSpacing.contentGap),
     _SettingsGroup(
       children: [
-        _SettingsDropdownTile<AppPlaybackQualityPreference>(
+        _SettingsChoiceTile<AppPlaybackQualityPreference>(
           controlKey: const ValueKey('settings-quality-selector'),
           icon: Icons.high_quality_rounded,
           title: context.l10n.settingsPlaybackSectionLabel,
@@ -667,7 +558,7 @@ class _SettingsPageState extends State<SettingsPage> {
             _save(widget.settings.copyWith(playbackQuality: quality)),
           ),
         ),
-        _SettingsDropdownTile<LyricAuxiliaryMode>(
+        _SettingsChoiceTile<LyricAuxiliaryMode>(
           controlKey: const ValueKey('settings-lyric-auxiliary-selector'),
           icon: Icons.lyrics_outlined,
           title: context.l10n.lyricsAuxiliaryMode,
@@ -797,231 +688,232 @@ class _SettingsContentTransitionState extends State<_SettingsContentTransition>
 }
 
 class _SettingsChoice<T> {
-  const _SettingsChoice({required this.value, required this.label, this.key});
-
+  const _SettingsChoice({
+    required this.value,
+    required this.label,
+    this.description,
+    this.key,
+  });
   final T value;
   final String label;
+  final String? description;
   final Key? key;
 }
 
-class _SettingsGroup extends StatelessWidget {
-  const _SettingsGroup({required this.children});
-
-  final List<Widget> children;
-
+class _SettingsSectionHeading extends StatelessWidget {
+  const _SettingsSectionHeading({
+    required this.label,
+    required this.headingKey,
+  });
+  final String label;
+  final Key headingKey;
   @override
-  Widget build(BuildContext context) => Material(
-    key: const ValueKey('settings-group'),
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    borderRadius: MusicRadii.content,
-    clipBehavior: Clip.antiAlias,
-    child: Column(
-      children: [
-        for (var index = 0; index < children.length; index++) ...[
-          if (index > 0)
-            Divider(
-              height: 1,
-              indent: 72,
-              color: Theme.of(context).colorScheme.outlineVariant,
-            ),
-          children[index],
-        ],
-      ],
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+    child: Semantics(
+      header: true,
+      child: Text(
+        label,
+        key: headingKey,
+        style: Theme.of(context).textTheme.titleSmall
+            ?.copyWith(color: Theme.of(context).colorScheme.primary),
+      ),
     ),
   );
 }
 
-class _SettingsDropdownTile<T> extends StatelessWidget {
-  const _SettingsDropdownTile({
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.children});
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) => Theme(
+    // Settings rows share the plain page canvas, not selected tonal cards.
+    data: Theme.of(context).copyWith(listTileTheme: const ListTileThemeData()),
+    child: Material(
+      key: const ValueKey('settings-group'),
+      type: MaterialType.transparency,
+      child: Column(
+        children: [
+          for (var index = 0; index < children.length; index++) ...[
+            if (index > 0) const Divider(height: 1, indent: 56, endIndent: 16),
+            children[index],
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+/// One interaction grammar on pointer and touch platforms. The standard modal
+/// route owns dismissal/motion; the existing Settings owner owns persistence.
+class _SettingsChoiceTile<T> extends StatefulWidget {
+  const _SettingsChoiceTile({
     required this.controlKey,
     required this.icon,
     required this.title,
     required this.current,
     required this.choices,
     required this.onSelected,
+    this.currentLabel,
+    this.sheetFooter,
     this.enabled = true,
-    super.key,
   });
-
   final Key controlKey;
   final IconData icon;
   final String title;
   final T current;
+  final String? currentLabel;
   final List<_SettingsChoice<T>> choices;
   final ValueChanged<T> onSelected;
+  final Widget? sheetFooter;
   final bool enabled;
-
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final selected = choices.singleWhere((choice) => choice.value == current);
-      final theme = Theme.of(context);
-      final colors = theme.colorScheme;
-      const dropdownTheme = DropdownMenuThemeData();
-      // Theme overrides may contain only colors/font family. TextField merges
-      // those with the localized body style; measure the same effective style.
-      final textStyle = theme.textTheme.bodyLarge!.merge(
-        dropdownTheme.textStyle,
-      );
-      final direction = Directionality.of(context);
-      double textWidth(String text, TextStyle style) {
-        final painter = TextPainter(
-          text: TextSpan(text: text, style: style),
-          textDirection: direction,
-          textScaler: MediaQuery.textScalerOf(context),
-          locale: Localizations.localeOf(context),
-          maxLines: 1,
-        )..layout();
-        final width = painter.width;
-        painter.dispose();
-        return width;
-      }
-
-      final labelWidth = choices.fold<double>(
-        0,
-        (width, choice) => math.max(width, textWidth(choice.label, textStyle)),
-      );
-      final decorationPadding =
-          dropdownTheme.inputDecorationTheme?.contentPadding
-              ?.resolve(direction)
-              .horizontal ??
-          24;
-      // Reserve the standard 48 dp arrow target, its 4 dp inset on each side,
-      // decoration padding and editable caret margin, without shrinking text.
-      final preferredWidth = math.max(
-        180.0,
-        (labelWidth + decorationPadding + kMinInteractiveDimension + 8 + 8)
-            .ceilToDouble(),
-      );
-      final titleWidth = textWidth(
-        title,
-        ListTileTheme.of(context).titleTextStyle ?? theme.textTheme.bodyLarge!,
-      );
-      // ListTile has 18 dp side padding, a 40 dp leading slot and two gaps.
-      final rowWidth = 36 + 40 + 16 + titleWidth + 16 + preferredWidth;
-      final stacked =
-          constraints.maxWidth < 520 || rowWidth > constraints.maxWidth;
-      final controlWidth = stacked ? constraints.maxWidth - 36 : preferredWidth;
-      final dropdown = Semantics(
-        label: context.l10n.commonSelectedValue(title, selected.label),
-        child: DropdownMenu<T>(
-          key: controlKey,
-          width: controlWidth,
-          maxLines: stacked ? null : 1,
-          enabled: enabled,
-          initialSelection: current,
-          selectOnly: true,
-          requestFocusOnTap: true,
-          enableSearch: false,
-          dropdownMenuEntries: [
-            for (final choice in choices)
-              DropdownMenuEntry<T>(
-                value: choice.value,
-                label: choice.label,
-                labelWidget: Text(choice.label, key: choice.key),
-              ),
-          ],
-          onSelected: (value) {
-            if (value != null && value != current) onSelected(value);
-          },
-        ),
-      );
-      // DropdownMenu builds an internal TextField. Isolate every theme layer
-      // that can style that field so the shared short-enum selector receives
-      // the SDK component defaults in enabled, focused and disabled states.
-      // Keep this boundary local: ordinary application text fields must retain
-      // the product input theme.
-      final effectiveDropdown = Theme(
-        data: theme.copyWith(
-          dropdownMenuTheme: const DropdownMenuThemeData(),
-          menuTheme: const MenuThemeData(),
-          inputDecorationTheme: const InputDecorationThemeData(),
-        ),
-        child: dropdown,
-      );
-      final tile = ListTile(
-        enabled: enabled,
-        leading: Icon(icon, color: enabled ? colors.primary : null),
-        title: Text(title),
-        trailing: stacked ? null : effectiveDropdown,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-      );
-      if (!stacked) return tile;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          tile,
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-            child: effectiveDropdown,
-          ),
-        ],
-      );
-    },
-  );
+  State<_SettingsChoiceTile<T>> createState() => _SettingsChoiceTileState<T>();
 }
 
-class _ColorSourcePreview extends StatelessWidget {
-  const _ColorSourcePreview({
-    required this.icon,
-    required this.background,
-    required this.foreground,
-  });
+class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>> {
+  final _focusNode = FocusNode();
+  bool _sheetOpen = false;
 
-  final IconData icon;
-  final Color background;
-  final Color foreground;
+  Future<void> _choose() async {
+    if (!widget.enabled || _sheetOpen) return;
+    _sheetOpen = true;
+    final selection = await showModalBottomSheet<T>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      requestFocus: true,
+      // Remain bottom aligned on desktop; use the SDK M3 640 dp width limit.
+      constraints: BoxConstraints(
+        maxWidth: 640,
+        maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+      ),
+      builder: (sheetContext) => Theme(
+        data: Theme.of(sheetContext)
+            .copyWith(listTileTheme: const ListTileThemeData()),
+        child: Shortcuts(
+          shortcuts: const {
+            SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+          },
+          child: Actions(
+            actions: {
+              DismissIntent: CallbackAction<DismissIntent>(
+                onInvoke: (_) {
+                  Navigator.of(sheetContext).pop();
+                  return null;
+                },
+              ),
+            },
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                key: const ValueKey('settings-choice-sheet'),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                      child: Semantics(
+                        header: true,
+                        child: Text(
+                          widget.title,
+                          style: Theme.of(sheetContext).textTheme.titleLarge,
+                        ),
+                      ),
+                    ),
+                    RadioGroup<T>(
+                      groupValue: widget.current,
+                      onChanged: (value) {
+                        // Selecting the current radio closes without a write.
+                        Navigator.of(sheetContext).pop(value ?? widget.current);
+                      },
+                      child: Column(
+                        children: [
+                          for (final choice in widget.choices)
+                            RadioListTile<T>(
+                              key: choice.key,
+                              value: choice.value,
+                              toggleable: true,
+                              autofocus: choice.value == widget.current,
+                              title: Text(choice.label),
+                              subtitle: choice.description == null
+                                  ? null
+                                  : Text(choice.description!),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (widget.sheetFooter != null) widget.sheetFooter!,
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    _sheetOpen = false;
+    if (!mounted) return;
+    _focusNode.requestFocus();
+    if (widget.enabled && selection != null && selection != widget.current) {
+      widget.onSelected(selection);
+    }
+  }
 
   @override
-  Widget build(BuildContext context) => ExcludeSemantics(
-    child: DecoratedBox(
-      decoration: BoxDecoration(color: background, shape: BoxShape.circle),
-      child: SizedBox.square(
-        dimension: 40,
-        child: Icon(icon, color: foreground, size: 22),
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = widget.choices.singleWhere(
+      (choice) => choice.value == widget.current,
+    );
+    return ListTile(
+      key: widget.controlKey,
+      focusNode: _focusNode,
+      enabled: widget.enabled,
+      leading: Icon(widget.icon),
+      title: Text(widget.title),
+      subtitle: Text(widget.currentLabel ?? selected.label),
+      trailing: const ExcludeSemantics(
+        child: Icon(Icons.chevron_right_rounded),
       ),
-    ),
-  );
+      onTap: widget.enabled ? () => unawaited(_choose()) : null,
+    );
+  }
 }
 
 class _SettingsPalettePreview extends StatelessWidget {
   const _SettingsPalettePreview({required this.scheme});
-
   final ColorScheme scheme;
-
   @override
-  Widget build(BuildContext context) {
-    final colors = [
-      scheme.primary,
-      scheme.secondary,
-      scheme.tertiary,
-      scheme.primaryContainer,
-      scheme.surfaceContainerHighest,
-    ];
-    return Semantics(
-      label: context.l10n.settingsColorSourceLabel,
-      child: Row(
-        key: const ValueKey('settings-color-palette-preview'),
-        children: [
-          for (var index = 0; index < colors.length; index++)
-            Expanded(
-              child: Container(
-                height: 28,
-                decoration: BoxDecoration(
-                  color: colors[index],
-                  borderRadius: BorderRadius.horizontal(
-                    left: index == 0 ? const Radius.circular(14) : Radius.zero,
-                    right: index == colors.length - 1
-                        ? const Radius.circular(14)
-                        : Radius.zero,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Wrap(
+      key: const ValueKey('settings-color-palette-preview'),
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final color in [
+          scheme.primary,
+          scheme.secondary,
+          scheme.tertiary,
+          scheme.primaryContainer,
+          scheme.surfaceContainerHighest,
+        ])
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+      ],
+    ),
+  );
 }
 
 class _CompactSettingsMenu extends StatelessWidget {
@@ -1052,9 +944,7 @@ class _CompactSettingsMenu extends StatelessWidget {
             ),
           ),
           Material(
-            color: colors.surfaceContainerLow,
-            borderRadius: MusicRadii.content,
-            clipBehavior: Clip.antiAlias,
+            type: MaterialType.transparency,
             child: Column(
               children: [
                 for (
@@ -1118,14 +1008,10 @@ class _CompactSettingsMenuTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              Container(
+              SizedBox(
                 width: 40,
                 height: 40,
-                decoration: BoxDecoration(
-                  color: colors.secondaryContainer,
-                  borderRadius: MusicRadii.control,
-                ),
-                child: Icon(section.icon, color: colors.onSecondaryContainer),
+                child: Icon(section.icon, color: colors.onSurfaceVariant),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1139,8 +1025,6 @@ class _CompactSettingsMenuTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       summary,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall
                           ?.copyWith(color: colors.onSurfaceVariant),
                     ),

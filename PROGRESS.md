@@ -1,15 +1,50 @@
 ---
 execution:
   mode: HUMAN_DIRECTED
-  work_domain: CORE
-  state: LINUX_STARTUP_AND_PLAYBACK_DEPENDENCY_AUDIT_MACHINE_VERIFIED
-  acceptance_milestone: LINUX_DEBUG_STARTUP_AND_DEPENDENCY_OWNERSHIP
-  active_workstream: LINUX_STARTUP_AND_PLAYBACK_DEPENDENCY_AUDIT
-  current_task: LINUX_STARTUP_AND_PLAYBACK_DEPENDENCY_OWNERSHIP_AUDIT
-  next_action: HUMAN_REVIEW_SCOPED_DIFF_AND_EXTERNAL_PLATFORM_EVIDENCE
+  work_domain: UI
+  state: SETTINGS_CHOICE_BOTTOM_SHEETS_MACHINE_VERIFIED
+  acceptance_milestone: SETTINGS_LIST_AND_MODAL_SHEET_HUMAN_REVIEW
+  active_workstream: SETTINGS_UI_UNIFICATION
+  current_task: SETTINGS_CHOICE_ROWS_AND_STANDARD_MODAL_SHEETS
+  next_action: HUMAN_REVIEW_SETTINGS_ROWS_AND_MODAL_SHEETS
 ---
 
 # Current State
+
+- **2026-10-07 Human-directed Settings unification:** starting HEAD and tracked
+  origin/main were `65a2be28dd4748238adf407a36e4af78ab66e4ec`, worktree clean.
+  Human selected `HUMAN_DIRECTED / UI` and fixed the list + Material modal
+  bottom-sheet interaction; no new design/reference decision was requested.
+  All six real enum settings now share whole-row title/current-value/chevron
+  interaction on compact and desktop. Nested filled Appearance containers,
+  dropdowns and the permanent color expansion/radios are removed. The palette
+  is a secondary row with actual effective ColorScheme swatches. Dynamic-color
+  capability/brand fallback and the existing save owner/schema are retained;
+  misleading system-preview availability copy was corrected. Standard route
+  motion, selected radio semantics, scrollable 2x text, keyboard/focus,
+  Escape/Back/scrim/current-value dismissal, saving state, persistence
+  success/failure rollback, real safe-area insets and disposed-caller isolation
+  pass. All Settings tests and the existing full MusicApp suite pass; added
+  compact/desktop active-player tests prove the modal blocks underlying hits
+  without stopping/re-resolving or replacing playback/Queue ownership.
+  English/Chinese, light/dark and 1x/2x at 320/390/640/1440 dp are exercised.
+  Actual Flutter component, integrated Shell and animation time-sequence
+  renders were inspected. Local interactive read-only agy preflight, actual
+  component-render review and a separate fresh integrated-page review were
+  performed; no concrete new machine defect was identified. Human still owns
+  density/spacing/desktop whitespace and final visual/runtime acceptance;
+  agy and offline synthetic renders are not acceptance. Analysis, affected
+  format, source privacy and diff checks pass. No Rust, Provider, playback,
+  auth, Queue, startup helper, dependency or other-page production changes.
+  No native-device/remote-CI acceptance is claimed; no commit/push/reset/
+  restore/clean. Durable constraints, exact render snapshot/review material
+  and temporary evidence paths: [Settings Shell](docs/design/settings-shell.md).
+  Human subsequently authorized Git publication with `提交git` and explicitly
+  requested care with remote rules. The remote-only `c59c3c6` AGENTS initiative/
+  follow-through update was read and fast-forwarded before publication without
+  touching the Settings production diff or discarding work. Publication does
+  not constitute Human visual acceptance; the Settings gate remains
+  `HUMAN_REVIEW`.
 
 - **2026-10-07 Human-directed Linux startup/dependency audit:** Human explicitly
   selected `HUMAN_DIRECTED / CORE`; starting HEAD and tracked origin/main were

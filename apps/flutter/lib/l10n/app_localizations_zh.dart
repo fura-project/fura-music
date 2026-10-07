@@ -3096,17 +3096,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsColorSourceBody => '选择 Material 3 色板的取色来源。';
 
   @override
+  String get settingsPalettePreviewLabel => '色板预览';
+
+  @override
   String get settingsColorSourceSystem => '系统动态取色（Monet）';
 
   @override
-  String get settingsColorSourceSystemDescription =>
-      '在受支持的设备上使用壁纸或系统强调色；不可用时回退到当前音乐服务的印象色。';
+  String get settingsColorSourceSystemDescription => '使用系统或壁纸色板；不可用时使用音乐服务品牌色。';
 
   @override
-  String get settingsColorSourceSystemAvailable => '系统取色可用；此预览来自当前系统调色板。';
+  String get settingsColorSourceSystemAvailable => '系统动态取色可用。';
 
   @override
-  String get settingsColorSourceSystemUnavailable => '系统取色不可用；当前显示音乐服务品牌回退色。';
+  String get settingsColorSourceSystemUnavailable =>
+      '系统动态取色不可用；将使用当前音乐服务品牌回退色。';
 
   @override
   String get settingsColorSourceSystemSummary => '系统动态色';
@@ -3116,7 +3119,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String settingsColorSourceBrandDescription(String provider) {
-    return '使用受 $provider 启发、在不同设备上保持一致的配色。';
+    return '使用受 $provider 启发的品牌印象配色。';
   }
 
   @override

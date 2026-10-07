@@ -14,6 +14,7 @@ import 'package:flutter/material.dart'
         AnimatedSwitcher,
         AppBar,
         AppLifecycleState,
+        BottomSheet,
         Brightness,
         BuildContext,
         Color,
@@ -146,7 +147,14 @@ Future<void> _selectAdaptiveSection(
   final isDropdown = controlFinder.evaluate().any(
     (element) => element.widget is DropdownMenu,
   );
-  if (isDropdown) {
+  if (control.startsWith('settings-')) {
+    await tester.ensureVisible(controlFinder);
+    await tester.tap(controlFinder);
+    await tester.pumpAndSettle();
+    final option = find.byKey(ValueKey(item)).hitTestable();
+    expect(option, findsOneWidget);
+    await tester.tap(option);
+  } else if (isDropdown) {
     await tester.tap(controlFinder);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
@@ -9563,8 +9571,32 @@ void main() {
         find.byKey(const ValueKey('settings-color-source-selector')),
         findsOneWidget,
       );
+      if (captureReviewImages) {
+        const reviewDirectory = String.fromEnvironment(
+          'SETTINGS_LAYOUT_REVIEW_DIR',
+          defaultValue: '/tmp',
+        );
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('$reviewDirectory/settings-shell-desktop-normal.png'),
+          ),
+        );
+      }
       await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
       await tester.pumpAndSettle();
+      if (captureReviewImages) {
+        const reviewDirectory = String.fromEnvironment(
+          'SETTINGS_LAYOUT_REVIEW_DIR',
+          defaultValue: '/tmp',
+        );
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('$reviewDirectory/settings-shell-desktop-theme.png'),
+          ),
+        );
+      }
       await tester.tap(
         find.byKey(const ValueKey('settings-theme-dark')).hitTestable(),
       );
@@ -9894,6 +9926,94 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final width in [390.0, 1440.0]) {
+    testWidgets('settings sheet retains active shell playback at $width', (
+      tester,
+    ) async {
+      const capture = bool.fromEnvironment('SETTINGS_ACTIVE_PLAYER_REVIEW');
+      await _loadRecentReviewFonts(tester, enabled: capture);
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'settings:synthetic-player',
+        title: 'Settings review fixture',
+        artistNames: ['Synthetic artist'],
+        durationSeconds: 180,
+      );
+      final queue = _WidgetPlaybackQueueGateway()
+        ..replace(tracks: const [track], currentIndex: 0);
+      final audio = _WidgetAudioSession();
+      final media = _SuccessfulWidgetMediaGateway();
+      final host = createForegroundAppPlaybackHost(
+        playbackQueueGateway: queue,
+        mediaResolutionGateway: media,
+        lyricGateway: const _WidgetLyricGateway(),
+        audioEngine: _WidgetAudioEngine(audio),
+      );
+      addTearDown(host.dispose);
+      await host.controller.playback.playTrack(track);
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(_WaitingSession()),
+          settingsStore: AppSettingsStore(
+            storage: _WidgetSettingsDocumentStorage(),
+          ),
+          playbackHost: host,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-settings')));
+      await tester.pumpAndSettle();
+      if (width < 600) {
+        await tester.tap(
+          find.byKey(const ValueKey('settings-compact-appearance')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byType(NavigationBar), findsNothing);
+      }
+      final playerAction = find.byKey(
+        const ValueKey('now-playing-primary-action'),
+      );
+      expect(playerAction.hitTestable(), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsOneWidget);
+      // The modal route blocks underlying player controls, but not its owner.
+      expect(playerAction.hitTestable(), findsNothing);
+      expect(host.controller.playback.stage, TrackPlaybackStage.playing);
+      expect(host.controller.playback.track, same(track));
+      expect(media.requests, 1);
+      if (capture) {
+        const directory = String.fromEnvironment(
+          'SETTINGS_LAYOUT_REVIEW_DIR',
+          defaultValue: '/tmp',
+        );
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('$directory/settings-active-player-${width.toInt()}.png'),
+          ),
+        );
+      }
+      await tester.tap(find.byKey(const ValueKey('settings-theme-dark')));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(playerAction.hitTestable(), findsOneWidget);
+      expect(host.controller.playback.stage, TrackPlaybackStage.playing);
+      expect(host.controller.playback.track, same(track));
+      expect(media.requests, 1);
+      expect(host.controller.snapshot.tracks, const [track]);
+      expect(audio.stopCalls, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets(
     'mobile settings navigate from categories into searchable detail pages',
@@ -12984,11 +13104,16 @@ class _UnavailableMediaOperation implements MediaResolutionOperation {
 }
 
 class _SuccessfulWidgetMediaGateway implements MediaResolutionGateway {
+  int requests = 0;
+
   @override
   MediaResolutionOperation beginResolution({
     required String providerId,
     required String opaqueTrackId,
-  }) => const _SuccessfulWidgetMediaOperation();
+  }) {
+    requests++;
+    return const _SuccessfulWidgetMediaOperation();
+  }
 }
 
 class _SuccessfulWidgetMediaOperation implements MediaResolutionOperation {

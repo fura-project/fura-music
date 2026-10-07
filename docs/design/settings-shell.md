@@ -61,3 +61,148 @@ At 390×844:
 ## Canvas correction, 2026-09-09
 
 The Human reported that the earlier opaque-transition fix left an unwanted pale panel behind Settings and playlist detail. The backing now uses the same `Theme.scaffoldBackgroundColor` as the normal content canvas and resting toolbar, while retaining full opacity, clipping and content-only fading for the entire entry/exit transition. Sidebar/player container roles and all accepted geometry remain unchanged. This is one consistent canvas role, not a hard-coded light color; dark mode follows its existing theme. The corrected candidate requires Human visual review.
+
+## Current Settings rows and choice sheets, 2026-10-07
+
+**Design source:** Human's explicit Settings unification requirement on this
+date. The dated composition above records earlier evidence; the current real
+categories are Appearance, Music service, Language and Playback. No screenshot
+of an earlier unsatisfactory implementation is a new design target.
+**Status:** implemented candidate, `HUMAN_REVIEW`; not visually accepted.
+
+The current approved page grammar is a plain page canvas, small section heading,
+and quiet whole-row settings: optional leading icon, title, current-value
+subtitle and decorative chevron. Both nested filled Appearance containers and
+the permanent inline color-source radio/expansion panel are removed. Compact
+category navigation/search/Back and the shared desktop Shell are retained,
+not redesigned.
+
+All six current simple enums use the same private `_SettingsChoiceTile<T>`:
+Theme, Color source, Music service, Language, Default quality and Lyric
+auxiliary mode. Desktop and compact both open `showModalBottomSheet<T>`;
+there is no desktop dropdown, popup or central-dialog alternative. The
+standard route owns scrim, drag handle, motion and dismissal. Its content
+uses `RadioGroup`/`RadioListTile`, safe-area padding and a scroll view, with
+a 640 dp maximum width and viewport-relative height limit. Option text wraps
+without a smaller font or ellipsis. Geometry changes do not change the
+interaction model.
+
+Selection returns the enum and closes the route; the existing Settings save
+owner then applies it, updates the row and persists it. The focused row is
+restored on return. Current-value selection and Escape/Back/scrim dismissal
+write nothing. A caller disposed while the route is open cannot apply a late
+selection. Saving disables the current settings rows. Existing persistence
+failure feedback/rollback is retained; no success Snackbar or Apply button is
+added. There are no Boolean settings in the current page; this component does
+not redefine future Switches or action/navigation controls as enums.
+
+The secondary Palette preview row contains five 20 dp swatches from the
+**actual effective page ColorScheme**. Color-source supporting text stays in
+the sheet, including actual system-color availability and existing Provider
+brand fallback. Availability no longer incorrectly claims that a currently
+brand-selected page preview comes from the system palette. Preference enums,
+schema, migration, dynamic-color loader, brand palette owner and persistence
+semantics are unchanged.
+
+### Machine and rendered evidence
+
+Starting HEAD/tracked origin/main:
+`65a2be28dd4748238adf407a36e4af78ab66e4ec`; initial worktree clean.
+Render snapshot: that HEAD plus the Settings/l10n production diff with SHA256
+`8c9f3f29c53879581c5950540d7b242f1733c9e24883ddd0240b7933d0904e94`.
+The digest is from `git diff -- apps/flutter/lib/settings/settings_page.dart
+apps/flutter/lib/l10n | sha256sum`, not an invented new commit.
+
+The reused Settings render test exercises all six enums at 320/390/640/1440 dp,
+English/Chinese, light/dark and 1x/2x text. It checks the actual rows, every
+option's scroll reachability and hit target, selection/dismissal and no
+overflow; it does not stop at checking widget existence. Interaction tests
+also cover keyboard Enter/arrow selection, focus return, current-value
+semantics, actual owner persistence success/failure, all-row saving state,
+real top/bottom system insets and disposed callers. Existing MusicApp tests
+continue to exercise category/search/Back, provider/locale transitions and
+retained playback/Queue owners.
+
+Additional MusicApp tests at 390/1440 dp begin with a playing synthetic source:
+the sheet blocks underlying player hit testing while playback stays playing,
+media resolution count remains one, stop count stays zero and Queue tracks
+remain unchanged. After selection/dismissal the player controls become
+reachable again. Actual renders are `settings-active-player-390.png` and
+`settings-active-player-1440.png`. This proves UI/controller ownership with
+test doubles, not native audio continuity on a physical device.
+
+Temporary CURRENT images/logs are in
+`/tmp/fura-settings-choice-20261007-wds6JI/`; no fonts or bulk screenshots are
+repository assets. The eight required states are:
+
+| State | Actual render filename |
+| --- | --- |
+| Desktop normal | `1440_zh_light_1x-settings.png` |
+| Compact normal | `390_zh_light_1x-settings.png` |
+| Desktop Theme open | `1440_zh_light_1x-theme.png` |
+| Compact Theme open | `390_zh_light_1x-theme.png` |
+| Desktop Color source open | `1440_zh_light_1x-color.png` |
+| Compact Color source open | `390_zh_light_1x-color.png` |
+| Dark Settings | `1440_zh_dark_1x-settings.png` |
+| Enlarged/long supporting copy | `390_zh_dark_2x-color.png` |
+
+These are real Flutter-rendered synthetic Settings fixtures, not physical
+Android captures. Additional MusicApp integrated renders are
+`settings-shell-desktop-normal.png` and `settings-shell-desktop-theme.png`;
+the existing compact capture test writes
+`/tmp/fura-settings-mobile-menu.png`,
+`/tmp/fura-settings-mobile-appearance.png` and
+`/tmp/fura-settings-mobile-system-colors.png`.
+
+The local Flutter 3.47.1 implementation supplies the standard 640 dp M3 sheet
+width and 250 ms enter / 200 ms exit animation. Actual time-sequence captures
+are `motion-open-{000,125,250}ms.png` and
+`motion-close-{000,100,200}ms.png`; route tests verify animation progress and
+completion. Final static screenshots alone are not motion evidence. Stock
+modal behavior, including its current response to reduced-animation settings,
+is preserved; no extra animation owner is added.
+
+### Read-only review and Human boundary
+
+The installed Antigravity CLI 1.2.2, locally configured Gemini 3.8 Flash (Low),
+was used interactively from the repository in `agy --mode plan` for component
+preflight and then actual component-render review. Preflight read Settings and
+theme source; it identified focus/keyboard/scroll/saving/unmounted-caller risks
+within the Human-selected interaction. Render review actually read all eight
+CURRENT images above. It identified no concrete new machine defect; desktop
+space/width proportions and compact 2x text density remain Human judgments.
+
+A separate fresh integrated-page session used
+`agy --mode plan --log-file /tmp/fura-settings-choice-20261007-wds6JI/agy-page.log
+--add-dir /tmp/fura-settings-choice-20261007-wds6JI`. It read the original Human
+requirement, Settings source, both MusicApp desktop images, all three compact
+MusicApp images, dark desktop and enlarged compact risk renders. It found no
+new concretely supported defect and left palette/icon alignment, density and
+sheet/canvas whitespace to Human. No edit permission, model switch or global
+configuration change was granted.
+
+That page session also actually read both added active-player renders. It
+reported correct modal z-order and no player hit-through, leaving the desktop
+sheet's visual occlusion of the central player controls as a Human judgment.
+The standard modal blocking behavior is deliberately retained; no new local
+avoidance scheme or change to the shared player was adopted.
+
+Final executed checks: `flutter test test/settings` (80 pass),
+`flutter test test/widget_test.dart` (123 pass), render capture test (33 pass),
+both integrated capture tests and active-player capture tests, `dart analyze`
+(no issues), affected `dart format --output=none --set-exit-if-changed`, source
+privacy audit and `git diff --check`. Test-development failures (asserting
+radio state before opening, fixture API/import/semantics-handle mistakes and
+a formatting lint) were corrected and rerun, not attributed to product code.
+The before-change regression at the old inline expansion is preserved in the
+temporary `before.log`; obsolete dropdown/ExpansionTile-style assertions were
+replaced by the approved row/sheet contract, not by weakened persistence,
+keyboard or large-text assertions.
+
+GPT checked those suggestions against actual source/SDK/tests. The reviewer's
+static "no crash"/gesture claims are **not** adopted as runtime proof; only
+executed interaction tests establish those machine behaviors. Render review
+cannot accept aesthetics, prove physical native behavior or replace Human
+acceptance. No new decision permits changing the sheet into a dropdown or
+dialog. Final native-device appearance/interaction and remote CI are not
+verified by these offline renders; no commit/push was performed.

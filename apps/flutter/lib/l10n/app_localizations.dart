@@ -5415,6 +5415,12 @@ abstract class AppLocalizations {
   /// **'Choose where the Material 3 palette comes from.'**
   String get settingsColorSourceBody;
 
+  /// No description provided for @settingsPalettePreviewLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Palette preview'**
+  String get settingsPalettePreviewLabel;
+
   /// No description provided for @settingsColorSourceSystem.
   ///
   /// In en, this message translates to:
@@ -5424,19 +5430,19 @@ abstract class AppLocalizations {
   /// No description provided for @settingsColorSourceSystemDescription.
   ///
   /// In en, this message translates to:
-  /// **'Use wallpaper or OS accent colors where supported. The current music service palette is used as a fallback.'**
+  /// **'Use the system or wallpaper palette, with a music service brand fallback.'**
   String get settingsColorSourceSystemDescription;
 
   /// No description provided for @settingsColorSourceSystemAvailable.
   ///
   /// In en, this message translates to:
-  /// **'System colors are available; this preview uses the current system palette.'**
+  /// **'System colors are available.'**
   String get settingsColorSourceSystemAvailable;
 
   /// No description provided for @settingsColorSourceSystemUnavailable.
   ///
   /// In en, this message translates to:
-  /// **'System colors are unavailable; the music service brand fallback is shown.'**
+  /// **'System colors are unavailable; the music service brand palette will be used instead.'**
   String get settingsColorSourceSystemUnavailable;
 
   /// No description provided for @settingsColorSourceSystemSummary.
@@ -5454,7 +5460,7 @@ abstract class AppLocalizations {
   /// Appearance setting description for the provider-aware brand impression palette.
   ///
   /// In en, this message translates to:
-  /// **'Use colors inspired by {provider}, kept consistent across devices.'**
+  /// **'Use the brand impression palette inspired by {provider}.'**
   String settingsColorSourceBrandDescription(String provider);
 
   /// No description provided for @settingsColorSourceBrandSummary.

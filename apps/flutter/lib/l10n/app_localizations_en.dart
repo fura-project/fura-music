@@ -3389,19 +3389,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'Choose where the Material 3 palette comes from.';
 
   @override
+  String get settingsPalettePreviewLabel => 'Palette preview';
+
+  @override
   String get settingsColorSourceSystem => 'System colors (Monet)';
 
   @override
   String get settingsColorSourceSystemDescription =>
-      'Use wallpaper or OS accent colors where supported. The current music service palette is used as a fallback.';
+      'Use the system or wallpaper palette, with a music service brand fallback.';
 
   @override
   String get settingsColorSourceSystemAvailable =>
-      'System colors are available; this preview uses the current system palette.';
+      'System colors are available.';
 
   @override
   String get settingsColorSourceSystemUnavailable =>
-      'System colors are unavailable; the music service brand fallback is shown.';
+      'System colors are unavailable; the music service brand palette will be used instead.';
 
   @override
   String get settingsColorSourceSystemSummary => 'System colors';
@@ -3411,7 +3414,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String settingsColorSourceBrandDescription(String provider) {
-    return 'Use colors inspired by $provider, kept consistent across devices.';
+    return 'Use the brand impression palette inspired by $provider.';
   }
 
   @override
