@@ -122,12 +122,6 @@ flutter {
     source = "../.."
 }
 
-dependencies {
-    // Already resolved transitively at 1.7.0; explicitly own our native UI use.
-    implementation("com.google.android.material:material:1.7.0")
-    testImplementation("junit:junit:4.13.2")
-}
-
 // Manifest-disabled audio_service still creates a cached FlutterEngine from
 // onAttachedToActivity. Guard registration before attachment, not by removing
 // an already-connected plugin. Preserve Flutter's generated input and every

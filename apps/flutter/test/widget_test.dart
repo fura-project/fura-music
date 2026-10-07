@@ -9586,6 +9586,22 @@ void main() {
             Uri.file('$reviewDirectory/settings-shell-desktop-normal.png'),
           ),
         );
+        await tester.tap(
+          find.byKey(const ValueKey('settings-color-source-selector')),
+        );
+        await tester.pumpAndSettle();
+        FocusManager.instance.primaryFocus?.unfocus();
+        await tester.pumpAndSettle();
+        await expectLater(
+          find.byType(MusicApp),
+          matchesGoldenFile(
+            Uri.file('$reviewDirectory/settings-shell-desktop-color.png'),
+          ),
+        );
+        await tester.tap(
+          find.byKey(const ValueKey('settings-color-source-selector')),
+        );
+        await tester.pumpAndSettle();
       }
       await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
       await tester.pumpAndSettle();

@@ -875,7 +875,6 @@
   "settingsSearchResultsTitle": "搜索结果",
   "settingsSearchNoMatch": "没有与“{query}”匹配的设置。",
   "settingsSearchMatchSummary": "找到 {count} 个与“{query}”匹配的设置分类。",
-  "settingsChoiceUnavailable": "原生设置对话框暂不可用，请返回应用后重试。",
   "settingsSaveFailure": "无法在此设备上保存设置。",
   "settingsChooseCategory": "选择设置分类",
   "settingsCategorySemantics": "{label}。{description}。{summary}",

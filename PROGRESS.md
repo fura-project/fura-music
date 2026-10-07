@@ -2,14 +2,56 @@
 execution:
   mode: HUMAN_DIRECTED
   work_domain: UI
-  state: SETTINGS_NATIVE_CHOICES_AND_GROUPED_SURFACES_MACHINE_VERIFIED
-  acceptance_milestone: SETTINGS_GROUPED_SURFACE_AND_ANDROID_NATIVE_HUMAN_REVIEW
+  state: SETTINGS_TAXONOMY_LOCAL_MACHINE_VERIFIED
+  acceptance_milestone: SETTINGS_UNIFIED_M3_AND_INLINE_COLOR_HUMAN_REVIEW
   active_workstream: SETTINGS_UI_UNIFICATION
-  current_task: SETTINGS_GROUPED_SURFACES_AND_NATIVE_ANDROID_CHOICES
-  next_action: HUMAN_REVIEW_GROUPED_SETTINGS_AND_NATIVE_ANDROID_DIALOG
+  current_task: SETTINGS_SIMPLE_SHEET_AND_DETAILED_INLINE_CORRECTION
+  next_action: HUMAN_REVIEW_UNIFIED_SHEETS_AND_INLINE_COLOR
 ---
 
 # Current State
+
+- **2026-10-07 Human-directed Settings interaction correction:** starting HEAD
+  and tracked origin/main were `73da77571e4cb289b178803824d8a7a1cb4867bd`,
+  initial worktree clean. Human retained grouped surfaces but rejected the
+  Agent's Android-native interpretation and all-enums modal classification.
+  Five simple settings now share one content-driven 520 dp Flutter M3 bottom
+  sheet on every platform. Detailed Color Source expands inside the retained
+  group with actual radios, explanations, availability and effective palette;
+  selection stays expanded and the existing save/rollback owner remains.
+  Only Settings-exclusive Android channel/styles/tests/direct dependencies
+  are removed; Activity/playback registration and diagnostics are unchanged.
+  Before-fix failures are retained. Actual reduced-motion testing exposed
+  zero-duration AnimatedSize layout mutation; direct reduced-motion layout
+  fixes it. Standard idle/hover/focus pixel, stale/duplicate/invalid result,
+  large-text and saving rollback tests pass, as do Settings + full MusicApp
+  regressions. Actual Linux GTK selection/readback/cancel/focus/2x/inline-color
+  ends `UNIFIED_FLUTTER_M3`, exactly three disposable fixture writes; it neither
+  accesses accounts nor starts playback. Ordinary Android x64 Debug build,
+  ten requested rendered states, integrated desktop/compact and synthetic
+  active-player captures, actual motion frame sequences, analyze/format/privacy
+  and diff checks pass. Real local read-only agy preflight, rendered component
+  review and a separate fresh integrated-page review ran with the configured
+  model; no new reproducible defect was identified. GPT rejected unsupported
+  image-to-runtime/scrim/blanket-acceptance claims. Initial ADB inventory had no
+  device and Waydroid was stopped; privileged shell checks required a password.
+  Independent inspection found the container service already active and normal
+  user session startup succeeded without sudo or data reset. Authorized ADB
+  transport could not execute property reads or 10-second minimal shell probes;
+  one reconnect failed before any APK installation/application launch. Android
+  interaction remains unverified due to that exact environment blocker, not
+  reported as Fura failure or PASS. The task-started session was restored to
+  STOPPED, no app data cleared. Other non-Linux native runtimes and new remote
+  CI remain unverified, not inferred from five widget platform variants. Current evidence
+  and remaining Human acceptance are recorded in
+  [Settings Shell](docs/design/settings-shell.md). No unrelated production
+  layer, governance definition or historical evidence is rewritten. Candidate
+  is not Human-accepted; no commit/push/reset/restore/clean.
+  Human subsequently authorized Git publication with `提交git`, under the
+  standing commit-and-push instruction. Live remote main remains `73da775`;
+  current governance was checked before publication. Publication does not
+  establish Human visual acceptance or Android runtime verification; the
+  Settings gate remains `HUMAN_REVIEW`.
 
 - **2026-10-07 Human visual rejection and native Settings correction:** starting
   HEAD and tracked origin/main were

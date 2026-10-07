@@ -37,6 +37,10 @@ void main() {
                 ),
               );
               await tester.pumpAndSettle();
+              // Canonical resting captures must not retain the test pointer or
+              // keyboard focus from an earlier interaction.
+              FocusManager.instance.primaryFocus?.unfocus();
+              await tester.pumpAndSettle();
               if (section == SettingsSection.appearance) {
                 await _capture(tester, boundary, '$name-settings');
               }
@@ -52,9 +56,17 @@ void main() {
                 expect(tester.getSize(row).height, greaterThanOrEqualTo(48));
                 await tester.tap(row);
                 await tester.pumpAndSettle();
-                expect(find.byType(BottomSheet), findsOneWidget);
+                final detailed = key == 'settings-color-source-selector';
+                expect(
+                  find.byType(BottomSheet),
+                  detailed ? findsNothing : findsOneWidget,
+                );
                 if (key == 'settings-theme-selector' ||
                     key == 'settings-color-source-selector') {
+                  if (detailed) {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    await tester.pumpAndSettle();
+                  }
                   await _capture(
                     tester,
                     boundary,
@@ -81,6 +93,24 @@ void main() {
                 await tester.pumpAndSettle();
                 expect(find.byType(BottomSheet), findsNothing);
                 expect(tester.takeException(), isNull);
+                if (detailed) {
+                  expect(
+                    find.byKey(
+                      const ValueKey('settings-color-palette-preview'),
+                    ),
+                    findsOneWidget,
+                  );
+                  await tester.ensureVisible(row);
+                  await tester.pumpAndSettle();
+                  await tester.tap(row);
+                  await tester.pumpAndSettle();
+                  expect(
+                    find.byKey(
+                      const ValueKey('settings-color-palette-preview'),
+                    ),
+                    findsNothing,
+                  );
+                }
               }
             }
           }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
@@ -119,6 +149,29 @@ void main() {
     await _capture(tester, boundary, 'motion-close-200ms');
     await tester.pumpAndSettle();
     expect(find.byType(BottomSheet), findsNothing);
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    final color = find.byKey(const ValueKey('settings-color-source-selector'));
+    await tester.tap(color);
+    await tester.pump();
+    await _capture(tester, boundary, 'color-motion-open-000ms');
+    await tester.pump(const Duration(milliseconds: 100));
+    await _capture(tester, boundary, 'color-motion-open-100ms');
+    await tester.pump(const Duration(milliseconds: 100));
+    await _capture(tester, boundary, 'color-motion-open-200ms');
+    await tester.pumpAndSettle();
+    await tester.tap(color);
+    await tester.pump();
+    await _capture(tester, boundary, 'color-motion-close-000ms');
+    await tester.pump(const Duration(milliseconds: 100));
+    await _capture(tester, boundary, 'color-motion-close-100ms');
+    await tester.pump(const Duration(milliseconds: 100));
+    await _capture(tester, boundary, 'color-motion-close-200ms');
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('settings-color-palette-preview')),
+      findsNothing,
+    );
   }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 }
 

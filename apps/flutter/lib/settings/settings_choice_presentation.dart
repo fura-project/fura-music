@@ -1,6 +1,3 @@
-import 'dart:async';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -25,9 +22,8 @@ class SettingsChoicePresentation {
   void cancel() => _cancel();
 }
 
-const _channel = MethodChannel('com.fura/settings_choice');
-int _nextRequestId = 0;
-
+/// Simple choices use one Flutter M3 route on every platform. Detailed
+/// settings are inline disclosures, not clients of this presentation edge.
 SettingsChoicePresentation showSettingsSingleChoice({
   required BuildContext context,
   required String title,
@@ -36,46 +32,6 @@ SettingsChoicePresentation showSettingsSingleChoice({
   String? footer,
   Key? footerKey,
 }) {
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-    final id = ++_nextRequestId;
-    final theme = Theme.of(context);
-    final result = _channel
-        .invokeMethod<int>('show', {
-          'requestId': id,
-          'title': title,
-          'options': [
-            for (final option in options)
-              {
-                'label': option.label,
-                'supportingText': option.supportingText,
-                'enabled': option.enabled,
-              },
-          ],
-          'selectedIndex': selectedIndex,
-          'brightness': theme.brightness.name,
-          'primary': theme.colorScheme.primary.toARGB32(),
-          'footer': footer,
-        })
-        .then(
-          (index) =>
-              index != null &&
-                  index >= 0 &&
-                  index < options.length &&
-                  options[index].enabled
-              ? index
-              : null,
-        );
-    return SettingsChoicePresentation._(result, () {
-      // Disposal is not a new interaction. A missing/detached host cannot
-      // dismiss anything, and must never open a Flutter replacement dialog.
-      unawaited(
-        _channel
-            .invokeMethod<void>('dismiss', {'requestId': id})
-            .catchError((Object _) {}),
-      );
-    });
-  }
-
   ModalRoute<int>? ownedRoute;
   var cancelled = false;
   final result = showModalBottomSheet<int>(
@@ -84,10 +40,15 @@ SettingsChoicePresentation showSettingsSingleChoice({
     useSafeArea: true,
     isScrollControlled: true,
     requestFocus: true,
-    constraints: BoxConstraints(
-      maxWidth: 640,
-      maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+    backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+    elevation: 0,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
+    constraints: const BoxConstraints(maxWidth: 520),
+    sheetAnimationStyle: MediaQuery.disableAnimationsOf(context)
+        ? AnimationStyle.noAnimation
+        : null,
     builder: (sheetContext) {
       ownedRoute = ModalRoute.of<int>(sheetContext);
       if (cancelled) {

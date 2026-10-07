@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="SettingsChoiceLight" parent="Theme.Material3.Light.BottomSheetDialog" />
-    <style name="SettingsChoiceDark" parent="Theme.Material3.Dark.BottomSheetDialog" />
-</resources>

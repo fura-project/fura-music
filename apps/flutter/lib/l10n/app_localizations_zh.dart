@@ -3041,9 +3041,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get settingsChoiceUnavailable => '原生设置对话框暂不可用，请返回应用后重试。';
-
-  @override
   String get settingsSaveFailure => '无法在此设备上保存设置。';
 
   @override

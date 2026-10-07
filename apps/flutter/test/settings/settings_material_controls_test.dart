@@ -84,7 +84,11 @@ void main() {
         final route = ModalRoute.of(sheetContext)! as ModalBottomSheetRoute;
         final before = route.animation!.value;
         await tester.pump(const Duration(milliseconds: 100));
-        expect(route.animation!.value, greaterThan(before));
+        if (reducedMotion) {
+          expect(route.animation!.value, 1);
+        } else {
+          expect(route.animation!.value, greaterThan(before));
+        }
         await tester.pumpAndSettle();
         expect(route.animation!.value, 1);
         expect(tester.widget<BottomSheet>(sheet).showDragHandle, isTrue);
@@ -106,6 +110,10 @@ void main() {
   ) async {
     await tester.pumpWidget(
       const SettingsReviewHarness(brightness: Brightness.dark),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('settings-color-source-selector')),
     );
     await tester.pumpAndSettle();
     final palette = find.byKey(

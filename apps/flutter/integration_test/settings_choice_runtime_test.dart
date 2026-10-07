@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,14 +12,12 @@ import 'package:integration_test/integration_test.dart';
 
 /// Real host/plugin presentation with a disposable preference key. Never
 /// starts MusicApp, restores credentials, accesses Providers or changes Queue.
-/// Android selections are driven externally with native UI input, not mocked.
+/// All platforms exercise the same real Flutter route and inline disclosure.
 void main() {
-  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('Settings choices use real platform presentation and storage', (
     tester,
   ) async {
-    final previousDeviceInput = binding.shouldPropagateDevicePointerEvents;
-    binding.shouldPropagateDevicePointerEvents = Platform.isAndroid;
     final storage = _CountingStorage(
       SharedPreferencesAppSettingsDocumentStorage(
         documentKey:
@@ -58,8 +54,8 @@ void main() {
             onSettingsChanged: owner.update,
             onBack: () {},
             onCompactSectionSelected: (_) {},
-            compactHierarchy: Platform.isAndroid,
-            compactSectionOpen: Platform.isAndroid,
+            compactHierarchy: true,
+            compactSectionOpen: true,
             systemLightColorScheme: light,
             systemDarkColorScheme: dark,
           ),
@@ -89,54 +85,24 @@ void main() {
       await tester.tap(row);
       await tester.pumpAndSettle();
       debugPrint('FURA_SETTINGS_REVIEW phase=$phase ready');
-      if (Platform.isAndroid) {
-        expect(
-          find.byType(BottomSheet),
-          findsNothing,
-          reason: 'Android must not draw a Flutter replacement',
-        );
-        await waitFor(() => focus.hasFocus);
+      expect(find.byType(BottomSheet), findsOneWidget);
+      if (optionKey == 'escape') {
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      } else if (optionKey == 'scrim') {
+        await tester.tapAt(const Offset(8, 8));
       } else {
-        expect(find.byType(BottomSheet), findsOneWidget);
-        if (optionKey == 'escape') {
-          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-        } else if (optionKey == 'scrim') {
-          await tester.tapAt(const Offset(8, 8));
-        } else {
-          final option = find.byKey(ValueKey(optionKey));
-          await tester.ensureVisible(option);
-          await tester.tap(option);
-        }
-        await tester.pumpAndSettle();
-        expect(focus.hasFocus, isTrue);
+        final option = find.byKey(ValueKey(optionKey));
+        await tester.ensureVisible(option);
+        await tester.tap(option);
       }
+      await tester.pumpAndSettle();
+      expect(focus.hasFocus, isTrue);
       expect(tester.takeException(), isNull);
       debugPrint('FURA_SETTINGS_REVIEW phase=$phase success');
     }
 
     try {
       expect(await storage.read(), isNull);
-      if (Platform.isAndroid) {
-        // A real host may launch into an existing freeform task. Wait for a
-        // native input handshake before opening any dialog, so bringing that
-        // task to the foreground cannot accidentally cancel the first case.
-        var ready = false;
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: Center(
-                child: FilledButton(
-                  onPressed: () => ready = true,
-                  child: const Text('Start native Settings review'),
-                ),
-              ),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-        debugPrint('FURA_SETTINGS_REVIEW phase=host_ready waiting_for_input');
-        await waitFor(() => ready);
-      }
       await tester.pumpWidget(fixture());
       await tester.pumpAndSettle();
       await choice(
@@ -171,45 +137,55 @@ void main() {
         'settings-theme-dark',
       );
       expect(storage.writes, 2);
-      await choice(
-        'color_system',
-        'settings-color-source-selector',
-        'settings-color-source-system',
+      final colorRow = find.byKey(
+        const ValueKey('settings-color-source-selector'),
       );
+      await tester.ensureVisible(colorRow);
+      await tester.tap(colorRow);
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      final system = find.byKey(const ValueKey('settings-color-source-system'));
+      await tester.ensureVisible(system);
+      await tester.tap(system);
+      await tester.pumpAndSettle();
       expect(owner.settings.colorSource, AppColorSourcePreference.system);
       await waitFor(() => storage.writes == 3);
       expect(
         (await store.load()).settings.colorSource,
         AppColorSourcePreference.system,
       );
-      await choice(
-        'color_current',
-        'settings-color-source-selector',
-        'settings-color-source-system',
-      );
+      await tester.tap(system);
+      await tester.pumpAndSettle();
       expect(storage.writes, 3);
-      if (Platform.isAndroid) {
-        await choice(
-          'activity_pause_resume',
-          'settings-theme-selector',
-          'escape',
-        );
-        expect(storage.writes, 3);
-      }
+      expect(
+        find.byKey(const ValueKey('settings-color-palette-preview')),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(colorRow);
+      await tester.pumpAndSettle();
+      await tester.tap(colorRow);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-color-palette-preview')),
+        findsNothing,
+      );
       scale = 2;
       await tester.pumpWidget(fixture());
       await tester.pumpAndSettle();
-      await choice(
-        'color_large_cancel',
-        'settings-color-source-selector',
-        'escape',
-      );
+      await choice('theme_large_cancel', 'settings-theme-selector', 'escape');
       expect(storage.writes, 3);
+      await tester.ensureVisible(colorRow);
+      await tester.tap(colorRow);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('settings-color-palette-preview')),
+      );
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(tester.takeException(), isNull);
       debugPrint(
-        'FURA_SETTINGS_REVIEW all_success writes=3 presentation=${Platform.isAndroid ? 'ANDROID_NATIVE' : 'FLUTTER_FALLBACK'}',
+        'FURA_SETTINGS_REVIEW all_success writes=3 presentation=UNIFIED_FLUTTER_M3 color=INLINE',
       );
     } finally {
-      binding.shouldPropagateDevicePointerEvents = previousDeviceInput;
       await tester.pumpWidget(const SizedBox.shrink());
       owner.dispose();
       await storage.delete();

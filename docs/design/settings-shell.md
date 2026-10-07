@@ -62,12 +62,181 @@ At 390×844:
 
 The Human reported that the earlier opaque-transition fix left an unwanted pale panel behind Settings and playlist detail. The backing now uses the same `Theme.scaffoldBackgroundColor` as the normal content canvas and resting toolbar, while retaining full opacity, clipping and content-only fading for the entire entry/exit transition. Sidebar/player container roles and all accepted geometry remain unchanged. This is one consistent canvas role, not a hard-coded light color; dark mode follows its existing theme. The corrected candidate requires Human visual review.
 
-## Current grouped Settings and native Android choices, 2026-10-07
+## Current Settings interaction taxonomy, 2026-10-07
 
-**Design source:** Human explicitly rejected candidate `a68c320f358fe6fcf36bd8c031d28b923f22ae35`:
-the transparent group was too flat, and a Flutter sheet was not the requested
-Android native dialog. This correction supersedes the dated candidate below,
-not the retained Shell/navigation/search/player ownership above.
+**Design source:** Human's latest Settings interaction correction supersedes
+the native-Android presentation decision below. Preserve the accepted grouped
+surface and Shell; all platforms use the same Flutter Material 3 interaction.
+**Status:** implemented candidate, `HUMAN_REVIEW`, not visually accepted.
+
+| Setting / complexity | Presentation |
+| --- | --- |
+| Theme, Language, Default quality, Lyric auxiliary, Music service selection | SIMPLE: unified Flutter M3 bottom choice sheet |
+| Color Source (explanations, availability, Provider brand, preview) | DETAILED: inline disclosure in the same grouped surface |
+| Boolean settings, when supported | M3 Switch |
+| Complex workflows, when supported | Settings subpage |
+
+This is interaction taxonomy, not an all-enums rule or a schema framework.
+No business enum, Settings schema, capability or save owner changes.
+
+### Retained grouped surface and detailed Color Source
+
+Keep one quiet `surfaceContainerLow` Material per group, existing 16 dp radius,
+880 dp padded content constraint (832 dp desktop group), external heading,
+quiet icons, measured trailing desktop values and stacked compact/large text.
+Ordinary setting rows are not selected destinations. Standard hover/focus/
+pressed layers remain valid; canonical idle captures clear pointer/focus, not
+the keyboard accessibility policy. A pixel regression checks hover and focus
+actually alter the row and that both return to identical idle pixels.
+
+Color Source owns only disclosure state. `RadioGroup` / `RadioListTile` show
+the real current enum, existing explanations, actual dynamic-color availability
+and Provider brand fallback. Five real effective-ColorScheme palette dots live
+only inside expanded details, without a separate collapsed preview row or a
+second Card. Selection uses the existing save/rollback owner, stays expanded
+on success or failure, and restores selected-option focus after saving.
+
+`AnimatedRotation` and `AnimatedSize` use restrained 200 ms height/chevron
+motion; rapid toggles remain safe. Reduced motion renders details directly and
+rotates immediately. Actual testing rejected `AnimatedSize(Duration.zero)`:
+this local SDK synchronously notified during layout and asserted. The direct
+reduced-motion branch fixes that reproduced negative evidence, not an ignored
+test or a second animation owner.
+
+### One simple bottom dialog on every platform
+
+`settings_choice_presentation.dart` now always uses `showModalBottomSheet<int>`
+with current M3 ColorScheme `surfaceContainerLow`, 28 dp top rounding, zero
+elevation, standard handle/scrim, title, `RadioGroup` / `RadioListTile`, SafeArea,
+scroll continuation and standard modal-route motion. Maximum width is 520 dp;
+height follows content rather than reserving 90% of the viewport. Android,
+Linux, Windows, macOS and iOS use this same code, row grammar and motion owner;
+responsive width/insets are not platform-specific dialogs. No Apply button.
+
+Selection closes and saves immediately. Current value and cancel do not write.
+Back/Escape/scrim, keyboard selection, focus return, disabled/save-pending state,
+stale external value, duplicate open, invalid result and disposed route retain
+their tests. Cancellation removes only the caller's owned modal route. There
+is no DropdownButton/FormField, centered AlertDialog or native fallback.
+
+Only Settings-exclusive Android presentation is removed: SettingsChoiceChannel,
+SettingsChoiceResult, local native styles/JVM result test, MethodChannel wiring
+and its sole-owner direct Material/JUnit dependencies. Activity diagnostics,
+lifecycle and AudioService registration are preserved. The final MainActivity
+content hash equals the pre-native candidate's host; no playback changes.
+
+### Current evidence boundary
+
+Starting HEAD and tracked origin/main were
+`73da77571e4cb289b178803824d8a7a1cb4867bd`, initial worktree clean.
+Current production render snapshot is that HEAD plus scoped Git diff SHA256
+`86978108582581ad0ad102a797a1dfb5f4404ad23a1cd8cdb5b432697fda3fff`, computed by:
+
+```bash
+git diff -- apps/flutter/lib/settings apps/flutter/lib/l10n \
+  apps/flutter/android/app/build.gradle.kts apps/flutter/android/app/src/main | sha256sum
+```
+
+Actual baseline/failure logs, renders and read-only review material remain
+outside Git at `/tmp/fura-settings-taxonomy-20261007-EVucxo/`. Before-fix tests
+prove the Android/native path, 640 dp simple sheet and modal Color Source did
+not meet this corrected requirement. These rejected implementation captures
+are CURRENT evidence, never promoted to Human TARGET.
+
+Settings and whole-MusicApp regressions, five-platform presentation variants,
+pending-save rollback/focus and idle-state pixel checks pass. Real Linux GTK
+runtime exercises the production Settings page and real preference plugin with
+a unique disposable key: three writes/readback, current/cancel no-write,
+inline Color Source and 2x text pass. The fixture does not restore credentials,
+access accounts or start playback; it removes its own preference key.
+
+### Canonical renders and verification
+
+All files below are actual current Flutter renders under the snapshot above,
+with synthetic data, not native Windows/macOS/iOS or physical-phone captures.
+The ten requested visual states were individually inspected by GPT:
+
+| State | Desktop | Compact |
+| --- | --- | --- |
+| Appearance collapsed | `1440_zh_light_1x-settings.png` | `390_zh_light_1x-settings.png` |
+| Inline Color Source expanded | `1440_zh_light_1x-color.png` | `390_zh_light_1x-color.png` |
+| Dark expanded | `1440_zh_dark_1x-color.png` | `390_zh_dark_1x-color.png` |
+| Theme choice sheet | `1440_zh_light_1x-theme.png` | `390_zh_light_1x-theme.png` |
+| 2x text | — | `390_zh_light_2x-color.png`, `390_zh_light_2x-theme.png` |
+
+Integrated MusicApp evidence: `settings-shell-desktop-{normal,color,theme}.png`,
+`settings-shell-compact-{normal,color}.png`; synthetic active-player sheets:
+`settings-active-player-{390,1440}.png`. Existing tests prove modal hit isolation
+while the retained Queue/player keeps playing with one resolution and no stop.
+The compact modal legitimately covers the mini-player; it does not stop it.
+Motion is captured at actual opening/closing frame times:
+`color-motion-{open,close}-{000,100,200}ms.png` and stock sheet
+`motion-open-{000,125,250}ms.png`, `motion-close-{000,100,200}ms.png`.
+Static final screenshots alone are not animation proof.
+
+Actual checks: Settings + whole MusicApp regression pass; the final additional
+inline-keyboard/current-no-op regression also passes. The layout test covers
+320/390/640/1440/1600 dp, English/Chinese, light/dark, 1x/2x and every current
+control, not only Theme. `dart analyze`, affected format (no changes), source
+privacy and `git diff --check` pass. Ordinary Android x64 Debug APK builds after
+native-edge/dependency removal. Real Linux GTK runtime passes as above.
+
+Actual interactive local `agy` 1.2.2 uses the existing authorized
+Gemini 3.8 Flash (Low), `--mode plan`, no model/global permission changes.
+One preflight and a rendered component review ran; the component session
+`9ce1959c-e852-44b7-a98c-34374e0ce9dc` explicitly read all ten state images,
+motion frames, rejected before-images, relevant component/theme/tests and
+bounded build/runtime logs. Its scratch report is copied to
+`agy-component-report.md` in the temporary evidence directory. No new
+reproducible component defect was identified. GPT does not adopt its unsupported
+dark-scrim comfort inference (no dark sheet supplied to that review), claimed
+both X11/Wayland runtime proof, or native Back proof from an Escape-labelled
+runtime phase. Existing deterministic Back and real Escape tests have their
+own narrower proof; preference/density and motion feel remain Human-owned.
+
+A separate fresh integrated-page session
+`08d8e018-13ff-44c8-9a02-2cc8cf5db24a` read the Human constraint packet, five
+integrated Shell states, both active-player sheets, 2x/dark companions and
+motion opening frames/closing midpoint. Invocation was `agy --mode plan
+--log-file /tmp/fura-settings-taxonomy-20261007-EVucxo/agy-page.log --add-dir
+/tmp/fura-settings-taxonomy-20261007-EVucxo --prompt-interactive <bounded page
+packet>`. Its actual outside-repository scratch result is copied to
+`agy-page-report.md`. It identified no new reproducible page defect; desktop
+palette whitespace and compact dark surface contrast remain H observations.
+GPT corrected its erroneous scrim inference from a non-modal dark expanded
+image before final reporting. The supplied image cannot prove hit blocking,
+immediate writes or widget-tree absence: existing interaction/runtime tests
+prove those claims. Likewise dynamic availability is not determined by whether
+the System option is selected. The review's blanket acceptance/remainder
+statements are not adopted as Human acceptance or as five native-runtime proof.
+
+Human retains visual acceptance of density, spacing, grouped composition,
+inline rhythm, desktop width and phone touch/insets. Widget platform variants
+are not five native-runtime proofs; Android build is not physical-phone
+acceptance. Remote CI and native Windows/macOS/iOS runtime are unverified.
+Android Debug compilation is verified. Initial ADB inventory had no device
+and Waydroid session was stopped; privileged shell checks required a sudo
+password. An independent safe check found the existing container service was
+already active, so normal unprivileged session startup was possible without
+sudo, new runtime installation or data reset. Existing ADB authorization then
+succeeded (`device`), but property reads hung and independent 10-second
+`shell true` / echo probes timed out. A single transport reconnect failed and
+the following probe reported device offline. This happened before any test
+APK installation or application launch; it is an environment/transport blocker,
+not Fura runtime failure. Android interaction remains unverified, with evidence
+in `android-runtime-boundary.txt`. The session started by this task was stopped
+and initial STOPPED state verified; no app data or shared root service was
+cleared/disabled. Physical-phone proof is not inferred from compilation.
+
+## Historical grouped Settings and native Android choices, 2026-10-07 (superseded)
+
+**Historical interpretation, superseded by the correction above:** candidate
+`a68c320f358fe6fcf36bd8c031d28b923f22ae35` was rejected for its flat transparent
+groups. The previous Agent interpreted the dialog correction as Android-native;
+that interpretation was incorrect. Human's final direction is one unified
+Flutter M3 bottom dialog on all platforms. The dated native candidate and its
+evidence below remain historical, not current presentation requirements; the
+retained Shell/navigation/search/player ownership is unchanged.
 **Status:** implemented candidate, `HUMAN_REVIEW`; no Human visual acceptance.
 
 ### Current page grammar

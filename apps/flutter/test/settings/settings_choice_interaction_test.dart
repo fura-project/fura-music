@@ -13,7 +13,7 @@ import 'settings_review_harness.dart';
 
 void main() {
   for (final width in [320.0, 390.0, 1180.0]) {
-    testWidgets('every choice uses the same bottom sheet at $width', (
+    testWidgets('simple choices use the same bottom sheet at $width', (
       tester,
     ) async {
       setSettingsViewport(tester, Size(width, 844));
@@ -24,6 +24,7 @@ void main() {
         expect(find.byType(ExpansionTile), findsNothing);
         expect(find.byWidgetPredicate((w) => w is DropdownMenu), findsNothing);
         for (final (selectorKey, optionKey) in selectors) {
+          if (selectorKey == 'settings-color-source-selector') continue;
           final selector = find.byKey(ValueKey(selectorKey));
           await tester.ensureVisible(selector);
           expect(tester.getSize(selector).height, greaterThanOrEqualTo(48));
@@ -58,7 +59,7 @@ void main() {
             tester
                 .getSize(find.byKey(const ValueKey('settings-choice-sheet')))
                 .width,
-            lessThanOrEqualTo(640),
+            lessThanOrEqualTo(520),
           );
           expect(find.byType(AlertDialog), findsNothing);
           final option = find.byKey(ValueKey(optionKey));
@@ -141,6 +142,7 @@ void main() {
         succeeds ? 'Light' : 'System',
       );
       expect(tester.widget<ListTile>(selector).enabled, isTrue);
+      expect(tester.widget<ListTile>(selector).focusNode!.hasFocus, isTrue);
       expect(find.byType(SnackBar), succeeds ? findsNothing : findsOneWidget);
       expect(tester.takeException(), isNull);
       semantics.dispose();
@@ -252,7 +254,7 @@ void main() {
 
   for (final available in [true, false]) {
     testWidgets(
-      'color sheet preserves actual capability available=$available',
+      'inline color details preserve actual capability available=$available',
       (tester) async {
         await tester.pumpWidget(
           SettingsReviewHarness(systemColorsAvailable: available),
@@ -265,9 +267,11 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           tester
-              .widget<RadioGroup<int>>(find.byType(RadioGroup<int>))
+              .widget<RadioGroup<AppColorSourcePreference>>(
+                find.byType(RadioGroup<AppColorSourcePreference>),
+              )
               .groupValue,
-          1,
+          AppColorSourcePreference.brand,
         );
         expect(
           find.byKey(
@@ -280,7 +284,7 @@ void main() {
           findsOneWidget,
         );
         final l10n = AppLocalizations.of(
-          tester.element(find.byKey(const ValueKey('settings-choice-sheet'))),
+          tester.element(find.byKey(const ValueKey('settings-color-details'))),
         );
         expect(
           find.text(l10n.settingsColorSourceSystemDescription),

@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
@@ -393,7 +391,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onSelected: (theme) =>
                 _save(widget.settings.copyWith(theme: theme)),
           ),
-          _SettingsChoiceTile<AppColorSourcePreference>(
+          _SettingsColorDisclosure(
             controlKey: const ValueKey('settings-color-source-selector'),
             icon: Icons.palette_outlined,
             title: l10n.settingsColorSourceLabel,
@@ -418,10 +416,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ],
-            sheetFooter: systemScheme == null
+            availability: systemScheme == null
                 ? l10n.settingsColorSourceSystemUnavailable
                 : l10n.settingsColorSourceSystemAvailable,
-            footerKey: ValueKey(
+            availabilityKey: ValueKey(
               systemScheme == null
                   ? 'settings-system-colors-unavailable'
                   : 'settings-system-colors-available',
@@ -430,7 +428,6 @@ class _SettingsPageState extends State<SettingsPage> {
             onSelected: (source) =>
                 _save(widget.settings.copyWith(colorSource: source)),
           ),
-          _SettingsPaletteRow(title: l10n.settingsPalettePreviewLabel),
         ],
       ),
     ];
@@ -736,8 +733,6 @@ class _SettingsChoiceTile<T> extends StatefulWidget {
     required this.choices,
     required this.onSelected,
     this.currentLabel,
-    this.sheetFooter,
-    this.footerKey,
     this.enabled = true,
   });
   final Key controlKey;
@@ -747,8 +742,6 @@ class _SettingsChoiceTile<T> extends StatefulWidget {
   final String? currentLabel;
   final List<_SettingsChoice<T>> choices;
   final Future<void> Function(T) onSelected;
-  final String? sheetFooter;
-  final Key? footerKey;
   final bool enabled;
   @override
   State<_SettingsChoiceTile<T>> createState() => _SettingsChoiceTileState<T>();
@@ -777,9 +770,7 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !widget.enabled || !_focusReturnPending) return;
       final lifecycle = WidgetsBinding.instance.lifecycleState;
-      if (Theme.of(context).platform == TargetPlatform.android &&
-          lifecycle != null &&
-          lifecycle != AppLifecycleState.resumed) {
+      if (lifecycle != null && lifecycle != AppLifecycleState.resumed) {
         return;
       }
       _focusReturnPending = false;
@@ -809,8 +800,6 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
               key: choice.key,
             ),
         ],
-        footer: widget.sheetFooter,
-        footerKey: widget.footerKey,
       );
       _presentation = presentation;
       final index = await presentation.result;
@@ -819,6 +808,8 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
       if (widget.enabled &&
           widget.current == current &&
           index != null &&
+          index >= 0 &&
+          index < values.length &&
           values[index] != current) {
         await widget.onSelected(values[index]);
       }
@@ -827,22 +818,10 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
       // Saving disables the row and revokes its focus. Restore only after
       // the existing owner finishes and the enabled row has been rebuilt.
       _returnFocus();
-    } on PlatformException catch (_) {
-      _showPresentationUnavailable();
-    } on MissingPluginException catch (_) {
-      _showPresentationUnavailable();
     } finally {
       _sheetOpen = false;
       _presentation = null;
     }
-  }
-
-  void _showPresentationUnavailable() {
-    if (!mounted) return;
-    _focusNode.requestFocus();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.l10n.settingsChoiceUnavailable)),
-    );
   }
 
   @override
@@ -910,6 +889,211 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
           onTap: widget.enabled ? () => unawaited(_choose()) : null,
         );
       },
+    );
+  }
+}
+
+/// Detailed choice: explanation, availability and preview stay together in
+/// the existing group. This state owns disclosure only, never Settings truth.
+class _SettingsColorDisclosure extends StatefulWidget {
+  const _SettingsColorDisclosure({
+    required this.controlKey,
+    required this.icon,
+    required this.title,
+    required this.current,
+    required this.currentLabel,
+    required this.choices,
+    required this.availability,
+    required this.availabilityKey,
+    required this.enabled,
+    required this.onSelected,
+  });
+  final Key controlKey;
+  final IconData icon;
+  final String title;
+  final AppColorSourcePreference current;
+  final String currentLabel;
+  final List<_SettingsChoice<AppColorSourcePreference>> choices;
+  final String availability;
+  final Key availabilityKey;
+  final bool enabled;
+  final Future<void> Function(AppColorSourcePreference) onSelected;
+  @override
+  State<_SettingsColorDisclosure> createState() =>
+      _SettingsColorDisclosureState();
+}
+
+class _SettingsColorDisclosureState extends State<_SettingsColorDisclosure> {
+  bool _expanded = false;
+  final _focusNode = FocusNode();
+  final _optionFocus = {
+    for (final value in AppColorSourcePreference.values) value: FocusNode(),
+  };
+
+  void _toggle() {
+    if (!widget.enabled) return;
+    setState(() => _expanded = !_expanded);
+    if (!_expanded) _focusNode.requestFocus();
+  }
+
+  Future<void> _select(AppColorSourcePreference? value) async {
+    if (!widget.enabled || value == null || value == widget.current) return;
+    await widget.onSelected(value);
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.enabled && _expanded) {
+        _optionFocus[value]!.requestFocus();
+      }
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    for (final focus in _optionFocus.values) {
+      focus.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
+    final titleStyle = theme.textTheme.bodyLarge!.copyWith(
+      color: widget.enabled ? theme.colorScheme.onSurface : theme.disabledColor,
+    );
+    final valueStyle = theme.textTheme.bodyMedium!.copyWith(
+      color: widget.enabled
+          ? theme.colorScheme.onSurfaceVariant
+          : theme.disabledColor,
+    );
+    final value = Text(
+      widget.currentLabel,
+      key: const ValueKey('settings-color-source-selector-current'),
+      style: valueStyle,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final inline = _fitsInline(
+              context,
+              constraints.maxWidth,
+              widget.title,
+              titleStyle,
+              widget.currentLabel,
+              valueStyle,
+            );
+            return Semantics(
+              expanded: _expanded,
+              child: ListTile(
+                key: widget.controlKey,
+                focusNode: _focusNode,
+                enabled: widget.enabled,
+                leading: Icon(
+                  widget.icon,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                title: inline
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: Text(widget.title, style: titleStyle),
+                          ),
+                          const SizedBox(width: 16),
+                          value,
+                        ],
+                      )
+                    : Text(widget.title, style: titleStyle),
+                subtitle: inline ? null : value,
+                minVerticalPadding: 12,
+                trailing: ExcludeSemantics(
+                  child: AnimatedRotation(
+                    key: const ValueKey('settings-color-chevron'),
+                    turns: _expanded ? 0.5 : 0,
+                    duration: duration,
+                    curve: Curves.easeInOutCubic,
+                    child: const Icon(Icons.expand_more_rounded),
+                  ),
+                ),
+                onTap: widget.enabled ? _toggle : null,
+              ),
+            );
+          },
+        ),
+        Builder(
+          builder: (context) {
+            final details = _expanded
+                ? Padding(
+                    key: const ValueKey('settings-color-details'),
+                    padding: const EdgeInsetsDirectional.fromSTEB(
+                      24,
+                      0,
+                      16,
+                      12,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        RadioGroup<AppColorSourcePreference>(
+                          groupValue: widget.current,
+                          onChanged: (value) => unawaited(_select(value)),
+                          child: Column(
+                            children: [
+                              for (final choice in widget.choices)
+                                RadioListTile<AppColorSourcePreference>(
+                                  key: choice.key,
+                                  value: choice.value,
+                                  enabled: widget.enabled,
+                                  focusNode: _optionFocus[choice.value],
+                                  title: Text(choice.label),
+                                  subtitle: Text(choice.description!),
+                                  contentPadding: EdgeInsets.zero,
+                                  minVerticalPadding: 8,
+                                ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsetsDirectional.fromSTEB(
+                            16,
+                            8,
+                            16,
+                            4,
+                          ),
+                          child: Text(
+                            widget.availability,
+                            key: widget.availabilityKey,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        _SettingsPaletteRow(
+                          title: context.l10n.settingsPalettePreviewLabel,
+                        ),
+                      ],
+                    ),
+                  )
+                : const SizedBox(width: double.infinity, height: 0);
+            // A zero-duration AnimatedSize starts synchronously during layout
+            // on this SDK. Reduced motion renders directly, with no height tween.
+            if (duration == Duration.zero) return details;
+            return AnimatedSize(
+              key: const ValueKey('settings-color-size'),
+              duration: duration,
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.topCenter,
+              child: details,
+            );
+          },
+        ),
+      ],
     );
   }
 }
