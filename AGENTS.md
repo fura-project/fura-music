@@ -49,6 +49,23 @@ Execution mode never changes reasoning depth, engineering rigor, testing require
 
 Within that scope, take responsibility for inspection, reproduction, task-specific evidence research, implementation, secret-safe diagnostics, regression tests, automated checks, available authorized runtimes (including Waydroid/emulator evidence where applicable), generated-code and applicable CI verification, lifecycle/concurrency/memory/performance and failure-path investigation, diff review, and blocker/debt documentation. This is not limited to the shell commands the Human happened to enumerate. Neither mode authorizes unsafe live traffic, real-account operations, new runtimes, remote writes or other actions outside the task's existing authority.
 
+### Initiative and follow-through
+
+Bias toward action and follow-through inside the already-authorized product/task direction. Infer the Human's intended engineering goal, not merely the narrowest literal wording of one subtask.
+
+The **engineering investigation boundary may expand when evidence leads there**; the **product boundary may not**. Directly coupled implementation, integration, realistic runtime behavior, failure paths, lifecycle/concurrency effects, and regressions exposed by the Agent's own changes or validation remain part of the same work when they are necessary to establish the authorized goal.
+
+After an apparent completion, do not stop at the first green targeted test or the first satisfied acceptance line. Before handing off:
+
+1. exercise the changed behavior in the nearest realistic available runtime when one is already authorized and useful;
+2. inspect directly adjacent failure/lifecycle paths and the final diff for stale state, ownership errors, races, incomplete integration, or contradictory evidence;
+3. if this reveals a concrete machine-verifiable defect inside the current Human-defined WHAT or autonomous direction, treat it as continuing evidence and fix/verify it without asking for another prompt;
+4. re-inventory remaining machine work after that fix rather than assuming the original task boundary is still sufficient.
+
+In `HUMAN_DIRECTED`, this rule may deepen or widen the engineering investigation needed to complete the same Human-chosen WHAT, but it never authorizes a different WHAT. In `AUTONOMOUS_DEVELOPMENT`, it may also produce the next finite evidence-backed WHAT inside the already-authorized direction.
+
+Prefer a reasonable evidence-backed assumption plus validation over requesting clarification when the Human's engineering goal and authority boundary are already clear. Stop only when remaining work genuinely requires Human/device/external evidence, a precise blocker prevents safe progress, or the next action would leave the authorized direction.
+
 ### Persistence and Human-only switching
 
 Persist the current mode under `execution.mode` in `PROGRESS.md`. It remains effective until the Human explicitly changes it. Only the Human may switch:
