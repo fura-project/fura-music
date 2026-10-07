@@ -9,13 +9,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from prepare_flutter_package_config import prepare_package_config
+from prepare_flutter_package_config import private_package_config
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 FLUTTER_PROJECT = REPOSITORY_ROOT / "apps" / "flutter"
 PACKAGE_CONFIG = FLUTTER_PROJECT / ".dart_tool" / "package_config.json"
 SUPPORTED_TARGETS = {"apk", "ios", "linux", "macos", "windows"}
+PRIVATE_REGISTRANT_DEFINE = "--dart-define=FURA_PATH_PRIVATE_REGISTRANT=1"
 
 
 def encoded_rust_flags(
@@ -60,10 +61,13 @@ def main() -> int:
         Path.home(),
     )
 
-    base_command = [flutter, "build", *build_arguments]
+    # Generated package: vs file: registrant URIs must not share an incremental
+    # kernel. Flutter keys its kernel by dart-defines, not by this URI mapping.
+    # This compile-only namespace does not select a runtime playback stack.
+    base_command = [flutter, "build", *build_arguments, PRIVATE_REGISTRANT_DEFINE]
     run([*base_command, "--config-only"], environment)
-    prepare_package_config(PACKAGE_CONFIG)
-    run([*base_command, "--no-pub"], environment)
+    with private_package_config(PACKAGE_CONFIG):
+        run([*base_command, "--no-pub"], environment)
     return 0
 
 

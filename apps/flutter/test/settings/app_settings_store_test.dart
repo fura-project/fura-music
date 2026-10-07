@@ -6,6 +6,98 @@ import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 
 void main() {
+  test(
+    'unregistered native preferences use defaults without eager crash',
+    () async {
+      final store = AppSettingsStore();
+
+      final loaded = await store.load();
+      expect(loaded.state, AppSettingsLoadState.storageUnavailable);
+      expect(loaded.settings, AppSettings.defaults);
+      expect(
+        await store.save(AppSettings.defaults),
+        AppSettingsWriteResult.storageUnavailable,
+      );
+      expect(await store.reset(), AppSettingsWriteResult.storageUnavailable);
+    },
+  );
+
+  test(
+    'factory is lazy and successful backend is shared by all operations',
+    () async {
+      var constructions = 0;
+      final storage = _MemoryDocumentStorage();
+      final store = AppSettingsStore(
+        storageFactory: () {
+          constructions++;
+          return storage;
+        },
+      );
+      expect(constructions, 0);
+      expect((await store.load()).state, AppSettingsLoadState.defaults);
+      expect(
+        await store.save(AppSettings.defaults),
+        AppSettingsWriteResult.saved,
+      );
+      expect((await store.load()).state, AppSettingsLoadState.stored);
+      expect(await store.reset(), AppSettingsWriteResult.saved);
+      expect(constructions, 1);
+    },
+  );
+
+  test(
+    'known construction failure remains unavailable without fake writes',
+    () async {
+      var constructions = 0;
+      final store = AppSettingsStore(
+        storageFactory: () {
+          constructions++;
+          throw const AppSettingsStorageInitializationUnavailable();
+        },
+      );
+      expect(
+        (await store.load()).state,
+        AppSettingsLoadState.storageUnavailable,
+      );
+      expect(
+        await store.save(AppSettings.defaults),
+        AppSettingsWriteResult.storageUnavailable,
+      );
+      expect(await store.reset(), AppSettingsWriteResult.storageUnavailable);
+      expect(constructions, 1);
+    },
+  );
+
+  test(
+    'programmer factory errors propagate without poisoning mutation tail',
+    () async {
+      for (final error in <Object>[
+        StateError('programmer error'),
+        ArgumentError('bad factory'),
+      ]) {
+        var fail = true;
+        final store = AppSettingsStore(
+          storageFactory: () {
+            if (fail) throw error;
+            return _MemoryDocumentStorage();
+          },
+        );
+        await expectLater(store.load(), throwsA(same(error)));
+        await expectLater(
+          store.save(AppSettings.defaults),
+          throwsA(same(error)),
+        );
+        await expectLater(store.reset(), throwsA(same(error)));
+        fail = false;
+        expect(
+          await store.save(AppSettings.defaults),
+          AppSettingsWriteResult.saved,
+        );
+        expect((await store.load()).state, AppSettingsLoadState.stored);
+      }
+    },
+  );
+
   test('loads validated defaults when no settings document exists', () async {
     final storage = _MemoryDocumentStorage();
 

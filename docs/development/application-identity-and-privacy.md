@@ -80,6 +80,16 @@ Android's system-Cargo path applies the corresponding C/C++ prefix maps as
 well. Symbol files produced for a private build are diagnostics and must not be
 uploaded as application artifacts.
 
+The generated package-URI mapping is scoped to that build and removed from
+the ordinary pub configuration even on build failure. Private builds carry
+the compile-only `FURA_PATH_PRIVATE_REGISTRANT=1` define to give them a distinct
+incremental kernel namespace. Flutter's kernel cache key includes caller
+dart-defines but not the generated registrant URI: switching a cached kernel
+between ordinary `file:` and private `package:` registrants can skip root
+isolate Dart plugin registration. Do not run the preparation helper alone as
+a persistent development configuration, reuse its private kernels for ordinary
+Debug runs, or compensate with manual root-isolate plugin registration.
+
 Flutter Debug kernels intentionally contain source URIs so debuggers can
 resolve application and dependency code. They are not hex-patched or stripped
 after compilation. Android x64 development artifacts are therefore built in

@@ -7,7 +7,9 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from contextlib import nullcontext
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
@@ -138,6 +140,76 @@ class PrivacyAuditTests(unittest.TestCase):
             flags,
         )
         self.assertIn("--remap-path-prefix=/home/tester=/fura-build", flags)
+
+    def test_private_uri_scope_restores_pub_config_on_success_and_failure(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="private uri with spaces ") as directory:
+            path = Path(directory) / "package_config.json"
+            original = json.dumps(
+                {
+                    "configVersion": 2,
+                    "packages": [{
+                        "name": "flutterustmusic",
+                        "rootUri": "../",
+                        "packageUri": "lib/",
+                        "languageVersion": "3.13",
+                    }],
+                }
+            ).encode()
+            for fail in (False, True):
+                path.write_bytes(original)
+                expectation = self.assertRaises(RuntimeError) if fail else nullcontext()
+                with expectation:
+                    with package_config.private_package_config(path):
+                        self.assertIn(
+                            package_config.SYNTHETIC_PACKAGE_NAME, path.read_text()
+                        )
+                        if fail:
+                            raise RuntimeError("synthetic compiler failure")
+                self.assertEqual(path.read_bytes(), original)
+
+            package_config.prepare_package_config(path)
+            with package_config.private_package_config(path):
+                pass
+            self.assertNotIn(package_config.SYNTHETIC_PACKAGE_NAME, path.read_text())
+
+    def test_wrapper_separates_kernel_keys_without_changing_runtime_defines(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "package_config.json"
+            original = json.dumps(
+                {"packages": [{"name": "flutterustmusic", "languageVersion": "3.13"}]}
+            ).encode()
+            for target in sorted(privacy_build.SUPPORTED_TARGETS):
+                with self.subTest(target=target):
+                    path.write_bytes(original)
+                    commands = []
+
+                    def fake_run(command, environment):
+                        commands.append(command)
+                        if "--no-pub" in command:
+                            self.assertIn(
+                                package_config.SYNTHETIC_PACKAGE_NAME, path.read_text()
+                            )
+                            raise RuntimeError("synthetic build failure")
+
+                    with (
+                        patch.object(privacy_build, "PACKAGE_CONFIG", path),
+                        patch.object(privacy_build, "run", fake_run),
+                        patch.object(privacy_build.shutil, "which", return_value="flutter"),
+                        patch.object(sys, "argv", [
+                            "wrapper", target, "--debug",
+                            "--dart-define=FURA_AUDIO_ENGINE=audioplayers",
+                        ]),
+                    ):
+                        with self.assertRaises(RuntimeError):
+                            privacy_build.main()
+                    self.assertEqual(path.read_bytes(), original)
+                    self.assertEqual(len(commands), 2)
+                    for command in commands:
+                        self.assertEqual(command[2], target)
+                        self.assertIn(privacy_build.PRIVATE_REGISTRANT_DEFINE, command)
+                        self.assertIn(
+                            "--dart-define=FURA_AUDIO_ENGINE=audioplayers", command
+                        )
 
 if __name__ == "__main__":
     unittest.main()

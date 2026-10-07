@@ -9,6 +9,44 @@ import 'package:integration_test/integration_test.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  // Runtime overrides on Linux let separate processes reuse the same test
+  // binary. Android can use dart-defines instead; neither path selects a real
+  // settings key or reads account data.
+  final restartPhase =
+      (kIsWeb ? null : Platform.environment['FURA_SETTINGS_STORAGE_PHASE']) ??
+      const String.fromEnvironment('FURA_SETTINGS_STORAGE_PHASE');
+  final restartNonce =
+      (kIsWeb ? null : Platform.environment['FURA_SETTINGS_STORAGE_NONCE']) ??
+      const String.fromEnvironment('FURA_SETTINGS_STORAGE_NONCE');
+  if (restartPhase.isNotEmpty) {
+    if (!{'seed', 'verify', 'reset'}.contains(restartPhase) ||
+        !RegExp(r'^[a-zA-Z0-9_-]{8,64}$').hasMatch(restartNonce)) {
+      throw ArgumentError('invalid disposable settings restart fixture');
+    }
+    testWidgets('native settings survive a process restart ($restartPhase)', (
+      _,
+    ) async {
+      final storage = SharedPreferencesAppSettingsDocumentStorage(
+        documentKey:
+            'flutterustmusic.integration.settings.restart.$restartNonce',
+      );
+      final store = AppSettingsStore(storage: storage);
+      const expected = AppSettings(theme: AppThemePreference.dark);
+      if (restartPhase == 'seed') {
+        expect(await storage.read(), isNull, reason: 'test-key collision');
+        expect(await store.save(expected), AppSettingsWriteResult.saved);
+      } else {
+        final loaded = await store.load();
+        expect(loaded.state, AppSettingsLoadState.stored);
+        expect(loaded.settings, expected);
+        if (restartPhase == 'reset') {
+          expect(await store.reset(), AppSettingsWriteResult.saved);
+          expect(await storage.read(), isNull);
+          expect((await store.load()).state, AppSettingsLoadState.defaults);
+        }
+      }
+    }, skip: kIsWeb || !(Platform.isLinux || Platform.isAndroid));
+  }
 
   testWidgets('native preferences round-trip a disposable settings document', (
     _,

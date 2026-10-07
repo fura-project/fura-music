@@ -65,6 +65,18 @@ provides this product's MediaKit runtime, and both Linux playback integration
 and the Android native-library inventory prove that an extra audio package is
 not needed for this experiment.
 
+**2026-10-07 ownership checkpoint:** default requested/effective policy is
+unchanged. No dependency was retired. `audio_service` still owns the handler
+path used by current Linux Fura MPRIS as well as rollback/iOS fallback;
+`audio_service_platform_interface` and `dbus` are direct project APIs.
+`audio_service_win` is not an endorsed/transitive dependency of AudioService
+0.18.19: its explicit pin provides Windows rollback registration. Native and
+Dart registrant presence does not itself activate a system session. See the
+[Linux startup and dependency audit](linux-startup-playback-dependency-audit-2026-10-07.md)
+for exact owners, transitive platform packages and retirement gates. This
+checkpoint does not rewrite the dated physical-device failure above or claim
+new Windows/Apple runtime acceptance.
+
 ## Selector and four combinations
 
 The internal compile-time selector is intentionally absent from Settings:
@@ -189,7 +201,11 @@ Two Android behaviors remain runtime risks:
 - `onTaskRemoved` stops the service when it is not playing or has no media
   item, so paused-task-swipe and notification retention require physical proof.
 
-Fura does not enable the package's optional background keepalive.
+The current Android adapter briefly primes the package's public background
+keepalive flag before service activation to meet the foreground-service
+startup deadline, then disables it and publishes Queue-owned state. It does
+not introduce an independent keepalive or playback policy. The dated startup
+fix and runtime evidence remain separate from dependency-retirement authority.
 
 ### Apple
 

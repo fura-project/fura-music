@@ -1,15 +1,43 @@
 ---
 execution:
-  mode: AUTONOMOUS_DEVELOPMENT
+  mode: HUMAN_DIRECTED
   work_domain: CORE
-  state: ANDROID_HANDOFF_DISPATCH_MACHINE_VERIFIED_PENDING_DEVICE
-  acceptance_milestone: ANDROID_REPEAT_ONE_LIFECYCLE_STABILITY
-  active_workstream: ANDROID_PLAYBACK_LIFECYCLE_REGRESSION
-  current_task: NATIVE_CONTROL_QUIESCENCE_AND_TERMINAL_DISPATCH_REGRESSION
-  next_action: PHYSICAL_LIFECYCLE_AND_FRESH_NATIVE_DELAY_EVIDENCE
+  state: LINUX_STARTUP_AND_PLAYBACK_DEPENDENCY_AUDIT_MACHINE_VERIFIED
+  acceptance_milestone: LINUX_DEBUG_STARTUP_AND_DEPENDENCY_OWNERSHIP
+  active_workstream: LINUX_STARTUP_AND_PLAYBACK_DEPENDENCY_AUDIT
+  current_task: LINUX_STARTUP_AND_PLAYBACK_DEPENDENCY_OWNERSHIP_AUDIT
+  next_action: HUMAN_REVIEW_SCOPED_DIFF_AND_EXTERNAL_PLATFORM_EVIDENCE
 ---
 
 # Current State
+
+- **2026-10-07 Human-directed Linux startup/dependency audit:** Human explicitly
+  selected `HUMAN_DIRECTED / CORE`; starting HEAD and tracked origin/main were
+  `bd1a6d73db7fce874bf78c7191a2d79b448b3980`, worktree clean. Generated Linux
+  Dart-only SharedPreferences registration was present. A controlled private
+  registrant URI/shared incremental-kernel transition reproduced the exact
+  pre-Rust constructor crash; an independent compiler namespace worked with
+  the same packages/SDK. The privacy wrapper now scopes/restores its package
+  mapping and separates private kernels by a compile-only define. Settings
+  owns a lazy backend factory: the known registration-construction failure
+  returns defaults/unavailable with a coarse diagnostic; programmer factory
+  errors still propagate. No schema/store duplication or root-isolate manual
+  registration. Fixed private Debug, subsequent ordinary Debug, private Release
+  and another ordinary Debug all reach first frame; no Settings fallback masks
+  those passes. Existing native Settings tests prove save/restart-read/reset in
+  isolated processes. MPRIS, both music engines and local MV integrations,
+  affected unit/widget suites, analysis/format and source/Release privacy checks
+  pass. Ownership audit retains all ten playback dependencies, including the
+  explicit Windows AudioService rollback pin and current Linux handler API;
+  no dependency versions/entries, lockfile or generated registrants changed.
+  Only stale normative ownership/default comments and TD-008 facts were
+  corrected. Playback/focus/Queue, Provider, auth, UI and governance definitions
+  are unchanged. New remote CI and non-Linux native wrapper builds remain
+  unverified; no Windows rollback retirement or physical-device acceptance is
+  claimed. Exact controls, ownership/retirement matrix and evidence boundaries:
+  [Linux startup/dependency audit](docs/research/linux-startup-playback-dependency-audit-2026-10-07.md).
+  Candidate awaits Human review; no new WHAT selected, no commit/push/reset/
+  restore/clean.
 
 - **2026-10-07 independent autonomous reliability audit:** starting HEAD,
   tracked and live remote main were

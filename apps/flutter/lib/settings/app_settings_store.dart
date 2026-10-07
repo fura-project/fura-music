@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -29,6 +30,25 @@ abstract interface class AppSettingsDocumentStorage {
   Future<void> delete();
 }
 
+/// A known backend-initialization failure, not an arbitrary factory error.
+class AppSettingsStorageInitializationUnavailable implements Exception {
+  const AppSettingsStorageInitializationUnavailable();
+}
+
+AppSettingsDocumentStorage _createNativeStorage() {
+  try {
+    return SharedPreferencesAppSettingsDocumentStorage();
+  } on StateError catch (error) {
+    // shared_preferences 2.5.5 throws this before any platform I/O. Keep the
+    // registration defect visible; unrelated construction bugs must propagate.
+    if (error.message ==
+        'The SharedPreferencesAsyncPlatform instance must be set.') {
+      throw const AppSettingsStorageInitializationUnavailable();
+    }
+    rethrow;
+  }
+}
+
 class SharedPreferencesAppSettingsDocumentStorage
     implements AppSettingsDocumentStorage {
   SharedPreferencesAppSettingsDocumentStorage({
@@ -53,16 +73,46 @@ class SharedPreferencesAppSettingsDocumentStorage
 }
 
 class AppSettingsStore {
-  AppSettingsStore({AppSettingsDocumentStorage? storage})
-    : _storage = storage ?? SharedPreferencesAppSettingsDocumentStorage();
+  AppSettingsStore({
+    AppSettingsDocumentStorage? storage,
+    AppSettingsDocumentStorage Function()? storageFactory,
+  }) : assert(storage == null || storageFactory == null),
+       _storage = storage,
+       _storageFactory = storageFactory ?? _createNativeStorage;
 
-  final AppSettingsDocumentStorage _storage;
+  AppSettingsDocumentStorage? _storage;
+  final AppSettingsDocumentStorage Function() _storageFactory;
+  bool _initializationUnavailable = false;
   Future<void> _mutationTail = Future.value();
 
+  AppSettingsDocumentStorage? _backend() {
+    if (_initializationUnavailable) return null;
+    if (_storage != null) return _storage;
+    try {
+      return _storage = _storageFactory();
+    } on AppSettingsStorageInitializationUnavailable {
+      _initializationUnavailable = true;
+      debugPrint(
+        'FURA_DIAGNOSTIC settings_storage phase=construct '
+        'outcome=unavailable reason=plugin_unregistered',
+      );
+      return null;
+    }
+  }
+
   Future<AppSettingsLoadResult> load() async {
+    // Resolve outside the I/O catch: programmer errors in factories are not
+    // storage-unavailable outcomes.
+    final storage = _backend();
     final String? document;
     try {
-      document = await _storage.read();
+      if (storage == null) {
+        return const AppSettingsLoadResult(
+          settings: AppSettings.defaults,
+          state: AppSettingsLoadState.storageUnavailable,
+        );
+      }
+      document = await storage.read();
     } on Object {
       return const AppSettingsLoadResult(
         settings: AppSettings.defaults,
@@ -203,6 +253,8 @@ class AppSettingsStore {
 
   Future<AppSettingsWriteResult> save(AppSettings settings) =>
       _serializeMutation(() async {
+        final storage = _backend();
+        if (storage == null) return AppSettingsWriteResult.storageUnavailable;
         final document = jsonEncode(<String, Object>{
           'schemaVersion': AppSettings.currentSchemaVersion,
           'theme': settings.theme.name,
@@ -213,7 +265,7 @@ class AppSettingsStore {
           'localePreference': settings.localePreference.name,
         });
         try {
-          await _storage.write(document);
+          await storage.write(document);
           return AppSettingsWriteResult.saved;
         } on Object {
           return AppSettingsWriteResult.storageUnavailable;
@@ -221,8 +273,10 @@ class AppSettingsStore {
       });
 
   Future<AppSettingsWriteResult> reset() => _serializeMutation(() async {
+    final storage = _backend();
+    if (storage == null) return AppSettingsWriteResult.storageUnavailable;
     try {
-      await _storage.delete();
+      await storage.delete();
       return AppSettingsWriteResult.saved;
     } on Object {
       return AppSettingsWriteResult.storageUnavailable;

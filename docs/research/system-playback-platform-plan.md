@@ -11,7 +11,7 @@
 
 ## Scope and invariant
 
-HD-014 authorizes operating-system music controls on Android, iOS, macOS, Linux, and Windows. One root `AppPlaybackHost` owns the existing Flutter playback controller, selected audio engine and Rust positional Queue handle for the application lifetime. Its `ProjectSystemAudioHandler` is the permanent service-facing adapter over that owner; it does not create a second player, duplicate Queue state, expose credentials or publish expiring QQ media URLs.
+HD-014 authorizes operating-system music controls on Android, iOS, macOS, Linux, and Windows. One root `AppPlaybackHost` owns the existing Flutter playback controller, selected audio engine and Rust positional Queue handle for the application lifetime. The selected system edge is either `FuraMediaSessionAdapter` or the retained `ProjectSystemAudioHandler` path (AudioService/Fura MPRIS). It does not create a second player, duplicate Queue state, expose credentials or publish expiring media URLs.
 
 Common system state is limited to provider-neutral current Track metadata, artwork, duration, position, playing/processing state, previous/next availability, and shuffle/repeat projection. System commands delegate to the existing controller. Product pages may add and remove listeners, but cannot attach, detach, replace, or dispose the playback owner. Only application shutdown closes the host and clears terminal platform state.
 
@@ -19,15 +19,15 @@ Common system state is limited to provider-neutral current Track metadata, artwo
 
 | Target | Native surface | Implemented wiring | Current evidence | Remaining acceptance |
 | --- | --- | --- | --- | --- |
-| Android | MediaSession, foreground media notification, lock screen, headset/media buttons | `AudioServiceActivity`, media foreground service/receiver, wake lock and Android 14 media-service permissions; app-lifetime handler/controller owner; one explicitly activated music audio session | Handler delegation/lifetime/unit regressions; AudioService success/failure seam; Android plugin-source lifecycle audit; ARM64 packaging; Linux real-session integration of the same handler contract | [Physical runtime matrix](android-system-playback-runtime-checklist.md): notification and lock-screen controls, headset buttons, audio focus/interruption, route loss, Activity navigation and background/task lifecycle |
+| Android | MediaSession, foreground media notification, lock screen, headset/media buttons | Default D uses `FuraMediaSessionAdapter` / Media3; AudioService declarations and A/B path remain rollback; shared app-lifetime Queue owner and `audio_session` focus | Selector and single-edge unit regressions; Android packaging and Waydroid lifecycle evidence in the dated audits, not physical acceptance | [Physical runtime matrix](android-system-playback-runtime-checklist.md): notification and lock-screen controls, headset buttons, audio focus/interruption, route loss, Activity navigation and background/task lifecycle |
 | iOS | Control Center, lock screen, remote commands, background audio | Official Darwin `audio_service` implementation, `UIBackgroundModes=audio`, music audio session | Generated plugin/Info.plist inspection only | macOS-host build plus physical/simulator remote commands, interruptions, route loss and background continuity |
-| macOS | Now Playing/remote commands and media keys | Official Darwin `audio_service` and `audio_session` registration | Generated plugin inspection only | macOS-host build and runtime command/metadata verification |
+| macOS | Now Playing/remote commands and media keys | Default D uses `flutter_media_session`; official Darwin `audio_service` remains A/B rollback; `audio_session` focus retained | Selection, adapter tests and generated plugin inspection; no new macOS build in this Linux audit | macOS-host build and runtime command/metadata verification |
 | Linux | MPRIS over the desktop session bus | Project-owned `AudioServicePlatform` edge using `dbus`; the shared handler remains the only command/state adapter | Linux Release build; unit protocol regressions; real session-bus integration verifies registration, properties and shuffle/repeat round trips without account access | KDE/GNOME shell metadata/transport, advancing progress, absolute/relative seek, shuffle/repeat and shutdown/stale-state observation |
-| Windows | System Media Transport Controls | `audio_service_win` platform implementation | Generated Windows registration and source-level capability audit only | Native Windows build/runtime; metadata and basic transport; TD-008 timeline/seek limitation |
+| Windows | System Media Transport Controls | Default D uses `flutter_media_session`; explicit `audio_service_win` platform pin supports A/B rollback | Selection and single-edge tests; generated Dart/native registration and locked package source inspected; no new Windows build in this Linux audit | Native Windows build/runtime; default-D repeat/shuffle callback semantics and rollback TD-008 timeline/seek limitation |
 
 ## Shared behavior
 
-- Play, pause, stop, previous, next, Queue-item selection, seek, shuffle, and repeat enter through one app-lifetime `ProjectSystemAudioHandler` and are permitted only when its existing controller permits them. Removing a page listener cannot disable those commands.
+- Play, pause, stop, previous, next, supported Queue-item selection, seek, shuffle, and repeat enter through the one selected app-lifetime system adapter and are permitted only when its existing controller permits them. Removing a page listener cannot disable those commands.
 - Current metadata never contains a resolved playback URI, vkey, Cookie, credential, or raw QQ response. Artwork accepts only HTTP(S) URIs already present in the provider-neutral Track summary.
 - `AudioSessionConfiguration.music()` establishes the one application audio
   session. Immediately before playback, the engine explicitly activates that
@@ -36,7 +36,7 @@ Common system state is limited to provider-neutral current Track metadata, artwo
   cannot race a second `AudioFocusRequest` against `audio_session`. Non-duck
   interruptions and output-route loss pause the current owner. No automatic
   resume policy is invented.
-- `AudioService.init` receives the already-constructed handler/controller before credential restoration. Failure to initialize an unavailable platform session is non-fatal and returns a foreground-only host around that same controller; it does not create a second fallback player or Queue.
+- The selected edge initializes against the already-constructed controller before credential restoration. Only the AudioService/Fura MPRIS path calls `AudioService.init`; the Flutter Media Session path does not. Initialization failure returns a foreground-only host around that same controller with controls explicitly unavailable, never another fallback player or Queue.
 - Android media-session notifications are notification-permission exempt. The
   app declares `POST_NOTIFICATIONS` plus the foreground-service permissions and
   media-playback service type, while first play does not depend on the ordinary
@@ -45,13 +45,13 @@ Common system state is limited to provider-neutral current Track metadata, artwo
 ## Known target differences
 
 - Linux exposes timestamp-projected `Position`, Track-bound `SetPosition`, relative `Seek`, shuffle, repeat and bounded volume through the existing handler. It intentionally omits MPRIS TrackList/Queue browsing because the Rust positional Queue remains authoritative. Capabilities derive from the current handler state rather than being permanently advertised.
-- Windows currently supports metadata and basic transport only. Timeline, progress scrubbing, Queue exposure, and system seek are TD-008.
+- The Windows AudioService rollback supports metadata and basic transport only (TD-008). The default-D candidate has timeline/seek APIs but still needs native runtime acceptance, especially for repeat/shuffle callback values; API presence is not acceptance.
 - Mobile background continuity keeps the root playback owner independent from Activity/page navigation through the platform media mechanism; it does not add background downloads, autoplay, Queue persistence, or restart-after-process-death restoration.
 - Desktop system controls work only while the application process is alive. They are not a daemon or sidecar.
 
 ## Dependency decision
 
-The integration pins `audio_service` 0.18.19 and `audio_session` 0.2.4 for the common media-session/audio-focus contract, `audio_service_win` 0.0.3 for Windows, and the already transitive MIT-licensed `audio_service_platform_interface` 0.1.3 plus `dbus` 0.7.15 directly for Linux. A maintainer runtime report proved `audio_service_mpris` 0.2.1 unsuitable for the accepted surface: it retained a static position sample and did not implement the advertised seek/shuffle/repeat behavior. The newer prerelease was source-audited but still lacked the required complete position/seek/Track identity behavior, so upgrading would not resolve the defect. The replacement remains one isolated Linux protocol edge over the same shared handler, not another playback owner; its maintenance cost is TD-009. Windows maturity remains isolated in TD-008.
+Default-D test builds pin `media_kit` 1.2.6 and `flutter_media_session` 3.0.5. `audio_session` 0.2.4 remains the common focus/interruption owner, not a redundant system edge. `audio_service` 0.18.19 remains rollback, iOS fallback and the current Linux handler API; the non-endorsed Windows rollback implementation needs its explicit `audio_service_win` 0.0.3 pin. Linux directly imports `audio_service_platform_interface` 0.1.3 and `dbus` 0.7.15, so their direct dependencies are intentional even where also transitive. A maintainer runtime report proved `audio_service_mpris` 0.2.1 unsuitable for the accepted surface: it retained a static position sample and did not implement the advertised seek/shuffle/repeat behavior. The newer prerelease was source-audited but still lacked the required complete position/seek/Track identity behavior, so upgrading would not resolve the defect. The replacement remains one isolated Linux protocol edge over the same shared handler, not another playback owner; its maintenance cost is TD-009. Windows maturity remains isolated in TD-008. See the [2026-10-07 ownership audit](linux-startup-playback-dependency-audit-2026-10-07.md) for the complete dependency inventory and retirement gates.
 
 ## Android ownership and plugin-source audit (2026-09-15)
 

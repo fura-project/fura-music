@@ -118,17 +118,26 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Status:** Open
 
-**Problem:** Windows system playback currently uses `audio_service_win` 0.0.3. It implements SMTC registration, metadata, play/pause/stop/previous/next callbacks and coarse playing state, but its platform adapter does not publish a playback timeline, accept seek, or expose the Queue. The package is young and has not been built or run on a Windows host in this checkout.
+**Problem:** The retained Windows `audio_service` rollback uses the directly pinned `audio_service_win` 0.0.3. It implements SMTC registration, metadata, play/pause/stop/previous/next callbacks and coarse playing state, but its platform adapter does not publish a playback timeline, accept seek, or expose the Queue. The current no-define test default instead selects `flutter_media_session` 3.0.5; its native repeat/shuffle callback-value semantics still need Windows runtime acceptance. Neither adapter was built or run on a Windows host during the 2026-10-07 Linux ownership audit. Prior build evidence does not prove those runtime claims.
 
 **Why accepted:** The package preserves the shared `audio_service` handler and single playback owner, provides the bounded transport surface already requested, and avoids inventing a second Windows-only playback architecture. No Windows runtime or release claim is being made.
 
-**Impact:** Windows can be wired for basic SMTC transport and metadata, but this repository cannot yet claim system progress scrubbing, timeline accuracy, Queue selection, or runtime compatibility there.
+**Impact:** The Windows AudioService rollback has basic SMTC transport and metadata only. Default D exposes richer candidate APIs, but this audit cannot claim their timeline accuracy, callback semantics or native runtime compatibility; neither default selection nor successful compilation closes that gate.
 
 **Risk:** A Windows build may expose plugin or lifecycle defects, and users could see controls whose capabilities differ from Android, Apple, or Linux. A dependency update could also change native behavior without a Dart compile error.
 
 **Suggested solution:** Before Windows system playback acceptance, run a native Windows integration against the existing handler, verify metadata and every advertised command, and either contribute/consume an evidence-backed timeline/seek implementation or keep those actions explicitly unsupported. Review the exact package/native license inventory with release preparation.
 
 **Trigger condition:** Schedule when a Windows build environment becomes available or before any Windows system-playback/release claim. Reassess immediately if the platform package changes ownership, compatibility, or API surface.
+
+**2026-10-07 ownership audit:** `audio_service` 0.18.19 does not depend on or
+endorse a Windows implementation. The explicit `audio_service_win` dependency
+provides both generated native registration and Dart
+`AudioServicePlatform.instance` registration for A/B rollback. Plugin
+registration alone does not activate SMTC: the package initializes it on
+`configure` / `initializeSMTC`. Keep the pin until a Human-approved rollback
+retirement or replacement plus native Windows build/runtime evidence. The
+default-D selection is not that retirement authority.
 
 ## TD-009 — Linux MPRIS protocol edge is project-owned
 
