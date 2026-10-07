@@ -26,6 +26,13 @@ abstract interface class MediaKitAudioPlayer {
   Stream<Duration> get position;
   Stream<String> get errors;
 
+  /// Log messages are uncorrelated observations, not terminal signals.
+  /// This separate stream reports a source that mpv actually unloaded without
+  /// an explicit stop/replacement. Values identify that source, never its URI.
+  Stream<int> get sourceFailures;
+  int get sourceGeneration;
+  bool get sourceFailed;
+
   Future<void> open(Uri source);
   Future<void> play();
   Future<void> pause();
@@ -43,10 +50,51 @@ class PlatformMediaKitAudioPlayer implements MediaKitAudioPlayer {
           title: 'fura music',
           logLevel: MPVLogLevel.error,
         ),
-      );
+      ) {
+    final native = _player.platform;
+    if (native is NativePlayer) {
+      native.onLoadHooks.add(_onLoad);
+      native.onUnloadHooks.add(_onUnload);
+    }
+  }
 
   final Player _player;
+  @visibleForTesting
+  NativePlayer get debugNativePlayer => _player.platform! as NativePlayer;
   bool _cacheConfigured = false;
+  int _sourceGeneration = 0;
+  int _loadedGeneration = 0;
+  int _expectedUnloadThrough = 0;
+  int? _failedGeneration;
+  Completer<void>? _loadAcknowledgement;
+  final _sourceFailures = StreamController<int>.broadcast();
+
+  @override
+  int get sourceGeneration => _sourceGeneration;
+  @override
+  bool get sourceFailed => _failedGeneration == _sourceGeneration;
+  @override
+  Stream<int> get sourceFailures => _sourceFailures.stream;
+
+  Future<void> _onLoad() async {
+    _loadedGeneration = _sourceGeneration;
+    final acknowledgement = _loadAcknowledgement;
+    if (acknowledgement != null && !acknowledgement.isCompleted) {
+      acknowledgement.complete();
+    }
+  }
+
+  Future<void> _onUnload() async {
+    final generation = _loadedGeneration;
+    // Public mpv on_unload runs before closing the file: it cannot be resumed
+    // at this point. keep-open EOF/seek never unloads the retained source.
+    // Explicit stop/open declares the retiring source before native dispatch.
+    if (generation > _expectedUnloadThrough && !_sourceFailures.isClosed) {
+      _failedGeneration = generation;
+      _sourceFailures.add(generation);
+    }
+    _loadedGeneration = 0;
+  }
 
   @override
   Stream<bool> get playing => _player.stream.playing;
@@ -62,6 +110,9 @@ class PlatformMediaKitAudioPlayer implements MediaKitAudioPlayer {
 
   @override
   Future<void> open(Uri source) async {
+    _expectedUnloadThrough = _sourceGeneration;
+    ++_sourceGeneration;
+    final acknowledgement = _loadAcknowledgement = Completer<void>();
     if (!_cacheConfigured) {
       final native = _player.platform;
       if (native is! NativePlayer) {
@@ -73,6 +124,13 @@ class PlatformMediaKitAudioPlayer implements MediaKitAudioPlayer {
       _cacheConfigured = true;
     }
     await _player.open(Media(source.toString()), play: false);
+    // SDK open acknowledges playlist commands, not the asynchronous on_load.
+    // Do not allow another source generation until this hook has acquired it.
+    // The engine's existing open deadline bounds this wait and retires a stall.
+    await acknowledgement.future;
+    if (sourceFailed) {
+      throw const ForegroundAudioException(ForegroundAudioFailure.load);
+    }
   }
 
   @override
@@ -82,7 +140,10 @@ class PlatformMediaKitAudioPlayer implements MediaKitAudioPlayer {
   Future<void> pause() => _player.pause();
 
   @override
-  Future<void> stop() => _player.stop();
+  Future<void> stop() {
+    _expectedUnloadThrough = _sourceGeneration;
+    return _player.stop();
+  }
 
   @override
   Future<void> seek(Duration position) => _player.seek(position);
@@ -92,6 +153,7 @@ class PlatformMediaKitAudioPlayer implements MediaKitAudioPlayer {
 
   @override
   Future<void> dispose() async {
+    _expectedUnloadThrough = _sourceGeneration;
     // A stalled plugin operation may hold NativePlayer's synchronization lock.
     // Terminal retirement must not wait for that same lock again.
     final native = _player.platform;
@@ -100,6 +162,7 @@ class PlatformMediaKitAudioPlayer implements MediaKitAudioPlayer {
     } else {
       await _player.dispose();
     }
+    await _sourceFailures.close();
   }
 }
 
@@ -158,7 +221,13 @@ class MediaKitForegroundAudioEngine implements ForegroundAudioEngine {
       }
       final generation = _playerGeneration;
       final player = _player;
-      await _serialize('open', generation, () => player.open(source));
+      late int sourceGeneration;
+      await _serialize('open', generation, () async {
+        await player.open(source);
+        // Capture inside the serialized operation: another queued open may
+        // start before this caller's await continuation constructs its session.
+        sourceGeneration = player.sourceGeneration;
+      });
       if (_disposed || generation != _playerGeneration) {
         throw const ForegroundAudioException(
           ForegroundAudioFailure.coreUnavailable,
@@ -168,6 +237,11 @@ class MediaKitForegroundAudioEngine implements ForegroundAudioEngine {
         player,
         _audioFocusOwner.createLease(),
         (phase, operation) => _serialize(phase, generation, operation),
+        sourceGeneration,
+        () =>
+            !_disposed &&
+            generation == _playerGeneration &&
+            identical(player, _player),
       );
     } on ForegroundAudioException {
       rethrow;
@@ -299,10 +373,16 @@ class MediaKitForegroundAudioEngine implements ForegroundAudioEngine {
 
 class _MediaKitForegroundAudioSession
     implements ForegroundAudioSession, ForegroundCompletionFocusSession {
-  _MediaKitForegroundAudioSession(this._player, this._focus, this._serialize) {
+  _MediaKitForegroundAudioSession(
+    this._player,
+    this._focus,
+    this._serialize,
+    this._sourceGeneration,
+    this._isPlayerCurrent,
+  ) {
     _subscriptions.addAll([
       _player.playing.listen((playing) {
-        if (_disposed) return;
+        if (!_ownsSource) return;
         if (!playing && _lastState == ForegroundAudioState.completed) return;
         if (playing) {
           _states.add(ForegroundAudioState.playing);
@@ -315,7 +395,7 @@ class _MediaKitForegroundAudioSession
       }, onError: (Object _) => _emitFailure()),
       _player.completed.listen((completed) {
         if (!completed ||
-            _disposed ||
+            !_ownsSource ||
             _lastState == ForegroundAudioState.completed) {
           return;
         }
@@ -326,19 +406,31 @@ class _MediaKitForegroundAudioSession
         _states.add(ForegroundAudioState.completed);
       }, onError: (Object _) => _emitFailure()),
       _player.position.listen((position) {
-        if (_disposed || position.isNegative) return;
+        if (!_ownsSource || position.isNegative) return;
         _positions.add(position.inMilliseconds);
       }, onError: (Object _) => _emitFailure()),
-      _player.errors.listen(
-        (_) => _emitFailure(),
-        onError: (Object _) => _emitFailure(),
-      ),
+      _player.errors.listen((_) {
+        if (!_ownsSource) return;
+        _logMediaKit(
+          'native_error_event observingSourceGeneration=$_sourceGeneration outcome=observed classification=uncorrelated_log',
+        );
+      }, onError: (Object _) => _emitFailure()),
+      _player.sourceFailures.listen((generation) {
+        if (generation == _sourceGeneration) _emitFailure();
+      }, onError: (Object _) => _emitFailure()),
     ]);
   }
 
   final MediaKitAudioPlayer _player;
   final ForegroundAudioFocusLease _focus;
   final Future<void> Function(String, Future<void> Function()) _serialize;
+  final int _sourceGeneration;
+  final bool Function() _isPlayerCurrent;
+  bool get _ownsSource =>
+      !_disposed &&
+      !_failed &&
+      _isPlayerCurrent() &&
+      _player.sourceGeneration == _sourceGeneration;
   final StreamController<ForegroundAudioState> _states =
       StreamController.broadcast();
   final StreamController<ForegroundAudioFailure> _failures =
@@ -347,6 +439,7 @@ class _MediaKitForegroundAudioSession
   final List<StreamSubscription<Object?>> _subscriptions = [];
   ForegroundAudioState _lastState = ForegroundAudioState.stopped;
   bool _disposed = false;
+  bool _failed = false;
 
   @override
   Stream<ForegroundAudioState> get states => _states.stream;
@@ -459,7 +552,7 @@ class _MediaKitForegroundAudioSession
   }
 
   void _ensureActive() {
-    if (_disposed) {
+    if (!_ownsSource || _failed || _player.sourceFailed) {
       throw const ForegroundAudioException(
         ForegroundAudioFailure.coreUnavailable,
       );
@@ -475,8 +568,11 @@ class _MediaKitForegroundAudioSession
       });
 
   void _emitFailure() {
-    if (_disposed || _failures.isClosed) return;
-    _logMediaKit('native_player_failure outcome=reported');
+    if (!_ownsSource || _failed || _failures.isClosed) return;
+    _failed = true;
+    _logMediaKit(
+      'native_player_failure sourceGeneration=$_sourceGeneration outcome=reported classification=source_unusable',
+    );
     unawaited(_releaseFocusBestEffort());
     _failures.add(ForegroundAudioFailure.playback);
   }

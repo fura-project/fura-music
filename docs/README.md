@@ -103,6 +103,7 @@ platform diagnostics and design discovery. Common families are:
   deduplication, TME hypothesis, capability matrix and bounded live evidence.
 - `android-*.md` and `system-playback-*.md` — Android/native playback diagnosis
   and Human runtime matrices.
+- [`linux-playback-failure-mpris-ownership-2026-10-08.md`](research/linux-playback-failure-mpris-ownership-2026-10-08.md) — pinned native log/source failure semantics and direct Fura MPRIS ownership, independently verified with local synthetic native and session-bus gates.
 - `m3-*`, `m4-*` and `m5-*` — historical product discovery that informed the
   canonical design files.
 

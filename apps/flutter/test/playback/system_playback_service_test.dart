@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:dbus/dbus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_media_session/flutter_media_session.dart' as fms;
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,8 @@ import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/flutter_media_session_system_edge.dart';
+import 'package:flutterustmusic/playback/fura_mpris_system_media_edge.dart';
+import 'package:flutterustmusic/playback/linux_mpris_player.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_stack_experiment.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
@@ -19,6 +22,272 @@ import 'package:flutterustmusic/playback/system_playback_service.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 void main() {
+  test('Linux owns direct MPRIS, never initializes AudioService', () async {
+    final client = _MprisClient();
+    final audio = _FakeAudioEngine();
+    final session = _FakeProjectAudioSession();
+    final host = await initializeAppPlaybackHost(
+      playbackQueueGateway: _MemoryQueueGateway(),
+      mediaResolutionGateway: const _MediaGateway(),
+      lyricGateway: const _NeverLyricGateway(),
+      audioEngine: audio,
+      platform: TargetPlatform.linux,
+      mprisClientFactory: () => client,
+      audioSessionFactory: () async => session,
+      audioServiceInitializer: (_, _) async => fail('Linux AudioService init'),
+    );
+    expect(host, isA<FuraMprisAppPlaybackHost>());
+    expect(host.systemControlsAvailable, isTrue);
+    void pageListener() {}
+    host.controller.addListener(pageListener);
+    await host.controller.replaceAndPlay(const [first, second], 0);
+    host.controller.removeListener(pageListener);
+    final player = client.player!;
+    expect(player.playbackStatus, 'Playing');
+    await _mprisCall(player, 'Pause');
+    await _waitUntil(
+      () => host.controller.playback.stage == TrackPlaybackStage.paused,
+    );
+    await _mprisCall(player, 'Play');
+    await _waitUntil(
+      () => host.controller.playback.stage == TrackPlaybackStage.playing,
+    );
+    expect(audio.sessions, hasLength(1));
+    await _mprisCall(player, 'Next');
+    await _waitUntil(
+      () =>
+          host.controller.current == second &&
+          host.controller.playback.canPause,
+    );
+    await _mprisCall(player, 'Previous');
+    await _waitUntil(
+      () =>
+          host.controller.current == first && host.controller.playback.canPause,
+    );
+    expect(audio.sessions, hasLength(3));
+    await player.setProperty(
+      projectMprisPlayerInterface,
+      'LoopStatus',
+      const DBusString('Track'),
+    );
+    await player.setProperty(
+      projectMprisPlayerInterface,
+      'Shuffle',
+      const DBusBoolean(true),
+    );
+    await player.setProperty(
+      projectMprisPlayerInterface,
+      'Volume',
+      const DBusDouble(0.35),
+    );
+    await _waitUntil(() => host.controller.playback.volume == 0.35);
+    expect(host.controller.repeatMode, PlaybackRepeatMode.one);
+    expect(host.controller.order, PlaybackOrder.shuffle);
+    // A relative seek from a playing snapshot includes real elapsed time.
+    // Pause first so the exact 42s assertion has a deterministic clock origin.
+    await _mprisCall(player, 'Pause');
+    await _waitUntil(
+      () => host.controller.playback.stage == TrackPlaybackStage.paused,
+    );
+    await _mprisCall(player, 'Seek', [const DBusInt64(42000000)]);
+    await _waitUntil(() => audio.sessions.last.seekPositions.contains(42000));
+    await _mprisCall(player, 'Stop');
+    await _waitUntil(
+      () => host.controller.playback.stage == TrackPlaybackStage.stopped,
+    );
+    await host.dispose();
+    expect(client.closes, 1);
+    expect(client.unregisters, 1);
+    expect(host.systemControlsAvailable, isFalse);
+    expect(await _mprisCall(player, 'Play'), isA<DBusMethodErrorResponse>());
+    await session.close();
+  });
+
+  test('MPRIS failed name ownership retains same foreground owner', () async {
+    final client = _MprisClient()..reply = DBusRequestNameReply.exists;
+    final audio = _FakeAudioEngine();
+    final host = await initializeAppPlaybackHost(
+      playbackQueueGateway: _MemoryQueueGateway(),
+      mediaResolutionGateway: const _MediaGateway(),
+      lyricGateway: const _NeverLyricGateway(),
+      audioEngine: audio,
+      platform: TargetPlatform.linux,
+      mprisClientFactory: () => client,
+      audioServiceInitializer: (_, _) async =>
+          fail('Fallback AudioService init'),
+    );
+    expect(host, isA<ForegroundAppPlaybackHost>());
+    expect(host.systemControlsAvailable, isFalse);
+    expect(client.closes, 1);
+    await host.controller.replaceAndPlay(const [first], 0);
+    expect(audio.sessions, hasLength(1));
+    await host.dispose();
+  });
+
+  test('concurrent Linux host disposal joins the actual bus cleanup', () async {
+    final gate = Completer<void>();
+    final client = _MprisClient()..unregisterGate = gate.future;
+    final session = _FakeProjectAudioSession();
+    final host = await initializeAppPlaybackHost(
+      playbackQueueGateway: _MemoryQueueGateway(),
+      mediaResolutionGateway: const _MediaGateway(),
+      lyricGateway: const _NeverLyricGateway(),
+      audioEngine: _FakeAudioEngine(),
+      platform: TargetPlatform.linux,
+      mprisClientFactory: () => client,
+      audioSessionFactory: () async => session,
+    );
+    final closing = host.dispose();
+    var joined = false;
+    final secondClose = host.dispose().then((_) => joined = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(joined, isFalse);
+    gate.complete();
+    await closing;
+    await secondClose;
+    expect(client.closes, 1);
+    expect(client.unregisters, 1);
+    await session.close();
+  });
+
+  test(
+    'MPRIS cancellation joins pending activation without late registration',
+    () async {
+      final gate = Completer<void>();
+      final client = _MprisClient()..registerGate = gate.future;
+      final controller = _controller();
+      final edge = FuraMprisSystemMediaEdge(
+        controller: controller,
+        clientFactory: () => client,
+      );
+      final activation = edge.activate();
+      final failed = expectLater(activation, throwsStateError);
+      expect(() => edge.activate(), throwsStateError);
+      final closing = edge.deactivate();
+      expect(edge.deactivate(), same(closing));
+      gate.complete();
+      await failed;
+      await closing;
+      expect(edge.isActive, isFalse);
+      expect(client.closes, 1);
+      expect(
+        await _mprisCall(client.player!, 'Stop'),
+        isA<DBusMethodErrorResponse>(),
+      );
+      controller.dispose();
+    },
+  );
+
+  test(
+    'MPRIS construction/connect failures are retryable and cleaned',
+    () async {
+      final controller = _controller();
+      var throwsFactory = true;
+      final client = _MprisClient()..registerFailure = true;
+      final edge = FuraMprisSystemMediaEdge(
+        controller: controller,
+        clientFactory: () {
+          if (throwsFactory) throw StateError('Synthetic factory failure');
+          return client;
+        },
+      );
+      await expectLater(edge.activate(), throwsStateError);
+      throwsFactory = false;
+      await expectLater(edge.activate(), throwsStateError);
+      expect(client.closes, 1);
+      client.registerFailure = false;
+      await edge.activate();
+      expect(edge.isActive, isTrue);
+      await edge.deactivate();
+      controller.dispose();
+    },
+  );
+
+  test(
+    'MPRIS unregister failure still closes projection and transport',
+    () async {
+      final client = _MprisClient()..unregisterFailure = true;
+      final controller = _controller();
+      final edge = FuraMprisSystemMediaEdge(
+        controller: controller,
+        clientFactory: () => client,
+      );
+      await edge.activate();
+      await expectLater(edge.deactivate(), throwsStateError);
+      expect(client.closes, 1);
+      expect(edge.isActive, isFalse);
+      expect(
+        await _mprisCall(client.player!, 'Stop'),
+        isA<DBusMethodErrorResponse>(),
+      );
+      controller.dispose();
+    },
+  );
+
+  test(
+    'MPRIS closing cannot wait forever for an already delegated control',
+    () async {
+      final client = _MprisClient();
+      final audio = _FakeAudioEngine();
+      final controller = _controller(audio: audio);
+      final edge = FuraMprisSystemMediaEdge(
+        controller: controller,
+        clientFactory: () => client,
+      );
+      await edge.activate();
+      await controller.replaceAndPlay(const [first], 0);
+      final pending = Completer<void>();
+      audio.sessions.single.pauseGate = pending.future;
+      await _mprisCall(client.player!, 'Pause');
+      await _waitUntil(() => audio.sessions.single.pauseCalls == 1);
+      await _mprisCall(client.player!, 'Next');
+      await edge.deactivate().timeout(const Duration(seconds: 1));
+      controller.dispose();
+      pending.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(audio.sessions, hasLength(1));
+      expect(edge.isActive, isFalse);
+      expect(client.closes, 1);
+    },
+  );
+
+  test('queued MPRIS SetPosition cannot seek a Track replaced by UI', () async {
+    final client = _MprisClient();
+    final audio = _FakeAudioEngine();
+    final controller = _controller(audio: audio);
+    final edge = FuraMprisSystemMediaEdge(
+      controller: controller,
+      clientFactory: () => client,
+    );
+    final gate = Completer<void>();
+    try {
+      await edge.activate();
+      await controller.replaceAndPlay(const [first, second], 0);
+      final player = client.player!;
+      final oldTrack = player.trackId;
+      audio.sessions.first.pauseGate = gate.future;
+      await _mprisCall(player, 'Pause');
+      await _waitUntil(() => audio.sessions.first.pauseCalls == 1);
+      await _mprisCall(player, 'SetPosition', [
+        oldTrack,
+        const DBusInt64(1000000),
+      ]);
+      // Existing app UI changes the same Queue while the first system command
+      // is settling. The seek was valid at receipt, no longer at dispatch.
+      await controller.advance();
+      expect(player.trackId, isNot(oldTrack));
+      gate.complete();
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+      expect(audio.sessions.last.seekPositions, isEmpty);
+      expect(controller.current, same(second));
+    } finally {
+      if (!gate.isCompleted) gate.complete();
+      await edge.deactivate();
+      controller.dispose();
+    }
+  });
+
   test('keeps the Android media session resumable while paused', () {
     expect(projectAudioServiceConfig.androidStopForegroundOnPause, isFalse);
     expect(projectAudioServiceConfig.androidResumeOnClick, isTrue);
@@ -716,6 +985,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
   final _positions = StreamController<int>.broadcast();
   int playCalls = 0;
   int pauseCalls = 0;
+  Future<void>? pauseGate;
   final List<int> seekPositions = [];
   final List<double> volumeValues = [];
 
@@ -737,6 +1007,8 @@ class _FakeAudioSession implements ForegroundAudioSession {
   @override
   Future<void> pause() async {
     pauseCalls += 1;
+    await pauseGate;
+    if (_states.isClosed) return;
     _states.add(ForegroundAudioState.paused);
   }
 
@@ -760,6 +1032,52 @@ class _FakeAudioSession implements ForegroundAudioSession {
   }
 
   void emit(ForegroundAudioState state) => _states.add(state);
+}
+
+Future<DBusMethodResponse> _mprisCall(
+  ProjectMprisPlayer player,
+  String name, [
+  List<DBusValue> values = const [],
+]) => player.handleMethodCall(
+  DBusMethodCall(
+    sender: ':1.1',
+    interface: projectMprisPlayerInterface,
+    name: name,
+    values: values,
+  ),
+);
+
+class _MprisClient extends DBusClient {
+  _MprisClient() : super(DBusAddress.unix(path: '/synthetic-not-connected'));
+  ProjectMprisPlayer? player;
+  Future<void>? registerGate;
+  Future<void>? unregisterGate;
+  bool registerFailure = false, unregisterFailure = false;
+  int closes = 0, unregisters = 0;
+  DBusRequestNameReply reply = DBusRequestNameReply.primaryOwner;
+  @override
+  Future<void> registerObject(DBusObject object) async {
+    player = object as ProjectMprisPlayer;
+    await registerGate;
+    if (registerFailure) throw StateError('Synthetic connect failure');
+  }
+
+  @override
+  Future<DBusRequestNameReply> requestName(
+    String name, {
+    Set<DBusRequestNameFlag> flags = const {},
+  }) async => reply;
+  @override
+  Future<void> unregisterObject(DBusObject object) async {
+    unregisters++;
+    await unregisterGate;
+    if (unregisterFailure) throw StateError('Synthetic unregister failure');
+  }
+
+  @override
+  Future<void> close() async {
+    closes++;
+  }
 }
 
 class _ControlledRelatedGateway implements RelatedTracksGateway {

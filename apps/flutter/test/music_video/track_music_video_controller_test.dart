@@ -496,6 +496,12 @@ class _FakeAudioSession implements ForegroundAudioSession {
 }
 
 class _FakeMediaKitMusicPlayer implements MediaKitAudioPlayer {
+  @override
+  int sourceGeneration = 0;
+  @override
+  bool get sourceFailed => false;
+  @override
+  Stream<int> get sourceFailures => const Stream.empty();
   final StreamController<bool> _playing = StreamController<bool>.broadcast();
   final StreamController<bool> _completed = StreamController<bool>.broadcast();
   final StreamController<Duration> _position =
@@ -514,7 +520,7 @@ class _FakeMediaKitMusicPlayer implements MediaKitAudioPlayer {
   Stream<String> get errors => _errors.stream;
 
   @override
-  Future<void> open(Uri source) async {}
+  Future<void> open(Uri source) async => ++sourceGeneration;
 
   @override
   Future<void> play() async => _playing.add(true);

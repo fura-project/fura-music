@@ -3,9 +3,212 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 
 void main() {
+  test(
+    'concurrent serialized opens cannot attach an old caller to the new source',
+    () async {
+      final player = _FakeMediaKitPlayer();
+      final focus = _FakeFocusManager();
+      final engine = MediaKitForegroundAudioEngine(
+        player: player,
+        audioFocusManager: focus,
+      );
+      final gate = Completer<void>();
+      player.openGate = gate.future;
+      final first = engine.loadRemote(
+        Uri.parse('https://audio.example.test/first.mp3'),
+      );
+      final second = engine.loadRemote(
+        Uri.parse('https://audio.example.test/second.mp3'),
+      );
+      await Future<void>.delayed(Duration.zero);
+      gate.complete();
+      final oldSession = await first;
+      final current = await second;
+      await expectLater(
+        oldSession.play(),
+        throwsA(isA<ForegroundAudioException>()),
+      );
+      expect(focus.values, isEmpty);
+      await current.play();
+      expect(player.playCalls, 1);
+      await expectLater(
+        oldSession.stop(),
+        throwsA(isA<ForegroundAudioException>()),
+      );
+      expect(player.stopCalls, 0);
+      expect(focus.values, [true]);
+      await oldSession.dispose();
+      await current.dispose();
+      await engine.dispose();
+    },
+  );
+  test(
+    'actual source loss during successful seek still terminates replay',
+    () async {
+      final player = _FakeMediaKitPlayer();
+      final focus = _FakeFocusManager();
+      final engine = MediaKitForegroundAudioEngine(
+        player: player,
+        audioFocusManager: focus,
+      );
+      final controller = ForegroundPlaybackController(engine);
+      await controller.playRemote(
+        Uri.parse('https://audio.example.test/local.mp3'),
+      );
+      player.emitCompleted();
+      await Future<void>.delayed(Duration.zero);
+      final gate = Completer<void>();
+      player.seekGate = gate.future;
+      final replay = controller.replayCurrent();
+      await Future<void>.delayed(Duration.zero);
+      player.emitSourceFailure();
+      await Future<void>.delayed(Duration.zero);
+      gate.complete();
+      await replay;
+      expect(controller.stage, ForegroundPlaybackStage.error);
+      expect(player.playCalls, 1);
+      expect(player.opened, hasLength(1));
+      expect(focus.values, [true, false]);
+      controller.dispose();
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
+  test(
+    'terminal source loss remains typed, one-shot and focus bounded',
+    () async {
+      final player = _FakeMediaKitPlayer();
+      final focus = _FakeFocusManager();
+      final engine = MediaKitForegroundAudioEngine(
+        player: player,
+        audioFocusManager: focus,
+        focusTimeout: const Duration(milliseconds: 20),
+      );
+      final controller = ForegroundPlaybackController(engine);
+      await controller.playRemote(
+        Uri.parse('https://audio.example.test/local.mp3'),
+      );
+      focus.releaseGate = Completer<bool>().future;
+      player.emitSourceFailure();
+      player.emitSourceFailure();
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      expect(controller.stage, ForegroundPlaybackStage.error);
+      expect(controller.failure, ForegroundAudioFailure.playback);
+      expect(focus.values, [true, false]);
+      controller.dispose();
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
+
+  test(
+    'old source log/terminal and disposed events cannot poison new source',
+    () async {
+      final player = _FakeMediaKitPlayer();
+      final focus = _FakeFocusManager();
+      final engine = MediaKitForegroundAudioEngine(
+        player: player,
+        audioFocusManager: focus,
+      );
+      final old = await engine.loadRemote(
+        Uri.parse('https://audio.example.test/old.mp3'),
+      );
+      await old.play();
+      final oldGeneration = player.sourceGeneration;
+      await old.stop();
+      player.emitError('synthetic stop transition');
+      await old.dispose();
+      final current = await engine.loadRemote(
+        Uri.parse('https://audio.example.test/new.mp3'),
+      );
+      await current.play();
+      final failures = <ForegroundAudioFailure>[];
+      final subscription = current.failures.listen(failures.add);
+      player.emitSourceFailure(oldGeneration);
+      player.emitError('late uncorrelated old-source message');
+      await Future<void>.delayed(Duration.zero);
+      expect(failures, isEmpty);
+      expect(focus.values, [true, false, true]);
+      await current.dispose();
+      final values = List<bool>.of(focus.values);
+      player.emitSourceFailure();
+      await Future<void>.delayed(Duration.zero);
+      expect(focus.values, values);
+      await subscription.cancel();
+      await engine.dispose();
+    },
+  );
+
+  for (final phase in ['seek', 'play']) {
+    test(
+      'explicit $phase failure is fatal without log text classification',
+      () async {
+        final player = _FakeMediaKitPlayer();
+        final focus = _FakeFocusManager();
+        final engine = MediaKitForegroundAudioEngine(
+          player: player,
+          audioFocusManager: focus,
+        );
+        final controller = ForegroundPlaybackController(engine);
+        await controller.playRemote(
+          Uri.parse('https://audio.example.test/local.mp3'),
+        );
+        final gate = Completer<void>();
+        if (phase == 'seek') {
+          player.seekGate = gate.future;
+        } else {
+          player.playGate = gate.future;
+        }
+        player.emitCompleted();
+        await Future<void>.delayed(Duration.zero);
+        final replay = controller.replayCurrent();
+        await Future<void>.delayed(Duration.zero);
+        gate.completeError(StateError('synthetic failure'));
+        await replay;
+        expect(controller.stage, ForegroundPlaybackStage.error);
+        expect(player.opened, hasLength(1));
+        await Future<void>.delayed(Duration.zero);
+        expect(focus.values.last, false);
+        controller.dispose();
+      },
+    );
+  }
+
+  test(
+    'native log during successful retained seek does not kill source',
+    () async {
+      final player = _FakeMediaKitPlayer();
+      final focus = _FakeFocusManager();
+      final engine = MediaKitForegroundAudioEngine(
+        player: player,
+        audioFocusManager: focus,
+      );
+      final controller = ForegroundPlaybackController(engine);
+      await controller.playRemote(
+        Uri.parse('https://audio.example.test/local.mp3'),
+      );
+      player.emitCompleted();
+      await Future<void>.delayed(Duration.zero);
+      final seek = Completer<void>();
+      player.seekGate = seek.future;
+      final replay = controller.replayCurrent();
+      await Future<void>.delayed(Duration.zero);
+      player.emitError('synthetic transition message');
+      await Future<void>.delayed(Duration.zero);
+      seek.complete();
+      await replay;
+      expect(controller.stage, ForegroundPlaybackStage.playing);
+      expect(controller.failure, isNull);
+      expect(player.opened, hasLength(1));
+      expect(player.stopCalls, 0);
+      expect(player.playCalls, 2);
+      expect(focus.values, [true]);
+      controller.dispose();
+      await Future<void>.delayed(Duration.zero);
+    },
+  );
   for (final phase in ['pause', 'seek', 'volume', 'stop']) {
     test(
       'disposed session rejects queued $phase before native dispatch',
@@ -520,6 +723,7 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       player.emitCompleted();
       player.emitError('source-bearing synthetic error');
+      player.emitSourceFailure();
       await Future<void>.delayed(Duration.zero);
 
       expect(
@@ -633,6 +837,19 @@ void main() {
 }
 
 class _FakeMediaKitPlayer implements MediaKitAudioPlayer {
+  final sourceFailuresController = StreamController<int>.broadcast();
+  @override
+  int sourceGeneration = 0;
+  @override
+  bool sourceFailed = false;
+  @override
+  Stream<int> get sourceFailures => sourceFailuresController.stream;
+  void emitSourceFailure([int? generation]) {
+    final value = generation ?? sourceGeneration;
+    if (value == sourceGeneration) sourceFailed = true;
+    sourceFailuresController.add(value);
+  }
+
   final _playing = StreamController<bool>.broadcast();
   final _completed = StreamController<bool>.broadcast();
   final _position = StreamController<Duration>.broadcast();
@@ -665,6 +882,8 @@ class _FakeMediaKitPlayer implements MediaKitAudioPlayer {
 
   @override
   Future<void> open(Uri source) async {
+    ++sourceGeneration;
+    sourceFailed = false;
     opened.add(source);
     final failure = openFailure;
     if (failure != null) throw failure;
@@ -703,6 +922,7 @@ class _FakeMediaKitPlayer implements MediaKitAudioPlayer {
     await _completed.close();
     await _position.close();
     await _errors.close();
+    await sourceFailuresController.close();
   }
 
   void emitPlaying(bool value) => _playing.add(value);

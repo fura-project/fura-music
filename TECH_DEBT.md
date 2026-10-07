@@ -143,11 +143,11 @@ default-D selection is not that retirement authority.
 
 **Status:** Open
 
-**Problem:** The stable generic MPRIS adapter retained only a static playback-position sample and left relative seek, shuffle, and repeat unavailable despite the application's shared handler supporting them. Linux therefore owns a bounded D-Bus/MPRIS `AudioServicePlatform` implementation instead of delegating that protocol edge to `audio_service_mpris`.
+**Problem:** The stable generic MPRIS adapter retained only a static playback-position sample and left relative seek, shuffle, and repeat unavailable despite the application's shared handler supporting them. Fura owns the DBus protocol. On 2026-10-08 its former AudioService message adapter was removed: direct `FuraMprisSystemMediaEdge` now projects the existing controller into the preserved `ProjectMprisPlayer` protocol object.
 
 **Why accepted:** The defect was reproduced by the maintainer and confirmed in the pinned adapter source. Its current prerelease still lacked the complete timestamped position, relative seek, and required Track identity behavior. Adding timers or duplicate mode state to the playback controller would hide the protocol defect and violate the single-owner boundary; a localized adapter with protocol and real session-bus tests fixes the root layer.
 
-**Impact:** Linux progress, seek, shuffle, repeat, and volume can map to the existing handler without a second player or Queue, but the repository now maintains MPRIS introspection, properties, methods, and signal behavior.
+**Impact:** Linux progress, seek, shuffle, repeat, and volume map directly to the existing Queue/controller without a second player, Queue or AudioService owner. The repository still maintains MPRIS introspection, properties, methods and signals; their real session-bus regression gate remains required.
 
 **Risk:** A future MPRIS specification or desktop-shell expectation could diverge from the local edge, while an upstream adapter may eventually make this code unnecessary. A session-bus test cannot prove every KDE/GNOME presentation behavior.
 
@@ -465,5 +465,18 @@ wait, not every Audioplayers operation. Exact before/after and final Android
 evidence are appended to the lifecycle audit. This debt remains open only for
 the stated upstream/fresh-evidence/physical prerequisites, not those repaired
 interleavings.
+
+**2026-10-08 Linux native/MPRIS audit:** Source-message false fatality and a new
+deterministic concurrent source-acquisition race were fixed and verified, not
+attributed to TD-018. Direct Linux MPRIS has no AudioService focus owner. The
+pinned audio_session 0.2.4 public `setActive` still awaits native request/abandon
+without cancellation or settlement-reset/ownership-transfer API. Affected
+focus failure-path tests and real Linux synthetic native/bus gates passed;
+Linux returns true for platform activation and does not establish Android
+AudioManager/OEM behavior. No new native/focus timeout occurred in those gates.
+The historical delay still needs a fresh in-flight trace, and a never-settling
+raw focus request still requires upstream acknowledgement/cancellation; no
+unsafe slot release, second manager or deadline adjustment was introduced.
+See [the independent failure/ownership audit](docs/research/linux-playback-failure-mpris-ownership-2026-10-08.md).
 
 Each future item must record: ID, status, problem, why accepted, impact, risk, suggested solution, and trigger condition. Source TODOs should reference the corresponding ID where practical.

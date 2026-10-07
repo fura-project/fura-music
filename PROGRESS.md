@@ -1,15 +1,55 @@
 ---
 execution:
   mode: HUMAN_DIRECTED
-  work_domain: UI
-  state: SETTINGS_TAXONOMY_LOCAL_MACHINE_VERIFIED
-  acceptance_milestone: SETTINGS_UNIFIED_M3_AND_INLINE_COLOR_HUMAN_REVIEW
-  active_workstream: SETTINGS_UI_UNIFICATION
-  current_task: SETTINGS_SIMPLE_SHEET_AND_DETAILED_INLINE_CORRECTION
-  next_action: HUMAN_REVIEW_UNIFIED_SHEETS_AND_INLINE_COLOR
+  work_domain: CORE
+  state: LINUX_NATIVE_FAILURE_AND_DIRECT_MPRIS_MACHINE_VERIFIED
+  acceptance_milestone: LINUX_NATIVE_FAILURE_AND_DIRECT_MPRIS_RUNTIME
+  active_workstream: LINUX_PLAYBACK_RELIABILITY
+  current_task: MEDIAKIT_FAILURE_SEMANTICS_THEN_FURA_MPRIS_OWNERSHIP
+  next_action: HUMAN_CORE_CANDIDATE_REVIEW_NO_NEW_WHAT
 ---
 
 # Current State
+
+- **2026-10-08 Human-directed Linux playback correction:** starting HEAD and
+  tracked/live origin/main are `aea2cf1a8edc879917fc2b48b07255fc5e2671fa`,
+  initial worktree clean. Human pauses Settings visual work and selects native
+  failure semantics followed by direct Fura-owned MPRIS. Mode stays
+  `HUMAN_DIRECTED`, domain changes to `CORE`; Settings acceptance remains a
+  separate historical pending claim. No Provider/UI work or Git publication
+  is authorized. Pinned media_kit 1.2.6 error data is an uncorrelated mpv log
+  stream, not terminal state. Before-fix false-fatal seek reproduction is
+  retained; source-generation-owned unexpected unload, channel/operation
+  failure and existing deadlines now define failure. Explicit stop/replacement
+  and stale/disposed messages cannot kill a new source. Independent native
+  runtime passed before MPRIS changes. Follow-through also reproduced/fixed
+  concurrent-open source capture, early-returning concurrent host disposal
+  and a queued MPRIS SetPosition targeting a UI-replaced Track. Seek now keeps
+  its existing MPRIS Track path through dispatch; global modes/volume do not.
+  Linux now uses direct FuraMprisSystemMediaEdge -> existing Queue/controller
+  -> preserved ProjectMprisPlayer -> DBus, without AudioService init/messages,
+  a second engine, Queue or Flutter engine. Real native/session-bus Debug and
+  Release passed retained EOF, replacement/Next, pause/resume, seek, genuine
+  corrupt-source/unexpected-unload failure, all advertised MPRIS commands,
+  advancing position, disposal and same-name restart. Retained gate has
+  resolve=1/open=1/seek=33/play=34/stop=0, no fatal/rebuild or extra HTTP reads.
+  147 affected tests and 131 application/selector regressions pass; existing
+  real MP3/M4A/FLAC, 100-source and 100-cached-EOF suites passed. Only the direct
+  audio_service_platform_interface dependency is removed, retaining 0.1.3
+  transitively and unchanged other pins/registrants. Analysis, format/privacy,
+  final production Release build and diff checks are recorded in the dated
+  [native/MPRIS audit](docs/research/linux-playback-failure-mpris-ownership-2026-10-08.md).
+  Combined desktop runner failure was traced to the SDK's reused closed log
+  reader; isolated native/bus executions pass, no SDK workaround or upgrade.
+  TD-018 still needs fresh native traces/upstream settlement or physical-device
+  evidence; local Linux cannot establish Android/OEM/real-account acceptance.
+  Settings remains a separate Human visual claim; Core candidate awaits Human
+  review. No commit/push/reset/restore/clean or further task selection.
+  Human subsequently authorized Git publication with `提交git`, under the
+  standing commit-and-push instruction. Live remote main and current governance
+  were rechecked at `aea2cf1`; publication does not establish original ordinary-
+  media, physical-device or new remote-CI acceptance. The Core candidate gate
+  remains `HUMAN_REVIEW`.
 
 - **2026-10-07 Human-directed Settings interaction correction:** starting HEAD
   and tracked origin/main were `73da77571e4cb289b178803824d8a7a1cb4867bd`,

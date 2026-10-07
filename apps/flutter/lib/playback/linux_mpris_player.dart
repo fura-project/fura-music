@@ -2,142 +2,36 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:audio_service_platform_interface/audio_service_platform_interface.dart';
 import 'package:dbus/dbus.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
-const projectMprisVolumeAction = 'projectMprisVolume';
 const projectMprisPlayerInterface = 'org.mpris.MediaPlayer2.Player';
 const projectMprisObjectPath = '/org/mpris/MediaPlayer2';
 
-/// Installs the Linux platform implementation before `AudioService.init`.
-/// Other targets retain their registered audio_service implementation.
-void registerProjectLinuxMprisAudioService() {
-  if (Platform.isLinux) {
-    AudioServicePlatform.instance = ProjectLinuxMprisAudioService();
-  }
-}
-
-/// Linux MPRIS bridge for audio_service.
-///
-/// The upstream stable adapter advertises controls it does not implement and
-/// stores only a stale position sample. This implementation is intentionally
-/// limited to the existing project playback contract and does not own audio or
-/// a second queue.
-class ProjectLinuxMprisAudioService extends AudioServicePlatform {
-  DBusClient? _client;
-  ProjectMprisPlayer? _player;
-  StreamSubscription<ProjectMprisEvent>? _eventSubscription;
-  AudioHandlerCallbacks? _handlerCallbacks;
-
-  @override
-  Future<void> configure(ConfigureRequest request) async {
-    if (_client != null || _eventSubscription != null) {
-      throw StateError('Linux MPRIS playback is already configured.');
-    }
-    final channelId = request.config.androidNotificationChannelId;
-    if (channelId == null || channelId.trim().isEmpty) {
-      throw StateError('A non-empty playback service identifier is required.');
-    }
-    final client = DBusClient.session();
-    final player = ProjectMprisPlayer(
-      identity: request.config.androidNotificationChannelName,
-    );
-    _client = client;
-    _player = player;
-    _eventSubscription = player.events.listen(
-      (event) => unawaited(_dispatch(event)),
-    );
-    await client.registerObject(player);
-    final reply = await client.requestName(
-      projectMprisServiceName(channelId),
-      flags: const {DBusRequestNameFlag.doNotQueue},
-    );
-    if (reply != DBusRequestNameReply.primaryOwner &&
-        reply != DBusRequestNameReply.alreadyOwner) {
-      throw StateError('Unable to own the Linux MPRIS playback service name.');
-    }
-  }
-
-  @override
-  Future<void> setState(SetStateRequest request) async {
-    _player?.updatePlaybackState(request.state);
-  }
-
-  @override
-  Future<void> setQueue(SetQueueRequest request) async {
-    // The project exposes only the current item through MPRIS. The Rust-backed
-    // queue remains authoritative and MPRIS TrackList is intentionally absent.
-    if (request.queue.isEmpty) _player?.clearMediaItem();
-  }
-
-  @override
-  Future<void> setMediaItem(SetMediaItemRequest request) async {
-    _player?.updateMediaItem(request.mediaItem);
-  }
-
-  @override
-  Future<void> stopService(StopServiceRequest request) async {
-    _player?.stop();
-  }
-
-  @override
-  Future<void> notifyChildrenChanged(
-    NotifyChildrenChangedRequest request,
-  ) async {
-    // Browsable media children are not part of the accepted system contract.
-  }
-
-  @override
-  void setHandlerCallbacks(AudioHandlerCallbacks callbacks) {
-    _handlerCallbacks = callbacks;
-  }
-
-  Future<void> _dispatch(ProjectMprisEvent event) async {
-    final callbacks = _handlerCallbacks;
-    final player = _player;
-    if (callbacks == null || player == null) return;
-    switch (event.type) {
-      case ProjectMprisEventType.play:
-        await callbacks.play(const PlayRequest());
-      case ProjectMprisEventType.pause:
-        await callbacks.pause(const PauseRequest());
-      case ProjectMprisEventType.stop:
-        await callbacks.stop(const StopRequest());
-      case ProjectMprisEventType.next:
-        await callbacks.skipToNext(const SkipToNextRequest());
-      case ProjectMprisEventType.previous:
-        await callbacks.skipToPrevious(const SkipToPreviousRequest());
-      case ProjectMprisEventType.seek:
-        final position = event.value! as Duration;
-        await callbacks.seek(SeekRequest(position: position));
-        await player.emitSeeked(player.position);
-      case ProjectMprisEventType.repeat:
-        await callbacks.setRepeatMode(
-          SetRepeatModeRequest(
-            repeatMode: switch (event.value! as String) {
-              'Track' => AudioServiceRepeatModeMessage.one,
-              'Playlist' => AudioServiceRepeatModeMessage.all,
-              _ => AudioServiceRepeatModeMessage.none,
-            },
-          ),
-        );
-      case ProjectMprisEventType.shuffle:
-        await callbacks.setShuffleMode(
-          SetShuffleModeRequest(
-            shuffleMode: event.value! as bool
-                ? AudioServiceShuffleModeMessage.all
-                : AudioServiceShuffleModeMessage.none,
-          ),
-        );
-      case ProjectMprisEventType.volume:
-        await callbacks.customAction(
-          CustomActionRequest(
-            name: projectMprisVolumeAction,
-            extras: {'value': event.value! as double},
-          ),
-        );
-    }
-  }
+/// Snapshot of existing project playback truth, not another Queue or player.
+class ProjectMprisPlaybackState {
+  const ProjectMprisPlaybackState({
+    required this.updatePosition,
+    required this.updateTime,
+    this.stage = TrackPlaybackStage.idle,
+    this.repeatMode = PlaybackRepeatMode.off,
+    this.order = PlaybackOrder.sequential,
+    this.volume = 1,
+    this.canGoNext = false,
+    this.canGoPrevious = false,
+    this.canPlay = false,
+    this.canPause = false,
+    this.canSeek = false,
+  });
+  final Duration updatePosition;
+  final DateTime updateTime;
+  final TrackPlaybackStage stage;
+  final PlaybackRepeatMode repeatMode;
+  final PlaybackOrder order;
+  final double volume;
+  final bool canGoNext, canGoPrevious, canPlay, canPause, canSeek;
 }
 
 enum ProjectMprisEventType {
@@ -153,10 +47,12 @@ enum ProjectMprisEventType {
 }
 
 class ProjectMprisEvent {
-  const ProjectMprisEvent(this.type, [this.value]);
+  const ProjectMprisEvent(this.type, [this.value, this.trackId]);
 
   final ProjectMprisEventType type;
   final Object? value;
+  // Captured at DBus receipt; a queued seek must still target this Track.
+  final DBusObjectPath? trackId;
 }
 
 /// Project-owned MPRIS object. Public only so its protocol behavior can be
@@ -170,6 +66,7 @@ class ProjectMprisPlayer extends DBusObject {
   final DateTime Function() _now;
   final StreamController<ProjectMprisEvent> _events =
       StreamController<ProjectMprisEvent>.broadcast();
+  bool _closed = false;
 
   Stream<ProjectMprisEvent> get events => _events.stream;
 
@@ -209,64 +106,48 @@ class ProjectMprisPlayer extends DBusObject {
     return value;
   }
 
-  void updatePlaybackState(PlaybackStateMessage state) {
+  void updatePlaybackState(ProjectMprisPlaybackState state) {
+    if (_closed) return;
     _position = state.updatePosition;
     _positionUpdatedAt = state.updateTime;
-    _rate = state.speed > 0 && state.speed.isFinite ? state.speed : 1;
+    _rate = 1;
     _setPlaybackStatus(
-      state.processingState == AudioProcessingStateMessage.idle ||
-              state.processingState == AudioProcessingStateMessage.completed ||
-              state.processingState == AudioProcessingStateMessage.error
+      state.stage == TrackPlaybackStage.idle ||
+              state.stage == TrackPlaybackStage.stopped ||
+              state.stage == TrackPlaybackStage.completed ||
+              state.stage == TrackPlaybackStage.engineError ||
+              state.stage == TrackPlaybackStage.resolutionError
           ? 'Stopped'
-          : state.playing
+          : state.stage == TrackPlaybackStage.playing
           ? 'Playing'
           : 'Paused',
     );
     _setLoopStatus(switch (state.repeatMode) {
-      AudioServiceRepeatModeMessage.one => 'Track',
-      AudioServiceRepeatModeMessage.all ||
-      AudioServiceRepeatModeMessage.group => 'Playlist',
-      AudioServiceRepeatModeMessage.none => 'None',
+      PlaybackRepeatMode.one => 'Track',
+      PlaybackRepeatMode.all => 'Playlist',
+      PlaybackRepeatMode.off => 'None',
     }, emitEvent: false);
-    _setShuffle(
-      state.shuffleMode != AudioServiceShuffleModeMessage.none,
-      emitEvent: false,
-    );
+    _setShuffle(state.order == PlaybackOrder.shuffle, emitEvent: false);
 
-    final actions = <MediaActionMessage>{
-      ...state.systemActions,
-      ...state.controls.map((control) => control.action),
-    };
-    _setCapability(
-      'CanGoNext',
-      actions.contains(MediaActionMessage.skipToNext),
-    );
-    _setCapability(
-      'CanGoPrevious',
-      actions.contains(MediaActionMessage.skipToPrevious),
-    );
-    _setCapability(
-      'CanPlay',
-      actions.contains(MediaActionMessage.play) ||
-          actions.contains(MediaActionMessage.playPause),
-    );
-    _setCapability(
-      'CanPause',
-      actions.contains(MediaActionMessage.pause) ||
-          actions.contains(MediaActionMessage.playPause),
-    );
-    _setCapability('CanSeek', actions.contains(MediaActionMessage.seek));
+    _setVolume(state.volume, emitEvent: false);
+    _setCapability('CanGoNext', state.canGoNext);
+    _setCapability('CanGoPrevious', state.canGoPrevious);
+    _setCapability('CanPlay', state.canPlay);
+    _setCapability('CanPause', state.canPause);
+    _setCapability('CanSeek', state.canSeek);
   }
 
-  void updateMediaItem(MediaItemMessage item) {
+  void updateMediaItem(PlaylistTrackSummary item, {required int index}) {
+    if (_closed) return;
     _metadata = _ProjectMprisMetadata(
-      trackId: _trackIdFor(item.id),
+      trackId: _trackIdFor('${item.providerId}:${item.opaqueId}:$index'),
       title: item.title,
-      length: item.duration,
-      artist: item.artist == null ? null : [item.artist!],
-      artUrl: item.artUri?.toString(),
-      album: item.album,
-      genre: item.genre == null ? null : [item.genre!],
+      length: item.durationSeconds == null || item.durationSeconds! <= 0
+          ? null
+          : Duration(seconds: item.durationSeconds!),
+      artist: item.artistNames.isEmpty ? null : item.artistNames,
+      artUrl: _safeArtwork(item.artworkUri),
+      album: item.albumTitle,
     );
     emitPropertiesChanged(
       projectMprisPlayerInterface,
@@ -275,11 +156,17 @@ class ProjectMprisPlayer extends DBusObject {
   }
 
   void clearMediaItem() {
+    if (_closed) return;
     _metadata = _ProjectMprisMetadata.empty();
     emitPropertiesChanged(
       projectMprisPlayerInterface,
       changedProperties: {'Metadata': _metadata.toValue()},
     );
+  }
+
+  Future<void> close() {
+    _closed = true;
+    return _events.close();
   }
 
   void stop() {
@@ -365,7 +252,9 @@ class ProjectMprisPlayer extends DBusObject {
   void _acceptSeek(Duration value) {
     _position = value;
     _positionUpdatedAt = _now();
-    _events.add(ProjectMprisEvent(ProjectMprisEventType.seek, value));
+    _events.add(
+      ProjectMprisEvent(ProjectMprisEventType.seek, value, _metadata.trackId),
+    );
   }
 
   Future<void> emitSeeked(Duration value) => emitSignal(
@@ -495,6 +384,7 @@ class ProjectMprisPlayer extends DBusObject {
 
   @override
   Future<DBusMethodResponse> handleMethodCall(DBusMethodCall methodCall) async {
+    if (_closed) return DBusMethodErrorResponse.failed('MPRIS edge is closed.');
     if (methodCall.interface != projectMprisPlayerInterface) {
       return DBusMethodErrorResponse.unknownMethod();
     }
@@ -644,6 +534,7 @@ class ProjectMprisPlayer extends DBusObject {
     String name,
     DBusValue value,
   ) async {
+    if (_closed) return DBusMethodErrorResponse.failed('MPRIS edge is closed.');
     if (interface != projectMprisPlayerInterface) {
       return DBusMethodErrorResponse.unknownProperty();
     }
@@ -664,6 +555,9 @@ class ProjectMprisPlayer extends DBusObject {
         _setShuffle(value.asBoolean(), emitEvent: true);
       case 'Volume':
         if (value.signature != DBusSignature('d')) {
+          return DBusMethodErrorResponse.invalidArgs();
+        }
+        if (!value.asDouble().isFinite) {
           return DBusMethodErrorResponse.invalidArgs();
         }
         _setVolume(value.asDouble(), emitEvent: true);
@@ -703,7 +597,6 @@ class _ProjectMprisMetadata {
     this.artist,
     this.artUrl,
     this.album,
-    this.genre,
   });
 
   factory _ProjectMprisMetadata.empty() => _ProjectMprisMetadata(
@@ -717,7 +610,6 @@ class _ProjectMprisMetadata {
   final List<String>? artist;
   final String? artUrl;
   final String? album;
-  final List<String>? genre;
 
   bool get hasTrack => trackId.value != '/com/fura/flutterustmusic/track/none';
 
@@ -730,7 +622,6 @@ class _ProjectMprisMetadata {
       if (artist != null) 'xesam:artist': DBusArray.string(artist!),
       if (artUrl != null) 'mpris:artUrl': DBusString(artUrl!),
       if (album != null) 'xesam:album': DBusString(album!),
-      if (genre != null) 'xesam:genre': DBusArray.string(genre!),
     });
   }
 }
@@ -754,3 +645,12 @@ String _safeBusSuffix(String value) => value
 
 String projectMprisServiceName(String serviceId) =>
     'org.mpris.MediaPlayer2.${_safeBusSuffix(serviceId)}.instance$pid';
+
+String? _safeArtwork(String? value) {
+  final uri = value == null ? null : Uri.tryParse(value);
+  return uri != null &&
+          uri.hasAuthority &&
+          (uri.scheme == 'https' || uri.scheme == 'http')
+      ? uri.toString()
+      : null;
+}

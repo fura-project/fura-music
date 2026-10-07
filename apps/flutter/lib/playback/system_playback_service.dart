@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:dbus/dbus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -12,7 +13,7 @@ import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/flutter_media_session_system_edge.dart';
-import 'package:flutterustmusic/playback/linux_mpris_audio_service.dart';
+import 'package:flutterustmusic/playback/fura_mpris_system_media_edge.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_stack_experiment.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
@@ -108,6 +109,31 @@ class FlutterMediaSessionAppPlaybackHost implements AppPlaybackHost {
   }
 }
 
+class FuraMprisAppPlaybackHost implements AppPlaybackHost {
+  FuraMprisAppPlaybackHost._(this._edge, this._bindings);
+  final FuraMprisSystemMediaEdge _edge;
+  final _AudioSessionBindings _bindings;
+  Future<void>? _disposal;
+  @override
+  QueuePlaybackController get controller => _edge.controller;
+  @override
+  bool get systemControlsAvailable => _edge.isActive;
+  @override
+  Future<void> dispose() => _disposal ??= _dispose();
+
+  Future<void> _dispose() async {
+    try {
+      await _edge.deactivate();
+    } finally {
+      await _bindings.interruptionSubscription?.cancel();
+      await _bindings.becomingNoisySubscription?.cancel();
+      controller.dispose();
+    }
+  }
+}
+
+const projectMprisVolumeAction = 'projectMprisVolume';
+
 typedef ProjectAudioServiceInitializer = Future<void> Function(
   ProjectSystemAudioHandler handler,
   AudioServiceConfig config,
@@ -176,7 +202,6 @@ class AudioServiceSystemMediaEdge implements SystemMediaEdge {
     if (_active) throw StateError('System media edge is already active.');
     _logSystemPlayback(phase: 'audio_service_init', outcome: 'started');
     try {
-      registerProjectLinuxMprisAudioService();
       await _initializer(_handler, projectAudioServiceConfig);
       _active = true;
       _logSystemPlayback(phase: 'audio_service_init', outcome: 'success');
@@ -270,6 +295,7 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
       PlatformProjectAudioSession.create,
   SystemMediaEdgeKind systemMediaEdge = SystemMediaEdgeKind.audioService,
   @visibleForTesting FlutterMediaSessionDriver? flutterMediaSessionDriver,
+  @visibleForTesting DBusClient Function()? mprisClientFactory,
   @visibleForTesting TargetPlatform? platform,
 }) async {
   final controller = createAppPlaybackController(
@@ -280,6 +306,29 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
     relatedTracksGateway: relatedTracksGateway,
   );
   final effectivePlatform = platform ?? defaultTargetPlatform;
+
+  if (effectivePlatform == TargetPlatform.linux ||
+      systemMediaEdge == SystemMediaEdgeKind.furaMpris) {
+    if (effectivePlatform != TargetPlatform.linux) {
+      return ForegroundAppPlaybackHost(controller);
+    }
+    final edge = FuraMprisSystemMediaEdge(
+      controller: controller,
+      clientFactory: mprisClientFactory,
+    );
+    try {
+      await edge.activate();
+    } on Object {
+      _logSystemPlayback(phase: 'host_selected', outcome: 'foreground_only');
+      return ForegroundAppPlaybackHost(controller);
+    }
+    final bindings = await _configureProjectAudioSession(
+      controller,
+      audioSessionFactory,
+    );
+    _logSystemPlayback(phase: 'host_selected', outcome: 'fura_mpris');
+    return FuraMprisAppPlaybackHost._(edge, bindings);
+  }
 
   if (systemMediaEdge == SystemMediaEdgeKind.flutterMediaSession) {
     final edge = FuraMediaSessionAdapter(

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
-import 'package:flutterustmusic/playback/linux_mpris_audio_service.dart';
+import 'package:flutterustmusic/playback/linux_mpris_player.dart';
 import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
@@ -30,7 +30,7 @@ void main() {
       systemMediaEdge: selection.effectiveSystemMediaEdge,
     );
 
-    expect(host, isA<AudioServiceAppPlaybackHost>());
+    expect(host, isA<FuraMprisAppPlaybackHost>());
     expect(host.controller, isNotNull);
     expect(selection.usesProjectLinuxMpris, isTrue);
 

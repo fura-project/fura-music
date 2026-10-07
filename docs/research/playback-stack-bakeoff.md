@@ -79,6 +79,14 @@ new Windows/Apple runtime acceptance.
 
 ## Selector and four combinations
 
+**2026-10-08 ownership correction:** Linux Fura MPRIS now directly implements
+`SystemMediaEdge` over the same Queue/controller and preserved DBus object. It
+no longer uses AudioService messages/init or the direct platform-interface
+dependency. This supersedes only the Linux API-owner statement in the dated
+2026-10-07 checkpoint above; retained rollback/iOS dependencies, requested/
+effective stack policy and physical-device acceptance boundaries are unchanged.
+See [the separate native and MPRIS runtime audit](linux-playback-failure-mpris-ownership-2026-10-08.md).
+
 The internal compile-time selector is intentionally absent from Settings:
 
 ```text

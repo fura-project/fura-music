@@ -584,7 +584,8 @@ class _MediaKitHarness implements _EngineHarness {
   void emitCompletion() => player.completedController.add(true);
 
   @override
-  void emitFailure() => player.errorsController.add('synthetic');
+  void emitFailure() =>
+      player.sourceFailuresController.add(player.sourceGeneration);
 
   @override
   void holdPause(Future<void> gate) => player.pauseGate = gate;
@@ -594,6 +595,13 @@ class _MediaKitHarness implements _EngineHarness {
 }
 
 class _FakeMediaKitContractPlayer implements MediaKitAudioPlayer {
+  @override
+  int sourceGeneration = 0;
+  @override
+  bool get sourceFailed => false;
+  @override
+  Stream<int> get sourceFailures => sourceFailuresController.stream;
+  final sourceFailuresController = StreamController<int>.broadcast();
   final playingController = StreamController<bool>.broadcast();
   final completedController = StreamController<bool>.broadcast();
   final positionController = StreamController<Duration>.broadcast();
@@ -621,7 +629,10 @@ class _FakeMediaKitContractPlayer implements MediaKitAudioPlayer {
   Stream<String> get errors => errorsController.stream;
 
   @override
-  Future<void> open(Uri source) async => opened.add(source);
+  Future<void> open(Uri source) async {
+    ++sourceGeneration;
+    opened.add(source);
+  }
 
   @override
   Future<void> play() async {
@@ -656,6 +667,7 @@ class _FakeMediaKitContractPlayer implements MediaKitAudioPlayer {
     await completedController.close();
     await positionController.close();
     await errorsController.close();
+    await sourceFailuresController.close();
   }
 }
 

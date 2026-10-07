@@ -701,6 +701,12 @@ class _CountedNativePlayer implements MediaKitAudioPlayer {
   final Future<void>? pauseAcknowledgement;
   final Completer<void>? pauseEntered;
   final _native = PlatformMediaKitAudioPlayer();
+  @override
+  int get sourceGeneration => _native.sourceGeneration;
+  @override
+  bool get sourceFailed => _native.sourceFailed;
+  @override
+  Stream<int> get sourceFailures => _native.sourceFailures;
   int opens = 0;
   int seeks = 0;
   int plays = 0;

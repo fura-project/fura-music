@@ -1,7 +1,9 @@
-import 'package:audio_service_platform_interface/audio_service_platform_interface.dart';
 import 'package:dbus/dbus.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutterustmusic/playback/linux_mpris_audio_service.dart';
+import 'package:flutterustmusic/playback/linux_mpris_player.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
+import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
+import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 void main() {
   late DateTime now;
@@ -11,22 +13,21 @@ void main() {
     now = DateTime.utc(2026, 8, 31, 12);
     player = ProjectMprisPlayer(identity: 'flutterustmusic', now: () => now);
     player.updateMediaItem(
-      const MediaItemMessage(
-        id: 'qq-music:opaque-track:0',
+      const PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'opaque-track',
         title: 'Track',
-        artist: 'Artist',
-        duration: Duration(minutes: 3),
+        artistNames: ['Artist'],
+        durationSeconds: 180,
       ),
+      index: 0,
     );
     player.updatePlaybackState(
-      PlaybackStateMessage(
-        processingState: AudioProcessingStateMessage.ready,
-        playing: true,
-        systemActions: const {
-          MediaActionMessage.seek,
-          MediaActionMessage.setRepeatMode,
-          MediaActionMessage.setShuffleMode,
-        },
+      ProjectMprisPlaybackState(
+        stage: TrackPlaybackStage.playing,
+        canPlay: true,
+        canPause: true,
+        canSeek: true,
         updatePosition: const Duration(seconds: 10),
         updateTime: now,
       ),
@@ -116,16 +117,69 @@ void main() {
     expect((await shuffleEvent).value, isTrue);
 
     player.updatePlaybackState(
-      PlaybackStateMessage(
-        processingState: AudioProcessingStateMessage.ready,
-        repeatMode: AudioServiceRepeatModeMessage.all,
-        shuffleMode: AudioServiceShuffleModeMessage.none,
+      ProjectMprisPlaybackState(
+        stage: TrackPlaybackStage.paused,
+        updatePosition: Duration.zero,
+        repeatMode: PlaybackRepeatMode.all,
+        order: PlaybackOrder.sequential,
         updateTime: now,
       ),
     );
     expect((await _property(player, 'LoopStatus')).asString(), 'Playlist');
     expect((await _property(player, 'Shuffle')).asBoolean(), isFalse);
   });
+
+  tearDown(() async => player.close());
+
+  test(
+    'volume is finite and bounded, and closed projection rejects commands',
+    () async {
+      final values = <ProjectMprisEvent>[];
+      final subscription = player.events.listen(values.add);
+      expect(
+        await player.setProperty(
+          projectMprisPlayerInterface,
+          'Volume',
+          const DBusDouble(double.nan),
+        ),
+        isA<DBusMethodErrorResponse>(),
+      );
+      expect(
+        await player.setProperty(
+          projectMprisPlayerInterface,
+          'Volume',
+          const DBusDouble(double.infinity),
+        ),
+        isA<DBusMethodErrorResponse>(),
+      );
+      expect(player.volume, 1);
+      await player.setProperty(
+        projectMprisPlayerInterface,
+        'Volume',
+        const DBusDouble(-1),
+      );
+      expect(player.volume, 0);
+      await player.setProperty(
+        projectMprisPlayerInterface,
+        'Volume',
+        const DBusDouble(2),
+      );
+      expect(player.volume, 1);
+      await Future<void>.delayed(Duration.zero);
+      expect(values.map((value) => value.value), [0.0, 1.0]);
+      await player.close();
+      expect(
+        await player.setProperty(
+          projectMprisPlayerInterface,
+          'Shuffle',
+          const DBusBoolean(true),
+        ),
+        isA<DBusMethodErrorResponse>(),
+      );
+      expect(player.shuffle, isFalse);
+      await subscription.cancel();
+    },
+  );
 
   test('clearing the owner removes stale current-track metadata', () async {
     player.clearMediaItem();
