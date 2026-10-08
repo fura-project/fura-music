@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_controller.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
-import 'package:flutterustmusic/settings/settings_choice_presentation.dart';
 
 import 'settings_review_harness.dart';
 
@@ -22,53 +21,7 @@ const allPlatforms = TargetPlatformVariant({
 });
 
 void main() {
-  testWidgets('radio keyboard focus paints the whole custom choice row', (
-    tester,
-  ) async {
-    setSettingsViewport(tester, const Size(1440, 900));
-    final boundary = GlobalKey();
-    await tester.pumpWidget(
-      RepaintBoundary(key: boundary, child: const SettingsReviewHarness()),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
-    await tester.pumpAndSettle();
-    final row = find.byKey(const ValueKey('settings-theme-system'));
-    // Radio's autofocus owns its internal focus node. Focus.of at the Radio
-    // widget's element instead finds its non-requestable ancestor InkWell.
-    final focus = FocusManager.instance.primaryFocus!;
-    expect(
-      focus.context!.findAncestorWidgetOfExactType<FuraChoiceRow<int>>()?.key,
-      const ValueKey('settings-theme-system'),
-    );
-    FocusManager.instance.primaryFocus?.unfocus();
-    FocusManager.instance.highlightStrategy =
-        FocusHighlightStrategy.alwaysTraditional;
-    addTearDown(
-      () => FocusManager.instance.highlightStrategy =
-          FocusHighlightStrategy.automatic,
-    );
-    await tester.pumpAndSettle();
-    // Blank trailing pixels exclude the Radio's own circular focus highlight.
-    final rect = tester.getRect(row);
-    final area = Rect.fromLTWH(rect.right - 48, rect.top + 12, 24, 24);
-    final idle = await _rowPixels(tester, boundary, row, area: area);
-    focus.requestFocus();
-    await tester.pumpAndSettle();
-    expect(
-      listEquals(idle, await _rowPixels(tester, boundary, row, area: area)),
-      isFalse,
-    );
-    focus.unfocus();
-    await tester.pumpAndSettle();
-    expect(
-      listEquals(idle, await _rowPixels(tester, boundary, row, area: area)),
-      isTrue,
-    );
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('custom handle retains route drag-dismiss with no write', (
+  testWidgets('official RadioListTile owns choices and SDK handle dismisses', (
     tester,
   ) async {
     var writes = 0;
@@ -80,90 +33,40 @@ void main() {
         },
       ),
     );
+    await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
     await tester.pumpAndSettle();
-    final row = find.byKey(const ValueKey('settings-theme-selector'));
-    await tester.tap(row);
-    await tester.pumpAndSettle();
-    await tester.fling(
-      find.byKey(const ValueKey('settings-choice-handle')),
+    expect(find.byType(RadioListTile<int>), findsNWidgets(3));
+    final sheet = find.byType(BottomSheet);
+    expect(tester.widget<BottomSheet>(sheet).showDragHandle, isTrue);
+    expect(
+      FocusManager.instance.primaryFocus!.context!
+          .findAncestorWidgetOfExactType<RadioListTile<int>>()
+          ?.value,
+      0,
+    );
+    await tester.flingFrom(
+      tester.getTopLeft(sheet) + const Offset(100, 16),
       const Offset(0, 350),
       1500,
     );
     await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsNothing);
+    expect(sheet, findsNothing);
     expect(writes, 0);
-    expect(settingsRowInk(tester, row).focusNode!.hasFocus, isTrue);
   });
-
-  testWidgets(
-    '2x short compact menu stays in viewport and all options remain reachable',
-    (tester) async {
-      setSettingsViewport(tester, const Size(320, 480));
-      await tester.pumpWidget(
-        const SettingsReviewHarness(compact: true, scale: 2, language: 'zh'),
-      );
-      await tester.pumpAndSettle();
-      final row = find.byKey(const ValueKey('settings-color-source-selector'));
-      await tester.ensureVisible(row);
-      await tester.tap(row);
-      await tester.pumpAndSettle();
-      final popup = find.byKey(const ValueKey('settings-color-popup'));
-      final rect = tester.getRect(popup);
-      expect(rect.left, greaterThanOrEqualTo(0));
-      expect(rect.right, lessThanOrEqualTo(320));
-      expect(rect.top, greaterThanOrEqualTo(0));
-      expect(rect.bottom, lessThanOrEqualTo(480));
-      for (final option in [
-        'settings-color-source-system',
-        'settings-color-source-brand',
-      ]) {
-        final target = find.byKey(ValueKey(option));
-        await tester.ensureVisible(target);
-        await tester.pumpAndSettle();
-        expect(target.hitTestable(), findsOneWidget);
-      }
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('settings-color-palette-preview')),
-      );
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets('anchored radio keyboard selection closes and restores focus', (
-    tester,
-  ) async {
-    final storage = _PendingStorage(Future.value());
-    final owner = AppSettingsController(
-      AppSettingsStore(storage: storage),
-      null,
-      initialSettings: AppSettings.defaults,
+  testWidgets('full-width sheet tracks live window resize', (tester) async {
+    setSettingsViewport(tester, const Size(1440, 900));
+    await tester.pumpWidget(const SettingsReviewHarness());
+    await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(BottomSheet)).width, 1440);
+    tester.view.physicalSize = const Size(1000, 900);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(BottomSheet)).width, 1000);
+    expect(
+      tester.getBottomLeft(find.byType(BottomSheet)),
+      const Offset(0, 900),
     );
-    addTearDown(owner.dispose);
-    await tester.pumpWidget(SettingsReviewHarness(owner: owner));
-    await tester.pumpAndSettle();
-    final row = find.byKey(const ValueKey('settings-color-source-selector'));
-    final focus = settingsRowInk(tester, row).focusNode!;
-    focus.requestFocus();
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsNothing);
-    expect(find.byKey(const ValueKey('settings-color-popup')), findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-    await tester.pumpAndSettle();
-    expect(owner.settings.colorSource, AppColorSourcePreference.system);
-    expect(storage.writes, 1);
-    expect(find.byKey(const ValueKey('settings-color-popup')), findsNothing);
-    expect(focus.hasFocus, isTrue);
-    await tester.tap(row);
-    await tester.pumpAndSettle();
-    await tester.sendKeyEvent(LogicalKeyboardKey.space);
-    await tester.pumpAndSettle();
-    expect(storage.writes, 1);
-    expect(find.byKey(const ValueKey('settings-color-popup')), findsNothing);
-    expect(tester.takeException(), isNull);
   });
-
   testWidgets('stale, duplicate and invalid sheet results cannot write', (
     tester,
   ) async {
@@ -267,7 +170,7 @@ void main() {
     expect(nativeCalls, 0);
     expect(Theme.of(tester.element(sheet)).useMaterial3, isTrue);
     final content = find.byKey(const ValueKey('settings-choice-sheet'));
-    expect(tester.getSize(content).width, lessThanOrEqualTo(480));
+    expect(tester.getSize(content).width, 1440);
     expect(tester.getSize(content).height, lessThan(400));
     expect(tester.getBottomLeft(sheet).dy, 900);
     expect(
@@ -290,57 +193,51 @@ void main() {
   }, variant: allPlatforms);
 
   testWidgets(
-    'Color Source is anchored, leaves the group fixed, and owns palette',
+    'official color dropdown leaves group fixed and owns no radio panel',
     (tester) async {
       await tester.pumpWidget(const SettingsReviewHarness());
       await tester.pumpAndSettle();
-      final row = find.byKey(const ValueKey('settings-color-source-selector'));
+      final dropdown = find.byType(DropdownMenu<AppColorSourcePreference>);
       final group = find.byKey(const ValueKey('settings-group'));
       final before = tester.getRect(group);
       expect(
         find.byKey(const ValueKey('settings-color-palette-preview')),
+        findsOneWidget,
+      );
+      expect(find.byType(DropdownButton), findsNothing);
+      expect(find.byType(DropdownButtonFormField), findsNothing);
+      expect(
+        find.byKey(const ValueKey('settings-color-menu-anchor')),
         findsNothing,
       );
-      await tester.tap(row);
-      await tester.pumpAndSettle();
-      expect(find.byType(MenuAnchor), findsOneWidget);
-      expect(find.byType(BottomSheet), findsNothing);
-      expect(find.byType(FuraChoiceSheet), findsNothing);
       expect(
         find.byKey(const ValueKey('settings-color-details')),
         findsNothing,
       );
-      expect(tester.getRect(group), before);
+      expect(find.byType(RadioGroup<AppColorSourcePreference>), findsNothing);
+      // DropdownMenu's internal SDK MenuAnchor is not a Fura-owned popup.
+      expect(
+        find.ancestor(of: find.byType(MenuAnchor), matching: dropdown),
+        findsOneWidget,
+      );
       expect(
         tester
-            .widget<RadioGroup<AppColorSourcePreference>>(
-              find.byType(RadioGroup<AppColorSourcePreference>),
-            )
-            .groupValue,
+            .widget<DropdownMenu<AppColorSourcePreference>>(dropdown)
+            .initialSelection,
         AppColorSourcePreference.brand,
       );
-      await tester.tap(
-        find.byKey(const ValueKey('settings-color-source-system')),
-      );
+      await tester.tap(dropdown);
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('settings-color-popup')), findsNothing);
-      await tester.tap(row);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(tester.getRect(group), before);
+      await tester.tap(_colorOption('system'));
       await tester.pumpAndSettle();
       expect(
         tester
-            .widget<RadioGroup<AppColorSourcePreference>>(
-              find.byType(RadioGroup<AppColorSourcePreference>),
-            )
-            .groupValue,
+            .widget<DropdownMenu<AppColorSourcePreference>>(dropdown)
+            .initialSelection,
         AppColorSourcePreference.system,
       );
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('settings-color-palette-preview')),
-        findsNothing,
-      );
-      expect(settingsRowInk(tester, row).focusNode!.hasFocus, isTrue);
       expect(tester.getRect(group), before);
       expect(tester.takeException(), isNull);
     },
@@ -348,7 +245,7 @@ void main() {
   );
 
   for (final success in [true, false]) {
-    testWidgets('menu closes then existing save reconciles success=$success', (
+    testWidgets('dropdown existing save reconciles success=$success', (
       tester,
     ) async {
       final saved = Completer<void>();
@@ -360,17 +257,20 @@ void main() {
       );
       addTearDown(owner.dispose);
       await tester.pumpWidget(SettingsReviewHarness(owner: owner));
-      final row = find.byKey(const ValueKey('settings-color-source-selector'));
-      await tester.tap(row);
+      final dropdown = find.byType(DropdownMenu<AppColorSourcePreference>);
+      await tester.tap(dropdown);
       await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey('settings-color-source-system')),
-      );
+      await tester.tap(_colorOption('system'));
+      await tester.pump();
+      // The Settings saving flag schedules a second rebuild after the
+      // optimistic owner notification; inspect the rendered disabled state.
       await tester.pump();
       expect(storage.writes, 1);
       expect(owner.settings.colorSource, AppColorSourcePreference.system);
-      expect(find.byKey(const ValueKey('settings-color-popup')), findsNothing);
-      expect(settingsRowInk(tester, row).onTap, isNull);
+      expect(
+        tester.widget<DropdownMenu<AppColorSourcePreference>>(dropdown).enabled,
+        isFalse,
+      );
       if (success) {
         saved.complete();
       } else {
@@ -383,26 +283,17 @@ void main() {
             ? AppColorSourcePreference.system
             : AppColorSourcePreference.brand,
       );
-      expect(settingsRowInk(tester, row).focusNode!.hasFocus, isTrue);
-      expect(find.byType(SnackBar), success ? findsNothing : findsOneWidget);
-      await tester.tap(row);
-      await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<RadioGroup<AppColorSourcePreference>>(
-              find.byType(RadioGroup<AppColorSourcePreference>),
-            )
-            .groupValue,
-        owner.settings.colorSource,
+      final widget = tester.widget<DropdownMenu<AppColorSourcePreference>>(
+        dropdown,
       );
+      expect(widget.initialSelection, owner.settings.colorSource);
+      expect(widget.focusNode!.hasFocus, isTrue);
+      expect(find.byType(SnackBar), success ? findsNothing : findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
-
-  for (final dismiss in ['outside', 'escape', 'back', 'current']) {
-    testWidgets('menu $dismiss closes without write, restores focus', (
-      tester,
-    ) async {
+  for (final dismiss in ['outside', 'escape', 'current']) {
+    testWidgets('dropdown $dismiss dismisses without write', (tester) async {
       var writes = 0;
       await tester.pumpWidget(
         SettingsReviewHarness(
@@ -412,31 +303,23 @@ void main() {
           },
         ),
       );
-      await tester.pumpAndSettle();
-      final row = find.byKey(const ValueKey('settings-color-source-selector'));
-      await tester.tap(row);
+      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
       await tester.pumpAndSettle();
       switch (dismiss) {
         case 'outside':
           await tester.tapAt(const Offset(8, 8));
         case 'escape':
           await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-        case 'back':
-          await tester.binding.handlePopRoute();
         case 'current':
-          await tester.tap(
-            find.byKey(const ValueKey('settings-color-source-brand')),
-          );
+          await tester.tap(_colorOption('brand'));
       }
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('settings-color-popup')), findsNothing);
+      expect(_colorOption('system'), findsNothing);
       expect(writes, 0);
-      expect(settingsRowInk(tester, row).focusNode!.hasFocus, isTrue);
       expect(tester.takeException(), isNull);
     });
   }
-
-  testWidgets('stale menu snapshot and disposed anchor cannot write', (
+  testWidgets('dropdown keyboard traverses choices and persists once', (
     tester,
   ) async {
     final storage = _PendingStorage(Future.value());
@@ -447,31 +330,105 @@ void main() {
     );
     addTearDown(owner.dispose);
     await tester.pumpWidget(SettingsReviewHarness(owner: owner));
-    final row = find.byKey(const ValueKey('settings-color-source-selector'));
-    await tester.tap(row);
+    final dropdown = find.byType(DropdownMenu<AppColorSourcePreference>);
+    tester
+        .widget<DropdownMenu<AppColorSourcePreference>>(dropdown)
+        .focusNode!
+        .requestFocus();
     await tester.pumpAndSettle();
-    await owner.update(
-      owner.settings.copyWith(colorSource: AppColorSourcePreference.system),
-    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('settings-color-source-brand')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(storage.writes, 1);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
     expect(owner.settings.colorSource, AppColorSourcePreference.system);
-    await tester.tap(row);
-    await tester.pumpAndSettle();
-    await tester.pumpWidget(
-      SettingsReviewHarness(owner: owner, showPage: false),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('settings-color-popup')), findsNothing);
     expect(storage.writes, 1);
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+    'externally replaced dropdown and disposed caller cannot write stale result',
+    (tester) async {
+      final storage = _PendingStorage(Future.value());
+      final owner = AppSettingsController(
+        AppSettingsStore(storage: storage),
+        null,
+        initialSettings: AppSettings.defaults,
+      );
+      addTearDown(owner.dispose);
+      await tester.pumpWidget(SettingsReviewHarness(owner: owner));
+      final dropdown = find.byType(DropdownMenu<AppColorSourcePreference>);
+      final oldCallback = tester
+          .widget<DropdownMenu<AppColorSourcePreference>>(dropdown)
+          .onSelected!;
+      await tester.tap(dropdown);
+      await tester.pumpAndSettle();
+      await owner.update(
+        owner.settings.copyWith(colorSource: AppColorSourcePreference.system),
+      );
+      await tester.pumpAndSettle();
+      oldCallback(AppColorSourcePreference.brand);
+      await tester.pumpAndSettle();
+      expect(storage.writes, 1);
+      expect(_colorOption('brand'), findsNothing);
+      final disposedCallback = tester
+          .widget<DropdownMenu<AppColorSourcePreference>>(dropdown)
+          .onSelected!;
+      await tester.tap(dropdown);
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        SettingsReviewHarness(owner: owner, showPage: false),
+      );
+      await tester.pumpAndSettle();
+      disposedCallback(AppColorSourcePreference.brand);
+      await tester.pumpAndSettle();
+      expect(storage.writes, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
+  for (final dismiss in ['escape', 'outside']) {
+    testWidgets(
+      'keyboard preview dismissed with $dismiss restores saved selection',
+      (tester) async {
+        await tester.pumpWidget(const SettingsReviewHarness());
+        final dropdown = find.byType(DropdownMenu<AppColorSourcePreference>);
+        final initialText = tester
+            .widget<TextField>(
+              find.descendant(of: dropdown, matching: find.byType(TextField)),
+            )
+            .controller!
+            .text;
+        tester
+            .widget<DropdownMenu<AppColorSourcePreference>>(dropdown)
+            .focusNode!
+            .requestFocus();
+        await tester.pumpAndSettle();
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pumpAndSettle();
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pumpAndSettle();
+        if (dismiss == 'escape') {
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        } else {
+          await tester.tapAt(const Offset(8, 8));
+        }
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<TextField>(
+                find.descendant(of: dropdown, matching: find.byType(TextField)),
+              )
+              .controller!
+              .text,
+          initialText,
+        );
+      },
+    );
+  }
   for (final reduced in [false, true]) {
     testWidgets(
-      'anchored menu rapid toggles reduced=$reduced keep group fixed',
+      'SDK dropdown rapid toggles reduced=$reduced do not expand the group',
       (tester) async {
         tester.platformDispatcher.accessibilityFeaturesTestValue =
             FakeAccessibilityFeatures(disableAnimations: reduced);
@@ -479,27 +436,25 @@ void main() {
           tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
         );
         await tester.pumpWidget(const SettingsReviewHarness());
-        await tester.pumpAndSettle();
-        final row = find.byKey(
-          const ValueKey('settings-color-source-selector'),
-        );
+        final dropdown = find.byType(DropdownMenu<AppColorSourcePreference>);
         final group = find.byKey(const ValueKey('settings-group'));
         final size = tester.getSize(group);
         for (var i = 0; i < 10; i++) {
-          settingsRowInk(tester, row).onTap!();
+          await tester.tap(dropdown);
+          await tester.pump();
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
           await tester.pump();
           expect(tester.getSize(group), size);
         }
         await tester.pumpAndSettle();
-        expect(
-          find.byKey(const ValueKey('settings-color-popup')),
-          findsNothing,
-        );
         expect(tester.takeException(), isNull);
       },
     );
   }
 }
+
+Finder _colorOption(String value) =>
+    find.byKey(ValueKey('settings-color-source-$value')).hitTestable();
 
 Future<List<int>> _rowPixels(
   WidgetTester tester,

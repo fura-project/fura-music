@@ -9434,15 +9434,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('settings-system-colors-available')),
-        findsNothing,
+        findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey('settings-system-colors-unavailable')),
         findsNothing,
       );
-      await tester.tap(
-        find.byKey(const ValueKey('settings-color-source-selector')),
-      );
+      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('settings-system-colors-available')),
@@ -9453,7 +9451,7 @@ void main() {
         findsOneWidget,
       );
       await tester.tap(
-        find.byKey(const ValueKey('settings-color-source-brand')),
+        find.byKey(const ValueKey('settings-color-source-brand')).hitTestable(),
       );
       await tester.pumpAndSettle();
       expect(writes, hasLength(1));
@@ -9461,15 +9459,6 @@ void main() {
 
       await tester.pumpWidget(page(null));
       await tester.pumpAndSettle();
-      if (find
-          .byKey(const ValueKey('settings-system-colors-unavailable'))
-          .evaluate()
-          .isEmpty) {
-        await tester.tap(
-          find.byKey(const ValueKey('settings-color-source-selector')),
-        );
-        await tester.pumpAndSettle();
-      }
       expect(
         find.byKey(const ValueKey('settings-system-colors-unavailable')),
         findsOneWidget,
@@ -9586,9 +9575,7 @@ void main() {
             Uri.file('$reviewDirectory/settings-shell-desktop-normal.png'),
           ),
         );
-        await tester.tap(
-          find.byKey(const ValueKey('settings-color-source-selector')),
-        );
+        await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
         await tester.pumpAndSettle();
         FocusManager.instance.primaryFocus?.unfocus();
         await tester.pumpAndSettle();
@@ -9598,9 +9585,7 @@ void main() {
             Uri.file('$reviewDirectory/settings-shell-desktop-color.png'),
           ),
         );
-        await tester.tap(
-          find.byKey(const ValueKey('settings-color-source-selector')),
-        );
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
         await tester.pumpAndSettle();
       }
       await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
@@ -10141,12 +10126,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(settingsStorage.document, contains('"theme":"dark"'));
-      await tester.tap(
-        find.byKey(const ValueKey('settings-color-source-selector')),
-      );
+      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
       await tester.pumpAndSettle();
       await tester.tap(
-        find.byKey(const ValueKey('settings-color-source-system')),
+        find
+            .byKey(const ValueKey('settings-color-source-system'))
+            .hitTestable(),
       );
       await tester.pumpAndSettle();
       expect(settingsStorage.document, contains('"colorSource":"system"'));

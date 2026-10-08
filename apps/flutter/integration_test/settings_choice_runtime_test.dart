@@ -12,7 +12,7 @@ import 'package:integration_test/integration_test.dart';
 
 /// Real host/plugin presentation with a disposable preference key. Never
 /// starts MusicApp, restores credentials, accesses Providers or changes Queue.
-/// All platforms exercise the same real Flutter route and anchored menu.
+/// All platforms exercise the same SDK Flutter BottomSheet and DropdownMenu.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('Settings choices use real platform presentation and storage', (
@@ -90,6 +90,10 @@ void main() {
       await tester.pumpAndSettle();
       debugPrint('FURA_SETTINGS_REVIEW phase=$phase ready');
       expect(find.byType(BottomSheet), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(BottomSheet)).width,
+        MediaQuery.sizeOf(tester.element(row)).width,
+      );
       if (optionKey == 'escape') {
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       } else if (optionKey == 'scrim') {
@@ -145,10 +149,12 @@ void main() {
         const ValueKey('settings-color-source-selector'),
       );
       await tester.ensureVisible(colorRow);
-      await tester.tap(colorRow);
+      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
-      final system = find.byKey(const ValueKey('settings-color-source-system'));
+      final system = find
+          .byKey(const ValueKey('settings-color-source-system'))
+          .hitTestable();
       await tester.ensureVisible(system);
       await tester.tap(system);
       await tester.pumpAndSettle();
@@ -158,28 +164,25 @@ void main() {
         (await store.load()).settings.colorSource,
         AppColorSourcePreference.system,
       );
-      await tester.tap(colorRow);
+      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
       await tester.pumpAndSettle();
       await tester.tap(system);
       await tester.pumpAndSettle();
       expect(storage.writes, 3);
       expect(
         find.byKey(const ValueKey('settings-color-palette-preview')),
-        findsNothing,
-      );
-      await tester.tap(colorRow);
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('settings-color-popup')),
         findsOneWidget,
       );
+      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
+      await tester.pumpAndSettle();
+      expect(system, findsOneWidget);
       await tester.ensureVisible(colorRow);
       await tester.pumpAndSettle();
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('settings-color-palette-preview')),
-        findsNothing,
+        findsOneWidget,
       );
       scale = 2;
       await tester.pumpWidget(fixture());
@@ -187,7 +190,7 @@ void main() {
       await choice('theme_large_cancel', 'settings-theme-selector', 'escape');
       expect(storage.writes, 3);
       await tester.ensureVisible(colorRow);
-      await tester.tap(colorRow);
+      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
       await tester.pumpAndSettle();
       await tester.ensureVisible(
         find.byKey(const ValueKey('settings-color-palette-preview')),
@@ -195,7 +198,7 @@ void main() {
       expect(find.byType(BottomSheet), findsNothing);
       expect(tester.takeException(), isNull);
       debugPrint(
-        'FURA_SETTINGS_REVIEW all_success writes=3 presentation=FURA_CHOICE_SHEET color=MENU_ANCHOR',
+        'FURA_SETTINGS_REVIEW all_success writes=3 presentation=SDK_M3_FULL_WIDTH color=DROPDOWN_MENU',
       );
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());

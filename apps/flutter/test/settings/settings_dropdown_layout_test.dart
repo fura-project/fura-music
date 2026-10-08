@@ -6,7 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/settings/settings_page.dart';
-import 'package:flutterustmusic/settings/settings_choice_presentation.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 
 import 'settings_review_harness.dart';
 
@@ -55,19 +55,19 @@ void main() {
                   expect(text.overflow, isNull);
                 }
                 expect(tester.getSize(row).height, greaterThanOrEqualTo(48));
-                await tester.tap(row);
-                await tester.pumpAndSettle();
                 final detailed = key == 'settings-color-source-selector';
+                await tester.tap(
+                  detailed
+                      ? find.byType(DropdownMenu<AppColorSourcePreference>)
+                      : row,
+                );
+                await tester.pumpAndSettle();
                 expect(
                   find.byType(BottomSheet),
                   detailed ? findsNothing : findsOneWidget,
                 );
                 if (key == 'settings-theme-selector' ||
                     key == 'settings-color-source-selector') {
-                  if (detailed) {
-                    FocusManager.instance.primaryFocus?.unfocus();
-                    await tester.pumpAndSettle();
-                  }
                   await _capture(
                     tester,
                     boundary,
@@ -77,7 +77,7 @@ void main() {
                 // Every option, not only the selected one, stays reachable at
                 // large text. The standard scroll view supplies continuation.
                 for (final optionTile in tester.widgetList<Widget>(
-                  find.byWidgetPredicate((w) => w is FuraChoiceRow),
+                  find.byWidgetPredicate((w) => w is RadioListTile<int>),
                 )) {
                   final optionFinder = find.byKey(optionTile.key!);
                   await tester.ensureVisible(optionFinder);
@@ -88,7 +88,7 @@ void main() {
                     greaterThanOrEqualTo(48),
                   );
                 }
-                final selected = find.byKey(ValueKey(option));
+                final selected = find.byKey(ValueKey(option)).hitTestable();
                 await tester.ensureVisible(selected);
                 await tester.tap(selected);
                 await tester.pumpAndSettle();
@@ -99,18 +99,24 @@ void main() {
                     find.byKey(
                       const ValueKey('settings-color-palette-preview'),
                     ),
-                    findsNothing,
+                    findsOneWidget,
                   );
-                  await tester.tap(row);
+                  await tester.tap(
+                    find.byType(DropdownMenu<AppColorSourcePreference>),
+                  );
                   await tester.pumpAndSettle();
                   expect(
-                    find.byKey(const ValueKey('settings-color-popup')),
+                    find
+                        .byKey(const ValueKey('settings-color-source-system'))
+                        .hitTestable(),
                     findsOneWidget,
                   );
                   await tester.sendKeyEvent(LogicalKeyboardKey.escape);
                   await tester.pumpAndSettle();
                   expect(
-                    find.byKey(const ValueKey('settings-color-popup')),
+                    find
+                        .byKey(const ValueKey('settings-color-source-system'))
+                        .hitTestable(),
                     findsNothing,
                   );
                 }
@@ -154,7 +160,7 @@ void main() {
     expect(find.byType(BottomSheet), findsNothing);
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pumpAndSettle();
-    final color = find.byKey(const ValueKey('settings-color-source-selector'));
+    final color = find.byType(DropdownMenu<AppColorSourcePreference>);
     await tester.tap(color);
     await tester.pump();
     await _capture(tester, boundary, 'color-motion-open-000ms');
@@ -163,7 +169,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await _capture(tester, boundary, 'color-motion-open-200ms');
     await tester.pumpAndSettle();
-    await tester.tap(color);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     await _capture(tester, boundary, 'color-motion-close-000ms');
     await tester.pump(const Duration(milliseconds: 100));
@@ -173,7 +179,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('settings-color-palette-preview')),
-      findsNothing,
+      findsOneWidget,
     );
   }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 }

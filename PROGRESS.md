@@ -3,13 +3,54 @@ execution:
   mode: HUMAN_DIRECTED
   work_domain: UI
   state: WAITING_FOR_HUMAN_VISUAL_REVIEW
-  acceptance_milestone: SETTINGS_FURA_CHOICE_SHEET_AND_ANCHORED_COLOR
+  acceptance_milestone: SETTINGS_OFFICIAL_FULL_WIDTH_BOTTOM_SHEET_AND_DROPDOWN
   active_workstream: SETTINGS_UI_CORRECTION
-  current_task: CUSTOM_SETTINGS_ROWS_CHOICE_SHEET_AND_COLOR_MENU
-  next_action: HUMAN_REVIEW_FURA_CHOICE_SHEET_AND_COLOR_MENU
+  current_task: OFFICIAL_M3_SETTINGS_INTERACTION_CORRECTION
+  next_action: HUMAN_REVIEW_OFFICIAL_M3_SETTINGS_RENDERS
 ---
 
 # Current State
+
+- **2026-10-08 Human-directed official Settings component correction:** starting
+  HEAD and tracked origin/main are `ba4ce107a538d1399dfb353515a4b9295b2335e0`;
+  initial worktree clean. Human retains existing Settings layout, grouped
+  surfaces and business/persistence owner, but supersedes the prior custom
+  choice sheet and anchored Color Source model. Five simple settings now use
+  official Flutter M3 BottomSheet/RadioGroup/RadioListTile at full current
+  application-window width on all platforms, with stock handle, existing
+  theme, top-only rounded corners and content height. Color Source uses actual
+  DropdownMenu/DropdownMenuEntry in the row's control area, with small truthful
+  availability/effective-palette support below. No project custom MenuAnchor,
+  inline disclosure or MD2 dropdown remains. SDK DropdownMenu internally owns
+  a MenuAnchor; that is not a project custom popup. The existing route-completed
+  focus restoration and stale/disposed/save/rollback guards are retained.
+  Machine testing reproduced post-save supplied-node focus revocation and
+  unsaved arrow-key preview surviving Escape; only presentation lifecycle
+  corrections are made, with negative evidence retained outside Git.
+  Actual renders precede any further visual decision. The latest Human
+  instruction restricts agy to machine-oriented read-only review, not design.
+  Validation and evidence are recorded in
+  [Settings Shell](docs/design/settings-shell.md). No Core/Provider/playback,
+  governance definition, schema or unrelated dependency changes are authorized.
+  Final Settings suite passes 117 tests; whole MusicApp suite passes 123.
+  Forty size/language/brightness/scaler variants and the SDK motion capture
+  pass, with eight requested states and additional 2x/Shell evidence inspected.
+  Real Linux GTK Settings/plugin/preference integration passes exactly three
+  disposable-key writes, current/cancel no-write, readback, focus and 2x,
+  without account access. Integrated synthetic-player tests retain the same
+  Queue/session, one resolution and no stop. Analysis, format and diff checks
+  pass. Read-only agy component and fresh integrated audits use the configured
+  Gemini 3.8 Flash (Low), restricted to machine checks. Its screenshot-only
+  contrast concern is checked against actual active theme roles (AA text tests
+  pass); inactive scrim background and decorative swatches are not active text.
+  Its COMPLETE/blanket acceptance claims are not adopted. No new native target
+  or remote-CI result is inferred from widget platform variants. Human has not
+  accepted these renders; no further design/polish iteration is selected.
+  No commit/push/reset/restore/clean; candidate awaits Human visual review.
+  Human subsequently authorized Git publication with `提交git`, under the
+  standing commit-and-push instruction. Live remote main and current rules
+  were rechecked at `ba4ce107`; publication does not establish Human visual
+  or new remote-CI acceptance. The Settings gate remains `HUMAN_REVIEW`.
 
 - **2026-10-08 Human-directed Settings component correction:** starting HEAD,
   tracked origin/main and live remote main are

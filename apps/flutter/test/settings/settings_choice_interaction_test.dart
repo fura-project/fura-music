@@ -4,7 +4,6 @@ import 'dart:ui' show CheckedState;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_controller.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
@@ -22,7 +21,7 @@ void main() {
         await tester.pumpWidget(SettingsReviewHarness(section: section));
         await tester.pumpAndSettle();
         expect(find.byType(ExpansionTile), findsNothing);
-        expect(find.byWidgetPredicate((w) => w is DropdownMenu), findsNothing);
+        expect(find.byType(DropdownButton), findsNothing);
         for (final (selectorKey, optionKey) in selectors) {
           if (selectorKey == 'settings-color-source-selector') continue;
           final selector = find.byKey(ValueKey(selectorKey));
@@ -59,7 +58,7 @@ void main() {
             tester
                 .getSize(find.byKey(const ValueKey('settings-choice-sheet')))
                 .width,
-            lessThanOrEqualTo(520),
+            width,
           );
           expect(find.byType(AlertDialog), findsNothing);
           final option = find.byKey(ValueKey(optionKey));
@@ -264,69 +263,48 @@ void main() {
   }
 
   for (final available in [true, false]) {
-    testWidgets(
-      'anchored color details preserve actual capability available=$available',
-      (tester) async {
-        await tester.pumpWidget(
-          SettingsReviewHarness(systemColorsAvailable: available),
-        );
-        await tester.pumpAndSettle();
-        expect(find.byType(RadioListTile<int>), findsNothing);
-        await tester.tap(
-          find.byKey(const ValueKey('settings-color-source-selector')),
-        );
-        await tester.pumpAndSettle();
-        expect(
-          tester
-              .widget<RadioGroup<AppColorSourcePreference>>(
-                find.byType(RadioGroup<AppColorSourcePreference>),
-              )
-              .groupValue,
-          AppColorSourcePreference.brand,
-        );
-        expect(
-          find.byKey(
-            ValueKey(
-              available
-                  ? 'settings-system-colors-available'
-                  : 'settings-system-colors-unavailable',
-            ),
+    testWidgets('official color dropdown preserves availability=$available', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        SettingsReviewHarness(systemColorsAvailable: available),
+      );
+      await tester.pumpAndSettle();
+      final dropdown = find.byType(DropdownMenu<AppColorSourcePreference>);
+      expect(
+        tester
+            .widget<DropdownMenu<AppColorSourcePreference>>(dropdown)
+            .initialSelection,
+        AppColorSourcePreference.brand,
+      );
+      expect(
+        find.byKey(
+          ValueKey(
+            available
+                ? 'settings-system-colors-available'
+                : 'settings-system-colors-unavailable',
           ),
-          findsOneWidget,
-        );
-        final l10n = AppLocalizations.of(
-          tester.element(find.byKey(const ValueKey('settings-color-popup'))),
-        );
-        expect(
-          find.text(l10n.settingsColorSourceSystemDescription),
-          findsOneWidget,
-        );
-        expect(
-          find.text(
-            l10n.settingsColorSourceBrandDescription(l10n.providerQqMusic),
-          ),
-          findsOneWidget,
-        );
-        await tester.tap(
-          find.byKey(const ValueKey('settings-color-source-system')),
-        );
-        await tester.pumpAndSettle();
-        expect(find.byType(BottomSheet), findsNothing);
-        expect(
-          tester
-              .widget<Text>(
-                find.byKey(
-                  const ValueKey('settings-color-source-selector-current'),
-                ),
-              )
-              .data,
-          'System colors',
-        );
-        expect(find.byType(SnackBar), findsNothing);
-      },
-
-      variant: TargetPlatformVariant.only(TargetPlatform.linux),
-    );
+        ),
+        findsOneWidget,
+      );
+      expect(find.byType(RadioGroup<AppColorSourcePreference>), findsNothing);
+      await tester.tap(dropdown);
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find
+            .byKey(const ValueKey('settings-color-source-system'))
+            .hitTestable(),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<DropdownMenu<AppColorSourcePreference>>(dropdown)
+            .initialSelection,
+        AppColorSourcePreference.system,
+      );
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
   }
 }
 

@@ -62,7 +62,129 @@ At 390×844:
 
 The Human reported that the earlier opaque-transition fix left an unwanted pale panel behind Settings and playlist detail. The backing now uses the same `Theme.scaffoldBackgroundColor` as the normal content canvas and resting toolbar, while retaining full opacity, clipping and content-only fading for the entire entry/exit transition. Sidebar/player container roles and all accepted geometry remain unchanged. This is one consistent canvas role, not a hard-coded light color; dark mode follows its existing theme. The corrected candidate requires Human visual review.
 
-## Current Settings component contract, 2026-10-08
+## Current official Settings component contract, 2026-10-08
+
+**Design source:** the latest explicit Human correction, not a new taxonomy.
+**Status:** candidate; `HUMAN_REVIEW`. No aesthetic iteration is authorized
+before Human sees these renders. Starting HEAD/origin/main:
+`ba4ce107a538d1399dfb353515a4b9295b2335e0`, initial worktree clean.
+
+The existing Shell, navigation, search, Back, grouped surface, section heading,
+desktop content width, ordinary row composition, compact hierarchy and
+Shell-owned Player remain unchanged. Business enums, schema, owner,
+persistence and rollback do not change.
+
+- Theme, Music service, Language, Default playback quality and Lyric auxiliary
+  use official `showModalBottomSheet` / `BottomSheet` with standard drag handle,
+  `RadioGroup` and `RadioListTile`. One Flutter path serves every platform.
+  Explicit infinite maximum width overrides the SDK M3 640 dp fallback; the
+  finite window constraint and stretched content supply full window width,
+  including live resizing. Height follows content and can scroll at large
+  text. The current M3 BottomSheetTheme supplies surface/elevation and 28 dp
+  top-only rounding. SafeArea, standard scrim, Back/Escape/dismiss, no Apply,
+  no-write current selection and owned-route cancellation remain.
+- Color Source uses actual `DropdownMenu<AppColorSourcePreference>` and
+  `DropdownMenuEntry` in the existing row's trailing/control area; compact
+  layout stacks the control without introducing a new panel. Selecting the
+  field opens the official SDK dropdown, not the whole row or a modal.
+  Availability and five actual ColorScheme swatches remain small secondary
+  content below it, not complex menu content or a second Card.
+- `FuraChoiceSheet`, `FuraChoiceRow`, project MenuAnchor/MenuController popup
+  and inline disclosure are removed. DropdownMenu uses MenuAnchor internally
+  in Flutter; tests distinguish SDK ownership from project custom presentation.
+  No DropdownButton/FormField or Android MethodChannel is introduced.
+
+### Failure-path checks and current evidence
+
+The earlier real Overlay-removal focus fix remains: modal results wait for
+`ModalRoute.completed` before the existing triggering row restores focus.
+New deterministic failures were retained, not overwritten by later passes:
+
+1. A disabled TextField revokes its supplied FocusNode; DropdownMenu reads that
+   node when enabled again. The Settings control explicitly restores its
+   canRequestFocus on the save owner's enabled update.
+2. SDK arrow traversal previews a label before a value is committed; dismissing
+   with Escape left that unsaved label in the field. A supplied text controller
+   restores the existing setting on Escape, outside tap and focus departure,
+   while SDK DropdownMenu still owns opening, selection and dismissal.
+
+Stale/external replacement and disposed callbacks cannot apply a value.
+No change to Settings save semantics or shared visual theme is made.
+
+Current synthetic renders/logs are outside Git:
+`/tmp/fura-settings-official-m3-20261008-Ax9gpe`.
+Production SettingsPage, current M3 theme, actual Noto CJK/MaterialIcons and
+real shadow rendering are used. These renders do not prove native-platform
+runtime or Human visual acceptance.
+
+| Requested state | Evidence filename |
+| --- | --- |
+| Desktop Appearance idle | `1440_zh_light_1x-settings.png` |
+| Compact Appearance idle | `390_zh_light_1x-settings.png` |
+| Desktop Theme sheet | `1440_zh_light_1x-theme.png` |
+| Compact Theme sheet | `390_zh_light_1x-theme.png` |
+| Desktop Color dropdown | `1440_zh_light_1x-color.png` |
+| Compact Color dropdown | `390_zh_light_1x-color.png` |
+| Dark Theme sheet | `1440_zh_dark_1x-theme.png` |
+| Dark Color dropdown | `390_zh_dark_1x-color.png` |
+
+The matrix also covers English/Chinese, 320/390/640/1440/1600 widths,
+light/dark and 1x/2x text. Final validation/review results are recorded below
+after execution. The latest Human instruction overrides design consultation:
+agy may inspect actual renders only for machine-oriented overflow, focus,
+semantics, accessibility, touch or contrast; it cannot change the locked
+BottomSheet/DropdownMenu model, shape, width or row structure.
+
+### Executed validation and bounded machine review
+
+- `flutter test test/settings`: 117 pass. Includes full window width/live
+  resize, all five widget platform variants (not native-platform runtime),
+  current/selected/no-write, Back/Escape/scrim/drag, keyboard/focus, disabled
+  save/rollback, stale/disposed callbacks, preview cancellation, safe area,
+  reduced motion, true capability/palette and 40 layout combinations.
+- `flutter test test/widget_test.dart`: 123 pass. Obsolete popup-only
+  availability assumptions were updated to always-visible secondary support;
+  menu targets now distinguish real hit-testable SDK entries from the hidden
+  intrinsic-width sizing copies. No business assertion is removed.
+- Actual production MusicApp synthetic-player captures at 390/1440 pass:
+  same Queue/session, one resolution/no stop, underlying controls blocked only
+  while modal is open and reachable again after selection.
+- Real Linux Debug build/GTK `settings_choice_runtime_test.dart` passes:
+  real plugin-backed disposable preference key, exactly three writes,
+  selection/readback/current/cancel/Escape/scrim/focus/2x; its unique key is
+  deleted in teardown. No stored accounts, Providers or real media are used.
+- `dart analyze`, affected-file format and `git diff --check` pass.
+  No new remote CI or other native-platform runtime is claimed.
+
+Before-fix logs (`interaction-rerun.log`, `keyboard-preview-before.log`)
+remain beside `settings-final.log`, `widget-rerun-final.log`,
+`render-final.log`, `linux-runtime-final.log` and integrated captures.
+The manifest records the exact current source hashes/scoped diff and review
+boundary. Raw review transcripts and images stay outside Git.
+
+Real interactive `agy` 1.2.2 invoked in plan/read-only mode with the existing
+configured Gemini 3.8 Flash (Low), using bounded packets/read-only source
+snapshots. Component review received the ten listed renders and inspected
+actual desktop/compact/light/dark/2x images (not a blanket ten-state
+acceptance claim); a separate fresh integrated review explicitly listed
+`settings-active-player-1440.png`,
+`settings-active-player-390.png`, `390_zh_light_2x-color.png` and
+`390_zh_light_2x-theme.png`. The explicit Human instruction forbids design
+consultation here. No component/interaction/shape/width redesign is adopted.
+
+The component review suggested checking dark auxiliary-text contrast.
+Actual active onSurfaceVariant/group, onSecondaryContainer/control and
+onSurface/sheet pairs pass >=4.5:1 in light/dark deterministic tests.
+Background under the modal scrim is intentionally inactive; palette swatches
+are decorative real colors rather than text or selectable controls. The
+integrated review observed the dropdown extending beyond the group but inside
+the viewport: normal SDK overlay behavior, not a clipping defect. Screenshot
+claims about runtime focus/touch/semantics and the component review's COMPLETE
+footer are not acceptance. Applicable widget and GTK checks supply separate
+machine evidence; Human still owns visual acceptance. No further polish is
+performed before that review.
+
+## Superseded custom Settings component contract, 2026-10-08
 
 **Design source:** Human's directed component correction. This supersedes the
 2026-10-07 inline Color Source and default RadioListTile sheet candidate below.
