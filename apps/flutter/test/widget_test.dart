@@ -8,6 +8,7 @@ import 'dart:ui'
 import 'package:dynamic_color/dynamic_color.dart' show DynamicColorPlugin;
 import 'package:flutter/foundation.dart'
     show ChangeNotifier, Listenable, ValueKey, debugPrint, TargetPlatform;
+import 'package:flutter/painting.dart' show debugDisableShadows;
 import 'package:flutter/gestures.dart' show PointerHoverEvent, kSecondaryButton;
 import 'package:flutter/material.dart'
     show
@@ -9432,6 +9433,10 @@ void main() {
         page(ColorScheme.fromSeed(seedColor: const Color(0xFF6750A4))),
       );
       await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('settings-color-source-selector')),
+      );
+      await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('settings-system-colors-available')),
         findsOneWidget,
@@ -9440,8 +9445,6 @@ void main() {
         find.byKey(const ValueKey('settings-system-colors-unavailable')),
         findsNothing,
       );
-      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
-      await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('settings-system-colors-available')),
         findsOneWidget,
@@ -9575,7 +9578,9 @@ void main() {
             Uri.file('$reviewDirectory/settings-shell-desktop-normal.png'),
           ),
         );
-        await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
+        await tester.tap(
+          find.byKey(const ValueKey('settings-color-source-selector')),
+        );
         await tester.pumpAndSettle();
         FocusManager.instance.primaryFocus?.unfocus();
         await tester.pumpAndSettle();
@@ -9585,7 +9590,9 @@ void main() {
             Uri.file('$reviewDirectory/settings-shell-desktop-color.png'),
           ),
         );
-        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.tap(
+          find.byKey(const ValueKey('settings-color-source-selector')),
+        );
         await tester.pumpAndSettle();
       }
       await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
@@ -9937,7 +9944,7 @@ void main() {
   );
 
   for (final width in [390.0, 1440.0]) {
-    testWidgets('settings sheet retains active shell playback at $width', (
+    testWidgets('settings popup retains active shell playback at $width', (
       tester,
     ) async {
       const capture = bool.fromEnvironment('SETTINGS_ACTIVE_PLAYER_REVIEW');
@@ -9993,9 +10000,10 @@ void main() {
       expect(playerAction.hitTestable(), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
       await tester.pumpAndSettle();
-      expect(find.byType(BottomSheet), findsOneWidget);
-      // The modal route blocks underlying player controls, but not its owner.
-      expect(playerAction.hitTestable(), findsNothing);
+      expect(find.byType(MenuItemButton), findsNWidgets(3));
+      expect(find.byType(BottomSheet), findsNothing);
+      // A compact menu has no scrim and does not replace the Shell owner.
+      expect(playerAction.hitTestable(), findsOneWidget);
       expect(host.controller.playback.stage, TrackPlaybackStage.playing);
       expect(host.controller.playback.track, same(track));
       expect(media.requests, 1);
@@ -10004,12 +10012,25 @@ void main() {
           'SETTINGS_LAYOUT_REVIEW_DIR',
           defaultValue: '/tmp',
         );
-        await expectLater(
-          find.byType(MusicApp),
-          matchesGoldenFile(
-            Uri.file('$directory/settings-active-player-${width.toInt()}.png'),
-          ),
-        );
+        // Render real elevations, not the binding's solid shadow outlines.
+        final previousShadows = debugDisableShadows;
+        debugDisableShadows = false;
+        try {
+          for (final renderObject in tester.allRenderObjects) {
+            renderObject.markNeedsPaint();
+          }
+          await tester.pump();
+          await expectLater(
+            find.byType(MusicApp),
+            matchesGoldenFile(
+              Uri.file(
+                '$directory/settings-active-player-${width.toInt()}.png',
+              ),
+            ),
+          );
+        } finally {
+          debugDisableShadows = previousShadows;
+        }
       }
       await tester.tap(find.byKey(const ValueKey('settings-theme-dark')));
       await tester.pumpAndSettle();
@@ -10126,7 +10147,9 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(settingsStorage.document, contains('"theme":"dark"'));
-      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
+      await tester.tap(
+        find.byKey(const ValueKey('settings-color-source-selector')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(
         find

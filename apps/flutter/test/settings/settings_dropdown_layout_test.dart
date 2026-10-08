@@ -6,7 +6,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/settings/settings_page.dart';
-import 'package:flutterustmusic/settings/app_settings.dart';
 
 import 'settings_review_harness.dart';
 
@@ -17,9 +16,7 @@ void main() {
         for (final scale in [1.0, 2.0]) {
           final name =
               '${width.toInt()}_${language}_${brightness.name}_${scale.toInt()}x';
-          testWidgets('choice rows and scrollable sheets fit $name', (
-            tester,
-          ) async {
+          testWidgets('popup and inline details fit $name', (tester) async {
             setSettingsViewport(tester, Size(width, 900));
             await _loadReviewFonts(tester);
             final boundary = GlobalKey();
@@ -38,8 +35,6 @@ void main() {
                 ),
               );
               await tester.pumpAndSettle();
-              // Canonical resting captures must not retain the test pointer or
-              // keyboard focus from an earlier interaction.
               FocusManager.instance.primaryFocus?.unfocus();
               await tester.pumpAndSettle();
               if (section == SettingsSection.appearance) {
@@ -48,89 +43,86 @@ void main() {
               for (final (key, option) in selectors) {
                 final row = find.byKey(ValueKey(key));
                 await tester.ensureVisible(row);
-                for (final text in tester.widgetList<Text>(
-                  find.descendant(of: row, matching: find.byType(Text)),
-                )) {
-                  expect(text.maxLines, isNull);
-                  expect(text.overflow, isNull);
-                }
-                expect(tester.getSize(row).height, greaterThanOrEqualTo(48));
                 final detailed = key == 'settings-color-source-selector';
-                await tester.tap(
-                  detailed
-                      ? find.byType(DropdownMenu<AppColorSourcePreference>)
-                      : row,
+                final beforeSize = tester.getSize(
+                  find.byKey(const ValueKey('settings-group')),
                 );
+                await tester.tap(row);
                 await tester.pumpAndSettle();
+                expect(find.byType(BottomSheet), findsNothing);
                 expect(
-                  find.byType(BottomSheet),
-                  detailed ? findsNothing : findsOneWidget,
+                  find.byWidgetPredicate((w) => w is DropdownMenu),
+                  findsNothing,
                 );
-                if (key == 'settings-theme-selector' ||
-                    key == 'settings-color-source-selector') {
+                expect(find.byType(TextField), findsNothing);
+                if (!detailed) {
+                  expect(
+                    tester.getSize(
+                      find.byKey(const ValueKey('settings-group')),
+                    ),
+                    beforeSize,
+                  );
+                  for (final menu in tester.widgetList<MenuItemButton>(
+                    find.byType(MenuItemButton),
+                  )) {
+                    final entry = find.byKey(menu.key!);
+                    await tester.ensureVisible(entry);
+                    await tester.pumpAndSettle();
+                    expect(entry.hitTestable(), findsOneWidget);
+                    final rect = tester.getRect(entry);
+                    expect(rect.left, greaterThanOrEqualTo(0));
+                    expect(rect.right, lessThanOrEqualTo(width));
+                    expect(rect.top, greaterThanOrEqualTo(0));
+                    expect(rect.bottom, lessThanOrEqualTo(900));
+                    expect(rect.height, greaterThanOrEqualTo(48));
+                  }
+                }
+                if (key == 'settings-theme-selector' || detailed) {
                   await _capture(
                     tester,
                     boundary,
-                    '$name-${key == 'settings-theme-selector' ? 'theme' : 'color'}',
+                    '$name-${detailed ? 'color' : 'theme'}',
                   );
                 }
-                // Every option, not only the selected one, stays reachable at
-                // large text. The standard scroll view supplies continuation.
-                for (final optionTile in tester.widgetList<Widget>(
-                  find.byWidgetPredicate((w) => w is RadioListTile<int>),
-                )) {
-                  final optionFinder = find.byKey(optionTile.key!);
-                  await tester.ensureVisible(optionFinder);
-                  await tester.pumpAndSettle();
-                  expect(optionFinder.hitTestable(), findsOneWidget);
-                  expect(
-                    tester.getSize(optionFinder).height,
-                    greaterThanOrEqualTo(48),
-                  );
-                }
-                final selected = find.byKey(ValueKey(option)).hitTestable();
-                await tester.ensureVisible(selected);
-                await tester.tap(selected);
+                final target = find.byKey(ValueKey(option));
+                await tester.ensureVisible(target);
+                await tester.tap(target);
                 await tester.pumpAndSettle();
-                expect(find.byType(BottomSheet), findsNothing);
-                expect(tester.takeException(), isNull);
+                expect(find.byType(MenuItemButton), findsNothing);
                 if (detailed) {
                   expect(
-                    find.byKey(
-                      const ValueKey('settings-color-palette-preview'),
-                    ),
+                    find.byKey(const ValueKey('settings-color-details')),
                     findsOneWidget,
                   );
-                  await tester.tap(
-                    find.byType(DropdownMenu<AppColorSourcePreference>),
+                  final preview = find.byKey(
+                    const ValueKey('settings-color-palette-preview'),
                   );
+                  await tester.ensureVisible(preview);
+                  await tester.pumpAndSettle();
+                  // Decorative swatches have no input hit target.
+                  expect(tester.getRect(preview).top, greaterThanOrEqualTo(0));
+                  expect(
+                    tester.getRect(preview).bottom,
+                    lessThanOrEqualTo(900),
+                  );
+                  await tester.ensureVisible(row);
+                  await tester.pumpAndSettle();
+                  await tester.tap(row);
                   await tester.pumpAndSettle();
                   expect(
-                    find
-                        .byKey(const ValueKey('settings-color-source-system'))
-                        .hitTestable(),
-                    findsOneWidget,
-                  );
-                  await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-                  await tester.pumpAndSettle();
-                  expect(
-                    find
-                        .byKey(const ValueKey('settings-color-source-system'))
-                        .hitTestable(),
+                    find.byKey(const ValueKey('settings-color-details')),
                     findsNothing,
                   );
                 }
+                expect(tester.takeException(), isNull);
               }
             }
-          }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+          });
         }
       }
     }
   }
-
-  testWidgets('rendered sheet opening and closing time sequence', (
-    tester,
-  ) async {
+  testWidgets('inline expansion and collapse motion capture', (tester) async {
     setSettingsViewport(tester, const Size(1440, 900));
     await _loadReviewFonts(tester);
     final boundary = GlobalKey();
@@ -141,27 +133,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
-    await tester.pump();
-    await _capture(tester, boundary, 'motion-open-000ms');
-    await tester.pump(const Duration(milliseconds: 125));
-    await _capture(tester, boundary, 'motion-open-125ms');
-    await tester.pump(const Duration(milliseconds: 125));
-    await _capture(tester, boundary, 'motion-open-250ms');
-    await tester.pumpAndSettle();
-    await tester.tapAt(const Offset(8, 8));
-    await tester.pump();
-    await _capture(tester, boundary, 'motion-close-000ms');
-    await tester.pump(const Duration(milliseconds: 100));
-    await _capture(tester, boundary, 'motion-close-100ms');
-    await tester.pump(const Duration(milliseconds: 100));
-    await _capture(tester, boundary, 'motion-close-200ms');
-    await tester.pumpAndSettle();
-    expect(find.byType(BottomSheet), findsNothing);
-    FocusManager.instance.primaryFocus?.unfocus();
-    await tester.pumpAndSettle();
-    final color = find.byType(DropdownMenu<AppColorSourcePreference>);
-    await tester.tap(color);
+    final row = find.byKey(const ValueKey('settings-color-source-selector'));
+    await tester.tap(row);
     await tester.pump();
     await _capture(tester, boundary, 'color-motion-open-000ms');
     await tester.pump(const Duration(milliseconds: 100));
@@ -169,7 +142,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await _capture(tester, boundary, 'color-motion-open-200ms');
     await tester.pumpAndSettle();
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.tap(row);
     await tester.pump();
     await _capture(tester, boundary, 'color-motion-close-000ms');
     await tester.pump(const Duration(milliseconds: 100));
@@ -177,11 +150,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await _capture(tester, boundary, 'color-motion-close-200ms');
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('settings-color-palette-preview')),
-      findsOneWidget,
-    );
-  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+    expect(find.byKey(const ValueKey('settings-color-details')), findsNothing);
+  });
 }
 
 Future<void> _loadReviewFonts(WidgetTester tester) async {

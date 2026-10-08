@@ -12,7 +12,7 @@ import 'package:integration_test/integration_test.dart';
 
 /// Real host/plugin presentation with a disposable preference key. Never
 /// starts MusicApp, restores credentials, accesses Providers or changes Queue.
-/// All platforms exercise the same SDK Flutter BottomSheet and DropdownMenu.
+/// All platforms exercise the same SDK M3 menu and inline detailed configuration.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('Settings choices use real platform presentation and storage', (
@@ -62,8 +62,11 @@ void main() {
         ),
       ),
     );
-    Future<void> waitFor(bool Function() predicate) async {
-      final deadline = DateTime.now().add(const Duration(seconds: 90));
+    Future<void> waitFor(
+      bool Function() predicate, {
+      Duration limit = const Duration(seconds: 90),
+    }) async {
+      final deadline = DateTime.now().add(limit);
       while (!predicate() && DateTime.now().isBefore(deadline)) {
         await tester.pump();
         await tester.runAsync(
@@ -89,14 +92,11 @@ void main() {
       await tester.tap(row);
       await tester.pumpAndSettle();
       debugPrint('FURA_SETTINGS_REVIEW phase=$phase ready');
-      expect(find.byType(BottomSheet), findsOneWidget);
-      expect(
-        tester.getSize(find.byType(BottomSheet)).width,
-        MediaQuery.sizeOf(tester.element(row)).width,
-      );
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(MenuItemButton), findsNWidgets(3));
       if (optionKey == 'escape') {
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      } else if (optionKey == 'scrim') {
+      } else if (optionKey == 'outside') {
         await tester.tapAt(const Offset(8, 8));
       } else {
         final option = find.byKey(ValueKey(optionKey));
@@ -104,7 +104,29 @@ void main() {
         await tester.tap(option);
       }
       await tester.pumpAndSettle();
-      expect(focus.hasFocus, isTrue);
+      debugPrint(
+        'FURA_SETTINGS_REVIEW phase=$phase focus=${focus.hasFocus} lifecycle=${WidgetsBinding.instance.lifecycleState?.name}',
+      );
+      // Focus requests and GTK lifecycle delivery are asynchronous. Prove the
+      // bounded settled contract, not an immediate synchronous getter.
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        await waitFor(
+          () =>
+              focus.hasFocus ||
+              WidgetsBinding.instance.lifecycleState !=
+                  AppLifecycleState.resumed,
+          limit: const Duration(seconds: 2),
+        );
+      }
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        expect(focus.hasFocus, isTrue);
+      } else {
+        // An externally deactivated GTK window must not steal host focus.
+        // Inactive -> dismiss -> resume restoration is a deterministic test.
+        debugPrint(
+          'FURA_SETTINGS_REVIEW phase=$phase focus=deferred_until_resume',
+        );
+      }
       expect(tester.takeException(), isNull);
       debugPrint('FURA_SETTINGS_REVIEW phase=$phase success');
     }
@@ -129,7 +151,7 @@ void main() {
       expect(storage.writes, 1);
       await choice('theme_back', 'settings-theme-selector', 'escape');
       expect(storage.writes, 1);
-      await choice('theme_scrim', 'settings-theme-selector', 'scrim');
+      await choice('theme_outside', 'settings-theme-selector', 'outside');
       expect(storage.writes, 1);
       await choice(
         'theme_dark',
@@ -145,11 +167,19 @@ void main() {
         'settings-theme-dark',
       );
       expect(storage.writes, 2);
+      for (var cycle = 0; cycle < 30; cycle++) {
+        await choice(
+          'dismiss_stress_$cycle',
+          'settings-theme-selector',
+          cycle.isEven ? 'escape' : 'outside',
+        );
+      }
+      expect(storage.writes, 2);
       final colorRow = find.byKey(
         const ValueKey('settings-color-source-selector'),
       );
       await tester.ensureVisible(colorRow);
-      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
+      await tester.tap(colorRow);
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
       final system = find
@@ -164,33 +194,35 @@ void main() {
         (await store.load()).settings.colorSource,
         AppColorSourcePreference.system,
       );
-      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
-      await tester.pumpAndSettle();
+      // Selection keeps the detail expanded; the current radio is a no-op.
       await tester.tap(system);
       await tester.pumpAndSettle();
       expect(storage.writes, 3);
       expect(
-        find.byKey(const ValueKey('settings-color-palette-preview')),
+        find.byKey(const ValueKey('settings-color-details')),
         findsOneWidget,
       );
-      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
-      await tester.pumpAndSettle();
-      expect(system, findsOneWidget);
-      await tester.ensureVisible(colorRow);
-      await tester.pumpAndSettle();
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('settings-color-palette-preview')),
         findsOneWidget,
       );
+      await tester.ensureVisible(colorRow);
+      await tester.tap(colorRow);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-color-details')),
+        findsNothing,
+      );
+      await tester.tap(colorRow);
+      await tester.pumpAndSettle();
+      expect(system, findsOneWidget);
       scale = 2;
       await tester.pumpWidget(fixture());
       await tester.pumpAndSettle();
       await choice('theme_large_cancel', 'settings-theme-selector', 'escape');
       expect(storage.writes, 3);
       await tester.ensureVisible(colorRow);
-      await tester.tap(find.byType(DropdownMenu<AppColorSourcePreference>));
+      // Details stay expanded after the scaler update.
       await tester.pumpAndSettle();
       await tester.ensureVisible(
         find.byKey(const ValueKey('settings-color-palette-preview')),
@@ -198,7 +230,7 @@ void main() {
       expect(find.byType(BottomSheet), findsNothing);
       expect(tester.takeException(), isNull);
       debugPrint(
-        'FURA_SETTINGS_REVIEW all_success writes=3 presentation=SDK_M3_FULL_WIDTH color=DROPDOWN_MENU',
+        'FURA_SETTINGS_REVIEW all_success writes=3 presentation=SDK_M3_ANCHORED_MENU color=INLINE_DETAILS',
       );
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());

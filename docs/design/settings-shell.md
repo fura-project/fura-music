@@ -62,7 +62,125 @@ At 390×844:
 
 The Human reported that the earlier opaque-transition fix left an unwanted pale panel behind Settings and playlist detail. The backing now uses the same `Theme.scaffoldBackgroundColor` as the normal content canvas and resting toolbar, while retaining full opacity, clipping and content-only fading for the entire entry/exit transition. Sidebar/player container roles and all accepted geometry remain unchanged. This is one consistent canvas role, not a hard-coded light color; dark mode follows its existing theme. The corrected candidate requires Human visual review.
 
-## Current official Settings component contract, 2026-10-08
+## Current anchored choices and inline details, 2026-10-08
+
+**Design source:** the latest explicit Human interaction restoration.
+**Status:** implemented candidate; `HUMAN_REVIEW`, not visual acceptance.
+Starting HEAD and tracked origin/main:
+`9377611976202aed92219085a491258d970aaa73`; initial worktree clean.
+This supersedes the interaction contracts below, not the accepted Shell,
+grouped surfaces, section headings, responsive rows or Settings save owner.
+
+- Theme, Music service, Language, Default playback quality and Lyric auxiliary
+  use SDK M3 `MenuAnchor`, `MenuController` and `MenuItemButton`. The small
+  option panel anchors below the actual current-value label, without a scrim,
+  TextField/control box or a change to group height. Standard theme roles and
+  check icons convey selection. Menu sizing is bounded by window/option copy;
+  48 dp option targets and SDK keyboard/navigation remain. No BottomSheet,
+  DropdownMenu, AlertDialog or platform-specific Settings choice path remains.
+- Color Source expands inside the existing group using plain transparent
+  Material/InkWell, `RadioGroup`/`Radio`, secondary explanation and truthful
+  Monet availability. The five existing small swatches use actual effective
+  ColorScheme colors. There is no second Card, large branded detail panel,
+  popup, modal, RadioListTile or new page. AnimatedSize/AnimatedRotation provide
+  a restrained 200 ms transition; reduced motion renders the final layout
+  directly. Selection/rollback keeps the detail expanded and authoritative.
+- Immediate save, current-value no-op, saving disablement, rollback/error,
+  outside/Escape/Back cancellation and focus return retain the existing
+  Settings ownership. LocalHistoryEntry consumes popup Back without leaving
+  Settings. Revisions retire external/ABA, disposed and previous-open callbacks.
+  The unused Settings-only modal presentation helper is removed. Business
+  enums/schema/migration, shared theme, dependencies and Core are unchanged.
+
+### Reproduced failure paths and their boundaries
+
+1. Compact/2x long option text exceeded the SDK intrinsic menu's maximum width.
+   `crossAxisUnconstrained: false` constrains the real panel; the 40-variant
+   layout matrix verifies all options remain reachable. Width tests measure
+   the panel, not inner button Material, and account for SDK desktop density.
+2. Retired callbacks could write after dismiss/reopen with an unchanged value.
+   A new popup/inline expansion revision now invalidates those callbacks;
+   deterministic before-fix write failures and after-fix regressions remain.
+3. Semantics inspection reproduced a selected flag outside the SDK's merged
+   labelled menu item. The flag now belongs inside MenuItemButton's semantic
+   owner. Inline Radio and its label/explanation share MergeSemantics. Tests
+   verify actual merged selected/checked/expanded states, not only check pixels.
+4. An immediate GTK focus assertion failed without lifecycle tracing; it is
+   retained, not diagnosed from a later pass. A subsequent bounded failure
+   explicitly recorded `lifecycle=inactive`: the existing production policy
+   defers focus return until resumed. SDK focus requests are asynchronous.
+   The runtime test checks the bounded focus contract when resumed and records
+   inactive cases separately; deterministic inactive/dismiss/resume verifies
+   restoration. A prior traced GTK run recorded resumed focus at every short
+   choice phase. Non-foreground cases are not claimed as completed host-focus
+   acceptance, and no window activation/configuration workaround is introduced.
+
+Rapid taps during closing also preserve the next keyboard session. The pinned
+SDK intentionally keeps MenuController.isOpen true during its closing
+animation; the initial synchronous-reopen test assumption was corrected from
+that source contract, not by disabling motion or rewriting the menu state
+machine. Pending-save tests pump bounded frames rather than waiting for an
+intentionally running progress indicator to settle.
+
+### Current rendered and runtime evidence
+
+Evidence stays outside Git at:
+`/tmp/fura-settings-popup-inline-20261008-fPEQ91`.
+Production SettingsPage/current M3 theme, actual Noto CJK/MaterialIcons and real
+shadows are used. Integrated captures include the retained synthetic Shell
+player; no account access or real media is used. Synthetic renders are not
+native-platform or Human visual acceptance.
+
+| Human-requested state | Evidence filename |
+| --- | --- |
+| Desktop Appearance collapsed | `1440_zh_light_1x-settings.png` |
+| Desktop short Theme popup | `1440_zh_light_1x-theme.png` |
+| Desktop Color Source expanded | `1440_zh_light_1x-color.png` |
+| Compact Appearance collapsed | `390_zh_light_1x-settings.png` |
+| Compact short Theme popup | `390_zh_light_1x-theme.png` |
+| Compact Color Source expanded | `390_zh_light_1x-color.png` |
+| Dark desktop | `1440_zh_dark_1x-color.png` |
+| 2x compact details risk case | `390_zh_light_2x-color.png` |
+
+Additional `390_zh_light_2x-theme.png`, motion frames and
+`settings-active-player-390.png` / `settings-active-player-1440.png` cover
+large menu text, expansion rhythm and whole-Shell context. Component/render
+matrix, targeted lifecycle and integration logs retain failed trials alongside
+passes; evidence manifest identifies the source and scoped production diff.
+
+- `flutter test test/settings`: 104 pass, including save/rollback, current and
+  dismiss no-write, keyboard/focus, five widget platform variants, stale/ABA,
+  retired/disposed callbacks, merged semantics, idle state-layer pixels,
+  reduced motion, rapid toggles, real theme/palette and availability states.
+- `flutter test test/widget_test.dart`: 123 pass. Settings navigation/search,
+  persistence/locale and retained Shell playback ownership remain asserted.
+- Real-font component rendering: 40 viewport/language/theme/text-scale variants
+  and one expansion/motion test pass. Integrated real-shadow captures pass at
+  390/1440 with one media resolution, zero stop and the same Queue/session.
+- Final Linux Debug build and actual GTK Settings/storage integration pass,
+  with exactly three fixture-key writes/readback, current/cancel no-write,
+  30 repeated popup dismissals, inline save/reopen and 2x. Only the test's unique
+  preference key is removed. No stored accounts, Providers or real media run.
+- `dart analyze`: no issues; affected Dart format and `git diff --check` pass.
+  No new remote CI or non-Linux native-platform runtime is claimed.
+
+Final passing logs include `settings-handoff.log`, `widget-handoff.log`,
+`render-review-final.log`, `integrated-render-handoff.log`,
+`linux-runtime-handoff.log`, `analyze-handoff.log` and `format-handoff.log`.
+The test renderer's debug-outline/teardown invariant and literal-name invocation
+failures are retained and corrected in the harness/command, not production UI.
+
+Final `agy` review was attempted using installed 1.2.2, interactive plan mode,
+the existing configured Gemini 3.8 Flash (Low), a bounded read-only snapshot and
+actual render packet. The Human forbids preflight/design consultation here.
+An initial executor-not-ready error was followed, after the configured model
+became visible, by `Eligibility check failed: UNAVAILABLE (code 503): The
+service is currently unavailable.` No substantive component/image review
+completed; the dependent integrated-page review is likewise incomplete.
+No model substitution or aesthetic iteration is performed. This external
+machine-review blocker remains distinct from Human visual acceptance.
+
+## Superseded official Settings component contract, 2026-10-08
 
 **Design source:** the latest explicit Human correction, not a new taxonomy.
 **Status:** candidate; `HUMAN_REVIEW`. No aesthetic iteration is authorized

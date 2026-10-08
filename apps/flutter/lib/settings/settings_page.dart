@@ -1,11 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
-import 'package:flutterustmusic/settings/settings_choice_presentation.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
@@ -392,7 +390,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onSelected: (theme) =>
                 _save(widget.settings.copyWith(theme: theme)),
           ),
-          _SettingsColorDropdown(
+          _SettingsColorDisclosure(
             controlKey: const ValueKey('settings-color-source-selector'),
             icon: Icons.palette_outlined,
             title: l10n.settingsColorSourceLabel,
@@ -723,8 +721,7 @@ class _SettingsGroup extends StatelessWidget {
   );
 }
 
-/// One interaction grammar on pointer and touch platforms. The standard modal
-/// route owns dismissal/motion; the existing Settings owner owns persistence.
+/// Compact SDK menu presentation; the existing Settings owner saves values.
 class _SettingsChoiceTile<T> extends StatefulWidget {
   const _SettingsChoiceTile({
     required this.controlKey,
@@ -751,7 +748,13 @@ class _SettingsChoiceTile<T> extends StatefulWidget {
 class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
     with WidgetsBindingObserver {
   final _focusNode = FocusNode();
-  bool _sheetOpen = false;
+  final _menu = MenuController();
+  final _anchorKey = GlobalKey();
+  final _valueKey = GlobalKey();
+  LocalHistoryEntry? _backEntry;
+  bool _disposing = false;
+  bool _selecting = false;
+  int _revision = 0;
   bool _focusReturnPending = false;
 
   @override
@@ -780,55 +783,83 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
     WidgetsBinding.instance.scheduleFrame();
   }
 
-  SettingsChoicePresentation? _presentation;
-
-  Future<void> _choose() async {
-    if (!widget.enabled || _sheetOpen) return;
-    _sheetOpen = true;
-    _focusNode.unfocus();
-    final current = widget.current;
-    final values = [for (final choice in widget.choices) choice.value];
-    try {
-      final presentation = showSettingsSingleChoice(
-        context: context,
-        title: widget.title,
-        selectedIndex: values.indexOf(current),
-        options: [
-          for (final choice in widget.choices)
-            SettingsChoiceOption(
-              label: choice.label,
-              supportingText: choice.description,
-              key: choice.key,
-            ),
-        ],
-      );
-      _presentation = presentation;
-      final index = await presentation.result;
-      if (!mounted || _presentation != presentation) return;
-      // An external update while a dialog was open makes its snapshot stale.
-      if (widget.enabled &&
-          widget.current == current &&
-          index != null &&
-          index >= 0 &&
-          index < values.length &&
-          values[index] != current) {
-        await widget.onSelected(values[index]);
+  @override
+  void didUpdateWidget(covariant _SettingsChoiceTile<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.current != widget.current || !widget.enabled) {
+      _revision++;
+      if (_menu.isOpen) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _menu.isOpen) _menu.close();
+        });
       }
+    }
+  }
+
+  void _choose() {
+    if (!widget.enabled || _selecting) return;
+    if (_menu.isOpen) {
+      _menu.close();
+      return;
+    }
+    final anchor = _anchorKey.currentContext!.findRenderObject()! as RenderBox;
+    final value = _valueKey.currentContext!.findRenderObject()! as RenderBox;
+    // Anchor to the real current-value label, not the group's full width.
+    // The SDK fits the naturally sized panel inside the available safe area.
+    final origin = anchor.globalToLocal(value.localToGlobal(Offset.zero));
+    // A fresh popup retires callbacks captured by an earlier popup, even
+    // when the authoritative value has not changed (dismiss / reopen).
+    setState(() => _revision++);
+    _menu.open(position: origin + Offset(0, value.size.height + 4));
+  }
+
+  void _opened() {
+    final route = ModalRoute.of(context);
+    if (route == null) return;
+    final entry = LocalHistoryEntry(
+      onRemove: () {
+        _backEntry = null;
+        if (!_disposing && _menu.isOpen) _menu.close();
+      },
+    );
+    _backEntry = entry;
+    route.addLocalHistoryEntry(entry);
+  }
+
+  void _closed() {
+    final entry = _backEntry;
+    _backEntry = null;
+    entry?.remove();
+    if (_disposing) return;
+    _focusReturnPending = true;
+    _returnFocus();
+  }
+
+  Future<void> _select(T value, T snapshot, int revision) async {
+    if (!mounted ||
+        !widget.enabled ||
+        _selecting ||
+        revision != _revision ||
+        widget.current != snapshot ||
+        value == snapshot) {
+      return;
+    }
+    _selecting = true;
+    try {
+      await widget.onSelected(value);
       if (!mounted) return;
       _focusReturnPending = true;
-      // Saving disables the row and revokes its focus. Restore only after
-      // the existing owner finishes and the enabled row has been rebuilt.
       _returnFocus();
     } finally {
-      _sheetOpen = false;
-      _presentation = null;
+      _selecting = false;
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _presentation?.cancel();
+    _disposing = true;
+    _backEntry?.remove();
     _focusNode.dispose();
     super.dispose();
   }
@@ -838,15 +869,62 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
     final selected = widget.choices.singleWhere(
       (choice) => choice.value == widget.current,
     );
-    return _FuraSettingsRow(
-      key: widget.controlKey,
-      icon: widget.icon,
-      title: widget.title,
-      value: widget.currentLabel ?? selected.label,
-      valueKey: ValueKey('${(widget.controlKey as ValueKey).value}-current'),
-      enabled: widget.enabled,
-      focusNode: _focusNode,
-      onTap: () => unawaited(_choose()),
+    final snapshot = widget.current;
+    final revision = _revision;
+    return MenuAnchor(
+      key: _anchorKey,
+      controller: _menu,
+      childFocusNode: _focusNode,
+      // Constrain the SDK's intrinsic panel rather than clipping an
+      // unconstrained natural-width menu at large text / compact widths.
+      crossAxisUnconstrained: false,
+      consumeOutsideTap: true,
+      onOpen: _opened,
+      onClose: _closed,
+      style: MenuStyle(
+        minimumSize: const WidgetStatePropertyAll(Size(160, 0)),
+        maximumSize: WidgetStatePropertyAll(
+          Size(
+            (MediaQuery.sizeOf(context).width - 32).clamp(0, 320),
+            double.infinity,
+          ),
+        ),
+      ),
+      menuChildren: [
+        for (final choice in widget.choices)
+          MenuItemButton(
+            key: choice.key,
+            autofocus: choice.value == snapshot,
+            requestFocusOnHover: false,
+            style: const ButtonStyle(
+              minimumSize: WidgetStatePropertyAll(Size(0, 48)),
+            ),
+            leadingIcon: SizedBox(
+              width: 24,
+              child: choice.value == snapshot ? const Icon(Icons.check) : null,
+            ),
+            onPressed: widget.enabled
+                ? () => unawaited(_select(choice.value, snapshot, revision))
+                : null,
+            // Put the selected flag inside the SDK's MergeSemantics owner.
+            // An outer flag becomes a separate, unlabelled semantic node.
+            child: Semantics(
+              selected: choice.value == snapshot,
+              child: Text(choice.label),
+            ),
+          ),
+      ],
+      child: _FuraSettingsRow(
+        key: widget.controlKey,
+        icon: widget.icon,
+        title: widget.title,
+        value: widget.currentLabel ?? selected.label,
+        valueKey: ValueKey('${(widget.controlKey as ValueKey).value}-current'),
+        valueAnchorKey: _valueKey,
+        enabled: widget.enabled,
+        focusNode: _focusNode,
+        onTap: _choose,
+      ),
     );
   }
 }
@@ -860,7 +938,9 @@ class _FuraSettingsRow extends StatelessWidget {
     required this.valueKey,
     required this.focusNode,
     required this.onTap,
-    this.controlBuilder,
+    this.valueAnchorKey,
+    this.trailing,
+    this.expanded,
     this.enabled = true,
     super.key,
   });
@@ -870,7 +950,9 @@ class _FuraSettingsRow extends StatelessWidget {
   final bool enabled;
   final FocusNode focusNode;
   final VoidCallback? onTap;
-  final Widget Function(double width)? controlBuilder;
+  final Key? valueAnchorKey;
+  final Widget? trailing;
+  final bool? expanded;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -881,15 +963,15 @@ class _FuraSettingsRow extends StatelessWidget {
       color: enabled ? theme.colorScheme.onSurfaceVariant : theme.disabledColor,
     );
     return Semantics(
-      button: controlBuilder == null,
+      button: true,
+      expanded: expanded,
       enabled: enabled,
       child: Focus(
         canRequestFocus: false,
         child: Material(
           type: MaterialType.transparency,
           child: InkWell(
-            focusNode: controlBuilder == null ? focusNode : null,
-            canRequestFocus: controlBuilder == null,
+            focusNode: focusNode,
             onTap: enabled ? onTap : null,
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -901,7 +983,10 @@ class _FuraSettingsRow extends StatelessWidget {
                   value,
                   valueStyle,
                 );
-                final valueText = Text(value, key: valueKey, style: valueStyle);
+                final valueText = KeyedSubtree(
+                  key: valueAnchorKey,
+                  child: Text(value, key: valueKey, style: valueStyle),
+                );
                 return ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 64),
                   child: Padding(
@@ -924,35 +1009,7 @@ class _FuraSettingsRow extends StatelessWidget {
                         ),
                         const SizedBox(width: 16),
                         Expanded(
-                          child: controlBuilder != null
-                              ? (inline
-                                    ? Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              title,
-                                              style: titleStyle,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 16),
-                                          controlBuilder!(
-                                            (constraints.maxWidth - 88) / 2,
-                                          ),
-                                        ],
-                                      )
-                                    : Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(title, style: titleStyle),
-                                          const SizedBox(height: 8),
-                                          controlBuilder!(
-                                            constraints.maxWidth - 72,
-                                          ),
-                                        ],
-                                      ))
-                              : inline
+                          child: inline
                               ? Row(
                                   children: [
                                     Expanded(
@@ -972,14 +1029,16 @@ class _FuraSettingsRow extends StatelessWidget {
                                   ],
                                 ),
                         ),
-                        if (controlBuilder == null) ...[
+                        ...[
                           const SizedBox(width: 16),
                           ExcludeSemantics(
-                            child: Icon(
-                              Icons.chevron_right_rounded,
-                              size: 24,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
+                            child:
+                                trailing ??
+                                Icon(
+                                  Icons.expand_more_rounded,
+                                  size: 24,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                           ),
                         ],
                       ],
@@ -995,11 +1054,9 @@ class _FuraSettingsRow extends StatelessWidget {
   }
 }
 
-/// The official Material 3 dropdown owns Color Source presentation.
-/// Availability and the effective palette remain small, non-modal supporting
-/// content in the existing grouped surface; persistence stays with Settings.
-class _SettingsColorDropdown extends StatefulWidget {
-  const _SettingsColorDropdown({
+/// Detailed configuration stays inside the existing grouped surface.
+class _SettingsColorDisclosure extends StatefulWidget {
+  const _SettingsColorDisclosure({
     required this.controlKey,
     required this.icon,
     required this.title,
@@ -1020,60 +1077,51 @@ class _SettingsColorDropdown extends StatefulWidget {
   final bool enabled;
   final Future<void> Function(AppColorSourcePreference) onSelected;
   @override
-  State<_SettingsColorDropdown> createState() => _SettingsColorDropdownState();
+  State<_SettingsColorDisclosure> createState() =>
+      _SettingsColorDisclosureState();
 }
 
-class _SettingsColorDropdownState extends State<_SettingsColorDropdown> {
+class _SettingsColorDisclosureState extends State<_SettingsColorDisclosure> {
   final _focusNode = FocusNode();
-  final _textController = TextEditingController();
+  final _optionFocus = {
+    for (final value in AppColorSourcePreference.values) value: FocusNode(),
+  };
+  bool _expanded = false;
   bool _selecting = false;
+  int _revision = 0;
 
   @override
-  void initState() {
-    super.initState();
-    _focusNode.onKeyEvent = (_, event) {
-      if (event is KeyDownEvent &&
-          event.logicalKey == LogicalKeyboardKey.escape) {
-        _restoreSelectionText();
-      }
-      // The official DropdownMenu still owns Escape dismissal.
-      return KeyEventResult.ignored;
-    };
-    _focusNode.addListener(_onFocusChanged);
-  }
-
-  void _restoreSelectionText() {
-    if (!mounted) return;
-    _textController.text = widget.choices
-        .singleWhere((choice) => choice.value == widget.current)
-        .label;
-  }
-
-  void _onFocusChanged() {
-    if (!_focusNode.hasFocus) _restoreSelectionText();
-  }
-
-  @override
-  void didUpdateWidget(covariant _SettingsColorDropdown oldWidget) {
+  void didUpdateWidget(covariant _SettingsColorDisclosure oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // TextField revokes a supplied focus node while disabled. Restore its
-    // ability when the existing save owner re-enables this control; otherwise
-    // DropdownMenu reads the revoked node and remains unfocusable after save.
-    _focusNode.canRequestFocus = widget.enabled;
+    if (oldWidget.current != widget.current || !widget.enabled) {
+      _revision++;
+    }
+  }
+
+  void _toggle() {
+    if (!widget.enabled) return;
+    setState(() {
+      _revision++;
+      _expanded = !_expanded;
+    });
+    if (!_expanded) _focusNode.requestFocus();
   }
 
   Future<void> _select(
     AppColorSourcePreference? value,
     AppColorSourcePreference snapshot,
+    int revision,
   ) async {
     if (!mounted ||
         !widget.enabled ||
         _selecting ||
+        !_expanded ||
         value == null ||
-        widget.current != snapshot) {
+        value == snapshot ||
+        widget.current != snapshot ||
+        revision != _revision) {
       return;
     }
-    if (value == widget.current) return;
     _selecting = true;
     try {
       await widget.onSelected(value);
@@ -1081,7 +1129,10 @@ class _SettingsColorDropdownState extends State<_SettingsColorDropdown> {
       _selecting = false;
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && widget.enabled) _focusNode.requestFocus();
+          if (mounted && widget.enabled && _expanded) {
+            // Rollback focuses the authoritative selection, not an unsaved value.
+            _optionFocus[widget.current]!.requestFocus();
+          }
         });
         WidgetsBinding.instance.scheduleFrame();
       }
@@ -1090,16 +1141,118 @@ class _SettingsColorDropdownState extends State<_SettingsColorDropdown> {
 
   @override
   void dispose() {
-    _focusNode.removeListener(_onFocusChanged);
     _focusNode.dispose();
-    _textController.dispose();
+    for (final focus in _optionFocus.values) {
+      focus.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    final duration = reduced
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
     final snapshot = widget.current;
+    final revision = _revision;
+    final details = _expanded
+        ? Padding(
+            key: const ValueKey('settings-color-details'),
+            padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                RadioGroup<AppColorSourcePreference>(
+                  groupValue: snapshot,
+                  onChanged: (value) =>
+                      unawaited(_select(value, snapshot, revision)),
+                  child: Column(
+                    children: [
+                      for (final choice in widget.choices)
+                        MergeSemantics(
+                          child: Material(
+                            type: MaterialType.transparency,
+                            child: InkWell(
+                              key: choice.key,
+                              canRequestFocus: false,
+                              onTap: widget.enabled
+                                  ? () => unawaited(
+                                      _select(choice.value, snapshot, revision),
+                                    )
+                                  : null,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Radio<AppColorSourcePreference>(
+                                      value: choice.value,
+                                      enabled: widget.enabled,
+                                      focusNode: _optionFocus[choice.value],
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 4,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              choice.label,
+                                              style: theme.textTheme.bodyLarge,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              choice.description!,
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    color: theme
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 56, top: 8),
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        widget.availability,
+                        key: widget.availabilityKey,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      _SettingsPalettePreview(scheme: theme.colorScheme),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          )
+        : const SizedBox(width: double.infinity, height: 0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1111,55 +1264,27 @@ class _SettingsColorDropdownState extends State<_SettingsColorDropdown> {
           valueKey: const ValueKey('settings-color-source-selector-current'),
           focusNode: _focusNode,
           enabled: widget.enabled,
-          onTap: null,
-          controlBuilder: (width) => TapRegion(
-            // SDK arrow navigation previews a label before selection. A
-            // dismissed preview must not masquerade as a saved setting.
-            onTapOutside: (_) => _restoreSelectionText(),
-            child: DropdownMenu<AppColorSourcePreference>(
-              // Replacing an externally changed selection retires its open SDK
-              // menu and prevents callbacks from applying an outdated snapshot.
-              key: ValueKey(snapshot),
-              width: width.clamp(0.0, 320.0),
-              enabled: widget.enabled,
-              initialSelection: snapshot,
-              controller: _textController,
-              focusNode: _focusNode,
-              selectOnly: true,
-              enableSearch: false,
-              dropdownMenuEntries: [
-                for (final choice in widget.choices)
-                  DropdownMenuEntry(
-                    value: choice.value,
-                    label: choice.label,
-                    labelWidget: Text(choice.label, key: choice.key),
-                  ),
-              ],
-              onSelected: (value) {
-                if (value == null) _restoreSelectionText();
-                unawaited(_select(value, snapshot));
-              },
-            ),
+          expanded: _expanded,
+          onTap: _toggle,
+          trailing: AnimatedRotation(
+            turns: _expanded ? .5 : 0,
+            duration: duration,
+            curve: Curves.easeInOutCubic,
+            child: const Icon(Icons.expand_more_rounded),
           ),
         ),
-        Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(56, 0, 16, 12),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                widget.availability,
-                key: widget.availabilityKey,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              _SettingsPalettePreview(scheme: theme.colorScheme),
-            ],
+        // A zero-duration AnimatedSize mutates during layout on the pinned SDK.
+        // Reduced-motion renders the final layout directly instead.
+        if (reduced)
+          details
+        else
+          AnimatedSize(
+            key: const ValueKey('settings-color-size'),
+            duration: duration,
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            child: details,
           ),
-        ),
       ],
     );
   }

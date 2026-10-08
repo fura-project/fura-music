@@ -3,13 +3,60 @@ execution:
   mode: HUMAN_DIRECTED
   work_domain: UI
   state: WAITING_FOR_HUMAN_VISUAL_REVIEW
-  acceptance_milestone: SETTINGS_OFFICIAL_FULL_WIDTH_BOTTOM_SHEET_AND_DROPDOWN
+  acceptance_milestone: SETTINGS_ANCHORED_CHOICES_AND_INLINE_COLOR_DETAILS
   active_workstream: SETTINGS_UI_CORRECTION
-  current_task: OFFICIAL_M3_SETTINGS_INTERACTION_CORRECTION
-  next_action: HUMAN_REVIEW_OFFICIAL_M3_SETTINGS_RENDERS
+  current_task: SETTINGS_INTERACTION_SEMANTICS_RESTORATION
+  next_action: HUMAN_REVIEW_ANCHORED_SETTINGS_AND_INLINE_DETAILS
 ---
 
 # Current State
+
+- **2026-10-08 Human-directed Settings interaction restoration:** starting
+  HEAD/origin/main `9377611976202aed92219085a491258d970aaa73`, worktree clean.
+  Latest Human instruction supersedes the BottomSheet/DropdownMenu interaction
+  contract only: five short settings use compact M3 MenuAnchor/MenuItemButton
+  selectors; Color Source expands detailed configuration inside its existing
+  grouped surface. Shell, row composition, grouped surface, effective palette,
+  settings owner/schema/persistence/rollback and all Core work remain unchanged.
+  agy may only review actual final renders for machine interaction/accessibility
+  issues, not choose the model or redesign. No Git publication is authorized.
+  Candidate implemented: SDK MenuAnchor/MenuController/MenuItemButton for short
+  choices, inline RadioGroup/Radio details with the existing small real palette.
+  Superseded modal presentation helper is removed; no DropdownMenu, BottomSheet,
+  Color Source popup, second Card or new framework is introduced. Deterministic
+  testing reproduced/fixed compact intrinsic-menu clipping, retired callbacks
+  writing after reopen, and selected semantics outside the SDK's label owner.
+  Current menu selection and labelled Radio states are tested as actual merged
+  semantics; shared visual theme and business settings owner remain unchanged.
+  Final Settings suite passes 104 tests and whole MusicApp suite passes 123;
+  40 responsive/localized/light-dark/1x-2x variants plus motion sampling pass.
+  Two actual integrated synthetic-player captures preserve Queue/session,
+  one resolution and zero stop while underlying Shell controls remain reachable.
+  Final real Linux Debug/GTK storage integration passes three disposable-key
+  writes/readback, cancellation/current no-write, 30 repeated popup dismissals,
+  inline expand/save/reopen and 2x text; teardown removes only that fixture key.
+  Failed GTK focus assertions remain separately recorded. Tracing confirms
+  inactive-window cases defer focus until resumed; deterministic resume tests
+  and the actual resumed trace pass. Inactive cases are not blanket host-focus
+  acceptance. SDK closing-animation timing is not a synchronous reopen promise.
+  Analysis/format/privacy/diff checks pass. New remote CI, other native targets
+  and Human visual acceptance are not inferred from widget platform variants.
+  Actual installed agy final read-only review failed Eligibility with service
+  UNAVAILABLE/503 after model readiness; no substantive render review completed.
+  No model substitution, preflight/design consultation or further polish follows.
+  Exact proof boundaries and retained negative evidence are recorded in
+  [Settings Shell](docs/design/settings-shell.md), with screenshots/logs outside
+  Git. External agy review and Human visual review remain open; no other WHAT
+  is selected. No commit/push/reset/restore/clean/rebase/force push performed.
+  Human subsequently authorized publication with `提交git`, under the standing
+  commit-and-push instruction. Live remote main was rechecked at
+  `7fd3329ab359267d9e90a0a83384a4e8fe6b9624`: its two new commits contain only
+  the merged Dependabot Rust toolchain Action SHA update, with no governance
+  change or Settings overlap. The local branch fast-forwards to preserve that
+  update before this candidate is committed. The production Settings source
+  and scoped diff hashes still match the tested/rendered snapshot. Publication
+  does not establish Human visual, agy or new remote-CI acceptance; the gate
+  remains `HUMAN_REVIEW`.
 
 - **2026-10-08 Human-directed official Settings component correction:** starting
   HEAD and tracked origin/main are `ba4ce107a538d1399dfb353515a4b9295b2335e0`;
