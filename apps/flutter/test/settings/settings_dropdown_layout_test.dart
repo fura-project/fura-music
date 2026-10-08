@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/settings/settings_page.dart';
+import 'package:flutterustmusic/settings/settings_choice_presentation.dart';
 
 import 'settings_review_harness.dart';
 
@@ -76,7 +77,7 @@ void main() {
                 // Every option, not only the selected one, stays reachable at
                 // large text. The standard scroll view supplies continuation.
                 for (final optionTile in tester.widgetList<Widget>(
-                  find.byWidgetPredicate((w) => w is RadioListTile),
+                  find.byWidgetPredicate((w) => w is FuraChoiceRow),
                 )) {
                   final optionFinder = find.byKey(optionTile.key!);
                   await tester.ensureVisible(optionFinder);
@@ -98,16 +99,18 @@ void main() {
                     find.byKey(
                       const ValueKey('settings-color-palette-preview'),
                     ),
-                    findsOneWidget,
+                    findsNothing,
                   );
-                  await tester.ensureVisible(row);
-                  await tester.pumpAndSettle();
                   await tester.tap(row);
                   await tester.pumpAndSettle();
                   expect(
-                    find.byKey(
-                      const ValueKey('settings-color-palette-preview'),
-                    ),
+                    find.byKey(const ValueKey('settings-color-popup')),
+                    findsOneWidget,
+                  );
+                  await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+                  await tester.pumpAndSettle();
+                  expect(
+                    find.byKey(const ValueKey('settings-color-popup')),
                     findsNothing,
                   );
                 }
@@ -198,14 +201,29 @@ Future<void> _capture(
     'SETTINGS_LAYOUT_REVIEW_DIR',
     defaultValue: '/tmp',
   );
-  await tester.runAsync(() async {
-    final image =
-        await (boundary.currentContext!.findRenderObject()
-                as RenderRepaintBoundary)
-            .toImage();
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    await File('$directory/$name.png')
-        .writeAsBytes(bytes!.buffer.asUint8List());
-    image.dispose();
-  });
+  final previousShadows = debugDisableShadows;
+  debugDisableShadows = false;
+  // Test bindings replace elevations with solid outlines. Render the real
+  // shadow only for evidence, restoring the binding invariant before return.
+  void repaint(Element element) {
+    if (element is RenderObjectElement) element.renderObject.markNeedsPaint();
+    element.visitChildren(repaint);
+  }
+
+  try {
+    tester.binding.rootElement!.visitChildren(repaint);
+    await tester.pump();
+    await tester.runAsync(() async {
+      final image =
+          await (boundary.currentContext!.findRenderObject()
+                  as RenderRepaintBoundary)
+              .toImage();
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      await File('$directory/$name.png')
+          .writeAsBytes(bytes!.buffer.asUint8List());
+      image.dispose();
+    });
+  } finally {
+    debugDisableShadows = previousShadows;
+  }
 }

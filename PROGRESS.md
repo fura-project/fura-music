@@ -1,15 +1,56 @@
 ---
 execution:
   mode: HUMAN_DIRECTED
-  work_domain: CORE
-  state: LINUX_NATIVE_FAILURE_AND_DIRECT_MPRIS_MACHINE_VERIFIED
-  acceptance_milestone: LINUX_NATIVE_FAILURE_AND_DIRECT_MPRIS_RUNTIME
-  active_workstream: LINUX_PLAYBACK_RELIABILITY
-  current_task: MEDIAKIT_FAILURE_SEMANTICS_THEN_FURA_MPRIS_OWNERSHIP
-  next_action: HUMAN_CORE_CANDIDATE_REVIEW_NO_NEW_WHAT
+  work_domain: UI
+  state: WAITING_FOR_HUMAN_VISUAL_REVIEW
+  acceptance_milestone: SETTINGS_FURA_CHOICE_SHEET_AND_ANCHORED_COLOR
+  active_workstream: SETTINGS_UI_CORRECTION
+  current_task: CUSTOM_SETTINGS_ROWS_CHOICE_SHEET_AND_COLOR_MENU
+  next_action: HUMAN_REVIEW_FURA_CHOICE_SHEET_AND_COLOR_MENU
 ---
 
 # Current State
+
+- **2026-10-08 Human-directed Settings component correction:** starting HEAD,
+  tracked origin/main and live remote main are
+  `c2cb5295dab93610eb68e276b7194e6cb4a24fdf`, initial worktree clean. Human
+  retains Shell/navigation/search/compact hierarchy/player/grouped surfaces,
+  but rejects default RadioListTile sheets and inline Color Source. The locked
+  contract is now custom Material/InkWell/Focus/Semantics Settings rows; five
+  simple settings use one FuraChoiceSheet/FuraChoiceRow/RadioGroup/Radio route
+  on every platform, detailed Color Source uses M3 MenuAnchor/MenuController.
+  Theme is content-height with 480 dp desktop maximum; actual palette and
+  availability live only in the bounded anchored popup. Business enums, schema,
+  save owner and Core/playback/MPRIS are unchanged. Mode is HUMAN_DIRECTED,
+  domain UI; governance definitions remain unchanged. Implementation precedes
+  actual renders/GPT inspection/bounded agy audit by explicit Human direction.
+  Reproduced duplicate-primary-scroll ownership and real Linux outgoing-route
+  focus overwrite are fixed by an independent menu scroll owner and waiting
+  on real ModalRoute.completed, not timers. Failure logs remain outside Git.
+  115 Settings tests and 123 whole-MusicApp regressions pass, including five
+  platform variants, stale/disposed results, write rollback, current no-op,
+  dismissal, keyboard/focus, idle pixels, real row-wide choice focus, drag and
+  320 x 480 / 2x reachability. Two integrated synthetic active-player renders
+  retain one resolution/no stop/Queue ownership. Real Linux GTK production
+  Settings/preference integration passes three fixture writes/readback and
+  removes only its own unique key, without account access or real playback.
+  Ten required actual states and broader localization/size/theme captures
+  were individually inspected. agy 1.2.2 used the authorized configured model,
+  read-only snapshot and separate fresh integrated-page session; unsupported
+  current-radio/focus/drag/contrast claims were checked against the Human
+  contract, SDK and deterministic pixels/gestures rather than blindly adopted.
+  No new concrete page defect was reported. Analysis and format pass; final
+  source/diff checks and Android compilation are recorded with their actual
+  results in [Settings Shell](docs/design/settings-shell.md). Physical/native
+  non-Linux visual/runtime and remote CI are not inferred from platform variants
+  or build success. UI feel/density/popup rhythm remain Human-owned;
+  `HUMAN_REVIEW`, not COMPLETE. No other WHAT is selected. No commit/push or
+  reset/restore/clean/rebase; all current modifications belong to this candidate.
+  Human subsequently authorized Git publication with `提交git`, under the
+  standing commit-and-push instruction. Actual remote main and current rules
+  were rechecked at `c2cb529`; publication does not establish Human visual,
+  physical-device or new remote-CI acceptance. The Settings gate remains
+  `HUMAN_REVIEW`.
 
 - **2026-10-08 Human-directed Linux playback correction:** starting HEAD and
   tracked/live origin/main are `aea2cf1a8edc879917fc2b48b07255fc5e2671fa`,

@@ -391,7 +391,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onSelected: (theme) =>
                 _save(widget.settings.copyWith(theme: theme)),
           ),
-          _SettingsColorDisclosure(
+          _SettingsColorMenu(
             controlKey: const ValueKey('settings-color-source-selector'),
             icon: Icons.palette_outlined,
             title: l10n.settingsColorSourceLabel,
@@ -837,66 +837,134 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
     final selected = widget.choices.singleWhere(
       (choice) => choice.value == widget.current,
     );
-    final theme = Theme.of(context);
-    final value = widget.currentLabel ?? selected.label;
-    final titleStyle = theme.textTheme.bodyLarge!.copyWith(
-      color: widget.enabled ? theme.colorScheme.onSurface : theme.disabledColor,
-    );
-    final valueStyle = theme.textTheme.bodyMedium!.copyWith(
-      color: widget.enabled
-          ? theme.colorScheme.onSurfaceVariant
-          : theme.disabledColor,
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final inline = _fitsInline(
-          context,
-          constraints.maxWidth,
-          widget.title,
-          titleStyle,
-          value,
-          valueStyle,
-        );
-        final valueText = Text(
-          value,
-          key: ValueKey('${(widget.controlKey as ValueKey).value}-current'),
-          style: valueStyle,
-        );
-        return ListTile(
-          key: widget.controlKey,
-          focusNode: _focusNode,
-          enabled: widget.enabled,
-          leading: Icon(
-            widget.icon,
-            color: widget.enabled
-                ? theme.colorScheme.onSurfaceVariant
-                : theme.disabledColor,
-          ),
-          title: inline
-              ? Row(
-                  children: [
-                    Expanded(child: Text(widget.title, style: titleStyle)),
-                    const SizedBox(width: 16),
-                    valueText,
-                  ],
-                )
-              : Text(widget.title, style: titleStyle),
-          subtitle: inline ? null : valueText,
-          minVerticalPadding: 12,
-          trailing: const ExcludeSemantics(
-            child: Icon(Icons.chevron_right_rounded),
-          ),
-          onTap: widget.enabled ? () => unawaited(_choose()) : null,
-        );
-      },
+    return _FuraSettingsRow(
+      key: widget.controlKey,
+      icon: widget.icon,
+      title: widget.title,
+      value: widget.currentLabel ?? selected.label,
+      valueKey: ValueKey('${(widget.controlKey as ValueKey).value}-current'),
+      enabled: widget.enabled,
+      focusNode: _focusNode,
+      onTap: () => unawaited(_choose()),
     );
   }
 }
 
-/// Detailed choice: explanation, availability and preview stay together in
-/// the existing group. This state owns disclosure only, never Settings truth.
-class _SettingsColorDisclosure extends StatefulWidget {
-  const _SettingsColorDisclosure({
+/// Settings-specific spacing/state grammar, not default ListTile composition.
+class _FuraSettingsRow extends StatelessWidget {
+  const _FuraSettingsRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.valueKey,
+    required this.focusNode,
+    required this.onTap,
+    this.enabled = true,
+    this.affordance = Icons.chevron_right_rounded,
+    super.key,
+  });
+  final IconData icon, affordance;
+  final String title, value;
+  final Key valueKey;
+  final bool enabled;
+  final FocusNode focusNode;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleStyle = theme.textTheme.bodyLarge!.copyWith(
+      color: enabled ? theme.colorScheme.onSurface : theme.disabledColor,
+    );
+    final valueStyle = theme.textTheme.bodyMedium!.copyWith(
+      color: enabled ? theme.colorScheme.onSurfaceVariant : theme.disabledColor,
+    );
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      child: Focus(
+        canRequestFocus: false,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            focusNode: focusNode,
+            onTap: enabled ? onTap : null,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final inline = _fitsInline(
+                  context,
+                  constraints.maxWidth,
+                  title,
+                  titleStyle,
+                  value,
+                  valueStyle,
+                );
+                final valueText = Text(value, key: valueKey, style: valueStyle);
+                return ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 64),
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.fromSTEB(
+                      16,
+                      12,
+                      16,
+                      12,
+                    ),
+                    child: Row(
+                      children: [
+                        ExcludeSemantics(
+                          child: Icon(
+                            icon,
+                            size: 24,
+                            color: enabled
+                                ? theme.colorScheme.onSurfaceVariant
+                                : theme.disabledColor,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: inline
+                              ? Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(title, style: titleStyle),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    valueText,
+                                  ],
+                                )
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(title, style: titleStyle),
+                                    const SizedBox(height: 4),
+                                    valueText,
+                                  ],
+                                ),
+                        ),
+                        const SizedBox(width: 16),
+                        ExcludeSemantics(
+                          child: Icon(
+                            affordance,
+                            size: 24,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Detailed presentation only: the existing Settings owner still saves.
+class _SettingsColorMenu extends StatefulWidget {
+  const _SettingsColorMenu({
     required this.controlKey,
     required this.icon,
     required this.title,
@@ -910,46 +978,60 @@ class _SettingsColorDisclosure extends StatefulWidget {
   });
   final Key controlKey;
   final IconData icon;
-  final String title;
+  final String title, currentLabel, availability;
   final AppColorSourcePreference current;
-  final String currentLabel;
   final List<_SettingsChoice<AppColorSourcePreference>> choices;
-  final String availability;
   final Key availabilityKey;
   final bool enabled;
   final Future<void> Function(AppColorSourcePreference) onSelected;
   @override
-  State<_SettingsColorDisclosure> createState() =>
-      _SettingsColorDisclosureState();
+  State<_SettingsColorMenu> createState() => _SettingsColorMenuState();
 }
 
-class _SettingsColorDisclosureState extends State<_SettingsColorDisclosure> {
-  bool _expanded = false;
+class _SettingsColorMenuState extends State<_SettingsColorMenu> {
+  final _menu = MenuController();
   final _focusNode = FocusNode();
   final _optionFocus = {
     for (final value in AppColorSourcePreference.values) value: FocusNode(),
   };
+  bool _open = false, _selecting = false, _disposing = false;
+  AppColorSourcePreference? _openedValue;
 
-  void _toggle() {
-    if (!widget.enabled) return;
-    setState(() => _expanded = !_expanded);
-    if (!_expanded) _focusNode.requestFocus();
-  }
-
-  Future<void> _select(AppColorSourcePreference? value) async {
-    if (!widget.enabled || value == null || value == widget.current) return;
-    await widget.onSelected(value);
-    if (!mounted) return;
+  void _returnFocus() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.enabled && _expanded) {
-        _optionFocus[value]!.requestFocus();
-      }
+      if (mounted && widget.enabled && !_open) _focusNode.requestFocus();
     });
     WidgetsBinding.instance.scheduleFrame();
   }
 
+  void _toggle() {
+    if (!widget.enabled || _selecting) return;
+    if (_menu.isOpen) {
+      _menu.close();
+    } else {
+      _menu.open();
+    }
+  }
+
+  Future<void> _select(AppColorSourcePreference? value) async {
+    if (!widget.enabled || _selecting || value == null || !_menu.isOpen) return;
+    final current = _openedValue;
+    _selecting = true;
+    _menu.close();
+    try {
+      // An externally changed snapshot is stale, just like a modal result.
+      if (widget.current == current && value != current) {
+        await widget.onSelected(value);
+      }
+    } finally {
+      _selecting = false;
+      if (mounted) _returnFocus();
+    }
+  }
+
   @override
   void dispose() {
+    _disposing = true;
     _focusNode.dispose();
     for (final focus in _optionFocus.values) {
       focus.dispose();
@@ -960,146 +1042,135 @@ class _SettingsColorDisclosureState extends State<_SettingsColorDisclosure> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final duration = MediaQuery.disableAnimationsOf(context)
-        ? Duration.zero
-        : const Duration(milliseconds: 200);
-    final titleStyle = theme.textTheme.bodyLarge!.copyWith(
-      color: widget.enabled ? theme.colorScheme.onSurface : theme.disabledColor,
+    final media = MediaQuery.of(context);
+    final width = (media.size.width - 32).clamp(0.0, 400.0);
+    final height = (media.size.height - media.padding.vertical - 32).clamp(
+      0.0,
+      double.infinity,
     );
-    final valueStyle = theme.textTheme.bodyMedium!.copyWith(
-      color: widget.enabled
-          ? theme.colorScheme.onSurfaceVariant
-          : theme.disabledColor,
-    );
-    final value = Text(
-      widget.currentLabel,
-      key: const ValueKey('settings-color-source-selector-current'),
-      style: valueStyle,
-    );
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final inline = _fitsInline(
-              context,
-              constraints.maxWidth,
-              widget.title,
-              titleStyle,
-              widget.currentLabel,
-              valueStyle,
-            );
-            return Semantics(
-              expanded: _expanded,
-              child: ListTile(
-                key: widget.controlKey,
-                focusNode: _focusNode,
-                enabled: widget.enabled,
-                leading: Icon(
-                  widget.icon,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                title: inline
-                    ? Row(
-                        children: [
-                          Expanded(
-                            child: Text(widget.title, style: titleStyle),
+    return PopScope(
+      canPop: !_open,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _menu.isOpen) _menu.close();
+      },
+      child: MenuAnchor(
+        key: const ValueKey('settings-color-menu-anchor'),
+        controller: _menu,
+        childFocusNode: _focusNode,
+        useRootOverlay: true,
+        consumeOutsideTap: true,
+        alignmentOffset: const Offset(0, 4),
+        reservedPadding: const EdgeInsets.all(16),
+        style: MenuStyle(
+          backgroundColor: WidgetStatePropertyAll(
+            theme.colorScheme.surfaceContainer,
+          ),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          minimumSize: WidgetStatePropertyAll(Size(width, 0)),
+          maximumSize: WidgetStatePropertyAll(Size(width, height)),
+        ),
+        onOpen: () {
+          _openedValue = widget.current;
+          if (!_disposing && mounted) setState(() => _open = true);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _menu.isOpen) {
+              _optionFocus[widget.current]!.requestFocus();
+            }
+          });
+        },
+        onClose: () {
+          if (!_disposing && mounted) {
+            setState(() => _open = false);
+            _returnFocus();
+          }
+        },
+        menuChildren: [
+          SizedBox(
+            width: width,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: height),
+              child: SingleChildScrollView(
+                primary: false,
+                key: const ValueKey('settings-color-popup'),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      RadioGroup<AppColorSourcePreference>(
+                        groupValue: widget.current,
+                        onChanged: (value) =>
+                            unawaited(_select(value ?? widget.current)),
+                        child: Column(
+                          children: [
+                            for (final choice in widget.choices)
+                              FuraChoiceRow<AppColorSourcePreference>(
+                                key: choice.key,
+                                value: choice.value,
+                                label: choice.label,
+                                supportingText: choice.description,
+                                enabled: widget.enabled,
+                                focusNode: _optionFocus[choice.value],
+                                onSelected: () =>
+                                    unawaited(_select(choice.value)),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+                        child: Text(
+                          widget.availability,
+                          key: widget.availabilityKey,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
-                          const SizedBox(width: 16),
-                          value,
-                        ],
-                      )
-                    : Text(widget.title, style: titleStyle),
-                subtitle: inline ? null : value,
-                minVerticalPadding: 12,
-                trailing: ExcludeSemantics(
-                  child: AnimatedRotation(
-                    key: const ValueKey('settings-color-chevron'),
-                    turns: _expanded ? 0.5 : 0,
-                    duration: duration,
-                    curve: Curves.easeInOutCubic,
-                    child: const Icon(Icons.expand_more_rounded),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                        child: Wrap(
+                          spacing: 16,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              context.l10n.settingsPalettePreviewLabel,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                            _SettingsPalettePreview(scheme: theme.colorScheme),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                onTap: widget.enabled ? _toggle : null,
               ),
-            );
-          },
+            ),
+          ),
+        ],
+        builder: (context, controller, _) => _FuraSettingsRow(
+          key: widget.controlKey,
+          icon: widget.icon,
+          title: widget.title,
+          value: widget.currentLabel,
+          valueKey: const ValueKey('settings-color-source-selector-current'),
+          focusNode: _focusNode,
+          enabled: widget.enabled,
+          affordance: Icons.expand_more_rounded,
+          onTap: _toggle,
         ),
-        Builder(
-          builder: (context) {
-            final details = _expanded
-                ? Padding(
-                    key: const ValueKey('settings-color-details'),
-                    padding: const EdgeInsetsDirectional.fromSTEB(
-                      24,
-                      0,
-                      16,
-                      12,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        RadioGroup<AppColorSourcePreference>(
-                          groupValue: widget.current,
-                          onChanged: (value) => unawaited(_select(value)),
-                          child: Column(
-                            children: [
-                              for (final choice in widget.choices)
-                                RadioListTile<AppColorSourcePreference>(
-                                  key: choice.key,
-                                  value: choice.value,
-                                  enabled: widget.enabled,
-                                  focusNode: _optionFocus[choice.value],
-                                  title: Text(choice.label),
-                                  subtitle: Text(choice.description!),
-                                  contentPadding: EdgeInsets.zero,
-                                  minVerticalPadding: 8,
-                                ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsetsDirectional.fromSTEB(
-                            16,
-                            8,
-                            16,
-                            4,
-                          ),
-                          child: Text(
-                            widget.availability,
-                            key: widget.availabilityKey,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                        _SettingsPaletteRow(
-                          title: context.l10n.settingsPalettePreviewLabel,
-                        ),
-                      ],
-                    ),
-                  )
-                : const SizedBox(width: double.infinity, height: 0);
-            // A zero-duration AnimatedSize starts synchronously during layout
-            // on this SDK. Reduced motion renders directly, with no height tween.
-            if (duration == Duration.zero) return details;
-            return AnimatedSize(
-              key: const ValueKey('settings-color-size'),
-              duration: duration,
-              curve: Curves.easeInOutCubic,
-              alignment: Alignment.topCenter,
-              child: details,
-            );
-          },
-        ),
-      ],
+      ),
     );
   }
 }
 
-/// Measure both actual effective styles, locale and scaler, including the
-/// ListTile's icon/gaps/padding/chevron. Long/2x values stack without ellipsis.
+/// Measure actual localized styles/scaler including our icon/padding/gaps.
 bool _fitsInline(
   BuildContext context,
   double width,
@@ -1122,55 +1193,6 @@ bool _fitsInline(
 
   return width >= 560 &&
       measure(title, titleStyle) + measure(value, valueStyle) + 144 <= width;
-}
-
-class _SettingsPaletteRow extends StatelessWidget {
-  const _SettingsPaletteRow({required this.title});
-  final String title;
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final theme = Theme.of(context);
-      final palette = _SettingsPalettePreview(scheme: theme.colorScheme);
-      final inline =
-          _fitsInline(
-            context,
-            constraints.maxWidth - 100,
-            title,
-            theme.textTheme.bodyLarge!,
-            '',
-            theme.textTheme.bodyMedium!,
-          ) &&
-          constraints.maxWidth >= 560;
-      return ListTile(
-        key: const ValueKey('settings-palette-row'),
-        leading: Icon(
-          Icons.color_lens_outlined,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-        title: Text(title),
-        minVerticalPadding: 12,
-        trailing: inline
-            ? SizedBox(
-                width: 124,
-                child: Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: palette,
-                ),
-              )
-            : null,
-        subtitle: inline
-            ? null
-            : Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: palette,
-                ),
-              ),
-      );
-    },
-  );
 }
 
 class _SettingsPalettePreview extends StatelessWidget {

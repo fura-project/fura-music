@@ -28,7 +28,7 @@ void main() {
           final selector = find.byKey(ValueKey(selectorKey));
           await tester.ensureVisible(selector);
           expect(tester.getSize(selector).height, greaterThanOrEqualTo(48));
-          final tile = tester.widget<ListTile>(selector);
+          final tile = settingsRowInk(tester, selector);
           final previousValue = tester
               .widget<Text>(find.byKey(ValueKey('$selectorKey-current')))
               .data;
@@ -119,12 +119,19 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('settings-theme-light')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
+      // Route.completed settles after overlay removal; render the saving state
+      // scheduled by the result owner on the following frame.
+      await tester.pump();
       expect(find.byType(BottomSheet), findsNothing);
       expect(owner.settings.theme, AppThemePreference.light);
       expect(storage.writes, 1);
-      expect(tester.widget<ListTile>(selector).enabled, isFalse);
+      expect(settingsRowInk(tester, selector).onTap, isNull);
       expect(
-        (tester.widget<ListTile>(selector).subtitle! as Text).data,
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('settings-theme-selector-current')),
+            )
+            .data,
         'Light',
       );
       if (succeeds) {
@@ -138,11 +145,15 @@ void main() {
         succeeds ? AppThemePreference.light : AppThemePreference.system,
       );
       expect(
-        (tester.widget<ListTile>(selector).subtitle! as Text).data,
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('settings-theme-selector-current')),
+            )
+            .data,
         succeeds ? 'Light' : 'System',
       );
-      expect(tester.widget<ListTile>(selector).enabled, isTrue);
-      expect(tester.widget<ListTile>(selector).focusNode!.hasFocus, isTrue);
+      expect(settingsRowInk(tester, selector).onTap, isNotNull);
+      expect(settingsRowInk(tester, selector).focusNode!.hasFocus, isTrue);
       expect(find.byType(SnackBar), succeeds ? findsNothing : findsOneWidget);
       expect(tester.takeException(), isNull);
       semantics.dispose();
@@ -155,7 +166,7 @@ void main() {
     await tester.pumpWidget(const SettingsReviewHarness());
     await tester.pumpAndSettle();
     final selector = find.byKey(const ValueKey('settings-theme-selector'));
-    final focus = tester.widget<ListTile>(selector).focusNode!;
+    final focus = settingsRowInk(tester, selector).focusNode!;
     focus.requestFocus();
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -248,13 +259,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
       expect(writes, 0);
-      expect(tester.widget<ListTile>(selector).focusNode!.hasFocus, isTrue);
+      expect(settingsRowInk(tester, selector).focusNode!.hasFocus, isTrue);
     }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
   }
 
   for (final available in [true, false]) {
     testWidgets(
-      'inline color details preserve actual capability available=$available',
+      'anchored color details preserve actual capability available=$available',
       (tester) async {
         await tester.pumpWidget(
           SettingsReviewHarness(systemColorsAvailable: available),
@@ -284,7 +295,7 @@ void main() {
           findsOneWidget,
         );
         final l10n = AppLocalizations.of(
-          tester.element(find.byKey(const ValueKey('settings-color-details'))),
+          tester.element(find.byKey(const ValueKey('settings-color-popup'))),
         );
         expect(
           find.text(l10n.settingsColorSourceSystemDescription),

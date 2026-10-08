@@ -8,6 +8,30 @@ import 'package:flutterustmusic/settings/app_settings_store.dart';
 import 'settings_review_harness.dart';
 
 void main() {
+  testWidgets('choice result waits for actual outgoing route removal', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const SettingsReviewHarness());
+    final context = tester.element(
+      find.byKey(const ValueKey('settings-theme-selector')),
+    );
+    final pending = showSettingsSingleChoice(
+      context: context,
+      title: 'Synthetic',
+      options: const [SettingsChoiceOption(label: 'One')],
+      selectedIndex: 0,
+    );
+    var settled = false;
+    pending.result.then((_) => settled = true);
+    await tester.pumpAndSettle();
+    Navigator.of(tester.element(find.byType(BottomSheet))).pop();
+    await tester.pump();
+    expect(settled, isFalse);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(settled, isTrue);
+    expect(find.byType(BottomSheet), findsNothing);
+  });
   testWidgets(
     'fallback cancelled before first build cannot leave an orphan route',
     (tester) async {
@@ -48,18 +72,19 @@ void main() {
       await tester.tap(find.byKey(ValueKey(option)));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
+      // Present the save owner's rebuild after the outgoing route completes.
+      await tester.pump();
       expect(find.byType(BottomSheet), findsNothing);
       for (final (rowKey, _) in selectors) {
-        final row = tester.widget<ListTile>(find.byKey(ValueKey(rowKey)));
-        expect(row.enabled, isFalse);
+        final row = settingsRowInk(tester, find.byKey(ValueKey(rowKey)));
         expect(row.onTap, isNull);
       }
       save.complete(AppSettingsWriteResult.saved);
       await tester.pumpAndSettle();
       for (final (rowKey, _) in selectors) {
         expect(
-          tester.widget<ListTile>(find.byKey(ValueKey(rowKey))).enabled,
-          isTrue,
+          settingsRowInk(tester, find.byKey(ValueKey(rowKey))).onTap,
+          isNotNull,
         );
       }
       expect(tester.takeException(), isNull);
@@ -91,10 +116,15 @@ void main() {
         }
         await tester.pumpAndSettle();
         expect(route.animation!.value, 1);
-        expect(tester.widget<BottomSheet>(sheet).showDragHandle, isTrue);
+        expect(tester.widget<BottomSheet>(sheet).showDragHandle, isFalse);
+        expect(
+          find.byKey(const ValueKey('settings-choice-handle')),
+          findsOneWidget,
+        );
         expect(route.useSafeArea, isTrue);
         expect(route.isScrollControlled, isTrue);
-        expect(find.byType(RadioListTile<int>), findsNWidgets(3));
+        expect(find.byType(RadioListTile<int>), findsNothing);
+        expect(find.byType(Radio<int>), findsNWidgets(3));
         // Stock modal route handles motion. No outer animation framework.
         await tester.tapAt(const Offset(8, 8));
         await tester.pumpAndSettle();

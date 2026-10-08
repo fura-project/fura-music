@@ -39,6 +39,11 @@ void setSettingsViewport(WidgetTester tester, Size size) {
   addTearDown(tester.view.resetDevicePixelRatio);
 }
 
+InkWell settingsRowInk(WidgetTester tester, Finder row) =>
+    tester.widget<InkWell>(
+      find.descendant(of: row, matching: find.byType(InkWell)).first,
+    );
+
 class SettingsReviewHarness extends StatefulWidget {
   const SettingsReviewHarness({
     this.section = SettingsSection.appearance,

@@ -12,7 +12,7 @@ import 'package:integration_test/integration_test.dart';
 
 /// Real host/plugin presentation with a disposable preference key. Never
 /// starts MusicApp, restores credentials, accesses Providers or changes Queue.
-/// All platforms exercise the same real Flutter route and inline disclosure.
+/// All platforms exercise the same real Flutter route and anchored menu.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('Settings choices use real platform presentation and storage', (
@@ -81,7 +81,11 @@ void main() {
     Future<void> choice(String phase, String rowKey, String optionKey) async {
       final row = find.byKey(ValueKey(rowKey));
       await tester.ensureVisible(row);
-      final focus = tester.widget<ListTile>(row).focusNode!;
+      final focus = tester
+          .widget<InkWell>(
+            find.descendant(of: row, matching: find.byType(InkWell)).first,
+          )
+          .focusNode!;
       await tester.tap(row);
       await tester.pumpAndSettle();
       debugPrint('FURA_SETTINGS_REVIEW phase=$phase ready');
@@ -154,16 +158,24 @@ void main() {
         (await store.load()).settings.colorSource,
         AppColorSourcePreference.system,
       );
+      await tester.tap(colorRow);
+      await tester.pumpAndSettle();
       await tester.tap(system);
       await tester.pumpAndSettle();
       expect(storage.writes, 3);
       expect(
         find.byKey(const ValueKey('settings-color-palette-preview')),
+        findsNothing,
+      );
+      await tester.tap(colorRow);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('settings-color-popup')),
         findsOneWidget,
       );
       await tester.ensureVisible(colorRow);
       await tester.pumpAndSettle();
-      await tester.tap(colorRow);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('settings-color-palette-preview')),
@@ -183,7 +195,7 @@ void main() {
       expect(find.byType(BottomSheet), findsNothing);
       expect(tester.takeException(), isNull);
       debugPrint(
-        'FURA_SETTINGS_REVIEW all_success writes=3 presentation=UNIFIED_FLUTTER_M3 color=INLINE',
+        'FURA_SETTINGS_REVIEW all_success writes=3 presentation=FURA_CHOICE_SHEET color=MENU_ANCHOR',
       );
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());

@@ -62,7 +62,165 @@ At 390×844:
 
 The Human reported that the earlier opaque-transition fix left an unwanted pale panel behind Settings and playlist detail. The backing now uses the same `Theme.scaffoldBackgroundColor` as the normal content canvas and resting toolbar, while retaining full opacity, clipping and content-only fading for the entire entry/exit transition. Sidebar/player container roles and all accepted geometry remain unchanged. This is one consistent canvas role, not a hard-coded light color; dark mode follows its existing theme. The corrected candidate requires Human visual review.
 
-## Current Settings interaction taxonomy, 2026-10-07
+## Current Settings component contract, 2026-10-08
+
+**Design source:** Human's directed component correction. This supersedes the
+2026-10-07 inline Color Source and default RadioListTile sheet candidate below.
+**Status:** implemented candidate; `HUMAN_REVIEW`, not visually accepted.
+Human explicitly sets the order: implement the fixed contract, render, inspect
+with GPT, then bounded read-only agy audit. Neither reviewer chooses a new model.
+
+| Setting | Current presentation |
+| --- | --- |
+| Theme, Music service, Language, Default playback quality, Lyric auxiliary | SIMPLE: FuraChoiceSheet / FuraChoiceRow / RadioGroup / Radio |
+| Color Source | DETAILED: Material 3 MenuAnchor / MenuController / custom radio rows |
+| Boolean, when supported | M3 Switch in the same row grammar |
+| Complex workflow, when supported | Settings detail page |
+
+### Retained surfaces and explicit row ownership
+
+Settings Shell/navigation/search/Back/compact hierarchy and Shell-owned player
+remain unchanged. Keep one quiet `surfaceContainerLow` Material per group,
+16 dp rounding, external heading and the existing 880 dp padded content limit.
+`_FuraSettingsRow` now owns Material/InkWell/Focus/Semantics and Row/Column:
+minimum 64 dp, 16 dp horizontal / 12 dp vertical padding, quiet 24 dp icons.
+Actual localized text/style/scaler measurement preserves desktop trailing
+values and compact/long-text stacked values; no ellipsis or font reduction.
+Simple entries have chevrons, Color Source has an expansion/menu affordance.
+Ordinary rows have no persistent selected background; hover/focus/pressed state
+layers return to exact idle pixels after leaving those states.
+
+### Simple bottom choice dialog
+
+`showSettingsSingleChoice` always enters the same Flutter-rendered component
+on Android/Linux/Windows/macOS/iOS. `showModalBottomSheet` owns route, scrim,
+bottom placement, Back and dismiss motion, not the content grammar. Its builder
+uses project-owned `FuraChoiceSheet`: `surfaceContainerLow` Material, 28 dp top
+corners, 24 dp handle area with a 32 x 4 dp handle, titleLarge with 24 dp side
+padding, minimum 56 dp `FuraChoiceRow`, standard M3 Radio and 16 dp bottom
+spacing plus SafeArea. Content determines height; Theme is approximately
+256 dp at 1x. Desktop maximum width is 480 dp; compact uses available width.
+No RadioListTile/ListTile stack, native dialog, Apply button, dropdown or
+independent overlay framework. Standard route drag dismissal remains enabled.
+
+Selection closes, then the existing Settings owner saves. Current value and
+Back/Escape/scrim/drag cancellation do not write. Radio null toggles explicitly
+map back to the current value so current-option keyboard activation closes
+without deselecting or writing. Duplicate/stale/invalid/disposed results and
+pending-write disable/rollback behavior remain tested.
+
+### Detailed anchored Color Source
+
+`_SettingsColorMenu` owns only MenuController/focus/lifecycle, never Settings
+truth. MenuAnchor and M3 MenuStyle own the anchored surface; project radio rows
+show actual selection, supporting explanations and truthful dynamic-color
+availability. A Wrap shows five 20 dp real effective-ColorScheme dots. These
+non-interactive previews exist only inside the popup, never as a first-level
+row. Appearance stays two rows and opening does not increase group height.
+
+The popup is 400 dp maximum, limited to viewport width minus 32 dp, with
+16 dp rounded M3 surface and SDK viewport placement. Bounded internal scrolling
+retains explanations/options at 2x and short 320 x 480 viewports; no modal
+route/scrim, inline disclosure, MD2 dropdown or second card. Selecting closes
+then uses the unchanged save/rollback owner; current/outside/Escape/Back close
+without writes. Stale snapshots, disposal, rapid toggles, focus return and
+keyboard radio traversal are covered. Unsupported capabilities remain truthful.
+
+### Failure investigation and evidence boundary
+
+Starting HEAD, tracked origin/main and live remote main were
+`c2cb5295dab93610eb68e276b7194e6cb4a24fdf`; initial worktree clean. Existing Core
+playback/MPRIS work is preserved. Production evidence fingerprint:
+
+```bash
+git diff -- apps/flutter/lib/settings | sha256sum
+# dc6b9218872ce4f29bd440b8b7fb127825806d26e2a9db18d514988785fba63a
+```
+
+Evidence lives outside Git at `/tmp/fura-settings-contract-20261008-LLaPt7/`.
+Two reproduced presentation defects were fixed, not dismissed after a rerun:
+
+- Menu scrolling inherited the page PrimaryScrollController and produced a
+  multiple-ScrollPosition assertion; its own `primary: false` scroll owner
+  fixes the failure, including compact/short/large-text tests.
+- Real Linux Escape initially returned focus before the outgoing route's
+  Overlay teardown, which then replaced that focus. The result now waits on
+  actual `ModalRoute.completed`, not an invented delay. A deterministic route
+  test and real GTK rerun prove cleanup precedes save/focus return. Save tests
+  explicitly render the following scheduled frame, retaining disabled assertions.
+
+Capture-only investigation also found Flutter test bindings replace shadows
+with outlines. Evidence capture temporarily enables real shadow painting and
+restores the binding invariant in finally; production elevation is unchanged.
+The failed global-shadow test attempt remains in the log, not accepted output.
+
+Real Linux integration uses production Settings and preference plugin with a
+unique disposable fixture key: three writes/readback, current/cancel no-write,
+focus, anchored color and 2x succeed. It never restores credentials or starts
+MusicApp/accounts/playback; only its own preference key is removed. Separate
+synthetic MusicApp active-player tests prove one resolution, no stop, retained
+Queue/Track and modal interaction isolation. Static renders alone do not.
+
+### Actual renders and bounded review
+
+All ten below are real Flutter renders with synthetic data under the production
+fingerprint above, not physical-phone/native-five-platform captures. GPT
+inspected them individually. English/Chinese, light/dark, 1x/2x and all six
+controls are also exercised across 320/390/640/1440/1600 dp.
+
+| State | Desktop | Compact |
+| --- | --- | --- |
+| Appearance idle | `1440_zh_light_1x-settings.png` | `390_zh_light_1x-settings.png` |
+| Theme FuraChoiceSheet | `1440_zh_light_1x-theme.png` | `390_zh_light_1x-theme.png` |
+| Color Source MenuAnchor | `1440_zh_light_1x-color.png` | `390_zh_light_1x-color.png` |
+| Dark | `1440_zh_dark_1x-theme.png`, `1440_zh_dark_1x-color.png` | — |
+| 2x text | — | `390_zh_light_2x-theme.png`, `390_zh_light_2x-color.png` |
+
+`settings-active-player-{1440,390}.png` show the retained integrated Shell;
+sheet route opening/closing frame sequences are separate from settled images.
+The anchored menu uses SDK ownership, not the superseded inline height tween.
+
+Actual interactive agy 1.2.2 ran in the existing trusted project with the
+authorized Gemini 3.8 Flash (Low), `--mode plan --log-file <temporary log>
+--add-dir <evidence directory> --prompt-interactive <bounded packet>`.
+Read-only copies of component/theme code were supplied. No model/global setting
+change, production patch or expanded permission was approved. Component
+session `614e8c51-f52a-4142-9fb5-6c0d93b6c986` confirmed reading the ten PNGs
+and snapshots. Fresh integrated-page session
+`e80aa221-fb87-4c9c-b84c-13a13bfa843a` read the separate Shell/player and
+responsive companions and reported no new concrete M finding.
+
+GPT does not blindly adopt the component review: its current-radio dismissal
+objection contradicts Human's explicit no-write/close contract. Its claimed
+circle-only keyboard focus is disproved by a pixel regression of blank
+trailing row area (the Radio's real owned focus propagates to ancestor InkWell),
+with exact idle restoration. Compact asymmetric anchoring is contained in the
+viewport, so symmetry is H, not overflow; non-interactive palette contrast is
+not a control contrast failure. Its no-drag inference is disproved by a real
+gesture test. Any blanket COMPLETE/remainder statement is not Human acceptance.
+Durable findings and test references are recorded here; full operational logs
+and concise observed-response records remain in the temporary directory.
+
+Human still judges the new sheet feel, row density, popup rhythm and palette
+subtlety. Native non-Linux runtime, physical touch/screen-reader experience
+and new remote CI are not inferred from widget platform variants or screenshots.
+
+Final executed checks: `settings-acceptance-final.log` reports 115 Settings
+tests passed; `app-final.log` reports 123 whole-MusicApp regressions passed;
+`integrated-player-renders.log` reports two retained-player renders/tests passed.
+`linux-runtime-route-settled.log` builds/runs real Linux Debug and reports one
+integration passed with exactly three fixture writes. Full `dart analyze` has
+no issues; affected format reports 11 files / zero changes. Source audit finds
+no production legacy dialog/inline/dropdown path, new network/credential fields
+or platform-specific presentation dispatch; `git diff --check` passes.
+Ordinary `flutter build apk --debug --target-platform android-x64` succeeds in
+`android-debug-build.log`. This is compilation only: no physical/Waydroid APK
+installation or non-Linux native interaction claim is made for this candidate.
+The existing Gradle native-access warning is not a build failure or a reason
+to change Java/toolchain in this UI task. No dependency/registrant changes,
+Core edits, commit, push or reset/restore/clean/rebase were performed.
+
+## Superseded Settings interaction candidate, 2026-10-07
 
 **Design source:** Human's latest Settings interaction correction supersedes
 the native-Android presentation decision below. Preserve the accepted grouped
