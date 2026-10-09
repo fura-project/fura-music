@@ -18,8 +18,8 @@ appimagetool_sha256='ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb3
 gtk_plugin_commit='7a3fbc31a9e5075073ff8790f26effbac5f84453'
 gtk_plugin_url="https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/${gtk_plugin_commit}/linuxdeploy-plugin-gtk.sh"
 gtk_plugin_sha256='b0f4cbc684a0103a9651f0955b635eaea0096b3a66c0f5a2c2aa337960375171'
-runtime_url='https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64'
-# The upstream `continuous` asset is mutable; keep the reviewed digest pinned.
+runtime_asset_id='596078161'
+runtime_url="https://api.github.com/repos/AppImage/type2-runtime/releases/assets/${runtime_asset_id}"
 runtime_sha256='156f4bdbde9c52d01814600013e0a273f0118dc2de98975f3c8c63427ec79074'
 
 download_and_verify() {
@@ -38,8 +38,13 @@ download_and_verify "$appimagetool_url" "$appimagetool_sha256" \
   "$destination/appimagetool-x86_64.AppImage"
 download_and_verify "$gtk_plugin_url" "$gtk_plugin_sha256" \
   "$destination/linuxdeploy-plugin-gtk.sh"
-download_and_verify "$runtime_url" "$runtime_sha256" \
-  "$destination/runtime-x86_64"
+curl --fail --location --retry 4 --retry-all-errors --silent --show-error \
+  --header 'Accept: application/octet-stream' \
+  --header 'X-GitHub-Api-Version: 2022-11-28' \
+  --output "$destination/runtime-x86_64" "$runtime_url"
+printf '%s  %s\n' "$runtime_sha256" "$destination/runtime-x86_64" \
+  | sha256sum --check --status \
+  || die "checksum mismatch for pinned type2 runtime asset $runtime_asset_id"
 chmod 0755 \
   "$destination/linuxdeploy-x86_64.AppImage" \
   "$destination/appimagetool-x86_64.AppImage" \
@@ -53,6 +58,7 @@ linuxdeploy_gtk_commit=$gtk_plugin_commit
 linuxdeploy_gtk_sha256=$gtk_plugin_sha256
 appimagetool=1.9.1
 appimagetool_sha256=$appimagetool_sha256
+type2_runtime_asset_id=$runtime_asset_id
 type2_runtime_url=$runtime_url
 type2_runtime_sha256=$runtime_sha256
 TOOLS
