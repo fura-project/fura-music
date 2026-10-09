@@ -19,7 +19,8 @@ gtk_plugin_commit='7a3fbc31a9e5075073ff8790f26effbac5f84453'
 gtk_plugin_url="https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/${gtk_plugin_commit}/linuxdeploy-plugin-gtk.sh"
 gtk_plugin_sha256='b0f4cbc684a0103a9651f0955b635eaea0096b3a66c0f5a2c2aa337960375171'
 runtime_url='https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64'
-runtime_sha256='1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf'
+# The upstream `continuous` asset is mutable; keep the reviewed digest pinned.
+runtime_sha256='156f4bdbde9c52d01814600013e0a273f0118dc2de98975f3c8c63427ec79074'
 
 download_and_verify() {
   local url=$1
