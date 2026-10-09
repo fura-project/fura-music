@@ -10,18 +10,17 @@ import 'package:flutterustmusic/settings/settings_page.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 import 'package:integration_test/integration_test.dart';
 
-/// Real host/plugin presentation with a disposable preference key. Never
-/// starts MusicApp, restores credentials, accesses Providers or changes Queue.
-/// All platforms exercise the same SDK M3 menu and inline detailed configuration.
+/// The real Linux runner, production SettingsPage and preference plugin.
+/// No MusicApp, credentials, Provider calls or existing settings document.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  testWidgets('Settings choices use real platform presentation and storage', (
+  testWidgets('two official Settings representatives on real Linux', (
     tester,
   ) async {
-    final storage = _CountingStorage(
+    final storage = _Storage(
       SharedPreferencesAppSettingsDocumentStorage(
         documentKey:
-            'fura.integration.settings.choice.${DateTime.now().microsecondsSinceEpoch}',
+            'fura.integration.settings.representatives.${DateTime.now().microsecondsSinceEpoch}',
       ),
     );
     final store = AppSettingsStore(storage: storage);
@@ -30,229 +29,123 @@ void main() {
       null,
       initialSettings: AppSettings.defaults,
     );
-    var scale = 1.0;
-    Widget fixture() => ListenableBuilder(
-      listenable: owner,
-      builder: (context, _) => DynamicColorBuilder(
-        builder: (light, dark) => MaterialApp(
-          debugShowCheckedModeBanner: false,
-          locale: const Locale('en'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          theme: MusicMaterialTheme.light(),
-          darkTheme: MusicMaterialTheme.dark(),
-          themeMode: owner.settings.theme == AppThemePreference.dark
-              ? ThemeMode.dark
-              : ThemeMode.light,
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: TextScaler.linear(scale)),
-            child: child!,
-          ),
-          home: SettingsPage(
-            settings: owner.settings,
-            onSettingsChanged: owner.update,
-            onBack: () {},
-            onCompactSectionSelected: (_) {},
-            compactHierarchy: true,
-            compactSectionOpen: true,
-            systemLightColorScheme: light,
-            systemDarkColorScheme: dark,
+    try {
+      await tester.pumpWidget(
+        ListenableBuilder(
+          listenable: owner,
+          builder: (context, _) => DynamicColorBuilder(
+            builder: (light, dark) => MaterialApp(
+              debugShowCheckedModeBanner: false,
+              locale: const Locale('en'),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: MusicMaterialTheme.light(),
+              home: SettingsPage(
+                settings: owner.settings,
+                onSettingsChanged: owner.update,
+                onBack: () {},
+                onCompactSectionSelected: (_) {},
+                compactHierarchy: true,
+                compactSectionOpen: true,
+                systemLightColorScheme: light,
+                systemDarkColorScheme: dark,
+              ),
+            ),
           ),
         ),
-      ),
-    );
-    Future<void> waitFor(
-      bool Function() predicate, {
-      Duration limit = const Duration(seconds: 90),
-    }) async {
-      final deadline = DateTime.now().add(limit);
-      while (!predicate() && DateTime.now().isBefore(deadline)) {
-        await tester.pump();
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 100)),
-        );
-      }
-      expect(
-        predicate(),
-        isTrue,
-        reason: 'bounded runtime choice did not finish',
       );
       await tester.pumpAndSettle();
-    }
-
-    Future<void> choice(String phase, String rowKey, String optionKey) async {
-      final row = find.byKey(ValueKey(rowKey));
-      await tester.ensureVisible(row);
-      final focus = tester
-          .widget<InkWell>(
-            find.descendant(of: row, matching: find.byType(InkWell)).first,
-          )
-          .focusNode!;
-      await tester.tap(row);
-      await tester.pumpAndSettle();
-      debugPrint('FURA_SETTINGS_REVIEW phase=$phase ready');
-      expect(find.byType(BottomSheet), findsNothing);
-      expect(find.byType(MenuItemButton), findsNWidgets(3));
-      if (optionKey == 'escape') {
-        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      } else if (optionKey == 'outside') {
-        await tester.tapAt(const Offset(8, 8));
-      } else {
-        final option = find.byKey(ValueKey(optionKey));
-        await tester.ensureVisible(option);
-        await tester.tap(option);
-      }
-      await tester.pumpAndSettle();
-      debugPrint(
-        'FURA_SETTINGS_REVIEW phase=$phase focus=${focus.hasFocus} lifecycle=${WidgetsBinding.instance.lifecycleState?.name}',
-      );
-      // Focus requests and GTK lifecycle delivery are asynchronous. Prove the
-      // bounded settled contract, not an immediate synchronous getter.
-      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-        await waitFor(
+      final theme = find.byKey(const ValueKey('settings-theme-selector'));
+      for (final choice in [
+        'escape',
+        'settings-theme-system',
+        'settings-theme-light',
+      ]) {
+        await tester.tap(theme);
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsOneWidget);
+        if (choice == 'escape') {
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        } else {
+          await tester.tap(find.byKey(ValueKey(choice)));
+        }
+        await tester.pumpAndSettle();
+        await _wait(
+          tester,
           () =>
-              focus.hasFocus ||
-              WidgetsBinding.instance.lifecycleState !=
-                  AppLifecycleState.resumed,
-          limit: const Duration(seconds: 2),
+              owner.settings.theme ==
+              (choice == 'settings-theme-light'
+                  ? AppThemePreference.light
+                  : AppThemePreference.system),
         );
+        expect(find.byType(BottomSheet), findsNothing);
       }
-      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-        expect(focus.hasFocus, isTrue);
-      } else {
-        // An externally deactivated GTK window must not steal host focus.
-        // Inactive -> dismiss -> resume restoration is a deterministic test.
-        debugPrint(
-          'FURA_SETTINGS_REVIEW phase=$phase focus=deferred_until_resume',
+      expect(storage.writes, 1);
+      final dropdown = find.byType(DropdownMenu<AppColorSourcePreference>);
+      for (final choice in [
+        'escape',
+        'settings-color-source-brand',
+        'settings-color-source-system',
+      ]) {
+        await tester.tap(
+          find.descendant(of: dropdown, matching: find.byType(TextField)),
         );
-      }
-      expect(tester.takeException(), isNull);
-      debugPrint('FURA_SETTINGS_REVIEW phase=$phase success');
-    }
-
-    try {
-      expect(await storage.read(), isNull);
-      await tester.pumpWidget(fixture());
-      await tester.pumpAndSettle();
-      await choice(
-        'theme_light',
-        'settings-theme-selector',
-        'settings-theme-light',
-      );
-      expect(owner.settings.theme, AppThemePreference.light);
-      await waitFor(() => storage.writes == 1);
-      expect((await store.load()).settings.theme, AppThemePreference.light);
-      await choice(
-        'theme_current',
-        'settings-theme-selector',
-        'settings-theme-light',
-      );
-      expect(storage.writes, 1);
-      await choice('theme_back', 'settings-theme-selector', 'escape');
-      expect(storage.writes, 1);
-      await choice('theme_outside', 'settings-theme-selector', 'outside');
-      expect(storage.writes, 1);
-      await choice(
-        'theme_dark',
-        'settings-theme-selector',
-        'settings-theme-dark',
-      );
-      expect(owner.settings.theme, AppThemePreference.dark);
-      await waitFor(() => storage.writes == 2);
-      expect((await store.load()).settings.theme, AppThemePreference.dark);
-      await choice(
-        'theme_dark_current',
-        'settings-theme-selector',
-        'settings-theme-dark',
-      );
-      expect(storage.writes, 2);
-      for (var cycle = 0; cycle < 30; cycle++) {
-        await choice(
-          'dismiss_stress_$cycle',
-          'settings-theme-selector',
-          cycle.isEven ? 'escape' : 'outside',
+        await tester.pumpAndSettle();
+        if (choice == 'escape') {
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        } else {
+          await tester.tap(find.byKey(ValueKey(choice)).hitTestable());
+        }
+        await tester.pumpAndSettle();
+        await _wait(
+          tester,
+          () =>
+              owner.settings.colorSource ==
+              (choice == 'settings-color-source-system'
+                  ? AppColorSourcePreference.system
+                  : AppColorSourcePreference.brand),
         );
       }
       expect(storage.writes, 2);
-      final colorRow = find.byKey(
-        const ValueKey('settings-color-source-selector'),
-      );
-      await tester.ensureVisible(colorRow);
-      await tester.tap(colorRow);
-      await tester.pumpAndSettle();
-      expect(find.byType(BottomSheet), findsNothing);
-      final system = find
-          .byKey(const ValueKey('settings-color-source-system'))
-          .hitTestable();
-      await tester.ensureVisible(system);
-      await tester.tap(system);
-      await tester.pumpAndSettle();
-      expect(owner.settings.colorSource, AppColorSourcePreference.system);
-      await waitFor(() => storage.writes == 3);
-      expect(
-        (await store.load()).settings.colorSource,
-        AppColorSourcePreference.system,
-      );
-      // Selection keeps the detail expanded; the current radio is a no-op.
-      await tester.tap(system);
-      await tester.pumpAndSettle();
-      expect(storage.writes, 3);
-      expect(
-        find.byKey(const ValueKey('settings-color-details')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('settings-color-palette-preview')),
-        findsOneWidget,
-      );
-      await tester.ensureVisible(colorRow);
-      await tester.tap(colorRow);
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('settings-color-details')),
-        findsNothing,
-      );
-      await tester.tap(colorRow);
-      await tester.pumpAndSettle();
-      expect(system, findsOneWidget);
-      scale = 2;
-      await tester.pumpWidget(fixture());
-      await tester.pumpAndSettle();
-      await choice('theme_large_cancel', 'settings-theme-selector', 'escape');
-      expect(storage.writes, 3);
-      await tester.ensureVisible(colorRow);
-      // Details stay expanded after the scaler update.
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('settings-color-palette-preview')),
-      );
-      expect(find.byType(BottomSheet), findsNothing);
+      final readback = await store.load();
+      expect(readback.settings.theme, AppThemePreference.light);
+      expect(readback.settings.colorSource, AppColorSourcePreference.system);
       expect(tester.takeException(), isNull);
       debugPrint(
-        'FURA_SETTINGS_REVIEW all_success writes=3 presentation=SDK_M3_ANCHORED_MENU color=INLINE_DETAILS',
+        'FURA_SETTINGS_REVIEW representatives=THEME_MODAL_COLOR_DROPDOWN writes=2 readback=success',
       );
     } finally {
       await tester.pumpWidget(const SizedBox.shrink());
       owner.dispose();
       await storage.delete();
-      expect(await storage.read(), isNull);
     }
   });
 }
 
-class _CountingStorage implements AppSettingsDocumentStorage {
-  _CountingStorage(this.inner);
-  final AppSettingsDocumentStorage inner;
+Future<void> _wait(WidgetTester tester, bool Function() predicate) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
+  while (!predicate() && DateTime.now().isBefore(deadline)) {
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+  }
+  expect(predicate(), isTrue, reason: 'bounded representative Settings save');
+  await tester.pumpAndSettle();
+}
+
+class _Storage implements AppSettingsDocumentStorage {
+  _Storage(this.delegate);
+  final AppSettingsDocumentStorage delegate;
   int writes = 0;
   @override
-  Future<String?> read() => inner.read();
+  Future<String?> read() => delegate.read();
   @override
-  Future<void> write(String document) async {
-    await inner.write(document);
+  Future<void> write(String document) {
     writes++;
+    return delegate.write(document);
   }
 
   @override
-  Future<void> delete() => inner.delete();
+  Future<void> delete() => delegate.delete();
 }

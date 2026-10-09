@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
@@ -364,7 +365,7 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       _SettingsGroup(
         children: [
-          _SettingsChoiceTile<AppThemePreference>(
+          _SettingsThemeChoice(
             controlKey: const ValueKey('settings-theme-selector'),
             icon: Icons.brightness_auto_rounded,
             title: l10n.settingsAppearanceCompactLabel,
@@ -390,15 +391,11 @@ class _SettingsPageState extends State<SettingsPage> {
             onSelected: (theme) =>
                 _save(widget.settings.copyWith(theme: theme)),
           ),
-          _SettingsColorDisclosure(
+          _SettingsColorDropdown(
             controlKey: const ValueKey('settings-color-source-selector'),
             icon: Icons.palette_outlined,
             title: l10n.settingsColorSourceLabel,
             current: widget.settings.colorSource,
-            currentLabel: _colorSourceSummary(
-              widget.settings.colorSource,
-              l10n,
-            ),
             choices: [
               _SettingsChoice(
                 key: const ValueKey('settings-color-source-system'),
@@ -721,7 +718,201 @@ class _SettingsGroup extends StatelessWidget {
   );
 }
 
-/// Compact SDK menu presentation; the existing Settings owner saves values.
+/// The Human-reviewed official modal sheet is scoped to Theme only.
+class _SettingsThemeChoice extends StatefulWidget {
+  const _SettingsThemeChoice({
+    required this.controlKey,
+    required this.icon,
+    required this.title,
+    required this.current,
+    required this.choices,
+    required this.enabled,
+    required this.onSelected,
+  });
+  final Key controlKey;
+  final IconData icon;
+  final String title;
+  final AppThemePreference current;
+  final List<_SettingsChoice<AppThemePreference>> choices;
+  final bool enabled;
+  final Future<void> Function(AppThemePreference) onSelected;
+  @override
+  State<_SettingsThemeChoice> createState() => _SettingsThemeChoiceState();
+}
+
+class _SettingsThemeChoiceState extends State<_SettingsThemeChoice>
+    with WidgetsBindingObserver {
+  final _focusNode = FocusNode();
+  ModalBottomSheetRoute<AppThemePreference>? _route;
+  int _revision = 0;
+  bool _opening = false;
+  bool _focusReturnPending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SettingsThemeChoice oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.current != widget.current ||
+        oldWidget.enabled != widget.enabled) {
+      _revision++;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _returnFocus();
+  }
+
+  void _returnFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.enabled || !_focusReturnPending) return;
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
+      _focusReturnPending = false;
+      _focusNode.requestFocus();
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  Future<void> _choose(BuildContext sheetContext) async {
+    if (!widget.enabled || _opening) return;
+    _opening = true;
+    final snapshot = widget.current;
+    final revision = ++_revision;
+    final selected = await showModalBottomSheet<AppThemePreference>(
+      context: sheetContext,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      constraints: const BoxConstraints(maxWidth: 640),
+      builder: (context) {
+        _route =
+            ModalRoute.of(context)!
+                as ModalBottomSheetRoute<AppThemePreference>;
+        void close(AppThemePreference? value) {
+          if (!mounted ||
+              revision != _revision ||
+              widget.current != snapshot ||
+              !widget.enabled ||
+              !_route!.isCurrent) {
+            return;
+          }
+          Navigator.of(context).pop(value);
+        }
+
+        return Shortcuts(
+          shortcuts: const {
+            SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+          },
+          child: Actions(
+            actions: {
+              DismissIntent: CallbackAction<DismissIntent>(
+                onInvoke: (_) {
+                  Navigator.of(context).pop();
+                  return null;
+                },
+              ),
+            },
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          widget.title,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                      RadioGroup<AppThemePreference>(
+                        groupValue: snapshot,
+                        onChanged: close,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final choice in widget.choices)
+                              RadioListTile<AppThemePreference>(
+                                key: choice.key,
+                                value: choice.value,
+                                toggleable: true,
+                                title: Text(choice.label),
+                                autofocus: choice.value == snapshot,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    // Wait for the SDK route's exit motion before returning row focus.
+    await _route?.completed;
+    _route = null;
+    _opening = false;
+    if (!mounted) return;
+    if (revision == _revision &&
+        widget.enabled &&
+        widget.current == snapshot &&
+        selected != null &&
+        selected != snapshot) {
+      await widget.onSelected(selected);
+    }
+    if (!mounted) return;
+    _focusReturnPending = true;
+    _returnFocus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    final route = _route;
+    if (route != null && route.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (route.isActive) route.navigator?.removeRoute(route);
+      });
+    }
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Theme(
+    // Keep the existing ColorScheme, but use SDK M3 sheet defaults locally.
+    data: Theme.of(context)
+        .copyWith(bottomSheetTheme: const BottomSheetThemeData()),
+    child: Builder(
+      builder: (context) => _FuraSettingsRow(
+        key: widget.controlKey,
+        icon: widget.icon,
+        title: widget.title,
+        value: widget.choices
+            .singleWhere((c) => c.value == widget.current)
+            .label,
+        valueKey: const ValueKey('settings-theme-selector-current'),
+        focusNode: _focusNode,
+        enabled: widget.enabled,
+        onTap: () => unawaited(_choose(context)),
+      ),
+    ),
+  );
+}
+
+/// Other settings retain their existing anchored presentation in this trial.
 class _SettingsChoiceTile<T> extends StatefulWidget {
   const _SettingsChoiceTile({
     required this.controlKey,
@@ -939,8 +1130,6 @@ class _FuraSettingsRow extends StatelessWidget {
     required this.focusNode,
     required this.onTap,
     this.valueAnchorKey,
-    this.trailing,
-    this.expanded,
     this.enabled = true,
     super.key,
   });
@@ -951,8 +1140,6 @@ class _FuraSettingsRow extends StatelessWidget {
   final FocusNode focusNode;
   final VoidCallback? onTap;
   final Key? valueAnchorKey;
-  final Widget? trailing;
-  final bool? expanded;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -964,7 +1151,6 @@ class _FuraSettingsRow extends StatelessWidget {
     );
     return Semantics(
       button: true,
-      expanded: expanded,
       enabled: enabled,
       child: Focus(
         canRequestFocus: false,
@@ -1032,13 +1218,11 @@ class _FuraSettingsRow extends StatelessWidget {
                         ...[
                           const SizedBox(width: 16),
                           ExcludeSemantics(
-                            child:
-                                trailing ??
-                                Icon(
-                                  Icons.expand_more_rounded,
-                                  size: 24,
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
+                            child: Icon(
+                              Icons.expand_more_rounded,
+                              size: 24,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                           ),
                         ],
                       ],
@@ -1054,14 +1238,13 @@ class _FuraSettingsRow extends StatelessWidget {
   }
 }
 
-/// Detailed configuration stays inside the existing grouped surface.
-class _SettingsColorDisclosure extends StatefulWidget {
-  const _SettingsColorDisclosure({
+/// Only Color Source uses the official select-only DropdownMenu.
+class _SettingsColorDropdown extends StatefulWidget {
+  const _SettingsColorDropdown({
     required this.controlKey,
     required this.icon,
     required this.title,
     required this.current,
-    required this.currentLabel,
     required this.choices,
     required this.availability,
     required this.availabilityKey,
@@ -1070,41 +1253,28 @@ class _SettingsColorDisclosure extends StatefulWidget {
   });
   final Key controlKey;
   final IconData icon;
-  final String title, currentLabel, availability;
+  final String title, availability;
   final AppColorSourcePreference current;
   final List<_SettingsChoice<AppColorSourcePreference>> choices;
   final Key availabilityKey;
   final bool enabled;
   final Future<void> Function(AppColorSourcePreference) onSelected;
   @override
-  State<_SettingsColorDisclosure> createState() =>
-      _SettingsColorDisclosureState();
+  State<_SettingsColorDropdown> createState() => _SettingsColorDropdownState();
 }
 
-class _SettingsColorDisclosureState extends State<_SettingsColorDisclosure> {
+class _SettingsColorDropdownState extends State<_SettingsColorDropdown> {
   final _focusNode = FocusNode();
-  final _optionFocus = {
-    for (final value in AppColorSourcePreference.values) value: FocusNode(),
-  };
-  bool _expanded = false;
-  bool _selecting = false;
   int _revision = 0;
+  bool _selecting = false;
 
   @override
-  void didUpdateWidget(covariant _SettingsColorDisclosure oldWidget) {
+  void didUpdateWidget(covariant _SettingsColorDropdown oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.current != widget.current || !widget.enabled) {
+    if (oldWidget.current != widget.current ||
+        oldWidget.enabled != widget.enabled) {
       _revision++;
     }
-  }
-
-  void _toggle() {
-    if (!widget.enabled) return;
-    setState(() {
-      _revision++;
-      _expanded = !_expanded;
-    });
-    if (!_expanded) _focusNode.requestFocus();
   }
 
   Future<void> _select(
@@ -1115,7 +1285,6 @@ class _SettingsColorDisclosureState extends State<_SettingsColorDisclosure> {
     if (!mounted ||
         !widget.enabled ||
         _selecting ||
-        !_expanded ||
         value == null ||
         value == snapshot ||
         widget.current != snapshot ||
@@ -1123,169 +1292,157 @@ class _SettingsColorDisclosureState extends State<_SettingsColorDisclosure> {
       return;
     }
     _selecting = true;
+    _revision++;
     try {
       await widget.onSelected(value);
     } finally {
       _selecting = false;
-      if (mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && widget.enabled && _expanded) {
-            // Rollback focuses the authoritative selection, not an unsaved value.
-            _optionFocus[widget.current]!.requestFocus();
-          }
-        });
-        WidgetsBinding.instance.scheduleFrame();
-      }
+      // Recreate SDK display state from the authoritative owner after rollback,
+      // rather than retaining DropdownMenu's optimistic selected label.
+      if (mounted) setState(() => _revision++);
     }
   }
 
   @override
   void dispose() {
     _focusNode.dispose();
-    for (final focus in _optionFocus.values) {
-      focus.dispose();
-    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final reduced = MediaQuery.disableAnimationsOf(context);
-    final duration = reduced
-        ? Duration.zero
-        : const Duration(milliseconds: 200);
     final snapshot = widget.current;
     final revision = _revision;
-    final details = _expanded
-        ? Padding(
-            key: const ValueKey('settings-color-details'),
-            padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                RadioGroup<AppColorSourcePreference>(
-                  groupValue: snapshot,
-                  onChanged: (value) =>
-                      unawaited(_select(value, snapshot, revision)),
-                  child: Column(
-                    children: [
-                      for (final choice in widget.choices)
-                        MergeSemantics(
-                          child: Material(
-                            type: MaterialType.transparency,
-                            child: InkWell(
-                              key: choice.key,
-                              canRequestFocus: false,
-                              onTap: widget.enabled
-                                  ? () => unawaited(
-                                      _select(choice.value, snapshot, revision),
-                                    )
-                                  : null,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Radio<AppColorSourcePreference>(
-                                      value: choice.value,
-                                      enabled: widget.enabled,
-                                      focusNode: _optionFocus[choice.value],
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 4,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              choice.label,
-                                              style: theme.textTheme.bodyLarge,
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              choice.description!,
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                    color: theme
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+    double measure(String label) {
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: theme.textTheme.bodyLarge),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+        locale: Localizations.localeOf(context),
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      return width;
+    }
+
+    final preferredWidth =
+        widget.choices
+            .map((c) => measure(c.label))
+            .reduce((a, b) => a > b ? a : b) +
+        80;
+    return Padding(
+      key: widget.controlKey,
+      padding: const EdgeInsets.all(16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final available = (constraints.maxWidth - 40).clamp(
+            0.0,
+            double.infinity,
+          );
+          final controlWidth = preferredWidth.clamp(0.0, available);
+          final inline = measure(widget.title) + 16 + controlWidth <= available;
+          final dropdown = Theme(
+            // Reset only this representative selector's presentation overrides.
+            // SDK M3 defaults + the real project ColorScheme match the reference.
+            data: theme.copyWith(
+              dropdownMenuTheme: const DropdownMenuThemeData(),
+              menuTheme: const MenuThemeData(),
+              inputDecorationTheme: const InputDecorationThemeData(),
+            ),
+            child: Semantics(
+              label: widget.title,
+              child: DropdownMenu<AppColorSourcePreference>(
+                key: ValueKey('settings-color-dropdown-$revision'),
+                width: controlWidth,
+                focusNode: _focusNode,
+                selectOnly: true,
+                enableSearch: false,
+                enableFilter: false,
+                requestFocusOnTap: true,
+                enabled: widget.enabled,
+                initialSelection: snapshot,
+                inputDecorationTheme: const InputDecorationThemeData(
+                  filled: true,
+                ),
+                dropdownMenuEntries: [
+                  for (final choice in widget.choices)
+                    DropdownMenuEntry(
+                      value: choice.value,
+                      label: choice.label,
+                      labelWidget: Text(choice.label, key: choice.key),
+                    ),
+                ],
+                onSelected: (value) =>
+                    unawaited(_select(value, snapshot, revision)),
+              ),
+            ),
+          );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Icon(
+                      widget.icon,
+                      size: 24,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: inline
+                        ? Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  widget.title,
+                                  style: theme.textTheme.bodyLarge,
                                 ),
                               ),
-                            ),
+                              const SizedBox(width: 16),
+                              dropdown,
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.title,
+                                style: theme.textTheme.bodyLarge,
+                              ),
+                              const SizedBox(height: 8),
+                              dropdown,
+                            ],
                           ),
-                        ),
-                    ],
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsetsDirectional.only(start: 56, top: 8),
-                  child: Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        widget.availability,
-                        key: widget.availabilityKey,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 40, top: 8),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      widget.availability,
+                      key: widget.availabilityKey,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
-                      _SettingsPalettePreview(scheme: theme.colorScheme),
-                    ],
-                  ),
+                    ),
+                    _SettingsPalettePreview(scheme: theme.colorScheme),
+                  ],
                 ),
-              ],
-            ),
-          )
-        : const SizedBox(width: double.infinity, height: 0);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _FuraSettingsRow(
-          key: widget.controlKey,
-          icon: widget.icon,
-          title: widget.title,
-          value: widget.currentLabel,
-          valueKey: const ValueKey('settings-color-source-selector-current'),
-          focusNode: _focusNode,
-          enabled: widget.enabled,
-          expanded: _expanded,
-          onTap: _toggle,
-          trailing: AnimatedRotation(
-            turns: _expanded ? .5 : 0,
-            duration: duration,
-            curve: Curves.easeInOutCubic,
-            child: const Icon(Icons.expand_more_rounded),
-          ),
-        ),
-        // A zero-duration AnimatedSize mutates during layout on the pinned SDK.
-        // Reduced-motion renders the final layout directly instead.
-        if (reduced)
-          details
-        else
-          AnimatedSize(
-            key: const ValueKey('settings-color-size'),
-            duration: duration,
-            curve: Curves.easeInOutCubic,
-            alignment: Alignment.topCenter,
-            child: details,
-          ),
-      ],
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

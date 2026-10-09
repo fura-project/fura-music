@@ -2,19 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/settings/app_settings_store.dart';
 
 import 'settings_review_harness.dart';
 
 void main() {
   for (final brightness in Brightness.values) {
-    testWidgets('group, details and menu use truthful M3 roles $brightness', (
+    testWidgets('group, dropdown and sheet use truthful M3 roles $brightness', (
       tester,
     ) async {
       await tester.pumpWidget(SettingsReviewHarness(brightness: brightness));
-      await tester.tap(
-        find.byKey(const ValueKey('settings-color-source-selector')),
-      );
       await tester.pumpAndSettle();
       final availability = find.byKey(
         const ValueKey('settings-system-colors-available'),
@@ -32,14 +30,14 @@ void main() {
       }
 
       expect(contrast(foreground, group), greaterThanOrEqualTo(4.5));
-      expect(find.byType(RadioListTile), findsNothing);
-      expect(find.byWidgetPredicate((w) => w is DropdownMenu), findsNothing);
+      expect(find.byType(RadioListTile<AppThemePreference>), findsNothing);
+      expect(find.byWidgetPredicate((w) => w is DropdownMenu), findsOneWidget);
       expect(find.byWidgetPredicate((w) => w is DropdownButton), findsNothing);
       expect(find.byType(Card), findsNothing);
       await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
       await tester.pumpAndSettle();
-      expect(find.byType(MenuItemButton), findsNWidgets(3));
-      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(RadioListTile<AppThemePreference>), findsNWidgets(3));
+      expect(find.byType(BottomSheet), findsOneWidget);
       expect(
         contrast(
           theme.colorScheme.onSurface,
@@ -49,43 +47,48 @@ void main() {
       );
     });
   }
-  testWidgets('saving disables every settings row and inline radio', (
-    tester,
-  ) async {
-    for (final (section, selectors) in settingsChoiceSelectors) {
-      final save = Completer<AppSettingsWriteResult>();
-      await tester.pumpWidget(
-        SettingsReviewHarness(
-          key: ValueKey(section),
-          section: section,
-          onChanged: (_) => save.future,
-        ),
-      );
-      await tester.pumpAndSettle();
-      final (key, option) = selectors.first;
-      await tester.tap(find.byKey(ValueKey(key)));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(ValueKey(option)));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.pump();
-      for (final (rowKey, _) in selectors) {
-        expect(
-          settingsRowInk(tester, find.byKey(ValueKey(rowKey))).onTap,
-          isNull,
+  testWidgets(
+    'saving disables every settings row and representative controls',
+    (tester) async {
+      for (final (section, selectors) in settingsChoiceSelectors) {
+        final save = Completer<AppSettingsWriteResult>();
+        await tester.pumpWidget(
+          SettingsReviewHarness(
+            key: ValueKey(section),
+            section: section,
+            onChanged: (_) => save.future,
+          ),
         );
+        await tester.pumpAndSettle();
+        final (key, option) = selectors.first;
+        await tester.tap(find.byKey(ValueKey(key)));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(ValueKey(option)));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump();
+        for (final (rowKey, _) in selectors.where(
+          (s) => s.$1 != 'settings-color-source-selector',
+        )) {
+          expect(
+            settingsRowInk(tester, find.byKey(ValueKey(rowKey))).onTap,
+            isNull,
+          );
+        }
+        save.complete(AppSettingsWriteResult.saved);
+        await tester.pumpAndSettle();
+        for (final (rowKey, _) in selectors.where(
+          (s) => s.$1 != 'settings-color-source-selector',
+        )) {
+          expect(
+            settingsRowInk(tester, find.byKey(ValueKey(rowKey))).onTap,
+            isNotNull,
+          );
+        }
+        expect(tester.takeException(), isNull);
       }
-      save.complete(AppSettingsWriteResult.saved);
-      await tester.pumpAndSettle();
-      for (final (rowKey, _) in selectors) {
-        expect(
-          settingsRowInk(tester, find.byKey(ValueKey(rowKey))).onTap,
-          isNotNull,
-        );
-      }
-      expect(tester.takeException(), isNull);
-    }
-  });
+    },
+  );
   testWidgets('palette is compact and uses the actual effective ColorScheme', (
     tester,
   ) async {
@@ -94,9 +97,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey('settings-color-source-selector')),
-    );
     await tester.pumpAndSettle();
     final palette = find.byKey(
       const ValueKey('settings-color-palette-preview'),

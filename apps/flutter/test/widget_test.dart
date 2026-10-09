@@ -150,7 +150,11 @@ Future<void> _selectAdaptiveSection(
   );
   if (control.startsWith('settings-')) {
     await tester.ensureVisible(controlFinder);
-    await tester.tap(controlFinder);
+    await tester.tap(
+      control == 'settings-color-source-selector'
+          ? find.descendant(of: controlFinder, matching: find.byType(TextField))
+          : controlFinder,
+    );
     await tester.pumpAndSettle();
     final option = find.byKey(ValueKey(item)).hitTestable();
     expect(option, findsOneWidget);
@@ -9434,7 +9438,10 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.tap(
-        find.byKey(const ValueKey('settings-color-source-selector')),
+        find.descendant(
+          of: find.byType(DropdownMenu<AppColorSourcePreference>),
+          matching: find.byType(TextField),
+        ),
       );
       await tester.pumpAndSettle();
       expect(
@@ -9943,6 +9950,91 @@ void main() {
     variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
+  // Human review: exactly two representatives, no selector rollout or agy.
+  for (final (name, width, dark, scale, open) in [
+    ('01-desktop-appearance', 1440.0, false, 1.0, ''),
+    ('02-desktop-theme-sheet', 1440.0, false, 1.0, 'theme'),
+    ('03-desktop-color-dropdown', 1440.0, false, 1.0, 'color'),
+    ('04-compact-appearance', 390.0, false, 1.0, ''),
+    ('05-compact-theme-sheet', 390.0, false, 1.0, 'theme'),
+    ('06-compact-color-dropdown', 390.0, false, 1.0, 'color'),
+    ('07-dark-desktop', 1440.0, true, 1.0, 'theme'),
+    ('08-compact-2x', 390.0, false, 2.0, 'color'),
+  ]) {
+    testWidgets('representative Settings render $name', (tester) async {
+      const capture = bool.fromEnvironment('SETTINGS_REPRESENTATIVE_REVIEW');
+      await _loadRecentReviewFonts(tester, enabled: capture);
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final store = AppSettingsStore(storage: _WidgetSettingsDocumentStorage());
+      final initialSettings = AppSettings.defaults.copyWith(
+        localePreference: AppLocalePreference.simplifiedChinese,
+        theme: dark ? AppThemePreference.dark : AppThemePreference.system,
+      );
+      await store.save(initialSettings);
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _bootstrap,
+          authenticationGateway: _WidgetGateway(_WaitingSession()),
+          initialSettings: initialSettings,
+          settingsStore: store,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-recommendations')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-settings')));
+      await tester.pumpAndSettle();
+      if (width < 600) {
+        await tester.tap(
+          find.byKey(const ValueKey('settings-compact-appearance')),
+        );
+        await tester.pumpAndSettle();
+      }
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(
+        Theme.of(tester.element(find.byKey(const ValueKey('settings-group'))))
+            .brightness,
+        dark ? Brightness.dark : Brightness.light,
+      );
+      if (open == 'theme') {
+        await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
+      } else if (open == 'color') {
+        await tester.tap(
+          find.descendant(
+            of: find.byType(DropdownMenu<AppColorSourcePreference>),
+            matching: find.byType(TextField),
+          ),
+        );
+      }
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('settings-group')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      if (capture) {
+        const directory = String.fromEnvironment('SETTINGS_LAYOUT_REVIEW_DIR');
+        final previousShadows = debugDisableShadows;
+        debugDisableShadows = false;
+        try {
+          for (final renderObject in tester.allRenderObjects) {
+            renderObject.markNeedsPaint();
+          }
+          await tester.pump();
+          await expectLater(
+            find.byType(MusicApp),
+            matchesGoldenFile(Uri.file('$directory/$name.png')),
+          );
+        } finally {
+          debugDisableShadows = previousShadows;
+        }
+      }
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+  }
+
   for (final width in [390.0, 1440.0]) {
     testWidgets('settings popup retains active shell playback at $width', (
       tester,
@@ -10000,10 +10092,9 @@ void main() {
       expect(playerAction.hitTestable(), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
       await tester.pumpAndSettle();
-      expect(find.byType(MenuItemButton), findsNWidgets(3));
-      expect(find.byType(BottomSheet), findsNothing);
-      // A compact menu has no scrim and does not replace the Shell owner.
-      expect(playerAction.hitTestable(), findsOneWidget);
+      expect(find.byType(BottomSheet), findsOneWidget);
+      // The modal scrim blocks input, but keeps the same Shell playback owner.
+      expect(playerAction.hitTestable(), findsNothing);
       expect(host.controller.playback.stage, TrackPlaybackStage.playing);
       expect(host.controller.playback.track, same(track));
       expect(media.requests, 1);

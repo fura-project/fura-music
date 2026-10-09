@@ -3,13 +3,39 @@ execution:
   mode: HUMAN_DIRECTED
   work_domain: UI
   state: WAITING_FOR_HUMAN_VISUAL_REVIEW
-  acceptance_milestone: SETTINGS_ANCHORED_CHOICES_AND_INLINE_COLOR_DETAILS
+  acceptance_milestone: SETTINGS_OFFICIAL_THEME_COLOR_REPRESENTATIVES
   active_workstream: SETTINGS_UI_CORRECTION
-  current_task: SETTINGS_INTERACTION_SEMANTICS_RESTORATION
-  next_action: HUMAN_REVIEW_ANCHORED_SETTINGS_AND_INLINE_DETAILS
+  current_task: SETTINGS_OFFICIAL_THEME_COLOR_REFERENCE_CANDIDATE
+  next_action: HUMAN_REVIEW_TWO_OFFICIAL_M3_REPRESENTATIVES
 ---
 
 # Current State
+
+- **2026-10-09 two official M3 representatives, pending Human review:** initial
+  HEAD/tracked origin/main `5a51b73b180e878f529ba011fbd1b0a059535c6c`, clean tree.
+  Human explicitly limits this candidate to Theme and Color Source, using
+  Flutter 3.47.1 and official samples commit
+  `5541c59ab8e9d7e74c1a35ef22bd43a487fc596c`. Theme uses SDK
+  showModalBottomSheet/RadioGroup/RadioListTile, stock handle/scrim/motion and
+  locally scoped M3 defaults, with the reference's 640dp desktop maximum width.
+  Color Source uses select-only DropdownMenu/DropdownMenuEntry with real
+  availability/effective palette, replacing its inline radio configuration.
+  Other four settings retain their previous anchored interaction; Shell,
+  persistence/schema and Core production code are unchanged. Candidate checks:
+  34 focused Settings tests, eight actual MusicApp/Shell renders, four adjacent
+  Shell/palette/player tests, scoped analysis/format and real Linux Debug
+  integration pass. The latter uses a disposable preference key, performs two
+  saves/readback and deletes only that key; no real-account access. Current
+  selection/dismissal no-write, storage rollback and stale/disposed callbacks
+  are covered. The selected-radio no-callback behavior was corrected with SDK
+  toggleable selection (dismiss with no write); the render fixture's initial
+  dark theme was corrected and verified before handoff. Eight Chinese renders
+  (desktop/compact, sheet/dropdown, dark desktop and compact 2x) are outside Git:
+  `/tmp/fura-settings-official-representatives-20261009/`. They are widget-render
+  evidence of current production composition, not native tests of five OSes.
+  Per Human instruction: no agy, no further selector rollout/polish and no
+  promotion to `docs/design/settings-shell.md`. Human visual acceptance remains
+  open. No commit/push/reset/restore/clean/rebase/force push performed.
 
 - **2026-10-08 Human-directed Settings interaction restoration:** starting
   HEAD/origin/main `9377611976202aed92219085a491258d970aaa73`, worktree clean.
