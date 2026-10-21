@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/authentication/account_summary_gateway.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart' as bridge;
 
 void main() {
@@ -99,6 +100,42 @@ void main() {
       expect(transientVault.deleteCalls, 0);
     },
   );
+
+  test('safe read retries exactly once after shared continuation', () async {
+    final vault = SerializedCredentialVault(
+      _FakeVault(),
+      stagedVault: _FakeVault(),
+    );
+    final continuation = QqSessionContinuationCoordinator(
+      vault,
+      prepareAfterReadRejection: () async =>
+          const bridge.QqMusicRefreshPreparation(reusedNewGeneration: true),
+    );
+    var attempts = 0;
+    final gateway = RustAccountSummaryGateway(
+      credentialVault: vault,
+      sessionContinuation: continuation,
+      operationFactory: () {
+        attempts++;
+        return _ImmediateOperation(
+          attempts == 1
+              ? const AccountSummaryLoadResult(
+                  failure: AccountSummaryFailure.credentialRejected,
+                )
+              : const AccountSummaryLoadResult(
+                  summary: AuthenticatedAccountSummary(
+                    displayName: 'Recovered listener',
+                  ),
+                ),
+        );
+      },
+    );
+
+    final result = await gateway.beginLoad().run();
+
+    expect(result.summary?.displayName, 'Recovered listener');
+    expect(attempts, 2);
+  });
 
   test(
     'reports secure-vault cleanup failure after credential rejection',

@@ -1,15 +1,45 @@
 ---
 execution:
   mode: HUMAN_DIRECTED
-  work_domain: UI
-  state: WAITING_FOR_HUMAN_VISUAL_REVIEW
-  acceptance_milestone: SETTINGS_OFFICIAL_THEME_COLOR_REPRESENTATIVES
-  active_workstream: SETTINGS_UI_CORRECTION
-  current_task: SETTINGS_OFFICIAL_THEME_COLOR_REFERENCE_CANDIDATE
-  next_action: HUMAN_REVIEW_TWO_OFFICIAL_M3_REPRESENTATIVES
+  work_domain: CORE
+  state: WAITING_FOR_HUMAN_PROTOCOL_GATE
+  acceptance_milestone: QQ_SELF_HEALING_SESSION_V1
+  active_workstream: QQ_SESSION_CONTINUATION
+  current_task: QQ_REFRESH_COORDINATOR_RECOVERY_AND_BOUNDED_READ_RETRY
+  next_action: HUMAN_DISPOSABLE_WECHAT_SESSION_PROTOCOL_GATE
 ---
 
 # Current State
+
+- **2026-10-21 Human-directed CORE / QQ self-healing session V1:** initial
+  HEAD/tracked `origin/main` remain
+  `0d555f8e09dafdd5c7eb0c6d8cc98d6615735b10`; the pre-existing uncommitted
+  cross-platform packaging candidate is preserved and not rewritten by this
+  workstream. QQ now has a Provider-owned complete-decision single-flight,
+  exact generation/account refresh reservation, same-account opaque rotation,
+  serialized current-plus-stage secure-vault recovery, startup/local-expiry/
+  resume checkpoints and safe-read refresh-once/retry-once integration. Logout,
+  account switch and identical-account re-login dominate late refresh; writes
+  are never replayed. Synthetic tests cover ten triggers/one refresh, ten
+  rejecting reads/one retry each, stage/publication/commit failures, all startup
+  slot shapes, malformed/stale/transient recovery, terminal failure non-loops,
+  unsupported QQ type, redaction and two-slot logout. Release activation remains
+  hard-disabled; Debug requires an explicit Human experiment gate. Current
+  public sources corroborate the WeChat rotation fields but use Android-shaped
+  outer profiles/device identity, so they do not prove Fura's existing `ct=11`
+  Web envelope. No real credential or account traffic was used. TD-015 is only
+  partially resolved pending one bounded disposable-session refresh plus
+  account verification and optional ordinary read. Pinned Bridge generation,
+  Rust format, 658 workspace tests, 121 QQ Provider tests, 111 Bridge tests,
+  strict affected-library Clippy, Dart format/analyze, 93 affected Flutter tests
+  and privacy hygiene checks pass. The complete Flutter run retains one
+  unrelated committed Settings failure after 999 passes, reproduced unchanged
+  from a read-only baseline archive. Workspace/all-target Clippy retains 46
+  Rust-1.98 `unused_async_trait_impl` errors in pre-existing test transports;
+  this task's affected libraries are clean and the gate was not hidden with an
+  allowance or unrelated rewrite. See the 2026-10-21 addendum
+  in [the session audit](docs/research/provider-playback-session-audit-2026-10-06.md).
+  This checkpoint is authorized for a local commit; no push is authorized.
 
 - **2026-10-09 two official M3 representatives, pending Human review:** initial
   HEAD/tracked origin/main `5a51b73b180e878f529ba011fbd1b0a059535c6c`, clean tree.

@@ -16,7 +16,9 @@ use provider_qqmusic::{
     QqMusicCredentialRestoreState as ProviderCredentialRestoreState,
     QqMusicCredentialTransferError as ProviderCredentialTransferError,
     QqMusicDesktopQuickAuthenticationSession, QqMusicProvider, QqMusicQrAuthenticationCancellation,
-    QqMusicQrAuthenticationSession,
+    QqMusicQrAuthenticationSession, QqMusicRefreshFailure as ProviderRefreshFailure,
+    QqMusicRefreshPrepareState as ProviderRefreshPrepareState, QqMusicRefreshTrigger,
+    QqMusicStagedRecoveryAction as ProviderStagedRecoveryAction,
 };
 use qqmusic_client::{
     CredentialPersistenceError, CredentialTransferError, QqMusicClient, ReqwestTransport,
@@ -32,7 +34,16 @@ type NativeDesktopQuickSession = QqMusicDesktopQuickAuthenticationSession<Reqwes
 static QQ_MUSIC_PROVIDER: LazyLock<Result<NativeProvider, ()>> = LazyLock::new(|| {
     ReqwestTransport::new()
         .map(QqMusicClient::new)
-        .map(QqMusicProvider::new)
+        .map(|client| {
+            QqMusicProvider::new_with_refresh_activation(
+                client,
+                cfg!(debug_assertions)
+                    && matches!(
+                        std::env::var("FURA_QQ_WECHAT_REFRESH_EXPERIMENT").as_deref(),
+                        Ok("1" | "true")
+                    ),
+            )
+        })
         .map_err(|_| ())
 });
 static NEXT_START_ATTEMPT: AtomicU32 = AtomicU32::new(1);
@@ -194,6 +205,74 @@ pub enum QqMusicCredentialExportFailure {
 pub struct QqMusicCredentialExport {
     pub secret_bytes: Option<Vec<u8>>,
     pub failure: Option<QqMusicCredentialExportFailure>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicRefreshFailure {
+    ProductionGateDisabled,
+    NoCredential,
+    NotDue,
+    NotRefreshable,
+    UnsupportedLoginType,
+    Network,
+    RateLimited,
+    ServiceUnavailable,
+    InvalidResponse,
+    ReauthenticationRequired,
+    Replaced,
+    StorageUnavailable,
+}
+
+pub struct QqMusicRefreshPreparation {
+    pub reservation_id: Option<u32>,
+    pub staged_secret_bytes: Option<Vec<u8>>,
+    pub reused_new_generation: bool,
+    pub failure: Option<QqMusicRefreshFailure>,
+}
+
+impl fmt::Debug for QqMusicRefreshPreparation {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicRefreshPreparation")
+            .field("reservation_id", &self.reservation_id)
+            .field(
+                "staged_secret_byte_count",
+                &self.staged_secret_bytes.as_ref().map(Vec::len),
+            )
+            .field("reused_new_generation", &self.reused_new_generation)
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+pub struct QqMusicRefreshVerification {
+    pub current_secret_bytes: Option<Vec<u8>>,
+    pub failure: Option<QqMusicRefreshFailure>,
+}
+
+impl fmt::Debug for QqMusicRefreshVerification {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicRefreshVerification")
+            .field(
+                "current_secret_byte_count",
+                &self.current_secret_bytes.as_ref().map(Vec::len),
+            )
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicStagedRecoveryAction {
+    VerifyCandidate,
+    VerifyCommittedCurrent,
+    Stale,
+}
+
+pub struct QqMusicStagedRecovery {
+    pub action: Option<QqMusicStagedRecoveryAction>,
+    pub failure: Option<QqMusicCredentialRestoreFailure>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -843,6 +922,184 @@ pub fn restore_qq_music_credential_from_secure_storage(
     }
 }
 
+/// Resolves a crash-recovery stage against the opaque current document. This
+/// never exposes credential fields to Flutter.
+#[flutter_rust_bridge::frb(sync)]
+pub fn restore_qq_music_staged_credential_rotation(
+    current_secret_bytes: Option<Vec<u8>>,
+    staged_secret_bytes: Vec<u8>,
+) -> QqMusicStagedRecovery {
+    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
+        return QqMusicStagedRecovery {
+            action: None,
+            failure: Some(QqMusicCredentialRestoreFailure::CoreUnavailable),
+        };
+    };
+    let Ok(now_unix_seconds) = current_unix_seconds() else {
+        return QqMusicStagedRecovery {
+            action: None,
+            failure: Some(QqMusicCredentialRestoreFailure::CoreUnavailable),
+        };
+    };
+    match provider.restore_staged_credential_rotation(
+        current_secret_bytes.as_deref(),
+        &staged_secret_bytes,
+        now_unix_seconds,
+    ) {
+        Ok(action) => QqMusicStagedRecovery {
+            action: Some(match action {
+                ProviderStagedRecoveryAction::VerifyCandidate => {
+                    QqMusicStagedRecoveryAction::VerifyCandidate
+                }
+                ProviderStagedRecoveryAction::VerifyCommittedCurrent => {
+                    QqMusicStagedRecoveryAction::VerifyCommittedCurrent
+                }
+                ProviderStagedRecoveryAction::Stale => QqMusicStagedRecoveryAction::Stale,
+            }),
+            failure: None,
+        },
+        Err(error) => QqMusicStagedRecovery {
+            action: None,
+            failure: Some(match error {
+                qqmusic_client::CredentialRotationError::UnsupportedVersion(_) => {
+                    QqMusicCredentialRestoreFailure::UnsupportedVersion
+                }
+                qqmusic_client::CredentialRotationError::Credential(
+                    CredentialPersistenceError::UnsupportedVersion(_),
+                ) => QqMusicCredentialRestoreFailure::UnsupportedVersion,
+                qqmusic_client::CredentialRotationError::Serialize
+                | qqmusic_client::CredentialRotationError::InvalidDocument
+                | qqmusic_client::CredentialRotationError::Credential(_)
+                | qqmusic_client::CredentialRotationError::AccountChanged => {
+                    QqMusicCredentialRestoreFailure::InvalidDocument
+                }
+            }),
+        },
+    }
+}
+
+pub async fn prepare_qq_music_refresh_after_read_rejection() -> QqMusicRefreshPreparation {
+    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
+        return failed_refresh_preparation(QqMusicRefreshFailure::NoCredential);
+    };
+    map_refresh_preparation(
+        provider
+            .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection)
+            .await,
+    )
+}
+
+pub async fn prepare_qq_music_refresh_checkpoint() -> QqMusicRefreshPreparation {
+    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
+        return failed_refresh_preparation(QqMusicRefreshFailure::NoCredential);
+    };
+    let Ok(now_unix_seconds) = current_unix_seconds() else {
+        return failed_refresh_preparation(QqMusicRefreshFailure::ServiceUnavailable);
+    };
+    map_refresh_preparation(
+        provider
+            .prepare_credential_refresh(QqMusicRefreshTrigger::Checkpoint { now_unix_seconds })
+            .await,
+    )
+}
+
+pub async fn verify_qq_music_staged_refresh_candidate(
+    reservation_id: u32,
+) -> QqMusicRefreshVerification {
+    let Ok(provider) = QQ_MUSIC_PROVIDER.as_ref() else {
+        return failed_refresh_verification(QqMusicRefreshFailure::NoCredential);
+    };
+    match provider
+        .verify_staged_refresh_candidate(reservation_id)
+        .await
+    {
+        Ok(current_secret_bytes) => QqMusicRefreshVerification {
+            current_secret_bytes: Some(current_secret_bytes),
+            failure: None,
+        },
+        Err(failure) => failed_refresh_verification(map_refresh_failure(failure)),
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn commit_qq_music_staged_refresh_candidate(
+    reservation_id: u32,
+) -> Option<QqMusicRefreshFailure> {
+    QQ_MUSIC_PROVIDER
+        .as_ref()
+        .map_err(|_| ProviderRefreshFailure::NoCredential)
+        .and_then(|provider| provider.commit_staged_refresh_candidate(reservation_id))
+        .err()
+        .map(map_refresh_failure)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn abort_qq_music_credential_refresh(reservation_id: u32) -> Option<QqMusicRefreshFailure> {
+    QQ_MUSIC_PROVIDER
+        .as_ref()
+        .map_err(|_| ProviderRefreshFailure::NoCredential)
+        .and_then(|provider| provider.abort_credential_refresh(reservation_id))
+        .err()
+        .map(map_refresh_failure)
+}
+
+fn map_refresh_preparation(
+    result: Result<provider_qqmusic::QqMusicRefreshPrepareResult, ProviderRefreshFailure>,
+) -> QqMusicRefreshPreparation {
+    match result {
+        Ok(result) => {
+            let preparation = result.preparation;
+            QqMusicRefreshPreparation {
+                reservation_id: preparation.as_ref().map(|value| value.reservation_id),
+                staged_secret_bytes: preparation.map(|value| value.staged_secret_bytes),
+                reused_new_generation: matches!(
+                    result.state,
+                    ProviderRefreshPrepareState::ReusedNewGeneration
+                ),
+                failure: None,
+            }
+        }
+        Err(failure) => failed_refresh_preparation(map_refresh_failure(failure)),
+    }
+}
+
+const fn failed_refresh_preparation(failure: QqMusicRefreshFailure) -> QqMusicRefreshPreparation {
+    QqMusicRefreshPreparation {
+        reservation_id: None,
+        staged_secret_bytes: None,
+        reused_new_generation: false,
+        failure: Some(failure),
+    }
+}
+
+const fn failed_refresh_verification(failure: QqMusicRefreshFailure) -> QqMusicRefreshVerification {
+    QqMusicRefreshVerification {
+        current_secret_bytes: None,
+        failure: Some(failure),
+    }
+}
+
+const fn map_refresh_failure(failure: ProviderRefreshFailure) -> QqMusicRefreshFailure {
+    match failure {
+        ProviderRefreshFailure::ProductionGateDisabled => {
+            QqMusicRefreshFailure::ProductionGateDisabled
+        }
+        ProviderRefreshFailure::NoCredential => QqMusicRefreshFailure::NoCredential,
+        ProviderRefreshFailure::NotDue => QqMusicRefreshFailure::NotDue,
+        ProviderRefreshFailure::NotRefreshable => QqMusicRefreshFailure::NotRefreshable,
+        ProviderRefreshFailure::UnsupportedLoginType => QqMusicRefreshFailure::UnsupportedLoginType,
+        ProviderRefreshFailure::Network => QqMusicRefreshFailure::Network,
+        ProviderRefreshFailure::RateLimited => QqMusicRefreshFailure::RateLimited,
+        ProviderRefreshFailure::ServiceUnavailable => QqMusicRefreshFailure::ServiceUnavailable,
+        ProviderRefreshFailure::InvalidResponse => QqMusicRefreshFailure::InvalidResponse,
+        ProviderRefreshFailure::ReauthenticationRequired => {
+            QqMusicRefreshFailure::ReauthenticationRequired
+        }
+        ProviderRefreshFailure::Replaced => QqMusicRefreshFailure::Replaced,
+        ProviderRefreshFailure::StorageUnavailable => QqMusicRefreshFailure::StorageUnavailable,
+    }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn reserve_qq_music_credential_verification() -> Option<u32> {
     QQ_MUSIC_PROVIDER
@@ -1254,9 +1511,10 @@ mod tests {
         QqMusicCredentialRestoreFailure, QqMusicCredentialTransferExport,
         QqMusicCredentialTransferFailure, QqMusicCredentialVerificationFailure,
         QqMusicDesktopQuickLoginAccount, QqMusicDesktopQuickLoginFailure, QqMusicQrChallenge,
-        QqMusicQrImageFormat, QqMusicQrLoginFailure, begin_qq_music_account_summary_load,
-        clear_start_attempt, failed_start, map_account_summary_failure, map_desktop_quick_failure,
-        map_error, map_persistence_error, map_transfer_error, map_verification_failure,
+        QqMusicQrImageFormat, QqMusicQrLoginFailure, QqMusicRefreshPreparation,
+        QqMusicRefreshVerification, begin_qq_music_account_summary_load, clear_start_attempt,
+        failed_start, map_account_summary_failure, map_desktop_quick_failure, map_error,
+        map_persistence_error, map_transfer_error, map_verification_failure,
         reserve_qq_music_wechat_qr_login_start, start_attempt_guard, write_transfer_artifacts,
     };
     use provider_api::{AccountSummaryError, AuthenticationError, DesktopQuickAuthenticationError};
@@ -1330,6 +1588,27 @@ mod tests {
         let debug = format!("{export:?}");
         assert!(debug.contains("17"));
         assert!(!debug.contains("private"));
+    }
+
+    #[test]
+    fn refresh_bridge_debug_output_redacts_both_opaque_documents() {
+        let preparation = QqMusicRefreshPreparation {
+            reservation_id: Some(7),
+            staged_secret_bytes: Some(b"private-staged-rotation".to_vec()),
+            reused_new_generation: false,
+            failure: None,
+        };
+        let verification = QqMusicRefreshVerification {
+            current_secret_bytes: Some(b"private-current-credential".to_vec()),
+            failure: None,
+        };
+
+        let preparation_debug = format!("{preparation:?}");
+        let verification_debug = format!("{verification:?}");
+        assert!(preparation_debug.contains("staged_secret_byte_count"));
+        assert!(verification_debug.contains("current_secret_byte_count"));
+        assert!(!preparation_debug.contains("private"));
+        assert!(!verification_debug.contains("private"));
     }
 
     #[test]

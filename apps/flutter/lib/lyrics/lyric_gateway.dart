@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/src/rust/api/lyrics.dart' as bridge;
 
 enum LyricFailure {
@@ -114,6 +115,7 @@ class RustLyricGateway implements LyricGateway {
     CredentialVault? credentialVault,
     Map<String, CredentialVault>? credentialVaults,
     LyricLoadOperationFactory? operationFactory,
+    this.qqSessionContinuation,
   }) : _operationFactory = operationFactory ?? _beginRustLoad,
        _credentialVaults = Map.unmodifiable(
          credentialVaults ??
@@ -126,17 +128,27 @@ class RustLyricGateway implements LyricGateway {
 
   final Map<String, CredentialVault> _credentialVaults;
   final LyricLoadOperationFactory _operationFactory;
+  final QqSessionContinuationCoordinator? qqSessionContinuation;
 
   @override
   LyricLoadOperation beginLoad({
     required String providerId,
     required String opaqueTrackId,
   }) {
-    final operation = _operationFactory(providerId, opaqueTrackId);
+    LyricLoadOperation createOperation() =>
+        _operationFactory(providerId, opaqueTrackId);
+    final operation = createOperation();
     final vault = _credentialVaults[providerId];
     return vault == null
         ? operation
-        : _VaultCleaningLyricLoadOperation(operation, vault);
+        : _VaultCleaningLyricLoadOperation(
+            operation,
+            vault,
+            retryFactory: createOperation,
+            continuation: providerId == 'qq-music'
+                ? qqSessionContinuation
+                : null,
+          );
   }
 }
 
@@ -167,18 +179,40 @@ class _RustLyricLoadOperation implements LyricLoadOperation {
 }
 
 class _VaultCleaningLyricLoadOperation implements LyricLoadOperation {
-  const _VaultCleaningLyricLoadOperation(this._inner, this._vault);
+  _VaultCleaningLyricLoadOperation(
+    this._inner,
+    this._vault, {
+    this.retryFactory,
+    this.continuation,
+  });
 
-  final LyricLoadOperation _inner;
+  LyricLoadOperation _inner;
   final CredentialVault _vault;
+  final LyricLoadOperation Function()? retryFactory;
+  final QqSessionContinuationCoordinator? continuation;
+  bool _cancelled = false;
 
   @override
-  bool cancel() => _inner.cancel();
+  bool cancel() {
+    _cancelled = true;
+    return _inner.cancel();
+  }
 
   @override
   Future<LyricLoadResult> run() async {
     final result = await _inner.run();
     if (result.failure != LyricFailure.credentialRejected) return result;
+    if (continuation != null && retryFactory != null) {
+      final outcome = await continuation!.continueAfterReadRejection();
+      if (outcome == QqSessionContinuationResult.continued && !_cancelled) {
+        _inner = retryFactory!();
+        return _inner.run();
+      }
+      if (outcome != QqSessionContinuationResult.reauthenticationRequired) {
+        return const LyricLoadResult(failure: LyricFailure.serviceUnavailable);
+      }
+      return result;
+    }
     try {
       await _vault.delete();
       return result;

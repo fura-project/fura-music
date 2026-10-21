@@ -12,6 +12,34 @@ abstract interface class CredentialVault {
   Future<void> delete();
 }
 
+class CredentialTransactionSnapshot {
+  const CredentialTransactionSnapshot({this.current, this.staged});
+
+  final Uint8List? current;
+  final Uint8List? staged;
+}
+
+/// QQ-only crash-recovery operations. All bytes remain opaque to Flutter.
+abstract interface class CredentialRotationVault implements CredentialVault {
+  bool get supportsStaging;
+
+  int reserveRotation();
+
+  Future<bool> stageIfCurrent(int epoch, Uint8List secretBytes);
+
+  Future<bool> publishIfCurrent(int epoch, Uint8List secretBytes);
+
+  Future<bool> deleteStageIfCurrent(int epoch);
+
+  Future<CredentialTransactionSnapshot> readTransaction();
+
+  Future<void> publishReplacement(Uint8List secretBytes);
+
+  Future<void> deleteTransaction();
+
+  Future<bool> deleteTransactionIfCurrent(int epoch);
+}
+
 abstract interface class SecureStringStore {
   Future<void> write({required String key, required String value});
 
@@ -22,21 +50,106 @@ abstract interface class SecureStringStore {
 
 /// Orders every operation for one credential key so an old rejection cleanup
 /// cannot overtake a newer credential write.
-class SerializedCredentialVault implements CredentialVault {
-  SerializedCredentialVault(this._inner);
+class SerializedCredentialVault implements CredentialRotationVault {
+  SerializedCredentialVault(this._inner, {CredentialVault? stagedVault})
+    : _staged = stagedVault;
 
   final CredentialVault _inner;
+  final CredentialVault? _staged;
   Future<void> _tail = Future<void>.value();
+  int _epoch = 0;
 
   @override
-  Future<void> delete() => _enqueue(_inner.delete);
+  bool get supportsStaging => _staged != null;
+
+  @override
+  Future<void> delete() =>
+      _staged == null ? _enqueue(_inner.delete) : deleteTransaction();
 
   @override
   Future<Uint8List?> read() => _enqueue(_inner.read);
 
   @override
-  Future<void> write(Uint8List secretBytes) =>
-      _enqueue(() => _inner.write(secretBytes));
+  Future<void> write(Uint8List secretBytes) => _staged == null
+      ? _enqueue(() => _inner.write(secretBytes))
+      : publishReplacement(secretBytes);
+
+  @override
+  int reserveRotation() => _epoch;
+
+  @override
+  Future<bool> stageIfCurrent(int epoch, Uint8List secretBytes) =>
+      _enqueue(() async {
+        if (epoch != _epoch || _staged == null) return false;
+        await _staged.write(secretBytes);
+        return epoch == _epoch;
+      });
+
+  @override
+  Future<bool> publishIfCurrent(int epoch, Uint8List secretBytes) =>
+      _enqueue(() async {
+        if (epoch != _epoch || _staged == null) return false;
+        await _inner.write(secretBytes);
+        return epoch == _epoch;
+      });
+
+  @override
+  Future<bool> deleteStageIfCurrent(int epoch) => _enqueue(() async {
+    if (epoch != _epoch || _staged == null) return false;
+    await _staged.delete();
+    return epoch == _epoch;
+  });
+
+  @override
+  Future<CredentialTransactionSnapshot> readTransaction() => _enqueue(() async {
+    final current = await _inner.read();
+    try {
+      return CredentialTransactionSnapshot(
+        current: current,
+        staged: await _staged?.read(),
+      );
+    } on Object {
+      current?.fillRange(0, current.length, 0);
+      rethrow;
+    }
+  });
+
+  @override
+  Future<void> publishReplacement(Uint8List secretBytes) {
+    final epoch = ++_epoch;
+    return _enqueue(() async {
+      if (epoch != _epoch) return;
+      await _staged?.delete();
+      if (epoch != _epoch) return;
+      await _inner.write(secretBytes);
+    });
+  }
+
+  @override
+  Future<void> deleteTransaction() {
+    final epoch = ++_epoch;
+    return _enqueue(() async {
+      if (epoch != _epoch) return;
+      // Delete the stage first. A crash can then leave a recoverable current
+      // credential, never an orphan stage that revives a completed logout.
+      await _staged?.delete();
+      if (epoch != _epoch) return;
+      await _inner.delete();
+    });
+  }
+
+  @override
+  Future<bool> deleteTransactionIfCurrent(int epoch) {
+    if (epoch != _epoch) return Future<bool>.value(false);
+    final invalidatedEpoch = ++_epoch;
+    return _enqueue(() async {
+      if (invalidatedEpoch != _epoch) return false;
+      await _staged?.delete();
+      if (invalidatedEpoch != _epoch) return false;
+      await _inner.delete();
+      return true;
+    });
+  }
 
   Future<T> _enqueue<T>(Future<T> Function() action) {
     final result = Completer<T>();
@@ -105,6 +218,8 @@ class PlatformCredentialVault implements CredentialVault {
            );
 
   static const qqMusicCredentialKey = 'qq_music_credential_v1';
+  static const qqMusicStagedCredentialKey =
+      'qq_music_credential_refresh_staged_v1';
   static const netEaseCredentialKey = 'netease_cloud_music_credential_v1';
 
   final SecureStringStore _store;

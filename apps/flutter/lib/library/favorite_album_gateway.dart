@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 import 'package:flutterustmusic/src/rust/api/favorite_albums.dart' as bridge;
 
@@ -55,12 +56,15 @@ abstract interface class FavoriteAlbumPageLoadOperation {
 
 typedef FavoriteAlbumPageLoadOperationFactory =
     FavoriteAlbumPageLoadOperation Function(int offset, int size);
+typedef _FavoriteAlbumPageRetryFactory =
+    FavoriteAlbumPageLoadOperation Function();
 
 class RustFavoriteAlbumGateway implements FavoriteAlbumGateway {
   RustFavoriteAlbumGateway({
     this.providerId = 'qq-music',
     CredentialVault? credentialVault,
     this.operationFactory,
+    this.sessionContinuation,
   }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
@@ -68,15 +72,18 @@ class RustFavoriteAlbumGateway implements FavoriteAlbumGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final FavoriteAlbumPageLoadOperationFactory? operationFactory;
+  final QqSessionContinuationCoordinator? sessionContinuation;
 
   @override
   FavoriteAlbumPageLoadOperation beginLoad({
     required int offset,
     required int size,
-  }) => _VaultCleaningFavoriteAlbumPageLoadOperation(
-    operationFactory?.call(offset, size) ??
+  }) => _ContinuingFavoriteAlbumPageLoadOperation(
+    () =>
+        operationFactory?.call(offset, size) ??
         _beginRustLoad(providerId, offset, size),
     _credentialVault,
+    providerId == 'qq-music' ? sessionContinuation : null,
   );
 }
 
@@ -113,23 +120,44 @@ class _RustFavoriteAlbumPageLoadOperation
   }
 }
 
-class _VaultCleaningFavoriteAlbumPageLoadOperation
+class _ContinuingFavoriteAlbumPageLoadOperation
     implements FavoriteAlbumPageLoadOperation {
-  const _VaultCleaningFavoriteAlbumPageLoadOperation(
-    this._inner,
+  _ContinuingFavoriteAlbumPageLoadOperation(
+    this._factory,
     this._credentialVault,
-  );
+    this._continuation,
+  ) : _active = _factory();
 
-  final FavoriteAlbumPageLoadOperation _inner;
+  final _FavoriteAlbumPageRetryFactory _factory;
   final CredentialVault _credentialVault;
+  final QqSessionContinuationCoordinator? _continuation;
+  FavoriteAlbumPageLoadOperation _active;
+  bool _cancelled = false;
 
   @override
-  bool cancel() => _inner.cancel();
+  bool cancel() {
+    _cancelled = true;
+    return _active.cancel();
+  }
 
   @override
   Future<FavoriteAlbumPageResult> run() async {
-    final result = await _inner.run();
+    final result = await _active.run();
     if (result.failure != FavoriteAlbumFailure.credentialRejected) {
+      return result;
+    }
+    final continuation = _continuation;
+    if (continuation != null) {
+      final outcome = await continuation.continueAfterReadRejection();
+      if (outcome == QqSessionContinuationResult.continued && !_cancelled) {
+        _active = _factory();
+        return _active.run();
+      }
+      if (outcome != QqSessionContinuationResult.reauthenticationRequired) {
+        return const FavoriteAlbumPageResult(
+          failure: FavoriteAlbumFailure.serviceUnavailable,
+        );
+      }
       return result;
     }
     try {

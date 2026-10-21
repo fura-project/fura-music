@@ -2,7 +2,10 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
+import 'package:flutterustmusic/src/rust/api/authentication.dart'
+    as bridge_auth;
 import 'package:flutterustmusic/src/rust/api/album.dart' as bridge_album;
 import 'package:flutterustmusic/src/rust/api/favorite_albums.dart' as bridge;
 
@@ -216,7 +219,37 @@ void main() {
     );
     expect(failedVault.deleteCalls, 1);
   });
+
+  test('safe read retries once after shared QQ continuation', () async {
+    var operationCalls = 0;
+    final gateway = RustFavoriteAlbumGateway(
+      credentialVault: _FakeVault(),
+      sessionContinuation: _successfulContinuation(),
+      operationFactory: (_, _) => _ImmediateOperation(
+        operationCalls++ == 0
+            ? const FavoriteAlbumPageResult(
+                failure: FavoriteAlbumFailure.credentialRejected,
+              )
+            : const FavoriteAlbumPageResult(total: 1),
+      ),
+    );
+
+    final result = await gateway.beginLoad(offset: 0, size: 20).run();
+
+    expect(result.failure, isNull);
+    expect(result.total, 1);
+    expect(operationCalls, 2);
+  });
 }
+
+QqSessionContinuationCoordinator _successfulContinuation() =>
+    QqSessionContinuationCoordinator(
+      SerializedCredentialVault(_FakeVault(), stagedVault: _FakeVault()),
+      prepareAfterReadRejection: () async =>
+          const bridge_auth.QqMusicRefreshPreparation(
+            reusedNewGeneration: true,
+          ),
+    );
 
 class _ImmediateOperation implements FavoriteAlbumPageLoadOperation {
   _ImmediateOperation(this.result);

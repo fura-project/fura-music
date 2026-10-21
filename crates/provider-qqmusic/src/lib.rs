@@ -40,7 +40,8 @@ use provider_api::{
     align_auxiliary_lyric_track,
 };
 use qqmusic_client::{
-    Credential, CredentialPersistenceError, CredentialRestorePlan, CredentialTransferError,
+    Credential, CredentialPersistenceError, CredentialRefreshError, CredentialRestorePlan,
+    CredentialRotation, CredentialRotationError, CredentialTransferError,
     CredentialTransferPackage, CredentialVerificationError, HttpTransport,
     QqDesktopQuickLoginError, QqDesktopQuickLoginSession, QqMusicAlbumDetailsError,
     QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState, QqMusicAlbumSearchError,
@@ -113,6 +114,9 @@ enum QqMusicCredentialState {
     SignedOut,
     PendingVerification(Credential),
     LocallyExpired(Credential),
+    /// A definitive authenticated-read rejection retains the owning credential
+    /// and generation until the bounded continuation decision completes.
+    ContinuationRequired(Credential),
     Authenticated(Credential, RecentPlaysCache),
 }
 
@@ -174,8 +178,15 @@ impl CredentialGuard<'_> {
         self.generation() == snapshot.generation
             && matches!(
                 &self.0.state,
-                QqMusicCredentialState::Authenticated(current, _) if current == &snapshot.credential
+                QqMusicCredentialState::Authenticated(current, _)
+                    | QqMusicCredentialState::ContinuationRequired(current)
+                    if current == &snapshot.credential
             )
+    }
+
+    fn mark_continuation_required(&mut self, snapshot: &QqCredentialSnapshot) {
+        debug_assert!(self.matches_snapshot(snapshot));
+        self.0.state = QqMusicCredentialState::ContinuationRequired(snapshot.credential.clone());
     }
 }
 
@@ -191,6 +202,90 @@ struct RecentPlaysCache {
 struct CdnDispatchCacheEntry {
     dispatch: QqMusicCdnDispatch,
     valid_until: tokio::time::Instant,
+}
+
+const QQ_REFRESH_SAFETY_WINDOW_SECONDS: u64 = 5 * 60;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicRefreshTrigger {
+    AuthenticatedReadRejection,
+    Checkpoint { now_unix_seconds: u64 },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicRefreshFailure {
+    ProductionGateDisabled,
+    NoCredential,
+    NotDue,
+    NotRefreshable,
+    UnsupportedLoginType,
+    Network,
+    RateLimited,
+    ServiceUnavailable,
+    InvalidResponse,
+    ReauthenticationRequired,
+    Replaced,
+    StorageUnavailable,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct QqMusicRefreshPreparation {
+    pub reservation_id: u32,
+    pub staged_secret_bytes: Vec<u8>,
+}
+
+impl std::fmt::Debug for QqMusicRefreshPreparation {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("QqMusicRefreshPreparation")
+            .field("reservation_id", &self.reservation_id)
+            .field(
+                "staged_secret_bytes",
+                &format_args!("[{} bytes]", self.staged_secret_bytes.len()),
+            )
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicRefreshPrepareState {
+    Candidate,
+    ReusedNewGeneration,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct QqMusicRefreshPrepareResult {
+    pub state: QqMusicRefreshPrepareState,
+    pub preparation: Option<QqMusicRefreshPreparation>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QqMusicStagedRecoveryAction {
+    VerifyCandidate,
+    VerifyCommittedCurrent,
+    Stale,
+}
+
+#[derive(Debug)]
+struct QqRefreshReservation {
+    id: u32,
+    source_generation: u64,
+    source: Credential,
+    candidate: Credential,
+    verified: bool,
+    completed: Arc<tokio::sync::Notify>,
+}
+
+#[derive(Debug, Default)]
+enum QqRefreshCoordinatorState {
+    #[default]
+    Idle,
+    Active(Box<QqRefreshReservation>),
+    Completed {
+        source_generation: u64,
+        installed_generation: Option<u64>,
+        result: Result<(), QqMusicRefreshFailure>,
+    },
 }
 
 fn provider_diagnostic(message: std::fmt::Arguments<'_>) {
@@ -218,6 +313,9 @@ pub struct QqMusicProvider<T> {
     consumed_credential_transfer_sessions: Mutex<HashSet<String>>,
     cdn_dispatch_cache: tokio::sync::Mutex<Option<CdnDispatchCacheEntry>>,
     media_cache: tokio::sync::Mutex<provider_api::MediaResolutionCache>,
+    refresh_enabled: bool,
+    next_refresh_reservation: AtomicU32,
+    refresh: Mutex<QqRefreshCoordinatorState>,
 }
 
 /// QQ-owned immediate-playback source edge. It deliberately borrows the
@@ -231,6 +329,14 @@ pub struct QqMusicMediaSourceResolver<'a, T> {
 impl<T> QqMusicProvider<T> {
     #[must_use]
     pub fn new(client: QqMusicClient<T>) -> Self {
+        Self::new_with_refresh_activation(client, false)
+    }
+
+    /// Enables the evidence-bounded `WeChat` refresh candidate for an explicitly
+    /// gated integration environment. Production callers must keep this false
+    /// until the disposable-session protocol gate is accepted.
+    #[must_use]
+    pub fn new_with_refresh_activation(client: QqMusicClient<T>, refresh_enabled: bool) -> Self {
         Self {
             login: WechatQrLoginCoordinator::new(client),
             credential: Arc::new(Mutex::new(QqCredentialOwner::default())),
@@ -240,6 +346,9 @@ impl<T> QqMusicProvider<T> {
             consumed_credential_transfer_sessions: Mutex::new(HashSet::new()),
             cdn_dispatch_cache: tokio::sync::Mutex::new(None),
             media_cache: tokio::sync::Mutex::new(provider_api::MediaResolutionCache::default()),
+            refresh_enabled,
+            next_refresh_reservation: AtomicU32::new(1),
+            refresh: Mutex::new(QqRefreshCoordinatorState::Idle),
         }
     }
 
@@ -269,6 +378,35 @@ impl<T> QqMusicProvider<T> {
             .ok_or(AccountSummaryError::AuthenticationRequired)
     }
 
+    /// A read from generation G can finish after the one shared refresh has
+    /// already installed generation G+1. Only that exact, successful refresh
+    /// is allowed to turn the late rejection back into a continuation signal;
+    /// logout, account replacement and an unrelated later refresh remain
+    /// `Replaced`.
+    fn snapshot_was_just_refreshed(
+        &self,
+        state: &CredentialGuard<'_>,
+        snapshot: &QqCredentialSnapshot,
+    ) -> bool {
+        let QqMusicCredentialState::Authenticated(current, _) = &**state else {
+            return false;
+        };
+        if state.generation() <= snapshot.generation
+            || !current.same_account_as(&snapshot.credential)
+        {
+            return false;
+        }
+        matches!(
+            &*refresh_guard(&self.refresh),
+            QqRefreshCoordinatorState::Completed {
+                source_generation,
+                installed_generation: Some(installed_generation),
+                result: Ok(()),
+            } if *source_generation == snapshot.generation
+                && *installed_generation == state.generation()
+        )
+    }
+
     fn finish_account_await(
         &self,
         candidate: &QqCredentialSnapshot,
@@ -277,10 +415,13 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = state.matches_snapshot(candidate);
         if !still_current {
+            if rejected && self.snapshot_was_just_refreshed(&state, candidate) {
+                return Err(AccountSummaryError::CredentialRejected);
+            }
             return Err(AccountSummaryError::Replaced);
         }
         if rejected {
-            state.replace(QqMusicCredentialState::SignedOut);
+            state.mark_continuation_required(candidate);
             return Err(AccountSummaryError::CredentialRejected);
         }
         Ok(())
@@ -300,10 +441,13 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = state.matches_snapshot(candidate);
         if !still_current {
+            if rejected && self.snapshot_was_just_refreshed(&state, candidate) {
+                return Err(UserLibraryError::CredentialRejected);
+            }
             return Err(UserLibraryError::Replaced);
         }
         if rejected {
-            state.replace(QqMusicCredentialState::SignedOut);
+            state.mark_continuation_required(candidate);
             return Err(UserLibraryError::CredentialRejected);
         }
         Ok(())
@@ -320,7 +464,8 @@ impl<T> QqMusicProvider<T> {
             }
             QqMusicCredentialState::SignedOut => Ok(None),
             QqMusicCredentialState::PendingVerification(_)
-            | QqMusicCredentialState::LocallyExpired(_) => {
+            | QqMusicCredentialState::LocallyExpired(_)
+            | QqMusicCredentialState::ContinuationRequired(_) => {
                 Err(MediaResolutionError::AuthenticationRequired)
             }
         }
@@ -399,10 +544,13 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = state.matches_snapshot(candidate);
         if !still_current {
+            if rejected && self.snapshot_was_just_refreshed(&state, candidate) {
+                return Err(MediaResolutionError::CredentialRejected);
+            }
             return Err(MediaResolutionError::Replaced);
         }
         if rejected {
-            state.replace(QqMusicCredentialState::SignedOut);
+            state.mark_continuation_required(candidate);
             return Err(MediaResolutionError::CredentialRejected);
         }
         Ok(())
@@ -427,10 +575,13 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = state.matches_snapshot(candidate);
         if !still_current {
+            if rejected && self.snapshot_was_just_refreshed(&state, candidate) {
+                return Err(LyricsError::CredentialRejected);
+            }
             return Err(LyricsError::Replaced);
         }
         if rejected {
-            state.replace(QqMusicCredentialState::SignedOut);
+            state.mark_continuation_required(candidate);
             return Err(LyricsError::CredentialRejected);
         }
         Ok(())
@@ -452,10 +603,13 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = state.matches_snapshot(candidate);
         if !still_current {
+            if rejected && self.snapshot_was_just_refreshed(&state, candidate) {
+                return Err(RadarRecommendationError::CredentialRejected);
+            }
             return Err(RadarRecommendationError::Replaced);
         }
         if rejected {
-            state.replace(QqMusicCredentialState::SignedOut);
+            state.mark_continuation_required(candidate);
             return Err(RadarRecommendationError::CredentialRejected);
         }
         Ok(())
@@ -477,10 +631,13 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = state.matches_snapshot(candidate);
         if !still_current {
+            if rejected && self.snapshot_was_just_refreshed(&state, candidate) {
+                return Err(DailyRecommendationError::CredentialRejected);
+            }
             return Err(DailyRecommendationError::Replaced);
         }
         if rejected {
-            state.replace(QqMusicCredentialState::SignedOut);
+            state.mark_continuation_required(candidate);
             return Err(DailyRecommendationError::CredentialRejected);
         }
         Ok(())
@@ -502,10 +659,13 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = state.matches_snapshot(candidate);
         if !still_current {
+            if rejected && self.snapshot_was_just_refreshed(&state, candidate) {
+                return Err(PersonalizedPlaylistsError::CredentialRejected);
+            }
             return Err(PersonalizedPlaylistsError::Replaced);
         }
         if rejected {
-            state.replace(QqMusicCredentialState::SignedOut);
+            state.mark_continuation_required(candidate);
             return Err(PersonalizedPlaylistsError::CredentialRejected);
         }
         Ok(())
@@ -527,10 +687,13 @@ impl<T> QqMusicProvider<T> {
         let mut state = credential_guard(&self.credential);
         let still_current = state.matches_snapshot(candidate);
         if !still_current {
+            if rejected && self.snapshot_was_just_refreshed(&state, candidate) {
+                return Err(PersonalizedTracksError::CredentialRejected);
+            }
             return Err(PersonalizedTracksError::Replaced);
         }
         if rejected {
-            state.replace(QqMusicCredentialState::SignedOut);
+            state.mark_continuation_required(candidate);
             return Err(PersonalizedTracksError::CredentialRejected);
         }
         Ok(())
@@ -550,7 +713,9 @@ impl<T> QqMusicProvider<T> {
                 QqMusicCredentialRestoreState::LocallyExpired,
                 credential.clone(),
             )),
-            QqMusicCredentialState::SignedOut | QqMusicCredentialState::Authenticated(_, _) => None,
+            QqMusicCredentialState::SignedOut
+            | QqMusicCredentialState::ContinuationRequired(_)
+            | QqMusicCredentialState::Authenticated(_, _) => None,
         }
     }
 
@@ -630,7 +795,8 @@ impl<T> QqMusicProvider<T> {
             }
             QqMusicCredentialState::SignedOut
             | QqMusicCredentialState::PendingVerification(_)
-            | QqMusicCredentialState::LocallyExpired(_) => Ok(None),
+            | QqMusicCredentialState::LocallyExpired(_)
+            | QqMusicCredentialState::ContinuationRequired(_) => Ok(None),
         }
     }
 
@@ -738,6 +904,424 @@ impl<T> QqMusicProvider<T>
 where
     T: HttpTransport,
 {
+    /// Starts or joins the one QQ-specific refresh decision for the current
+    /// credential generation. The returned stage document is opaque and must
+    /// be durably written before candidate verification.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed refresh failure when the gate is disabled, the current
+    /// generation is not eligible, the bounded request fails, or another
+    /// authentication action supersedes this decision.
+    #[allow(clippy::too_many_lines)]
+    pub async fn prepare_credential_refresh(
+        &self,
+        trigger: QqMusicRefreshTrigger,
+    ) -> Result<QqMusicRefreshPrepareResult, QqMusicRefreshFailure> {
+        if !self.refresh_enabled {
+            if matches!(trigger, QqMusicRefreshTrigger::AuthenticatedReadRejection) {
+                let mut credential = credential_guard(&self.credential);
+                if matches!(
+                    &*credential,
+                    QqMusicCredentialState::ContinuationRequired(_)
+                ) {
+                    credential.replace(QqMusicCredentialState::SignedOut);
+                }
+            }
+            return Err(QqMusicRefreshFailure::ProductionGateDisabled);
+        }
+
+        loop {
+            if matches!(trigger, QqMusicRefreshTrigger::AuthenticatedReadRejection) {
+                let completed_generations = {
+                    let refresh = refresh_guard(&self.refresh);
+                    match &*refresh {
+                        QqRefreshCoordinatorState::Completed {
+                            source_generation,
+                            installed_generation: Some(installed_generation),
+                            result: Ok(()),
+                        } => Some((*source_generation, *installed_generation)),
+                        _ => None,
+                    }
+                };
+                if let Some((source_generation, installed_generation)) = completed_generations {
+                    let credential = credential_guard(&self.credential);
+                    if installed_generation > source_generation
+                        && credential.generation() == installed_generation
+                        && matches!(&*credential, QqMusicCredentialState::Authenticated(_, _))
+                    {
+                        return Ok(QqMusicRefreshPrepareResult {
+                            state: QqMusicRefreshPrepareState::ReusedNewGeneration,
+                            preparation: None,
+                        });
+                    }
+                }
+            }
+
+            let source = {
+                let state = credential_guard(&self.credential);
+                let credential = match (&*state, trigger) {
+                    (
+                        QqMusicCredentialState::ContinuationRequired(credential)
+                        | QqMusicCredentialState::LocallyExpired(credential),
+                        _,
+                    ) => credential,
+                    (
+                        QqMusicCredentialState::Authenticated(credential, _),
+                        QqMusicRefreshTrigger::Checkpoint { now_unix_seconds },
+                    ) if credential
+                        .refresh_due_at(now_unix_seconds, QQ_REFRESH_SAFETY_WINDOW_SECONDS) =>
+                    {
+                        credential
+                    }
+                    (QqMusicCredentialState::Authenticated(_, _), _) => {
+                        return Err(QqMusicRefreshFailure::NotDue);
+                    }
+                    (
+                        QqMusicCredentialState::SignedOut
+                        | QqMusicCredentialState::PendingVerification(_),
+                        _,
+                    ) => return Err(QqMusicRefreshFailure::NoCredential),
+                };
+                QqCredentialSnapshot {
+                    credential: credential.clone(),
+                    generation: state.generation(),
+                }
+            };
+
+            let wait = {
+                let mut refresh = refresh_guard(&self.refresh);
+                match &*refresh {
+                    QqRefreshCoordinatorState::Active(active)
+                        if active.source_generation == source.generation =>
+                    {
+                        Some(Arc::clone(&active.completed).notified_owned())
+                    }
+                    QqRefreshCoordinatorState::Completed {
+                        source_generation,
+                        result,
+                        ..
+                    } if *source_generation == source.generation => {
+                        return match result {
+                            Ok(()) => Ok(QqMusicRefreshPrepareResult {
+                                state: QqMusicRefreshPrepareState::ReusedNewGeneration,
+                                preparation: None,
+                            }),
+                            Err(failure) => Err(*failure),
+                        };
+                    }
+                    _ => {
+                        let reservation_id = self
+                            .next_refresh_reservation
+                            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+                                Some(if current == u32::MAX { 1 } else { current + 1 })
+                            })
+                            .unwrap_or_else(std::convert::identity);
+                        *refresh =
+                            QqRefreshCoordinatorState::Active(Box::new(QqRefreshReservation {
+                                id: reservation_id,
+                                source_generation: source.generation,
+                                source: source.credential.clone(),
+                                candidate: source.credential.clone(),
+                                verified: false,
+                                completed: Arc::new(tokio::sync::Notify::new()),
+                            }));
+                        None
+                    }
+                }
+            };
+            if let Some(completed) = wait {
+                completed.await;
+                continue;
+            }
+
+            let refreshed = self.client().refresh_credential(&source).await;
+            let candidate = match refreshed {
+                Ok(candidate) => candidate,
+                Err(error) => {
+                    let failure = map_refresh_error(error);
+                    self.finish_refresh_failure(source.generation, failure);
+                    return Err(failure);
+                }
+            };
+            let Ok(rotation) =
+                CredentialRotation::new(source.credential.clone(), candidate.clone())
+            else {
+                let failure = QqMusicRefreshFailure::ReauthenticationRequired;
+                self.finish_refresh_failure(source.generation, failure);
+                return Err(failure);
+            };
+            let Ok(staged_secret_bytes) = rotation.encode_for_secure_storage() else {
+                let failure = QqMusicRefreshFailure::InvalidResponse;
+                self.finish_refresh_failure(source.generation, failure);
+                return Err(failure);
+            };
+
+            let credential = credential_guard(&self.credential);
+            let mut refresh = refresh_guard(&self.refresh);
+            let QqRefreshCoordinatorState::Active(active) = &mut *refresh else {
+                return Err(QqMusicRefreshFailure::Replaced);
+            };
+            let still_current = active.source_generation == source.generation
+                && active.source == source.credential
+                && credential.matches_snapshot(&source);
+            if !still_current {
+                let completed = Arc::clone(&active.completed);
+                *refresh = QqRefreshCoordinatorState::Completed {
+                    source_generation: source.generation,
+                    installed_generation: None,
+                    result: Err(QqMusicRefreshFailure::Replaced),
+                };
+                completed.notify_waiters();
+                return Err(QqMusicRefreshFailure::Replaced);
+            }
+            active.candidate = candidate;
+            return Ok(QqMusicRefreshPrepareResult {
+                state: QqMusicRefreshPrepareState::Candidate,
+                preparation: Some(QqMusicRefreshPreparation {
+                    reservation_id: active.id,
+                    staged_secret_bytes,
+                }),
+            });
+        }
+    }
+
+    /// Verifies a durably staged candidate without installing it. The returned
+    /// opaque bytes are suitable for the current vault slot.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed verification or replacement failure when the reservation
+    /// is stale, the candidate is rejected, or the bounded verification fails.
+    pub async fn verify_staged_refresh_candidate(
+        &self,
+        reservation_id: u32,
+    ) -> Result<Vec<u8>, QqMusicRefreshFailure> {
+        let (source_generation, source, candidate) = {
+            let refresh = refresh_guard(&self.refresh);
+            let QqRefreshCoordinatorState::Active(active) = &*refresh else {
+                return Err(QqMusicRefreshFailure::Replaced);
+            };
+            if active.id != reservation_id {
+                return Err(QqMusicRefreshFailure::Replaced);
+            }
+            (
+                active.source_generation,
+                active.source.clone(),
+                active.candidate.clone(),
+            )
+        };
+
+        let verification = self.client().verify_credential(&candidate).await;
+        let failure = match verification {
+            Ok(_) => None,
+            Err(CredentialVerificationError::Rejected { .. }) => {
+                Some(QqMusicRefreshFailure::ReauthenticationRequired)
+            }
+            Err(error) => Some(match map_verification_error(&error) {
+                AuthenticationError::Network => QqMusicRefreshFailure::Network,
+                AuthenticationError::ServiceUnavailable
+                | AuthenticationError::Cancelled
+                | AuthenticationError::SessionClosed
+                | AuthenticationError::SessionFinished
+                | AuthenticationError::TimedOut
+                | AuthenticationError::TooManyNetworkFailures
+                | AuthenticationError::SecurityVerificationRequired
+                | AuthenticationError::SecondaryVerificationRequired => {
+                    QqMusicRefreshFailure::ServiceUnavailable
+                }
+                AuthenticationError::InvalidResponse => QqMusicRefreshFailure::InvalidResponse,
+                AuthenticationError::Rejected => QqMusicRefreshFailure::ReauthenticationRequired,
+                AuthenticationError::Replaced => QqMusicRefreshFailure::Replaced,
+            }),
+        };
+
+        let mut credential = credential_guard(&self.credential);
+        let mut refresh = refresh_guard(&self.refresh);
+        let QqRefreshCoordinatorState::Active(active) = &mut *refresh else {
+            return Err(QqMusicRefreshFailure::Replaced);
+        };
+        if active.id != reservation_id
+            || active.source_generation != source_generation
+            || active.source != source
+            || credential.generation() != source_generation
+            || !matches!(
+                &*credential,
+                QqMusicCredentialState::Authenticated(current, _)
+                    | QqMusicCredentialState::ContinuationRequired(current)
+                    | QqMusicCredentialState::LocallyExpired(current)
+                    if current == &source
+            )
+        {
+            return Err(QqMusicRefreshFailure::Replaced);
+        }
+        if let Some(failure) = failure {
+            let completed = Arc::clone(&active.completed);
+            if failure == QqMusicRefreshFailure::ReauthenticationRequired {
+                credential.replace(QqMusicCredentialState::SignedOut);
+            }
+            *refresh = QqRefreshCoordinatorState::Completed {
+                source_generation,
+                installed_generation: None,
+                result: Err(failure),
+            };
+            completed.notify_waiters();
+            return Err(failure);
+        }
+        let Ok(encoded) = candidate.encode_for_secure_storage() else {
+            let completed = Arc::clone(&active.completed);
+            *refresh = QqRefreshCoordinatorState::Completed {
+                source_generation,
+                installed_generation: None,
+                result: Err(QqMusicRefreshFailure::InvalidResponse),
+            };
+            completed.notify_waiters();
+            return Err(QqMusicRefreshFailure::InvalidResponse);
+        };
+        active.verified = true;
+        Ok(encoded)
+    }
+
+    /// Installs a verified candidate only after Flutter has durably published
+    /// its opaque bytes as the current credential.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Replaced` when the reservation is not verified or its exact
+    /// source generation/account is no longer current.
+    pub fn commit_staged_refresh_candidate(
+        &self,
+        reservation_id: u32,
+    ) -> Result<(), QqMusicRefreshFailure> {
+        let mut credential = credential_guard(&self.credential);
+        let mut refresh = refresh_guard(&self.refresh);
+        let QqRefreshCoordinatorState::Active(active) = &*refresh else {
+            return Err(QqMusicRefreshFailure::Replaced);
+        };
+        if active.id != reservation_id
+            || !active.verified
+            || credential.generation() != active.source_generation
+            || !matches!(
+                &*credential,
+                QqMusicCredentialState::Authenticated(current, _)
+                    | QqMusicCredentialState::ContinuationRequired(current)
+                    | QqMusicCredentialState::LocallyExpired(current)
+                    if current == &active.source
+            )
+        {
+            return Err(QqMusicRefreshFailure::Replaced);
+        }
+        let source_generation = active.source_generation;
+        let candidate = active.candidate.clone();
+        let completed = Arc::clone(&active.completed);
+        credential.replace(QqMusicCredentialState::authenticated(candidate));
+        let installed_generation = credential.generation();
+        *refresh = QqRefreshCoordinatorState::Completed {
+            source_generation,
+            installed_generation: Some(installed_generation),
+            result: Ok(()),
+        };
+        completed.notify_waiters();
+        Ok(())
+    }
+
+    /// Ends one in-process attempt after platform storage failure. The source
+    /// credential remains recoverable and waiters observe the same outcome.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Replaced` when the reservation is no longer the active flight.
+    pub fn abort_credential_refresh(
+        &self,
+        reservation_id: u32,
+    ) -> Result<(), QqMusicRefreshFailure> {
+        let mut refresh = refresh_guard(&self.refresh);
+        let QqRefreshCoordinatorState::Active(active) = &*refresh else {
+            return Err(QqMusicRefreshFailure::Replaced);
+        };
+        if active.id != reservation_id {
+            return Err(QqMusicRefreshFailure::Replaced);
+        }
+        let source_generation = active.source_generation;
+        let completed = Arc::clone(&active.completed);
+        *refresh = QqRefreshCoordinatorState::Completed {
+            source_generation,
+            installed_generation: None,
+            result: Err(QqMusicRefreshFailure::StorageUnavailable),
+        };
+        completed.notify_waiters();
+        Ok(())
+    }
+
+    fn finish_refresh_failure(&self, source_generation: u64, failure: QqMusicRefreshFailure) {
+        let mut credential = credential_guard(&self.credential);
+        let mut refresh = refresh_guard(&self.refresh);
+        let QqRefreshCoordinatorState::Active(active) = &*refresh else {
+            return;
+        };
+        if active.source_generation != source_generation {
+            return;
+        }
+        let completed = Arc::clone(&active.completed);
+        if matches!(
+            failure,
+            QqMusicRefreshFailure::ReauthenticationRequired
+                | QqMusicRefreshFailure::NotRefreshable
+                | QqMusicRefreshFailure::UnsupportedLoginType
+        ) && credential.generation() == source_generation
+        {
+            credential.replace(QqMusicCredentialState::SignedOut);
+        }
+        *refresh = QqRefreshCoordinatorState::Completed {
+            source_generation,
+            installed_generation: None,
+            result: Err(failure),
+        };
+        completed.notify_waiters();
+    }
+
+    /// Imports only a stage document that is bound to the current opaque
+    /// credential. A different/no current credential makes the stage stale.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted rotation/credential error for malformed, unsupported
+    /// or cross-account stage documents.
+    pub fn restore_staged_credential_rotation(
+        &self,
+        current_secret_bytes: Option<&[u8]>,
+        staged_secret_bytes: &[u8],
+        now_unix_seconds: u64,
+    ) -> Result<QqMusicStagedRecoveryAction, CredentialRotationError> {
+        let rotation = CredentialRotation::decode_from_secure_storage(staged_secret_bytes)?;
+        let Some(current_bytes) = current_secret_bytes else {
+            return Ok(QqMusicStagedRecoveryAction::Stale);
+        };
+        let current = Credential::decode_from_secure_storage(current_bytes)
+            .map_err(CredentialRotationError::Credential)?;
+        let (candidate, action) = if current == *rotation.candidate() {
+            (current, QqMusicStagedRecoveryAction::VerifyCommittedCurrent)
+        } else if current == *rotation.source() {
+            (
+                rotation.candidate().clone(),
+                QqMusicStagedRecoveryAction::VerifyCandidate,
+            )
+        } else {
+            return Ok(QqMusicStagedRecoveryAction::Stale);
+        };
+        let plan = CredentialRestorePlan::from_loaded(Some(candidate), now_unix_seconds);
+        let state = match plan {
+            CredentialRestorePlan::VerifyWithServer(credential)
+            | CredentialRestorePlan::LocallyExpired(credential) => {
+                QqMusicCredentialState::PendingVerification(credential)
+            }
+            CredentialRestorePlan::SignedOut => unreachable!("recovery has a candidate"),
+        };
+        credential_guard(&self.credential).replace(state);
+        *restore_verification_guard(&self.active_restore_verification) = None;
+        Ok(action)
+    }
+
     /// Verifies the retained startup candidate and promotes it only if no
     /// newer authentication action has superseded that exact credential.
     ///
@@ -1756,24 +2340,47 @@ where
             let request = Arc::new(());
             cache.request = Some(Arc::clone(&request));
             cache.snapshot = None;
-            (credential.clone(), request)
+            (
+                QqCredentialSnapshot {
+                    credential: credential.clone(),
+                    generation: state.generation(),
+                },
+                request,
+            )
         };
         let response = self.client().recent_plays_snapshot(&candidate).await;
         let mut state = credential_guard(&self.credential);
+        if matches!(response, Err(QqMusicRecentPlaysError::Rejected { .. })) {
+            let owns_active_request = state.generation() == candidate.generation
+                && match &*state {
+                    QqMusicCredentialState::Authenticated(current, cache) => {
+                        current == &candidate.credential
+                            && cache
+                                .request
+                                .as_ref()
+                                .is_some_and(|active| Arc::ptr_eq(active, &request))
+                    }
+                    QqMusicCredentialState::ContinuationRequired(current) => {
+                        current == &candidate.credential
+                    }
+                    _ => false,
+                };
+            if owns_active_request {
+                state.mark_continuation_required(&candidate);
+                return Err(UserLibraryError::CredentialRejected);
+            }
+            return Err(UserLibraryError::Replaced);
+        }
         let QqMusicCredentialState::Authenticated(current, cache) = &mut *state else {
             return Err(UserLibraryError::Replaced);
         };
-        if *current != candidate
+        if *current != candidate.credential
             || !cache
                 .request
                 .as_ref()
                 .is_some_and(|active| Arc::ptr_eq(active, &request))
         {
             return Err(UserLibraryError::Replaced);
-        }
-        if matches!(response, Err(QqMusicRecentPlaysError::Rejected { .. })) {
-            state.replace(QqMusicCredentialState::SignedOut);
-            return Err(UserLibraryError::CredentialRejected);
         }
         let snapshot = response.map_err(|error| map_recent_plays_error(&error))?;
         let page = snapshot
@@ -2234,6 +2841,7 @@ where
                 *credential,
                 QqMusicCredentialState::PendingVerification(_)
                     | QqMusicCredentialState::LocallyExpired(_)
+                    | QqMusicCredentialState::ContinuationRequired(_)
             ) {
                 credential.replace(QqMusicCredentialState::SignedOut);
             }
@@ -2343,6 +2951,7 @@ where
                 *credential,
                 QqMusicCredentialState::PendingVerification(_)
                     | QqMusicCredentialState::LocallyExpired(_)
+                    | QqMusicCredentialState::ContinuationRequired(_)
             ) {
                 credential.replace(QqMusicCredentialState::SignedOut);
             }
@@ -2490,6 +3099,28 @@ fn restore_verification_guard(
     attempt
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn refresh_guard(
+    refresh: &Mutex<QqRefreshCoordinatorState>,
+) -> std::sync::MutexGuard<'_, QqRefreshCoordinatorState> {
+    refresh
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+const fn map_refresh_error(error: CredentialRefreshError) -> QqMusicRefreshFailure {
+    match error {
+        CredentialRefreshError::NotRefreshable => QqMusicRefreshFailure::NotRefreshable,
+        CredentialRefreshError::UnsupportedLoginType => QqMusicRefreshFailure::UnsupportedLoginType,
+        CredentialRefreshError::Network => QqMusicRefreshFailure::Network,
+        CredentialRefreshError::RateLimited => QqMusicRefreshFailure::RateLimited,
+        CredentialRefreshError::CredentialRejected | CredentialRefreshError::AccountChanged => {
+            QqMusicRefreshFailure::ReauthenticationRequired
+        }
+        CredentialRefreshError::ProtocolUnavailable => QqMusicRefreshFailure::ServiceUnavailable,
+        CredentialRefreshError::InvalidResponse => QqMusicRefreshFailure::InvalidResponse,
+    }
 }
 
 fn qq_music_provider_id() -> ProviderId {
@@ -4263,7 +4894,11 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use super::{QqMusicCredentialRestoreState, QqMusicCredentialTransferError, QqMusicProvider};
+    use super::{
+        QqMusicCredentialRestoreState, QqMusicCredentialTransferError, QqMusicProvider,
+        QqMusicRefreshFailure, QqMusicRefreshPrepareState, QqMusicRefreshTrigger,
+        QqMusicStagedRecoveryAction,
+    };
     use music_domain::{
         AlbumId, ArtistId, AudioFormat, AudioQuality, NewAlbumRegion, NewSongCategory, PlaylistId,
         PlaylistOwnership, PlaylistPurpose, ProviderId, RankingId, TrackId, TrackSummary,
@@ -4299,12 +4934,29 @@ mod tests {
         QqMusicTrackMusicVideoError,
     };
     use serde_json::{Value, json};
-    use tokio::sync::Notify;
+    use tokio::sync::{Barrier, Notify};
 
     struct SuccessfulAuthenticationTransport;
 
     struct VerificationTransport {
         response: HttpResponse,
+    }
+
+    struct RefreshAndVerifyTransport {
+        refresh_calls: AtomicUsize,
+        verification_calls: AtomicUsize,
+    }
+
+    struct RejectingReadsThenRefreshTransport {
+        account_calls: AtomicUsize,
+        refresh_calls: AtomicUsize,
+        first_reads: Barrier,
+    }
+
+    struct RefreshTerminalTransport {
+        calls: AtomicUsize,
+        status: u16,
+        body: Vec<u8>,
     }
 
     struct OwnedPlaylistsTransport {
@@ -4655,6 +5307,89 @@ mod tests {
 
         async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
             Ok(self.response.clone())
+        }
+    }
+
+    impl HttpTransport for RefreshAndVerifyTransport {
+        type Error = Infallible;
+
+        fn execute(
+            &self,
+            request: HttpRequest,
+        ) -> impl std::future::Future<Output = Result<HttpResponse, Self::Error>> + Send {
+            let body: Value =
+                serde_json::from_slice(request.body_bytes().expect("authenticated request body"))
+                    .expect("request JSON");
+            let response = if body.get("music.login.LoginServer.Login").is_some() {
+                self.refresh_calls.fetch_add(1, Ordering::SeqCst);
+                HttpResponse::new(
+                    200,
+                    serde_json::to_vec(&json!({
+                        "code": 0,
+                        "music.login.LoginServer.Login": {
+                            "code": 0,
+                            "data": {
+                                "str_musicid": "123456",
+                                "musickey": "rotated-key",
+                                "loginType": 1,
+                                "openid": "synthetic-open",
+                                "unionid": "synthetic-union",
+                                "refresh_token": "rotated-refresh",
+                                "refresh_key": "rotated-refresh-key"
+                            }
+                        }
+                    }))
+                    .expect("refresh response"),
+                )
+            } else {
+                self.verification_calls.fetch_add(1, Ordering::SeqCst);
+                VerificationTransport::new(0).response
+            };
+            std::future::ready(Ok(response))
+        }
+    }
+
+    impl HttpTransport for RejectingReadsThenRefreshTransport {
+        type Error = Infallible;
+
+        async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            let body: Value =
+                serde_json::from_slice(request.body_bytes().expect("authenticated request body"))
+                    .expect("request JSON");
+            if body.get("music.login.LoginServer.Login").is_some() {
+                self.refresh_calls.fetch_add(1, Ordering::SeqCst);
+                return Ok(HttpResponse::new(
+                    200,
+                    serde_json::to_vec(&json!({
+                        "code": 0,
+                        "music.login.LoginServer.Login": {"code": 0, "data": {
+                            "str_musicid": "123456", "musickey": "rotated-key",
+                            "loginType": 1, "openid": "synthetic-open",
+                            "unionid": "synthetic-union", "refresh_token": "rotated-refresh",
+                            "refresh_key": "rotated-refresh-key"
+                        }}
+                    }))
+                    .expect("refresh response"),
+                ));
+            }
+            let call = self.account_calls.fetch_add(1, Ordering::SeqCst);
+            if call < 10 {
+                self.first_reads.wait().await;
+                return Ok(VerificationTransport::new(1000).response);
+            }
+            Ok(VerificationTransport::new(0).response)
+        }
+    }
+
+    impl HttpTransport for RefreshTerminalTransport {
+        type Error = Infallible;
+
+        fn execute(
+            &self,
+            _: HttpRequest,
+        ) -> impl std::future::Future<Output = Result<HttpResponse, Self::Error>> + Send {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            std::future::ready(Ok(HttpResponse::new(self.status, self.body.clone())))
         }
     }
 
@@ -6676,6 +7411,373 @@ mod tests {
             ));
         super::credential_guard(&provider.credential)
             .replace(super::QqMusicCredentialState::authenticated(credential));
+    }
+
+    fn set_refreshable_authenticated<T>(provider: &QqMusicProvider<T>) {
+        let credential = Credential::new("123456", "old-key", LoginType::WECHAT)
+            .expect("fixture credential")
+            .with_session_secrets(CredentialSessionSecrets::new(
+                Some("synthetic-open".into()),
+                None,
+                Some("synthetic-refresh".into()),
+                Some("synthetic-refresh-key".into()),
+                Some("synthetic-union".into()),
+                None,
+            ));
+        let mut owner = super::credential_guard(&provider.credential);
+        owner.replace(super::QqMusicCredentialState::authenticated(
+            credential.clone(),
+        ));
+    }
+
+    fn set_refreshable_continuation<T>(provider: &QqMusicProvider<T>) {
+        set_refreshable_authenticated(provider);
+        let mut owner = super::credential_guard(&provider.credential);
+        let snapshot = owner.snapshot().expect("authenticated snapshot");
+        owner.mark_continuation_required(&snapshot);
+    }
+
+    #[tokio::test]
+    async fn refresh_is_one_complete_flight_and_waiters_reuse_new_generation() {
+        let provider = Arc::new(QqMusicProvider::new_with_refresh_activation(
+            QqMusicClient::new(RefreshAndVerifyTransport {
+                refresh_calls: AtomicUsize::new(0),
+                verification_calls: AtomicUsize::new(0),
+            }),
+            true,
+        ));
+        set_refreshable_continuation(&provider);
+        let initial_generation = super::credential_guard(&provider.credential).generation();
+
+        let leader = provider
+            .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection)
+            .await
+            .expect("leader candidate");
+        assert_eq!(leader.state, QqMusicRefreshPrepareState::Candidate);
+        let preparation = leader.preparation.expect("stage document");
+        assert!(!format!("{preparation:?}").contains("synthetic-refresh"));
+
+        let mut waiters = Vec::new();
+        for _ in 0..9 {
+            let provider = Arc::clone(&provider);
+            waiters.push(tokio::spawn(async move {
+                provider
+                    .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection)
+                    .await
+            }));
+        }
+        tokio::task::yield_now().await;
+        let current = provider
+            .verify_staged_refresh_candidate(preparation.reservation_id)
+            .await
+            .expect("candidate verification");
+        assert!(!current.is_empty());
+        provider
+            .commit_staged_refresh_candidate(preparation.reservation_id)
+            .expect("durable publication acknowledged");
+
+        for waiter in waiters {
+            let result = waiter.await.expect("waiter task").expect("shared result");
+            assert_eq!(
+                result.state,
+                QqMusicRefreshPrepareState::ReusedNewGeneration
+            );
+            assert!(result.preparation.is_none());
+        }
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .refresh_calls
+                .load(Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .verification_calls
+                .load(Ordering::SeqCst),
+            1
+        );
+        assert!(super::credential_guard(&provider.credential).generation() > initial_generation);
+        assert!(provider.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn completed_refresh_does_not_mask_a_later_identical_account_relogin() {
+        let provider = QqMusicProvider::new_with_refresh_activation(
+            QqMusicClient::new(RefreshAndVerifyTransport {
+                refresh_calls: AtomicUsize::new(0),
+                verification_calls: AtomicUsize::new(0),
+            }),
+            true,
+        );
+        set_refreshable_authenticated(&provider);
+        let slow_read = provider
+            .authenticated_account_credential()
+            .expect("authenticated read snapshot");
+        {
+            let mut owner = super::credential_guard(&provider.credential);
+            owner.mark_continuation_required(&slow_read);
+        }
+
+        let preparation = provider
+            .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection)
+            .await
+            .expect("refresh candidate")
+            .preparation
+            .expect("refresh reservation");
+        provider
+            .verify_staged_refresh_candidate(preparation.reservation_id)
+            .await
+            .expect("candidate verification");
+        provider
+            .commit_staged_refresh_candidate(preparation.reservation_id)
+            .expect("candidate commit");
+
+        assert_eq!(
+            provider.finish_account_await(&slow_read, true),
+            Err(AccountSummaryError::CredentialRejected),
+            "the exact installed refresh may release its own slow read"
+        );
+
+        set_authenticated(&provider, "123456");
+        assert_eq!(
+            provider.finish_account_await(&slow_read, true),
+            Err(AccountSummaryError::Replaced),
+            "a later same-account login must not inherit the completed refresh"
+        );
+    }
+
+    #[tokio::test]
+    async fn ten_rejected_reads_share_one_refresh_and_retry_each_once() {
+        let provider = Arc::new(QqMusicProvider::new_with_refresh_activation(
+            QqMusicClient::new(RejectingReadsThenRefreshTransport {
+                account_calls: AtomicUsize::new(0),
+                refresh_calls: AtomicUsize::new(0),
+                first_reads: Barrier::new(10),
+            }),
+            true,
+        ));
+        set_refreshable_authenticated(&provider);
+
+        let mut tasks = Vec::new();
+        for _ in 0..10 {
+            let provider = Arc::clone(&provider);
+            tasks.push(tokio::spawn(async move {
+                assert_eq!(
+                    provider.account_summary().await,
+                    Err(AccountSummaryError::CredentialRejected)
+                );
+                let prepared = provider
+                    .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection)
+                    .await
+                    .expect("shared refresh result");
+                if let Some(candidate) = prepared.preparation {
+                    provider
+                        .verify_staged_refresh_candidate(candidate.reservation_id)
+                        .await
+                        .expect("candidate verification");
+                    provider
+                        .commit_staged_refresh_candidate(candidate.reservation_id)
+                        .expect("candidate commit");
+                } else {
+                    assert_eq!(
+                        prepared.state,
+                        QqMusicRefreshPrepareState::ReusedNewGeneration
+                    );
+                }
+                provider.account_summary().await.expect("one bounded retry")
+            }));
+        }
+        for task in tasks {
+            assert_eq!(
+                task.await.expect("read task").display_name(),
+                "Synthetic listener"
+            );
+        }
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .refresh_calls
+                .load(Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .account_calls
+                .load(Ordering::SeqCst),
+            21
+        );
+    }
+
+    #[tokio::test]
+    async fn rate_limit_and_definitive_rejection_do_not_restart_refresh() {
+        for (status, body, first, second) in [
+            (
+                429,
+                Vec::new(),
+                QqMusicRefreshFailure::RateLimited,
+                QqMusicRefreshFailure::RateLimited,
+            ),
+            (
+                200,
+                serde_json::to_vec(&json!({
+                    "code": 0,
+                    "music.login.LoginServer.Login": {"code": 104_401}
+                }))
+                .expect("rejection response"),
+                QqMusicRefreshFailure::ReauthenticationRequired,
+                QqMusicRefreshFailure::NoCredential,
+            ),
+        ] {
+            let provider = QqMusicProvider::new_with_refresh_activation(
+                QqMusicClient::new(RefreshTerminalTransport {
+                    calls: AtomicUsize::new(0),
+                    status,
+                    body,
+                }),
+                true,
+            );
+            set_refreshable_continuation(&provider);
+
+            assert_eq!(
+                provider
+                    .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection,)
+                    .await,
+                Err(first)
+            );
+            assert_eq!(
+                provider
+                    .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection,)
+                    .await,
+                Err(second)
+            );
+            assert_eq!(
+                provider.client().transport().calls.load(Ordering::SeqCst),
+                1
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn disabled_production_gate_invalidates_only_an_owning_read_rejection() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(RefreshTerminalTransport {
+            calls: AtomicUsize::new(0),
+            status: 200,
+            body: Vec::new(),
+        }));
+        set_refreshable_authenticated(&provider);
+
+        assert_eq!(
+            provider
+                .prepare_credential_refresh(QqMusicRefreshTrigger::Checkpoint {
+                    now_unix_seconds: 0,
+                })
+                .await,
+            Err(QqMusicRefreshFailure::ProductionGateDisabled)
+        );
+        assert!(provider.has_authenticated_credential());
+
+        set_refreshable_continuation(&provider);
+        assert_eq!(
+            provider
+                .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection)
+                .await,
+            Err(QqMusicRefreshFailure::ProductionGateDisabled)
+        );
+        assert!(!provider.has_authenticated_credential());
+        assert_eq!(
+            provider.client().transport().calls.load(Ordering::SeqCst),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn late_refresh_commit_cannot_cross_logout_or_identical_relogin() {
+        for replacement in [false, true] {
+            let provider = QqMusicProvider::new_with_refresh_activation(
+                QqMusicClient::new(RefreshAndVerifyTransport {
+                    refresh_calls: AtomicUsize::new(0),
+                    verification_calls: AtomicUsize::new(0),
+                }),
+                true,
+            );
+            set_refreshable_continuation(&provider);
+            let preparation = provider
+                .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection)
+                .await
+                .expect("candidate")
+                .preparation
+                .expect("reservation");
+            provider
+                .verify_staged_refresh_candidate(preparation.reservation_id)
+                .await
+                .expect("verified candidate");
+            if replacement {
+                set_authenticated(&provider, "123456");
+            } else {
+                provider.sign_out();
+            }
+            assert_eq!(
+                provider.commit_staged_refresh_candidate(preparation.reservation_id),
+                Err(QqMusicRefreshFailure::Replaced)
+            );
+            assert_eq!(provider.has_authenticated_credential(), replacement);
+        }
+    }
+
+    #[test]
+    fn staged_recovery_is_bound_to_exact_current_document() {
+        let provider = QqMusicProvider::new(QqMusicClient::new(VerificationTransport::new(0)));
+        let source = Credential::new("123456", "old-key", LoginType::WECHAT).expect("source");
+        let candidate = Credential::new("123456", "new-key", LoginType::WECHAT).expect("candidate");
+        let stage = qqmusic_client::CredentialRotation::new(source.clone(), candidate.clone())
+            .expect("rotation")
+            .encode_for_secure_storage()
+            .expect("stage");
+        let source_bytes = source.encode_for_secure_storage().expect("source bytes");
+        let candidate_bytes = candidate
+            .encode_for_secure_storage()
+            .expect("candidate bytes");
+        let other_bytes = Credential::new("654321", "other-key", LoginType::WECHAT)
+            .expect("other")
+            .encode_for_secure_storage()
+            .expect("other bytes");
+
+        assert_eq!(
+            provider
+                .restore_staged_credential_rotation(Some(&source_bytes), &stage, 1)
+                .expect("source-bound stage"),
+            QqMusicStagedRecoveryAction::VerifyCandidate
+        );
+        assert_eq!(
+            provider
+                .restore_staged_credential_rotation(Some(&candidate_bytes), &stage, 1)
+                .expect("committed stage"),
+            QqMusicStagedRecoveryAction::VerifyCommittedCurrent
+        );
+        assert_eq!(
+            provider
+                .restore_staged_credential_rotation(Some(&other_bytes), &stage, 1)
+                .expect("different current"),
+            QqMusicStagedRecoveryAction::Stale
+        );
+        assert_eq!(
+            provider
+                .restore_staged_credential_rotation(None, &stage, 1)
+                .expect("orphan stage"),
+            QqMusicStagedRecoveryAction::Stale
+        );
+        assert!(
+            provider
+                .restore_staged_credential_rotation(Some(&source_bytes), b"not-json", 1)
+                .is_err()
+        );
     }
 
     fn favorite_page_response(playlists: &Value, total: u32, has_more: bool) -> HttpResponse {

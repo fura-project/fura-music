@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/recommendations.dart' as bridge;
 
@@ -45,6 +46,7 @@ class RustPersonalizedPlaylistsGateway implements PersonalizedPlaylistsGateway {
     this.providerId = 'qq-music',
     CredentialVault? credentialVault,
     this.operationFactory,
+    this.sessionContinuation,
   }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
@@ -52,12 +54,14 @@ class RustPersonalizedPlaylistsGateway implements PersonalizedPlaylistsGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final PersonalizedPlaylistsLoadOperationFactory? operationFactory;
+  final QqSessionContinuationCoordinator? sessionContinuation;
 
   @override
   PersonalizedPlaylistsLoadOperation beginLoad() =>
       _VaultCleaningPersonalizedPlaylistsLoadOperation(
-        operationFactory?.call() ?? _beginRustLoad(providerId),
+        () => operationFactory?.call() ?? _beginRustLoad(providerId),
         _credentialVault,
+        providerId == 'qq-music' ? sessionContinuation : null,
       );
 }
 
@@ -89,21 +93,41 @@ class _RustPersonalizedPlaylistsLoadOperation
 
 class _VaultCleaningPersonalizedPlaylistsLoadOperation
     implements PersonalizedPlaylistsLoadOperation {
-  const _VaultCleaningPersonalizedPlaylistsLoadOperation(
-    this._inner,
+  _VaultCleaningPersonalizedPlaylistsLoadOperation(
+    this._factory,
     this._vault,
-  );
+    this._continuation,
+  ) : _inner = _factory();
 
-  final PersonalizedPlaylistsLoadOperation _inner;
+  final PersonalizedPlaylistsLoadOperationFactory _factory;
+  PersonalizedPlaylistsLoadOperation _inner;
   final CredentialVault _vault;
+  final QqSessionContinuationCoordinator? _continuation;
+  bool _cancelled = false;
 
   @override
-  bool cancel() => _inner.cancel();
+  bool cancel() {
+    _cancelled = true;
+    return _inner.cancel();
+  }
 
   @override
   Future<PersonalizedPlaylistsResult> run() async {
     final result = await _inner.run();
     if (result.failure != PersonalizedPlaylistsFailure.credentialRejected) {
+      return result;
+    }
+    if (_continuation != null) {
+      final outcome = await _continuation.continueAfterReadRejection();
+      if (outcome == QqSessionContinuationResult.continued && !_cancelled) {
+        _inner = _factory();
+        return _inner.run();
+      }
+      if (outcome != QqSessionContinuationResult.reauthenticationRequired) {
+        return const PersonalizedPlaylistsResult(
+          failure: PersonalizedPlaylistsFailure.serviceUnavailable,
+        );
+      }
       return result;
     }
     try {

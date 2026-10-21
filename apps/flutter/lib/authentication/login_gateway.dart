@@ -140,6 +140,14 @@ typedef CredentialVerificationOperationFactory =
 
 typedef CredentialSignOutCore = bool Function();
 
+typedef CredentialRotationRestorer = bridge.QqMusicStagedRecovery Function({
+  required Uint8List? currentSecretBytes,
+  required Uint8List stagedSecretBytes,
+});
+
+typedef CredentialPersistenceExporter =
+    bridge.QqMusicCredentialExport Function();
+
 class LoginChallenge {
   const LoginChallenge({
     required this.imageFormat,
@@ -321,19 +329,31 @@ class RustQqMusicAuthenticationGateway
     CredentialRestoreImporter? credentialImporter,
     CredentialVerificationOperationFactory? verificationOperationFactory,
     CredentialSignOutCore? credentialSignOutCore,
-  }) : _credentialVault = SerializedCredentialVault(
-         credentialVault ?? PlatformCredentialVault(),
-       ),
+    CredentialRotationRestorer? credentialRotationRestorer,
+    CredentialPersistenceExporter? credentialExporter,
+  }) : _credentialVault = credentialVault is CredentialRotationVault
+           ? credentialVault
+           : SerializedCredentialVault(
+               credentialVault ?? PlatformCredentialVault(),
+             ),
        _credentialImporter =
            credentialImporter ?? _restoreQqMusicCredentialInRust,
        _verificationOperationFactory =
            verificationOperationFactory ?? _reserveRustCredentialVerification,
-       _credentialSignOutCore = credentialSignOutCore ?? bridge.signOutQqMusic;
+       _credentialSignOutCore = credentialSignOutCore ?? bridge.signOutQqMusic,
+       _credentialRotationRestorer =
+           credentialRotationRestorer ??
+           bridge.restoreQqMusicStagedCredentialRotation,
+       _credentialExporter =
+           credentialExporter ?? bridge.exportQqMusicCredentialForSecureStorage;
 
   final CredentialVault _credentialVault;
   final CredentialRestoreImporter _credentialImporter;
   final CredentialVerificationOperationFactory _verificationOperationFactory;
   final CredentialSignOutCore _credentialSignOutCore;
+  final CredentialRotationRestorer _credentialRotationRestorer;
+  final CredentialPersistenceExporter _credentialExporter;
+  _PendingCredentialRecovery? _pendingRecovery;
 
   @override
   String get providerId => 'qq-music';
@@ -356,22 +376,44 @@ class RustQqMusicAuthenticationGateway
       );
 
   @override
-  CredentialVerificationOperation beginCredentialVerification() =>
-      _VaultCleaningCredentialVerificationOperation(
-        _verificationOperationFactory(),
-        _credentialVault,
-      );
+  CredentialVerificationOperation beginCredentialVerification() {
+    final recovery = _pendingRecovery;
+    return recovery != null
+        ? _RecoveryCredentialVerificationOperation(
+            inner: _verificationOperationFactory(),
+            recovery: recovery,
+            vault: _credentialVault as CredentialRotationVault,
+            verificationOperationFactory: _verificationOperationFactory,
+            credentialImporter: _credentialImporter,
+            credentialRotationRestorer: _credentialRotationRestorer,
+            credentialExporter: _credentialExporter,
+            onResolved: () {
+              if (identical(_pendingRecovery, recovery)) {
+                _pendingRecovery = null;
+              }
+            },
+          )
+        : _VaultCleaningCredentialVerificationOperation(
+            _verificationOperationFactory(),
+            _credentialVault,
+          );
+  }
 
   @override
   Future<CredentialPersistenceResult> persistAuthenticatedCredential() async {
-    final export = bridge.exportQqMusicCredentialForSecureStorage();
+    final export = _credentialExporter();
     final secretBytes = export.secretBytes;
     if (secretBytes == null) {
       return CredentialPersistenceResult.noAuthenticatedCredential;
     }
 
     try {
-      await _credentialVault.write(secretBytes);
+      final vault = _credentialVault;
+      if (vault is CredentialRotationVault && vault.supportsStaging) {
+        await vault.publishReplacement(secretBytes);
+      } else {
+        await vault.write(secretBytes);
+      }
       return CredentialPersistenceResult.stored;
     } catch (_) {
       return CredentialPersistenceResult.storageUnavailable;
@@ -382,6 +424,11 @@ class RustQqMusicAuthenticationGateway
 
   @override
   Future<CredentialRestoreResult> restoreCredential() async {
+    final vault = _credentialVault;
+    if (vault is CredentialRotationVault && vault.supportsStaging) {
+      final recovered = await _restoreCredentialTransaction(vault);
+      if (recovered != null) return recovered;
+    }
     Uint8List? secretBytes;
     try {
       secretBytes = await _credentialVault.read();
@@ -402,6 +449,7 @@ class RustQqMusicAuthenticationGateway
 
   @override
   Future<CredentialSignOutResult> signOut() async {
+    _pendingRecovery = null;
     try {
       if (!_credentialSignOutCore()) {
         return CredentialSignOutResult.coreUnavailable;
@@ -411,10 +459,89 @@ class RustQqMusicAuthenticationGateway
     }
 
     try {
-      await _credentialVault.delete();
+      final vault = _credentialVault;
+      if (vault is CredentialRotationVault && vault.supportsStaging) {
+        await vault.deleteTransaction();
+      } else {
+        await vault.delete();
+      }
       return CredentialSignOutResult.signedOut;
     } catch (_) {
       return CredentialSignOutResult.storageCleanupFailed;
+    }
+  }
+
+  Future<CredentialRestoreResult?> _restoreCredentialTransaction(
+    CredentialRotationVault vault,
+  ) async {
+    CredentialTransactionSnapshot snapshot;
+    try {
+      snapshot = await vault.readTransaction();
+    } on FormatException {
+      return _discardUnreadableStageAndRestoreCurrent(vault);
+    } on Object {
+      return CredentialRestoreResult.storageUnavailable;
+    }
+    final staged = snapshot.staged;
+    if (staged == null) {
+      snapshot.current?.fillRange(0, snapshot.current!.length, 0);
+      return null;
+    }
+    try {
+      final recovery = _credentialRotationRestorer(
+        currentSecretBytes: snapshot.current,
+        stagedSecretBytes: staged,
+      );
+      final action = recovery.action;
+      final failure = recovery.failure;
+      if (failure == bridge.QqMusicCredentialRestoreFailure.coreUnavailable) {
+        return CredentialRestoreResult.coreUnavailable;
+      }
+      if (action == bridge.QqMusicStagedRecoveryAction.stale ||
+          failure != null) {
+        final epoch = vault.reserveRotation();
+        await vault.deleteStageIfCurrent(epoch);
+        return _credentialImporter(snapshot.current);
+      }
+      if (action == null) return CredentialRestoreResult.coreUnavailable;
+      _pendingRecovery = _PendingCredentialRecovery(
+        action: action,
+        epoch: vault.reserveRotation(),
+      );
+      return CredentialRestoreResult.verificationRequired;
+    } on Object {
+      return CredentialRestoreResult.coreUnavailable;
+    } finally {
+      snapshot.current?.fillRange(0, snapshot.current!.length, 0);
+      staged.fillRange(0, staged.length, 0);
+    }
+  }
+
+  Future<CredentialRestoreResult> _discardUnreadableStageAndRestoreCurrent(
+    CredentialRotationVault vault,
+  ) async {
+    try {
+      final epoch = vault.reserveRotation();
+      final deleted = await vault.deleteStageIfCurrent(epoch);
+      if (!deleted) return CredentialRestoreResult.coreUnavailable;
+    } on Object {
+      return CredentialRestoreResult.storageUnavailable;
+    }
+
+    Uint8List? current;
+    try {
+      current = await vault.read();
+    } on FormatException {
+      return CredentialRestoreResult.invalidStoredCredential;
+    } on Object {
+      return CredentialRestoreResult.storageUnavailable;
+    }
+    try {
+      return _credentialImporter(current);
+    } on Object {
+      return CredentialRestoreResult.coreUnavailable;
+    } finally {
+      current?.fillRange(0, current.length, 0);
     }
   }
 }
@@ -898,6 +1025,131 @@ class _ImmediateCredentialVerificationOperation
 
   @override
   Future<CredentialVerificationResult> run() async => _result;
+}
+
+class _PendingCredentialRecovery {
+  const _PendingCredentialRecovery({required this.action, required this.epoch});
+
+  final bridge.QqMusicStagedRecoveryAction action;
+  final int epoch;
+}
+
+class _RecoveryCredentialVerificationOperation
+    implements CredentialVerificationOperation {
+  const _RecoveryCredentialVerificationOperation({
+    required this.inner,
+    required this.recovery,
+    required this.vault,
+    required this.verificationOperationFactory,
+    required this.credentialImporter,
+    required this.credentialRotationRestorer,
+    required this.credentialExporter,
+    required this.onResolved,
+  });
+
+  final CredentialVerificationOperation inner;
+  final _PendingCredentialRecovery recovery;
+  final CredentialRotationVault vault;
+  final CredentialVerificationOperationFactory verificationOperationFactory;
+  final CredentialRestoreImporter credentialImporter;
+  final CredentialRotationRestorer credentialRotationRestorer;
+  final CredentialPersistenceExporter credentialExporter;
+  final VoidCallback onResolved;
+
+  @override
+  bool cancel() => inner.cancel();
+
+  @override
+  Future<CredentialVerificationResult> run() async {
+    final result = await inner.run();
+    if (result == CredentialVerificationResult.authenticated) {
+      return _finishAcceptedRecovery();
+    }
+    if (result != CredentialVerificationResult.rejected) return result;
+
+    if (recovery.action == bridge.QqMusicStagedRecoveryAction.verifyCandidate) {
+      return _fallbackToCurrentAfterRejectedCandidate();
+    }
+    try {
+      await vault.deleteTransactionIfCurrent(recovery.epoch);
+      onResolved();
+      return CredentialVerificationResult.rejected;
+    } on Object {
+      return CredentialVerificationResult.rejectedStorageCleanupFailed;
+    }
+  }
+
+  Future<CredentialVerificationResult> _finishAcceptedRecovery() async {
+    if (recovery.action == bridge.QqMusicStagedRecoveryAction.verifyCandidate) {
+      final export = credentialExporter();
+      final bytes = export.secretBytes;
+      if (bytes == null) return CredentialVerificationResult.coreUnavailable;
+      try {
+        final published = await vault.publishIfCurrent(recovery.epoch, bytes);
+        if (!published) return CredentialVerificationResult.replaced;
+      } on Object {
+        await _restorePendingStageAfterPublicationFailure();
+        return CredentialVerificationResult.coreUnavailable;
+      } finally {
+        bytes.fillRange(0, bytes.length, 0);
+      }
+    }
+    try {
+      await vault.deleteStageIfCurrent(recovery.epoch);
+    } on Object {
+      // current == candidate plus the retained stage is a recoverable committed
+      // checkpoint, so authentication remains truthful.
+    }
+    onResolved();
+    return CredentialVerificationResult.authenticated;
+  }
+
+  Future<void> _restorePendingStageAfterPublicationFailure() async {
+    try {
+      final snapshot = await vault.readTransaction();
+      final staged = snapshot.staged;
+      if (staged != null) {
+        credentialRotationRestorer(
+          currentSecretBytes: snapshot.current,
+          stagedSecretBytes: staged,
+        );
+      }
+      snapshot.current?.fillRange(0, snapshot.current!.length, 0);
+      staged?.fillRange(0, staged.length, 0);
+    } on Object {
+      // The durable stage remains; the next startup recovery will retry.
+    }
+  }
+
+  Future<CredentialVerificationResult>
+  _fallbackToCurrentAfterRejectedCandidate() async {
+    try {
+      await vault.deleteStageIfCurrent(recovery.epoch);
+      final current = await vault.read();
+      try {
+        final restore = credentialImporter(current);
+        if (restore != CredentialRestoreResult.verificationRequired) {
+          onResolved();
+          return CredentialVerificationResult.rejected;
+        }
+      } finally {
+        current?.fillRange(0, current.length, 0);
+      }
+      onResolved();
+      final fallback = verificationOperationFactory();
+      final result = await fallback.run();
+      if (result == CredentialVerificationResult.rejected) {
+        try {
+          await vault.deleteTransaction();
+        } on Object {
+          return CredentialVerificationResult.rejectedStorageCleanupFailed;
+        }
+      }
+      return result;
+    } on Object {
+      return CredentialVerificationResult.coreUnavailable;
+    }
+  }
 }
 
 class _VaultCleaningCredentialVerificationOperation

@@ -1,4 +1,5 @@
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/src/rust/api/library.dart' as bridge;
 
 enum UserLibraryFailure {
@@ -64,6 +65,7 @@ class RustUserLibraryGateway implements UserLibraryGateway {
     this.providerId = 'qq-music',
     CredentialVault? credentialVault,
     this.operationFactory,
+    this.sessionContinuation,
   }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
@@ -71,11 +73,13 @@ class RustUserLibraryGateway implements UserLibraryGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final UserLibraryLoadOperationFactory? operationFactory;
+  final QqSessionContinuationCoordinator? sessionContinuation;
 
   @override
-  UserLibraryLoadOperation beginLoad() => _VaultCleaningLibraryLoadOperation(
-    operationFactory?.call() ?? _beginRustUserLibraryLoad(providerId),
+  UserLibraryLoadOperation beginLoad() => _ContinuingLibraryLoadOperation(
+    () => operationFactory?.call() ?? _beginRustUserLibraryLoad(providerId),
     _credentialVault,
+    providerId == 'qq-music' ? sessionContinuation : null,
   );
 }
 
@@ -143,19 +147,43 @@ class _RustUserLibraryLoadOperation implements UserLibraryLoadOperation {
   }
 }
 
-class _VaultCleaningLibraryLoadOperation implements UserLibraryLoadOperation {
-  const _VaultCleaningLibraryLoadOperation(this._inner, this._credentialVault);
+class _ContinuingLibraryLoadOperation implements UserLibraryLoadOperation {
+  _ContinuingLibraryLoadOperation(
+    this._factory,
+    this._credentialVault,
+    this._continuation,
+  ) : _active = _factory();
 
-  final UserLibraryLoadOperation _inner;
+  final UserLibraryLoadOperationFactory _factory;
   final CredentialVault _credentialVault;
+  final QqSessionContinuationCoordinator? _continuation;
+  UserLibraryLoadOperation _active;
+  bool _cancelled = false;
 
   @override
-  bool cancel() => _inner.cancel();
+  bool cancel() {
+    _cancelled = true;
+    return _active.cancel();
+  }
 
   @override
   Future<UserLibraryResult> run() async {
-    final result = await _inner.run();
+    var result = await _active.run();
     if (result.failure != UserLibraryFailure.credentialRejected) return result;
+    final continuation = _continuation;
+    if (continuation != null) {
+      final outcome = await continuation.continueAfterReadRejection();
+      if (outcome == QqSessionContinuationResult.continued && !_cancelled) {
+        _active = _factory();
+        return _active.run();
+      }
+      if (outcome != QqSessionContinuationResult.reauthenticationRequired) {
+        return const UserLibraryResult(
+          failure: UserLibraryFailure.serviceUnavailable,
+        );
+      }
+      return result;
+    }
     try {
       await _credentialVault.delete();
       return result;

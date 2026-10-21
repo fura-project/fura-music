@@ -12,13 +12,19 @@ entitlement-respecting clear HTTPS media gate passes.
 **Sequence:** audit → playback/cache → profiles → QQ → NetEase → KuGou →
 refresh/persistence integration → soak. Infrastructure implementation is serial.
 
-**Current checkpoint:** replay/cache/profile extraction and one-shot synthetic
-refresh Client candidates are implemented. Real Linux music/MV/MPRIS checks
-pass. Persistent byte cache and production automatic refresh are not completed.
-QQ's refresh Web profile and NetEase's minimal refresh-Cookie requirements need
-bounded maintainer-operated evidence before activation; afterward the Provider
-coordinator and atomic vault install still need implementation and regression.
-KuGou device/session/media remains blocked without an ordinary safe contract.
+**Current checkpoint (2026-10-21):** replay/cache/profile extraction and
+one-shot synthetic refresh Client candidates remain implemented. QQ now also
+has a QQ-specific Provider-owned complete-decision single-flight, exact
+generation/account reservation, opaque current-plus-stage crash recovery,
+startup/local-expiry/resume checkpoints, and safe-read refresh-once/retry-once
+integration. Logout, same-account re-login and account replacement invalidate
+late refresh work; mutations are not replayed. These paths are synthetic/offline
+candidate evidence only. Release builds cannot activate refresh, and Debug
+activation requires the explicit `FURA_QQ_WECHAT_REFRESH_EXPERIMENT` gate.
+QQ's accepted Web-profile refresh still needs the bounded maintainer-operated
+disposable WeChat-session proof before production activation. NetEase's minimal
+refresh-Cookie requirements and KuGou's ordinary device/session/media contract
+remain separate unresolved gates.
 See [the source audit and acceptance matrix](docs/research/provider-playback-session-audit-2026-10-06.md).
 
 **Boundaries:** no sidecar/proxy, raw JSON Bridge, profile/risk rotation,
@@ -27,10 +33,12 @@ media unlock, cross-Provider source or unsafe mutation replay. No real stored
 account automation, unrelated UI/platform changes, commit or push. Mobile and
 real-session completion cannot be inferred from Linux synthetic playback.
 
-**Next gate:** accept the specific refresh protocol/material evidence, then
-implement refresh single-flight/latest-generation install, safe durable rotation,
-read retry-once and mutation no-replay semantics. Human subsequently validates
-real credentials and physical mobile soak. This is a partial checkpoint, not
+**Next gate:** a Human operates one disposable WeChat session against the exact
+Fura Web profile, bounded to one refresh request, one account verification and
+at most one ordinary authenticated read. Stop on rate limit, secondary/security
+verification, account mismatch or a new device/signature requirement. Only
+accepted evidence may enable the already-tested candidate in production;
+physical mobile soak remains independent. This is a partial checkpoint, not
 completion of the P0 self-healing login objective.
 
 ## Human Review Workstream — long-list continuation and Roam completion (HD-035)

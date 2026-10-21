@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/recommendations.dart' as bridge;
 
@@ -45,6 +46,7 @@ class RustPersonalizedTracksGateway implements PersonalizedTracksGateway {
     this.providerId = 'qq-music',
     CredentialVault? credentialVault,
     this.operationFactory,
+    this.sessionContinuation,
   }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
@@ -52,12 +54,14 @@ class RustPersonalizedTracksGateway implements PersonalizedTracksGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final PersonalizedTracksLoadOperationFactory? operationFactory;
+  final QqSessionContinuationCoordinator? sessionContinuation;
 
   @override
   PersonalizedTracksLoadOperation beginLoad() =>
       _VaultCleaningPersonalizedTracksLoadOperation(
-        operationFactory?.call() ?? _beginRustLoad(providerId),
+        () => operationFactory?.call() ?? _beginRustLoad(providerId),
         _credentialVault,
+        providerId == 'qq-music' ? sessionContinuation : null,
       );
 }
 
@@ -89,18 +93,41 @@ class _RustPersonalizedTracksLoadOperation
 
 class _VaultCleaningPersonalizedTracksLoadOperation
     implements PersonalizedTracksLoadOperation {
-  const _VaultCleaningPersonalizedTracksLoadOperation(this._inner, this._vault);
+  _VaultCleaningPersonalizedTracksLoadOperation(
+    this._factory,
+    this._vault,
+    this._continuation,
+  ) : _inner = _factory();
 
-  final PersonalizedTracksLoadOperation _inner;
+  final PersonalizedTracksLoadOperationFactory _factory;
+  PersonalizedTracksLoadOperation _inner;
   final CredentialVault _vault;
+  final QqSessionContinuationCoordinator? _continuation;
+  bool _cancelled = false;
 
   @override
-  bool cancel() => _inner.cancel();
+  bool cancel() {
+    _cancelled = true;
+    return _inner.cancel();
+  }
 
   @override
   Future<PersonalizedTracksResult> run() async {
     final result = await _inner.run();
     if (result.failure != PersonalizedTracksFailure.credentialRejected) {
+      return result;
+    }
+    if (_continuation != null) {
+      final outcome = await _continuation.continueAfterReadRejection();
+      if (outcome == QqSessionContinuationResult.continued && !_cancelled) {
+        _inner = _factory();
+        return _inner.run();
+      }
+      if (outcome != QqSessionContinuationResult.reauthenticationRequired) {
+        return const PersonalizedTracksResult(
+          failure: PersonalizedTracksFailure.serviceUnavailable,
+        );
+      }
       return result;
     }
     try {

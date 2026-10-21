@@ -311,38 +311,40 @@ separate Human Decision defines Queue provenance and retention behavior.
 
 ## TD-015 — Refresh foundations lack atomic Provider/vault continuation
 
-**Status:** Triggered
+**Status:** Partially resolved; production protocol gate open
 
-**Problem:** One-shot QQ/NetEase Client refresh candidates do not implement
-Provider scheduling/single-flight, latest-generation install, read retry-once,
-stale/offline/verification state or rotation across the Rust owner and platform
-vault. The current secure-vault adapter serializes a single key but cannot
-atomically acknowledge a rotated credential with the Provider generation.
+**Problem:** The QQ WeChat candidate now implements the machine-verifiable
+continuation mechanics, but its exact Fura Web-profile request still lacks the
+required bounded disposable-session proof. Production activation therefore
+remains disabled. NetEase remains outside this QQ-specific V1 and still has no
+accepted minimal refresh-Cookie contract.
 
-**Why accepted:** Current QQ refresh Web-profile compatibility and NetEase's
-MUSIC_R_U versus minimal-cookie eligibility are not accepted real-session
-contracts. Automatically rotating a credential now would risk losing the only
-durable valid token or repeatedly probing unsupported profiles. The bounded
-offline protocol candidates remain unadvertised and uninstalled.
+**Why accepted:** Current public QQ implementations corroborate the complete
+WeChat material shape, but the current families use an Android-shaped outer
+profile or fabricated device/install identity. They do not prove that Fura's
+existing lightweight Web envelope is accepted. Synthetic correctness cannot
+authorize real-account traffic or production activation.
 
-**Impact:** Replay/cache stability is improved, but the requested P0 automatic
-login continuation is not delivered. Owning definitive rejection retains the
-previous production behavior until the coordinator is implemented.
+**Impact:** Rust owns refreshability, candidate/account validation, generation
+and stale commit; Flutter only serializes opaque current/stage storage and waits
+for durable acknowledgement. Startup recovery, lifecycle checkpoints and
+safe-read retry-once are wired, but release users still truthfully reauthenticate
+after an owning credential rejection until the Human protocol gate passes.
 
-**Risk:** Best-effort install-B/write-B can leave memory B and durable A after
-rotation; stale refresh may overwrite logout/new account, and automatic write
-replay may duplicate remote mutations. Network failure must not become logout.
+**Risk:** Enabling the candidate without the real-session gate could encounter a
+previously unseen signature/device/risk requirement. A Human run must stop
+rather than rotate profiles, fabricate identity or retry through a risk control.
 
-**Suggested solution:** Verify a narrow acceptable refresh material/profile
-contract, then stage a same-account candidate behind Provider-owned single-flight,
-durably write/ack opaque rotation, recheck generation and commit installation.
-Use a minimum recoverable journal/handshake and preserve logout dominance; test
-ten reads/one refresh, rejection/offline, late response, rotation/restart,
-read-once retry and mutation no-replay before production promotion.
+**Suggested solution:** Execute the bounded disposable WeChat-session gate: at
+most one refresh, one account verification and one ordinary authenticated read,
+with no retained request bodies, URLs, cookies or session material. If accepted,
+replace the release-disabled activation decision without widening supported
+login types. Keep QQ type 2, NetEase and every other Provider out of this route.
 
-**Trigger condition:** The 2026-10-06 session-continuation task triggered this
-item. Resume production implementation after its bounded protocol/material gate
-is accepted; see `docs/research/provider-playback-session-audit-2026-10-06.md`.
+**Trigger condition:** The machine implementation and synthetic regression
+matrix were completed on 2026-10-21. Resume only when the Human explicitly
+authorizes/provides the disposable-session protocol observation; see
+`docs/research/provider-playback-session-audit-2026-10-06.md`.
 
 ## TD-016 — Persistent media-object cache and native retirement bounds
 

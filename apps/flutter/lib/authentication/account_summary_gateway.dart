@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart' as bridge;
 
 enum AccountSummaryFailure {
@@ -51,6 +52,7 @@ class RustAccountSummaryGateway implements AccountSummaryGateway {
     this.providerId = 'qq-music',
     CredentialVault? credentialVault,
     this.operationFactory,
+    this.sessionContinuation,
   }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
@@ -58,13 +60,14 @@ class RustAccountSummaryGateway implements AccountSummaryGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final AccountSummaryLoadOperationFactory? operationFactory;
+  final QqSessionContinuationCoordinator? sessionContinuation;
 
   @override
-  AccountSummaryLoadOperation beginLoad() =>
-      _VaultCleaningAccountSummaryLoadOperation(
-        operationFactory?.call() ?? _beginRustLoad(providerId),
-        _credentialVault,
-      );
+  AccountSummaryLoadOperation beginLoad() => _ContinuingAccountSummaryOperation(
+    () => operationFactory?.call() ?? _beginRustLoad(providerId),
+    _credentialVault,
+    providerId == 'qq-music' ? sessionContinuation : null,
+  );
 }
 
 AccountSummaryLoadOperation _beginRustLoad(String providerId) =>
@@ -92,23 +95,45 @@ class _RustAccountSummaryLoadOperation implements AccountSummaryLoadOperation {
   }
 }
 
-class _VaultCleaningAccountSummaryLoadOperation
+class _ContinuingAccountSummaryOperation
     implements AccountSummaryLoadOperation {
-  const _VaultCleaningAccountSummaryLoadOperation(
-    this._inner,
+  _ContinuingAccountSummaryOperation(
+    this._factory,
     this._credentialVault,
-  );
+    this._continuation,
+  ) : _active = _factory();
 
-  final AccountSummaryLoadOperation _inner;
+  final AccountSummaryLoadOperationFactory _factory;
   final CredentialVault _credentialVault;
+  final QqSessionContinuationCoordinator? _continuation;
+  AccountSummaryLoadOperation _active;
+  bool _cancelled = false;
 
   @override
-  bool cancel() => _inner.cancel();
+  bool cancel() {
+    _cancelled = true;
+    return _active.cancel();
+  }
 
   @override
   Future<AccountSummaryLoadResult> run() async {
-    final result = await _inner.run();
+    var result = await _active.run();
     if (result.failure != AccountSummaryFailure.credentialRejected) {
+      return result;
+    }
+    final continuation = _continuation;
+    if (continuation != null) {
+      final outcome = await continuation.continueAfterReadRejection();
+      if (outcome == QqSessionContinuationResult.continued && !_cancelled) {
+        _active = _factory();
+        result = await _active.run();
+        return result;
+      }
+      if (outcome != QqSessionContinuationResult.reauthenticationRequired) {
+        return const AccountSummaryLoadResult(
+          failure: AccountSummaryFailure.serviceUnavailable,
+        );
+      }
       return result;
     }
     try {

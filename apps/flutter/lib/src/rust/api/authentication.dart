@@ -7,8 +7,8 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `clear_desktop_quick_start_attempt`, `clear_start_attempt`, `current_unix_seconds`, `desktop_quick_start_attempt_guard`, `failed_account_summary`, `failed_desktop_quick_start`, `failed_desktop_quick_update`, `failed_restore`, `failed_start`, `failed_transfer_export`, `failed_transfer_import`, `failed_verification`, `map_account_summary_failure`, `map_account_summary_load`, `map_artifact_io_error`, `map_desktop_quick_failure`, `map_error`, `map_persistence_error`, `map_progress`, `map_restore_state`, `map_transfer_error`, `map_verification_failure`, `native_qq_music_provider`, `read_transfer_artifact`, `start_attempt_guard`, `write_private_new_file`, `write_transfer_artifacts`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `clear_desktop_quick_start_attempt`, `clear_start_attempt`, `current_unix_seconds`, `desktop_quick_start_attempt_guard`, `failed_account_summary`, `failed_desktop_quick_start`, `failed_desktop_quick_update`, `failed_refresh_preparation`, `failed_refresh_verification`, `failed_restore`, `failed_start`, `failed_transfer_export`, `failed_transfer_import`, `failed_verification`, `map_account_summary_failure`, `map_account_summary_load`, `map_artifact_io_error`, `map_desktop_quick_failure`, `map_error`, `map_persistence_error`, `map_progress`, `map_refresh_failure`, `map_refresh_preparation`, `map_restore_state`, `map_transfer_error`, `map_verification_failure`, `native_qq_music_provider`, `read_transfer_artifact`, `start_attempt_guard`, `write_private_new_file`, `write_transfer_artifacts`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 int reserveQqMusicDesktopQuickLoginStart() => RustLib.instance.api
     .crateApiAuthenticationReserveQqMusicDesktopQuickLoginStart();
@@ -109,6 +109,46 @@ QqMusicCredentialRestore restoreQqMusicCredentialFromSecureStorage({
     .crateApiAuthenticationRestoreQqMusicCredentialFromSecureStorage(
       secretBytes: secretBytes,
     );
+
+/// Resolves a crash-recovery stage against the opaque current document. This
+/// never exposes credential fields to Flutter.
+QqMusicStagedRecovery restoreQqMusicStagedCredentialRotation({
+  Uint8List? currentSecretBytes,
+  required List<int> stagedSecretBytes,
+}) => RustLib.instance.api
+    .crateApiAuthenticationRestoreQqMusicStagedCredentialRotation(
+      currentSecretBytes: currentSecretBytes,
+      stagedSecretBytes: stagedSecretBytes,
+    );
+
+Future<QqMusicRefreshPreparation> prepareQqMusicRefreshAfterReadRejection() =>
+    RustLib.instance.api
+        .crateApiAuthenticationPrepareQqMusicRefreshAfterReadRejection();
+
+Future<QqMusicRefreshPreparation> prepareQqMusicRefreshCheckpoint() => RustLib
+    .instance
+    .api
+    .crateApiAuthenticationPrepareQqMusicRefreshCheckpoint();
+
+Future<QqMusicRefreshVerification> verifyQqMusicStagedRefreshCandidate({
+  required int reservationId,
+}) => RustLib.instance.api
+    .crateApiAuthenticationVerifyQqMusicStagedRefreshCandidate(
+      reservationId: reservationId,
+    );
+
+QqMusicRefreshFailure? commitQqMusicStagedRefreshCandidate({
+  required int reservationId,
+}) => RustLib.instance.api
+    .crateApiAuthenticationCommitQqMusicStagedRefreshCandidate(
+      reservationId: reservationId,
+    );
+
+QqMusicRefreshFailure? abortQqMusicCredentialRefresh({
+  required int reservationId,
+}) => RustLib.instance.api.crateApiAuthenticationAbortQqMusicCredentialRefresh(
+  reservationId: reservationId,
+);
 
 int? reserveQqMusicCredentialVerification() => RustLib.instance.api
     .crateApiAuthenticationReserveQqMusicCredentialVerification();
@@ -530,4 +570,92 @@ class QqMusicQrLoginUpdate {
           state == other.state &&
           failure == other.failure &&
           sessionActive == other.sessionActive;
+}
+
+enum QqMusicRefreshFailure {
+  productionGateDisabled,
+  noCredential,
+  notDue,
+  notRefreshable,
+  unsupportedLoginType,
+  network,
+  rateLimited,
+  serviceUnavailable,
+  invalidResponse,
+  reauthenticationRequired,
+  replaced,
+  storageUnavailable,
+}
+
+class QqMusicRefreshPreparation {
+  final int? reservationId;
+  final Uint8List? stagedSecretBytes;
+  final bool reusedNewGeneration;
+  final QqMusicRefreshFailure? failure;
+
+  const QqMusicRefreshPreparation({
+    this.reservationId,
+    this.stagedSecretBytes,
+    required this.reusedNewGeneration,
+    this.failure,
+  });
+
+  @override
+  int get hashCode =>
+      reservationId.hashCode ^
+      stagedSecretBytes.hashCode ^
+      reusedNewGeneration.hashCode ^
+      failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicRefreshPreparation &&
+          runtimeType == other.runtimeType &&
+          reservationId == other.reservationId &&
+          stagedSecretBytes == other.stagedSecretBytes &&
+          reusedNewGeneration == other.reusedNewGeneration &&
+          failure == other.failure;
+}
+
+class QqMusicRefreshVerification {
+  final Uint8List? currentSecretBytes;
+  final QqMusicRefreshFailure? failure;
+
+  const QqMusicRefreshVerification({this.currentSecretBytes, this.failure});
+
+  @override
+  int get hashCode => currentSecretBytes.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicRefreshVerification &&
+          runtimeType == other.runtimeType &&
+          currentSecretBytes == other.currentSecretBytes &&
+          failure == other.failure;
+}
+
+class QqMusicStagedRecovery {
+  final QqMusicStagedRecoveryAction? action;
+  final QqMusicCredentialRestoreFailure? failure;
+
+  const QqMusicStagedRecovery({this.action, this.failure});
+
+  @override
+  int get hashCode => action.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QqMusicStagedRecovery &&
+          runtimeType == other.runtimeType &&
+          action == other.action &&
+          failure == other.failure;
+}
+
+enum QqMusicStagedRecoveryAction {
+  verifyCandidate,
+  verifyCommittedCurrent,
+  stale,
 }

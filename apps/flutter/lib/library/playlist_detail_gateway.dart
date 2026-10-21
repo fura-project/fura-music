@@ -1,4 +1,5 @@
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/album.dart' as bridge_album;
@@ -95,6 +96,7 @@ class RustPlaylistDetailGateway
   RustPlaylistDetailGateway({
     CredentialVault? credentialVault,
     PlaylistTrackPageLoadOperationFactory? operationFactory,
+    this.sessionContinuation,
   }) : _operationFactory = operationFactory ?? _beginRustLoad,
        _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
@@ -102,6 +104,7 @@ class RustPlaylistDetailGateway
 
   final CredentialVault _credentialVault;
   final PlaylistTrackPageLoadOperationFactory _operationFactory;
+  final QqSessionContinuationCoordinator? sessionContinuation;
 
   @override
   PlaylistTrackPageLoadOperation beginLoad({
@@ -109,8 +112,9 @@ class RustPlaylistDetailGateway
     required int offset,
     required int size,
   }) => _VaultCleaningTrackPageLoadOperation(
-    _operationFactory(playlist, offset, size),
+    () => _operationFactory(playlist, offset, size),
     _credentialVault,
+    playlist.providerId == 'qq-music' ? sessionContinuation : null,
   );
 
   @override
@@ -269,18 +273,41 @@ bool _blank(String? value) => value != null && value.trim().isEmpty;
 
 class _VaultCleaningTrackPageLoadOperation
     implements PlaylistTrackPageLoadOperation {
-  const _VaultCleaningTrackPageLoadOperation(this._inner, this._vault);
+  _VaultCleaningTrackPageLoadOperation(
+    this._factory,
+    this._vault,
+    this._continuation,
+  ) : _inner = _factory();
 
-  final PlaylistTrackPageLoadOperation _inner;
+  final PlaylistTrackPageLoadOperation Function() _factory;
+  PlaylistTrackPageLoadOperation _inner;
   final CredentialVault _vault;
+  final QqSessionContinuationCoordinator? _continuation;
+  bool _cancelled = false;
 
   @override
-  bool cancel() => _inner.cancel();
+  bool cancel() {
+    _cancelled = true;
+    return _inner.cancel();
+  }
 
   @override
   Future<PlaylistTrackPageResult> run() async {
     final result = await _inner.run();
     if (result.failure != UserLibraryFailure.credentialRejected) return result;
+    if (_continuation != null) {
+      final outcome = await _continuation.continueAfterReadRejection();
+      if (outcome == QqSessionContinuationResult.continued && !_cancelled) {
+        _inner = _factory();
+        return _inner.run();
+      }
+      if (outcome != QqSessionContinuationResult.reauthenticationRequired) {
+        return const PlaylistTrackPageResult(
+          failure: UserLibraryFailure.serviceUnavailable,
+        );
+      }
+      return result;
+    }
     try {
       await _vault.delete();
       return result;

@@ -3,6 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 const CREDENTIAL_PERSISTENCE_VERSION: u64 = 1;
+const CREDENTIAL_ROTATION_VERSION: u64 = 1;
 
 /// Numeric QQ Music login type carried by musicu requests.
 ///
@@ -264,6 +265,28 @@ impl Credential {
         &self.session_secrets
     }
 
+    /// Returns whether both credentials belong to the same QQ Music account.
+    ///
+    /// This comparison deliberately stays in Rust so platform storage code can
+    /// coordinate opaque documents without learning account identifiers.
+    #[must_use]
+    pub fn same_account_as(&self, other: &Self) -> bool {
+        self.music_id == other.music_id
+    }
+
+    /// Returns whether reliable local expiry metadata says a refresh checkpoint
+    /// is due. Credentials without expiry metadata are never guessed to be due.
+    #[must_use]
+    pub fn refresh_due_at(&self, now_unix_seconds: u64, safety_window_seconds: u64) -> bool {
+        let Some(expiry) = self.expiry else {
+            return false;
+        };
+        expiry
+            .expires_at_unix_seconds()
+            .saturating_sub(safety_window_seconds)
+            <= now_unix_seconds
+    }
+
     pub(crate) fn musicu_cookie_header(&self) -> String {
         let music_id = self.music_id();
         let music_key = self.music_key();
@@ -371,6 +394,126 @@ impl Credential {
     }
 }
 
+/// Opaque, versioned crash-recovery document for one credential rotation.
+///
+/// Flutter may persist these bytes, but must never decode or log them. The
+/// source document prevents a staged candidate from replacing a different or
+/// newer account after a crash.
+#[derive(Clone, Eq, PartialEq)]
+pub struct CredentialRotation {
+    source: Credential,
+    candidate: Credential,
+}
+
+impl CredentialRotation {
+    /// # Errors
+    ///
+    /// Rejects a candidate for a different account.
+    pub fn new(source: Credential, candidate: Credential) -> Result<Self, CredentialRotationError> {
+        if !source.same_account_as(&candidate) {
+            return Err(CredentialRotationError::AccountChanged);
+        }
+        Ok(Self { source, candidate })
+    }
+
+    #[must_use]
+    pub const fn source(&self) -> &Credential {
+        &self.source
+    }
+
+    #[must_use]
+    pub const fn candidate(&self) -> &Credential {
+        &self.candidate
+    }
+
+    /// # Errors
+    ///
+    /// Returns a diagnostics-safe persistence error without exposing content.
+    pub fn encode_for_secure_storage(&self) -> Result<Vec<u8>, CredentialRotationError> {
+        let document = StoredCredentialRotationV1 {
+            version: CREDENTIAL_ROTATION_VERSION,
+            source: self
+                .source
+                .encode_for_secure_storage()
+                .map_err(CredentialRotationError::Credential)?,
+            candidate: self
+                .candidate
+                .encode_for_secure_storage()
+                .map_err(CredentialRotationError::Credential)?,
+        };
+        serde_json::to_vec(&document).map_err(|_| CredentialRotationError::Serialize)
+    }
+
+    /// # Errors
+    ///
+    /// Malformed, unsupported, cross-account, or invalid embedded credentials
+    /// are rejected without retaining the input bytes.
+    pub fn decode_from_secure_storage(bytes: &[u8]) -> Result<Self, CredentialRotationError> {
+        let header: StoredCredentialHeader =
+            serde_json::from_slice(bytes).map_err(|_| CredentialRotationError::InvalidDocument)?;
+        if header.version != CREDENTIAL_ROTATION_VERSION {
+            return Err(CredentialRotationError::UnsupportedVersion(header.version));
+        }
+        let document: StoredCredentialRotationV1 =
+            serde_json::from_slice(bytes).map_err(|_| CredentialRotationError::InvalidDocument)?;
+        let source = Credential::decode_from_secure_storage(&document.source)
+            .map_err(CredentialRotationError::Credential)?;
+        let candidate = Credential::decode_from_secure_storage(&document.candidate)
+            .map_err(CredentialRotationError::Credential)?;
+        Self::new(source, candidate)
+    }
+}
+
+impl fmt::Debug for CredentialRotation {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CredentialRotation")
+            .field(
+                "same_account",
+                &self.source.same_account_as(&self.candidate),
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CredentialRotationError {
+    Serialize,
+    InvalidDocument,
+    UnsupportedVersion(u64),
+    Credential(CredentialPersistenceError),
+    AccountChanged,
+}
+
+impl fmt::Display for CredentialRotationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Serialize => formatter.write_str("could not serialize credential rotation"),
+            Self::InvalidDocument => formatter.write_str("credential rotation is malformed"),
+            Self::UnsupportedVersion(version) => {
+                write!(
+                    formatter,
+                    "credential rotation version {version} is unsupported"
+                )
+            }
+            Self::Credential(error) => error.fmt(formatter),
+            Self::AccountChanged => formatter.write_str("credential rotation changed account"),
+        }
+    }
+}
+
+impl std::error::Error for CredentialRotationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Credential(error) => Some(error),
+            Self::Serialize
+            | Self::InvalidDocument
+            | Self::UnsupportedVersion(_)
+            | Self::AccountChanged => None,
+        }
+    }
+}
+
 const fn is_cookie_octet(byte: u8) -> bool {
     matches!(
         byte,
@@ -401,6 +544,14 @@ struct StoredCredentialV1 {
     refresh_key: Option<String>,
     union_id: Option<String>,
     encrypted_uin: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct StoredCredentialRotationV1 {
+    version: u64,
+    source: Vec<u8>,
+    candidate: Vec<u8>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -537,7 +688,8 @@ impl CredentialRestorePlan {
 mod tests {
     use super::{
         Credential, CredentialExpiry, CredentialPersistenceError, CredentialRestorePlan,
-        CredentialSessionSecrets, InvalidCredential, LocalCredentialValidity, LoginType,
+        CredentialRotation, CredentialRotationError, CredentialSessionSecrets, InvalidCredential,
+        LocalCredentialValidity, LoginType,
     };
 
     fn credential() -> Credential {
@@ -623,6 +775,13 @@ mod tests {
             LocalCredentialValidity::NotExpired {
                 expires_at_unix_seconds: 1_300,
             },
+        );
+        assert!(!credential.refresh_due_at(999, 300));
+        assert!(credential.refresh_due_at(1_000, 300));
+        assert!(
+            !Credential::new("1", "key", LoginType::QQ)
+                .expect("credential without expiry")
+                .refresh_due_at(u64::MAX, u64::MAX)
         );
         assert_eq!(
             credential.local_validity_at(1_300),
@@ -716,6 +875,40 @@ mod tests {
         assert_eq!(
             Credential::decode_from_secure_storage(future.as_bytes()),
             Err(CredentialPersistenceError::UnsupportedVersion(2)),
+        );
+    }
+
+    #[test]
+    fn rotation_document_is_opaque_versioned_same_account_and_redacted() {
+        let source = credential();
+        let candidate = Credential::new(
+            source.music_id(),
+            "Q_H_L_rotated-secret",
+            source.login_type(),
+        )
+        .expect("candidate");
+        let rotation = CredentialRotation::new(source.clone(), candidate.clone())
+            .expect("same-account rotation");
+        let encoded = rotation
+            .encode_for_secure_storage()
+            .expect("encode rotation");
+        let decoded =
+            CredentialRotation::decode_from_secure_storage(&encoded).expect("decode rotation");
+        assert_eq!(decoded.source(), &source);
+        assert_eq!(decoded.candidate(), &candidate);
+        let debug = format!("{decoded:?}");
+        assert!(!debug.contains(source.music_id()));
+        assert!(!debug.contains("rotated-secret"));
+        assert_eq!(
+            CredentialRotation::new(
+                source,
+                Credential::new("999", "key", LoginType::QQ).expect("other account")
+            ),
+            Err(CredentialRotationError::AccountChanged)
+        );
+        assert_eq!(
+            CredentialRotation::decode_from_secure_storage(b"not-json"),
+            Err(CredentialRotationError::InvalidDocument)
         );
     }
 }

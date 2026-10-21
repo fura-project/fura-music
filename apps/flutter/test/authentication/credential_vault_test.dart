@@ -89,6 +89,81 @@ void main() {
     expect(inner.events, <String>['delete-start', 'delete-end', 'write']);
     expect(inner.value, orderedEquals(<int>[4, 5, 6]));
   });
+
+  test(
+    'rotation epoch makes logout and replacement dominate stale writes',
+    () async {
+      final current = _MemoryCredentialVault();
+      final staged = _MemoryCredentialVault();
+      final vault = SerializedCredentialVault(current, stagedVault: staged);
+      await vault.publishReplacement(Uint8List.fromList(<int>[1]));
+
+      final refreshEpoch = vault.reserveRotation();
+      expect(
+        await vault.stageIfCurrent(refreshEpoch, Uint8List.fromList(<int>[2])),
+        isTrue,
+      );
+      await vault.publishReplacement(Uint8List.fromList(<int>[9]));
+
+      expect(
+        await vault.publishIfCurrent(
+          refreshEpoch,
+          Uint8List.fromList(<int>[2]),
+        ),
+        isFalse,
+      );
+      expect(await current.read(), orderedEquals(<int>[9]));
+      expect(await staged.read(), isNull);
+
+      final logoutEpoch = vault.reserveRotation();
+      expect(await vault.deleteTransactionIfCurrent(logoutEpoch), isTrue);
+      expect(await current.read(), isNull);
+      expect(await staged.read(), isNull);
+    },
+  );
+
+  test('publication failure retains the staged recovery document', () async {
+    final current = _MemoryCredentialVault()..failWrites = true;
+    final staged = _MemoryCredentialVault();
+    final vault = SerializedCredentialVault(current, stagedVault: staged);
+    final epoch = vault.reserveRotation();
+
+    await vault.stageIfCurrent(epoch, Uint8List.fromList(<int>[2]));
+
+    expect(
+      vault.publishIfCurrent(epoch, Uint8List.fromList(<int>[3])),
+      throwsStateError,
+    );
+    expect(await staged.read(), orderedEquals(<int>[2]));
+  });
+
+  test('legacy write and delete still own both transaction slots', () async {
+    final current = _MemoryCredentialVault()
+      ..value = Uint8List.fromList(<int>[1]);
+    final staged = _MemoryCredentialVault()
+      ..value = Uint8List.fromList(<int>[2]);
+    final vault = SerializedCredentialVault(current, stagedVault: staged);
+
+    await vault.write(Uint8List.fromList(<int>[3]));
+    expect(await current.read(), orderedEquals(<int>[3]));
+    expect(await staged.read(), isNull);
+
+    staged.value = Uint8List.fromList(<int>[4]);
+    await vault.delete();
+    expect(await current.read(), isNull);
+    expect(await staged.read(), isNull);
+  });
+
+  test('failed stage read zeroes the already-loaded current bytes', () async {
+    final currentBytes = Uint8List.fromList(<int>[1, 2, 3]);
+    final vault = SerializedCredentialVault(
+      _BorrowingCredentialVault(currentBytes),
+      stagedVault: const _FailingReadCredentialVault(),
+    );
+
+    await expectLater(vault.readTransaction(), throwsA(isA<FormatException>()));
+    expect(currentBytes, everyElement(0));
+  });
 }
 
 class _MemorySecureStringStore implements SecureStringStore {
@@ -131,4 +206,51 @@ class _GatedCredentialVault implements CredentialVault {
     value = Uint8List.fromList(secretBytes);
     events.add('write');
   }
+}
+
+class _MemoryCredentialVault implements CredentialVault {
+  Uint8List? value;
+  bool failWrites = false;
+
+  @override
+  Future<void> delete() async => value = null;
+
+  @override
+  Future<Uint8List?> read() async =>
+      value == null ? null : Uint8List.fromList(value!);
+
+  @override
+  Future<void> write(Uint8List secretBytes) async {
+    if (failWrites) throw StateError('synthetic write failure');
+    value = Uint8List.fromList(secretBytes);
+  }
+}
+
+class _BorrowingCredentialVault implements CredentialVault {
+  const _BorrowingCredentialVault(this.value);
+
+  final Uint8List value;
+
+  @override
+  Future<void> delete() async {}
+
+  @override
+  Future<Uint8List?> read() async => value;
+
+  @override
+  Future<void> write(Uint8List secretBytes) async {}
+}
+
+class _FailingReadCredentialVault implements CredentialVault {
+  const _FailingReadCredentialVault();
+
+  @override
+  Future<void> delete() async {}
+
+  @override
+  Future<Uint8List?> read() async =>
+      throw const FormatException('malformed staged storage');
+
+  @override
+  Future<void> write(Uint8List secretBytes) async {}
 }

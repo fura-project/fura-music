@@ -461,3 +461,152 @@ pinned regeneration for typed Queue completion.
 - `crates/qqmusic-client/src/wechat_qr.rs`
 - `docs/development/built-in-provider-ui-integration.md`
 - `docs/research/provider-playback-session-audit-2026-10-06.md`
+
+## 2026-10-21 addendum — QQ self-healing session V1 candidate
+
+This addendum supersedes only the earlier statements that the QQ coordinator,
+rotation handshake and bounded read retry were not implemented. The earlier
+text remains the historical pre-change audit. Production activation is still
+not accepted and TD-015 remains partially open.
+
+### Ownership and implementation
+
+- `QqMusicProvider` remains authoritative for credential identity,
+  refreshability, account equality, monotonic generation, the one complete
+  refresh-decision flight, verification and stale commit rejection. A read
+  rejection moves only its exact owning snapshot to `ContinuationRequired`.
+- A versioned opaque `CredentialRotation` binds source A to same-account
+  candidate B. Flutter never parses its credential fields. Debug output exposes
+  only typed states and byte counts.
+- `SerializedCredentialVault` now serializes one QQ transaction across current
+  and staged secure-storage keys. Login/account replacement and logout advance
+  its epoch synchronously, so late stage/publish/delete work cannot overtake a
+  newer user intent. Rotation order is stage B → verify B → publish B →
+  revalidate and commit the exact Rust reservation → remove stage.
+- Startup examines current plus staged bytes before ordinary restore. It handles
+  A/no-stage, A+B, B+B, no-current+stage, malformed/stale stage, definitive
+  candidate rejection, transient verification failure and publication failure.
+  B+B is a recoverable committed checkpoint; transient failures retain the
+  recoverable slots.
+- The app-lifetime `QqSessionContinuationCoordinator` owns no QQ fields or
+  session truth. It only drives the typed Rust phases and awaits durable opaque
+  storage acknowledgement. Startup uses it for an eligible locally expired
+  restore; resume is a checkpoint, not a probe-every-time loop.
+- QQ authenticated safe reads may continue once after an owning rejection and
+  retry their original read at most once. Concurrent rejected reads share the
+  Rust flight and each independently performs at most that one retry. Mutations
+  retain their existing single request and outcome-unknown semantics; none is
+  replayed automatically.
+- A successful refresh completed between a slow read's dispatch and rejection
+  is recognized only when the immediately completed flight matches that read's
+  exact source generation. Logout, replacement and unrelated refresh still
+  return `Replaced` rather than borrowing another session.
+
+The production Provider is constructed with refresh disabled in every release
+build. A Debug build additionally requires the explicit
+`FURA_QQ_WECHAT_REFRESH_EXPERIMENT=1` (or `true`) gate. This is a bounded Human
+protocol-observation hook, not a supported production setting.
+
+### Crash and concurrency properties verified synthetically
+
+Synthetic tests cover one complete flight with ten waiters, ten simultaneously
+rejected reads with one refresh and exactly one retry per read, same-account
+re-login/logout/account-switch dominance, stage/publication/commit failure,
+each recoverable startup slot shape, stale/malformed stage handling, transient
+recovery, terminal rejection/rate-limit non-looping, unsupported QQ login type,
+redacted diagnostics and transactional logout. Provider and existing mutation
+tests retain one transport dispatch per write; the continuation coordinator is
+injected only into safe-read gateways.
+
+Two concrete defects found while exercising the full decision path are retained
+as negative evidence:
+
+1. A slow rejecting read originally observed the newly installed generation as
+   a generic replacement and some of ten concurrent reads failed to retry. The
+   completed-flight match is now restricted to the exact source generation.
+2. `RustQqMusicAuthenticationGateway` originally wrapped an already
+   transactional vault in a second stage-less serializer, silently disabling
+   startup staging/recovery in production. It now preserves the exact supplied
+   `CredentialRotationVault` instance.
+
+A third integration race was removed after review: Dart no longer performs an
+unconditional Core sign-out after a disabled/unsupported continuation result.
+Rust invalidates only the exact `ContinuationRequired` generation; proactive
+checkpoint failure cannot clear an otherwise authenticated session.
+
+Final recovery review found two additional storage-edge defects. A malformed
+staged platform value previously blocked a separately valid current credential
+on every restart; startup now discards only the unreadable stage and restores A.
+Conversely, a transient `coreUnavailable` stage-classification result previously
+fell through the invalid-stage cleanup path; it now retains both A and B for a
+later recovery attempt.
+
+The same recovery review found that a staged-storage read failure could leave
+the already loaded current credential bytes in a Dart buffer while propagating
+the exception. `SerializedCredentialVault.readTransaction` now zeroes that
+buffer before rethrowing, with a borrowing-vault regression proving the actual
+loaded bytes are erased rather than merely dropping a copied reference.
+
+Legacy `CredentialVault.write/delete` entry points initially still operated on
+only the current slot when their concrete vault also owned a staged slot. They
+now delegate to full replacement/transaction deletion, so mutation rejection
+cleanup and injected compatibility callers cannot preserve a stale stage across
+logout or a newly published login. Vaults without staging retain their original
+single-key behavior.
+
+Final stale-result review found that a successful refresh completion recorded
+only its source generation. A later identical-account login could therefore
+still resemble "some newer same-account generation" to an old slow read. The
+completion record now includes the exact installed generation; only that exact
+generation can release the old read to retry, while a later same-account login
+returns `Replaced`.
+
+### Refreshed public evidence and production gate
+
+Read-only source inspection on 2026-10-21 found:
+
+| Source | Exact commit checked | Decision |
+| --- | --- | --- |
+| [L-1124/QQMusicApi](https://github.com/L-1124/QQMusicApi/tree/27861e51432ea6b6e88dc35c4e8c8e239c0339e8) | `27861e51432ea6b6e88dc35c4e8c8e239c0339e8` | Still corroborates the WeChat fields, but its client constructs an Android-shaped/fabricated device profile. It cannot authorize that profile in Fura. |
+| [YAQMC/qm-api-rs](https://github.com/YAQMC/qm-api-rs/tree/75f6e4d392f6d3e64608fb48e2480fb0087009e3) | `75f6e4d392f6d3e64608fb48e2480fb0087009e3` | Same L-1124 implementation family, not an independent wire vote. |
+| [yakult-green-tea/qq-music-api](https://github.com/yakult-green-tea/qq-music-api/tree/4a4a194e4ce43692a92647a6e190f3781d2d186d) | `4a4a194e4ce43692a92647a6e190f3781d2d186d` | Current source still carries the complete WeChat rotation material, but sends the outer request with an Android device context. Its QQ type-2 claim does not widen Fura V1. |
+
+This confirms the candidate material shape but still does **not** prove that
+Fura's existing lightweight `ct=11` Web envelope is accepted for a real
+disposable WeChat session. No real credential, account response or authenticated
+request was read or sent by the agent.
+
+The remaining gate is one Human-operated disposable WeChat session, bounded to
+one refresh request, one account verification and, only if necessary, one
+ordinary authenticated read. Stop immediately on 429, security/secondary
+verification, account mismatch or an unexpected device/signature requirement.
+Do not retain secret-bearing request bodies, cookies or URLs. Until that exact
+gate is accepted, production self-healing remains disabled and the correct
+outcome after an owning rejected credential is reauthentication.
+
+### 2026-10-21 machine validation and retained negative evidence
+
+- Pinned FRB 2.13.0 generation, Rust format, all 658 workspace/all-target
+  synthetic tests (27 live/Human tests ignored), 121 QQ Provider library tests,
+  111 Bridge library tests and strict Clippy for the three affected libraries
+  pass.
+- Dart format and analysis pass. The 93 affected Flutter credential/auth/read
+  gateway tests pass, as do the source/privacy hygiene audit and its 21 tests.
+- The complete Flutter suite reaches 999 passing tests but remains red because
+  the committed Settings test `mobile settings navigate from categories into
+  searchable detail pages` taps the outer Color Source container rather than
+  the select-only `DropdownMenu` field and cannot find its menu entry. The exact
+  same failure reproduces from a read-only archive of baseline
+  `0d555f8e09dafdd5c7eb0c6d8cc98d6615735b10`; no Settings source or test is in
+  this QQ task diff, so this bounded CORE task does not rewrite that UI test.
+- Workspace/all-target strict Clippy is also red on Rust 1.98's
+  `unused_async_trait_impl` for 46 pre-existing test transports. Every occurrence
+  remaining is outside this task's added test transport implementations; the two
+  new no-await refresh transports were corrected. Production/affected-library
+  strict Clippy is green. This negative gate is retained rather than hidden with
+  a global lint allowance or unrelated 46-site rewrite.
+
+These machine checks establish only deterministic lifecycle/storage semantics.
+They do not establish real QQ service acceptance, Android/iOS/macOS/Windows
+secure-storage behavior, physical-device lifecycle behavior or production
+refresh compatibility.

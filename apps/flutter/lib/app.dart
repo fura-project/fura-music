@@ -17,6 +17,7 @@ import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
 import 'package:flutterustmusic/authentication/qq_music_media_credential_cleanup.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
@@ -106,6 +107,7 @@ class MusicApp extends StatefulWidget {
     ValueChanged<AppPlaybackQualityPreference>? onPlaybackQualityChanged,
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
+    QqSessionContinuationCoordinator? qqSessionContinuation,
     Key? key,
   }) {
     RustMediaResolutionGateway? defaultMediaResolutionGateway;
@@ -123,15 +125,20 @@ class MusicApp extends StatefulWidget {
         favoriteArtistGateway == null) {
       final fallbackCredentialVault = SerializedCredentialVault(
         PlatformCredentialVault(),
+        stagedVault: PlatformCredentialVault(
+          credentialKey: PlatformCredentialVault.qqMusicStagedCredentialKey,
+        ),
       );
       authenticationGateway ??= RustQqMusicAuthenticationGateway(
         credentialVault: fallbackCredentialVault,
       );
       libraryGateway ??= RustUserLibraryGateway(
         credentialVault: fallbackCredentialVault,
+        sessionContinuation: qqSessionContinuation,
       );
       playlistDetailGateway ??= RustPlaylistDetailGateway(
         credentialVault: fallbackCredentialVault,
+        sessionContinuation: qqSessionContinuation,
       );
       if (mediaResolutionGateway == null) {
         defaultMediaResolutionGateway = RustMediaResolutionGateway(
@@ -141,31 +148,40 @@ class MusicApp extends StatefulWidget {
             QqMusicCredentialCleaningMediaResolutionGateway(
               defaultMediaResolutionGateway,
               credentialVault: fallbackCredentialVault,
+              sessionContinuation: qqSessionContinuation,
             );
       }
       lyricGateway ??= RustLyricGateway(
         credentialVault: fallbackCredentialVault,
+        qqSessionContinuation: qqSessionContinuation,
       );
       radarGateway ??= RustRadarGateway(
         credentialVault: fallbackCredentialVault,
+        sessionContinuation: qqSessionContinuation,
       );
       accountSummaryGateway ??= RustAccountSummaryGateway(
         credentialVault: fallbackCredentialVault,
+        sessionContinuation: qqSessionContinuation,
       );
       dailyRecommendationGateway ??= RustDailyRecommendationGateway(
         credentialVault: fallbackCredentialVault,
+        sessionContinuation: qqSessionContinuation,
       );
       personalizedPlaylistsGateway ??= RustPersonalizedPlaylistsGateway(
         credentialVault: fallbackCredentialVault,
+        sessionContinuation: qqSessionContinuation,
       );
       personalizedTracksGateway ??= RustPersonalizedTracksGateway(
         credentialVault: fallbackCredentialVault,
+        sessionContinuation: qqSessionContinuation,
       );
       favoriteAlbumGateway ??= RustFavoriteAlbumGateway(
         credentialVault: fallbackCredentialVault,
+        sessionContinuation: qqSessionContinuation,
       );
       favoriteArtistGateway ??= RustFavoriteArtistGateway(
         credentialVault: fallbackCredentialVault,
+        sessionContinuation: qqSessionContinuation,
       );
     }
     final resolvedRelatedTracksGateway =
@@ -253,6 +269,7 @@ class MusicApp extends StatefulWidget {
               ? null
               : (preference) => defaultMediaResolutionGateway!
                     .updatePreferredQuality(preference.audioPreference)),
+      qqSessionContinuation: qqSessionContinuation,
       key: key,
     );
   }
@@ -264,6 +281,7 @@ class MusicApp extends StatefulWidget {
     required this.initialSettings,
     required this.settingsStore,
     required this.onPlaybackQualityChanged,
+    this.qqSessionContinuation,
     super.key,
   });
 
@@ -273,17 +291,19 @@ class MusicApp extends StatefulWidget {
   final AppSettings initialSettings;
   final AppSettingsStore? settingsStore;
   final ValueChanged<AppPlaybackQualityPreference>? onPlaybackQualityChanged;
+  final QqSessionContinuationCoordinator? qqSessionContinuation;
 
   @override
   State<MusicApp> createState() => _MusicAppState();
 }
 
-class _MusicAppState extends State<MusicApp> {
+class _MusicAppState extends State<MusicApp> with WidgetsBindingObserver {
   late final AppSettingsController _settingsController;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _settingsController = AppSettingsController(
       widget.settingsStore,
       widget.onPlaybackQualityChanged,
@@ -299,7 +319,15 @@ class _MusicAppState extends State<MusicApp> {
       _settingsController.update(settings);
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(widget.qqSessionContinuation?.checkpoint());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(widget.playbackDependencies.playbackHost.dispose());
     _settingsController
       ..removeListener(_onSettingsChanged)

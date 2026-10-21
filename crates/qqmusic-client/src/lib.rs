@@ -66,8 +66,8 @@ pub use comments::{
 };
 pub use credential::{
     Credential, CredentialExpiry, CredentialPersistenceError, CredentialRestorePlan,
-    CredentialSessionSecrets, InvalidCredential, InvalidCredentialExpiry, InvalidLoginType,
-    LocalCredentialValidity, LoginType,
+    CredentialRotation, CredentialRotationError, CredentialSessionSecrets, InvalidCredential,
+    InvalidCredentialExpiry, InvalidLoginType, LocalCredentialValidity, LoginType,
 };
 pub use credential_transfer::{
     CredentialTransferError, CredentialTransferImport, CredentialTransferPackage,

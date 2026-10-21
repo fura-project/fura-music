@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/recommendations.dart' as bridge;
@@ -48,6 +49,7 @@ class RustDailyRecommendationGateway implements DailyRecommendationGateway {
     this.providerId = 'qq-music',
     CredentialVault? credentialVault,
     this.operationFactory,
+    this.sessionContinuation,
   }) : _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
        );
@@ -55,12 +57,14 @@ class RustDailyRecommendationGateway implements DailyRecommendationGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final DailyRecommendationLoadOperationFactory? operationFactory;
+  final QqSessionContinuationCoordinator? sessionContinuation;
 
   @override
   DailyRecommendationLoadOperation beginLoad() =>
       _VaultCleaningDailyRecommendationLoadOperation(
-        operationFactory?.call() ?? _beginRustLoad(providerId),
+        () => operationFactory?.call() ?? _beginRustLoad(providerId),
         _credentialVault,
+        providerId == 'qq-music' ? sessionContinuation : null,
       );
 }
 
@@ -92,21 +96,41 @@ class _RustDailyRecommendationLoadOperation
 
 class _VaultCleaningDailyRecommendationLoadOperation
     implements DailyRecommendationLoadOperation {
-  const _VaultCleaningDailyRecommendationLoadOperation(
-    this._inner,
+  _VaultCleaningDailyRecommendationLoadOperation(
+    this._factory,
     this._vault,
-  );
+    this._continuation,
+  ) : _inner = _factory();
 
-  final DailyRecommendationLoadOperation _inner;
+  final DailyRecommendationLoadOperationFactory _factory;
+  DailyRecommendationLoadOperation _inner;
   final CredentialVault _vault;
+  final QqSessionContinuationCoordinator? _continuation;
+  bool _cancelled = false;
 
   @override
-  bool cancel() => _inner.cancel();
+  bool cancel() {
+    _cancelled = true;
+    return _inner.cancel();
+  }
 
   @override
   Future<DailyRecommendationResult> run() async {
     final result = await _inner.run();
     if (result.failure != DailyRecommendationFailure.credentialRejected) {
+      return result;
+    }
+    if (_continuation != null) {
+      final outcome = await _continuation.continueAfterReadRejection();
+      if (outcome == QqSessionContinuationResult.continued && !_cancelled) {
+        _inner = _factory();
+        return _inner.run();
+      }
+      if (outcome != QqSessionContinuationResult.reauthenticationRequired) {
+        return const DailyRecommendationResult(
+          failure: DailyRecommendationFailure.serviceUnavailable,
+        );
+      }
       return result;
     }
     try {

@@ -1164,8 +1164,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicRefreshFailure dco_decode_box_autoadd_qq_music_refresh_failure(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicRelatedTracksLoadFailure
   dco_decode_box_autoadd_qq_music_related_tracks_load_failure(dynamic raw);
+
+  @protected
+  QqMusicStagedRecoveryAction
+  dco_decode_box_autoadd_qq_music_staged_recovery_action(dynamic raw);
 
   @protected
   QqMusicSynchronizedLyrics dco_decode_box_autoadd_qq_music_synchronized_lyrics(
@@ -1615,8 +1624,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicRefreshFailure? dco_decode_opt_box_autoadd_qq_music_refresh_failure(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicRelatedTracksLoadFailure?
   dco_decode_opt_box_autoadd_qq_music_related_tracks_load_failure(dynamic raw);
+
+  @protected
+  QqMusicStagedRecoveryAction?
+  dco_decode_opt_box_autoadd_qq_music_staged_recovery_action(dynamic raw);
 
   @protected
   QqMusicSynchronizedLyrics?
@@ -1996,11 +2014,32 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_qq_music_recommended_playlist_page_load_failure(dynamic raw);
 
   @protected
+  QqMusicRefreshFailure dco_decode_qq_music_refresh_failure(dynamic raw);
+
+  @protected
+  QqMusicRefreshPreparation dco_decode_qq_music_refresh_preparation(
+    dynamic raw,
+  );
+
+  @protected
+  QqMusicRefreshVerification dco_decode_qq_music_refresh_verification(
+    dynamic raw,
+  );
+
+  @protected
   QqMusicRelatedTracksLoad dco_decode_qq_music_related_tracks_load(dynamic raw);
 
   @protected
   QqMusicRelatedTracksLoadFailure
   dco_decode_qq_music_related_tracks_load_failure(dynamic raw);
+
+  @protected
+  QqMusicStagedRecovery dco_decode_qq_music_staged_recovery(dynamic raw);
+
+  @protected
+  QqMusicStagedRecoveryAction dco_decode_qq_music_staged_recovery_action(
+    dynamic raw,
+  );
 
   @protected
   QqMusicSynchronizedLyricLine dco_decode_qq_music_synchronized_lyric_line(
@@ -3112,8 +3151,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicRefreshFailure sse_decode_box_autoadd_qq_music_refresh_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicRelatedTracksLoadFailure
   sse_decode_box_autoadd_qq_music_related_tracks_load_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicStagedRecoveryAction
+  sse_decode_box_autoadd_qq_music_staged_recovery_action(
     SseDeserializer deserializer,
   );
 
@@ -3653,8 +3703,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicRefreshFailure? sse_decode_opt_box_autoadd_qq_music_refresh_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicRelatedTracksLoadFailure?
   sse_decode_opt_box_autoadd_qq_music_related_tracks_load_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicStagedRecoveryAction?
+  sse_decode_opt_box_autoadd_qq_music_staged_recovery_action(
     SseDeserializer deserializer,
   );
 
@@ -4136,6 +4197,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  QqMusicRefreshFailure sse_decode_qq_music_refresh_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicRefreshPreparation sse_decode_qq_music_refresh_preparation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicRefreshVerification sse_decode_qq_music_refresh_verification(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   QqMusicRelatedTracksLoad sse_decode_qq_music_related_tracks_load(
     SseDeserializer deserializer,
   );
@@ -4143,6 +4219,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   QqMusicRelatedTracksLoadFailure
   sse_decode_qq_music_related_tracks_load_failure(SseDeserializer deserializer);
+
+  @protected
+  QqMusicStagedRecovery sse_decode_qq_music_staged_recovery(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  QqMusicStagedRecoveryAction sse_decode_qq_music_staged_recovery_action(
+    SseDeserializer deserializer,
+  );
 
   @protected
   QqMusicSynchronizedLyricLine sse_decode_qq_music_synchronized_lyric_line(
@@ -5423,8 +5509,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_qq_music_refresh_failure(
+    QqMusicRefreshFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_qq_music_related_tracks_load_failure(
     QqMusicRelatedTracksLoadFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_qq_music_staged_recovery_action(
+    QqMusicStagedRecoveryAction self,
     SseSerializer serializer,
   );
 
@@ -6021,8 +6119,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_qq_music_refresh_failure(
+    QqMusicRefreshFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_qq_music_related_tracks_load_failure(
     QqMusicRelatedTracksLoadFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_qq_music_staged_recovery_action(
+    QqMusicStagedRecoveryAction? self,
     SseSerializer serializer,
   );
 
@@ -6588,6 +6698,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_qq_music_refresh_failure(
+    QqMusicRefreshFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_refresh_preparation(
+    QqMusicRefreshPreparation self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_refresh_verification(
+    QqMusicRefreshVerification self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_qq_music_related_tracks_load(
     QqMusicRelatedTracksLoad self,
     SseSerializer serializer,
@@ -6596,6 +6724,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_qq_music_related_tracks_load_failure(
     QqMusicRelatedTracksLoadFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_staged_recovery(
+    QqMusicStagedRecovery self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_qq_music_staged_recovery_action(
+    QqMusicStagedRecoveryAction self,
     SseSerializer serializer,
   );
 

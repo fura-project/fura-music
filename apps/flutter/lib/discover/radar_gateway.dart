@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/recommendations.dart' as bridge;
 
@@ -69,6 +70,7 @@ class RustRadarGateway implements RadarGateway {
   RustRadarGateway({
     CredentialVault? credentialVault,
     RadarTrackPageLoadOperationFactory? operationFactory,
+    this.sessionContinuation,
   }) : _operationFactory = operationFactory ?? _beginRustLoad,
        _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
@@ -76,12 +78,14 @@ class RustRadarGateway implements RadarGateway {
 
   final CredentialVault _credentialVault;
   final RadarTrackPageLoadOperationFactory _operationFactory;
+  final QqSessionContinuationCoordinator? sessionContinuation;
 
   @override
   RadarTrackPageLoadOperation beginLoad({required int page}) =>
       _VaultCleaningRadarTrackPageLoadOperation(
-        _operationFactory(page),
+        () => _operationFactory(page),
         _credentialVault,
+        sessionContinuation,
       );
 }
 
@@ -110,18 +114,41 @@ class _RustRadarTrackPageLoadOperation implements RadarTrackPageLoadOperation {
 
 class _VaultCleaningRadarTrackPageLoadOperation
     implements RadarTrackPageLoadOperation {
-  const _VaultCleaningRadarTrackPageLoadOperation(this._inner, this._vault);
+  _VaultCleaningRadarTrackPageLoadOperation(
+    this._factory,
+    this._vault,
+    this._continuation,
+  ) : _inner = _factory();
 
-  final RadarTrackPageLoadOperation _inner;
+  final RadarTrackPageLoadOperation Function() _factory;
+  RadarTrackPageLoadOperation _inner;
   final CredentialVault _vault;
+  final QqSessionContinuationCoordinator? _continuation;
+  bool _cancelled = false;
 
   @override
-  bool cancel() => _inner.cancel();
+  bool cancel() {
+    _cancelled = true;
+    return _inner.cancel();
+  }
 
   @override
   Future<RadarTrackPageResult> run() async {
     final result = await _inner.run();
     if (result.failure != RadarFailure.credentialRejected) return result;
+    if (_continuation != null) {
+      final outcome = await _continuation.continueAfterReadRejection();
+      if (outcome == QqSessionContinuationResult.continued && !_cancelled) {
+        _inner = _factory();
+        return _inner.run();
+      }
+      if (outcome != QqSessionContinuationResult.reauthenticationRequired) {
+        return const RadarTrackPageResult(
+          failure: RadarFailure.serviceUnavailable,
+        );
+      }
+      return result;
+    }
     try {
       await _vault.delete();
       return result;
