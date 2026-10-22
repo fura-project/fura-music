@@ -122,6 +122,19 @@ void main() {
     },
   );
 
+  test('reports whether a reserved rotation epoch is still current', () async {
+    final vault = SerializedCredentialVault(
+      _MemoryCredentialVault(),
+      stagedVault: _MemoryCredentialVault(),
+    );
+    final epoch = vault.reserveRotation();
+
+    expect(vault.isCurrent(epoch), isTrue);
+    final replacement = vault.publishReplacement(Uint8List.fromList(<int>[9]));
+    expect(vault.isCurrent(epoch), isFalse);
+    await replacement;
+  });
+
   test('publication failure retains the staged recovery document', () async {
     final current = _MemoryCredentialVault()..failWrites = true;
     final staged = _MemoryCredentialVault();

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart' as bridge;
 
@@ -237,6 +238,111 @@ void main() {
       expect(rejectionPrepareCalls, 0);
       expect(await current.read(), orderedEquals(<int>[1]));
       expect(await staged.read(), orderedEquals(<int>[2]));
+    },
+  );
+
+  test(
+    'checkpoint recovers a retained stage before preparing refresh',
+    () async {
+      final vault = SerializedCredentialVault(
+        _MemoryVault(),
+        stagedVault: _MemoryVault(),
+      );
+      var prepareCalls = 0;
+      var recoveryCalls = 0;
+      final coordinator = QqSessionContinuationCoordinator(
+        vault,
+        recoverStagedCredential: () async {
+          recoveryCalls++;
+          return StagedCredentialRecoveryResult.recovered;
+        },
+        prepareCheckpoint: () async {
+          prepareCalls++;
+          return const bridge.QqMusicRefreshPreparation(
+            reusedNewGeneration: false,
+            failure: bridge.QqMusicRefreshFailure.notDue,
+          );
+        },
+      );
+
+      expect(
+        await coordinator.checkpoint(),
+        QqSessionContinuationResult.continued,
+      );
+      expect(recoveryCalls, 1);
+      expect(prepareCalls, 0);
+    },
+  );
+
+  test(
+    'checkpoint prepares refresh only when no retained stage exists',
+    () async {
+      final vault = SerializedCredentialVault(
+        _MemoryVault(),
+        stagedVault: _MemoryVault(),
+      );
+      var prepareCalls = 0;
+      final coordinator = QqSessionContinuationCoordinator(
+        vault,
+        recoverStagedCredential: () async =>
+            StagedCredentialRecoveryResult.notNeeded,
+        prepareCheckpoint: () async {
+          prepareCalls++;
+          return const bridge.QqMusicRefreshPreparation(
+            reusedNewGeneration: false,
+            failure: bridge.QqMusicRefreshFailure.notDue,
+          );
+        },
+      );
+
+      expect(
+        await coordinator.checkpoint(),
+        QqSessionContinuationResult.notNeeded,
+      );
+      expect(prepareCalls, 1);
+    },
+  );
+
+  test(
+    'read rejection and resume checkpoints serialize as one owner',
+    () async {
+      final vault = SerializedCredentialVault(
+        _MemoryVault(),
+        stagedVault: _MemoryVault(),
+      );
+      final firstStarted = Completer<void>();
+      final releaseFirst = Completer<void>();
+      var checkpointPrepareCalls = 0;
+      final coordinator = QqSessionContinuationCoordinator(
+        vault,
+        recoverStagedCredential: () async =>
+            StagedCredentialRecoveryResult.notNeeded,
+        prepareAfterReadRejection: () async {
+          firstStarted.complete();
+          await releaseFirst.future;
+          return const bridge.QqMusicRefreshPreparation(
+            reusedNewGeneration: true,
+          );
+        },
+        prepareCheckpoint: () async {
+          checkpointPrepareCalls++;
+          return const bridge.QqMusicRefreshPreparation(
+            reusedNewGeneration: false,
+            failure: bridge.QqMusicRefreshFailure.notDue,
+          );
+        },
+      );
+
+      final rejection = coordinator.continueAfterReadRejection();
+      await firstStarted.future;
+      final checkpoint = coordinator.checkpoint();
+      await pumpEventQueue();
+      expect(checkpointPrepareCalls, 0);
+
+      releaseFirst.complete();
+      expect(await rejection, QqSessionContinuationResult.continued);
+      expect(await checkpoint, QqSessionContinuationResult.notNeeded);
+      expect(checkpointPrepareCalls, 1);
     },
   );
 }

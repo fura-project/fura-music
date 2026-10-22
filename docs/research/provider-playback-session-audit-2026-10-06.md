@@ -1,8 +1,9 @@
 # Provider, playback and session audit — 2026-10-06
 
-Status: playback/cache and profile extraction implemented; refresh foundations
-are offline candidates, not production automatic continuation. Overall task is
-not complete. Physical-device and real-session gates remain open.
+Status: playback/cache and profile extraction implemented; the bounded QQ
+WeChat Web-profile gate passed on 2026-10-22, but Release automatic continuation
+remains disabled pending Human authorization. Overall task is not complete;
+physical-device, production-soak and other Provider gates remain open.
 
 ## Source baseline and authority
 
@@ -563,6 +564,10 @@ returns `Replaced`.
 
 ### Refreshed public evidence and production gate
 
+The following was the final pre-live evidence state on 2026-10-21. Its missing
+wire-proof conclusion is superseded only by the bounded 2026-10-22 PASS recorded
+below; its source-family and risk-boundary findings remain valid.
+
 Read-only source inspection on 2026-10-21 found:
 
 | Source | Exact commit checked | Decision |
@@ -610,3 +615,84 @@ These machine checks establish only deterministic lifecycle/storage semantics.
 They do not establish real QQ service acceptance, Android/iOS/macOS/Windows
 secure-storage behavior, physical-device lifecycle behavior or production
 refresh compatibility.
+
+### 2026-10-21 post-commit correctness follow-up and executable gate
+
+The committed candidate at
+`476c4cfd485c94dea37984a33e36f9b1202c8b43` received a fresh diff and lifecycle
+audit before any real request. That audit found four directly related defects;
+they remain negative evidence rather than being erased by later green tests:
+
+1. `AppLifecycleState.resumed` only prepared a new refresh checkpoint. It did
+   not retry a durable staged candidate left by a transient verification or
+   current-publication failure, so convergence required a process restart.
+   Resume now reconciles that transaction first and prepares a new checkpoint
+   only when no stage exists.
+2. Startup transaction inspection reserved its vault epoch after asynchronous
+   reads/classification. A replacement during that interval could let stale
+   bytes be imported or stale cleanup target a newer transaction. The epoch is
+   now captured before the read and revalidated before every import/delete.
+3. Replacement during candidate verification returned `replaced` but left the
+   old `_pendingRecovery` wrapper installed. Every later verification could
+   therefore retry an obsolete epoch. All replacement exits now resolve that
+   stale owner while leaving the newer credential untouched.
+4. The publication-failure reclassification path zeroed its temporary buffers
+   only after the classifier returned. A thrown classifier skipped zeroization.
+   Current and staged buffers are now erased in `finally`.
+
+The app-lifetime coordinator serializes resume checkpoints and read-rejection
+continuations through one Dart owner. New regressions cover retained-stage
+resume, no-stage fallthrough, read/resume ordering, replacement during snapshot
+read and fallback, stale-owner cleanup on the next verification, and exact
+buffer zeroization when reclassification throws.
+
+`crates/qqmusic-client/tests/live_wechat_refresh_gate.rs` is the separate
+Debug-only, ignored, Human-operated wire gate. It requires an explicit opt-in
+and an absolute transient QR base path, creates the actual PNG/JPEG with
+create-new mode and Unix `0600`, removes it on completion/drop, and never prints
+credential, account, Cookie, URL or response material. After authentication it
+issues exactly one refresh request and exactly one account verification. The
+verification itself is the necessary ordinary authenticated read, so no third
+request is sent. HTTP 429, MusicU 2001 and account mismatch classify
+`BLOCKED_BY_RISK_CONTROL`; no profile/device/envelope fallback is attempted.
+
+The three non-live harness tests pass, including media-extension resolution,
+create-new/removal/mode and fail-closed classification. An actual Release test
+run with `FURA_QQ_WECHAT_REFRESH_EXPERIMENT=1` proves the production constructor
+still rejects activation. Rust workspace/all-target tests, affected strict
+Clippy, Dart format/analyze, 49 focused recovery tests, the broader affected
+Flutter batch and privacy hygiene pass. The complete Flutter suite reports
+1008 passes and only the previously retained unrelated Settings failure. No
+live QQ request has yet been made at this checkpoint; the next action is the
+single disposable-session QR interaction. A wire PASS will preserve evidence
+but will not authorize Release activation.
+
+### 2026-10-22 bounded QQ WeChat protocol result
+
+The Debug-only gate completed with classification `PASS` against the exact
+existing Fura Web profile. The first transient QR expired before the Human
+could scan it; that run never authenticated and therefore never entered the
+refresh function. Its private QR file was removed. The Human then explicitly
+requested a new interaction, and the second run produced this bounded sequence:
+
+1. WeChat QR accepted after scan and Human confirmation.
+2. Exactly one `refresh_credential` request returned a structurally complete
+   same-account WeChat credential.
+3. Exactly one `verify_credential` account request accepted that refreshed
+   credential and returned an account summary.
+4. No additional ordinary authenticated read was necessary or sent.
+5. No HTTP 429, MusicU 2001, CAPTCHA, secondary/security verification, account
+   mismatch, device identity, signature, package/certificate or attestation
+   requirement was observed.
+6. The second private QR file was removed at terminal completion. No credential,
+   account value, Cookie, secret-bearing URL/request/response body or user
+   content was printed or retained in the audit record.
+
+This result supplies the previously missing bounded wire evidence for the
+current WeChat `ct=11` candidate. It does not authorize QQ quick login, QQ login
+type 2, QQ Music App refresh, another profile/device identity, NetEase or any
+other Provider. It also does not authorize production activation: the Release
+constructor remains hard-disabled, with its environment-variable rejection
+proved in an actual Release-profile test. The only next product action is a
+separate Human decision on the minimal Release-gate change; physical-platform
+and longer-duration soak remain independent evidence gates.

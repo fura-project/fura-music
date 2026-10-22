@@ -31,17 +31,22 @@ pub(crate) type NativeProvider = QqMusicProvider<ReqwestTransport>;
 type NativeSession = QqMusicQrAuthenticationSession<ReqwestTransport>;
 type NativeDesktopQuickSession = QqMusicDesktopQuickAuthenticationSession<ReqwestTransport>;
 
+fn qq_refresh_experiment_enabled(debug_build: bool, value: Option<&str>) -> bool {
+    debug_build && matches!(value, Some("1" | "true"))
+}
+
 static QQ_MUSIC_PROVIDER: LazyLock<Result<NativeProvider, ()>> = LazyLock::new(|| {
     ReqwestTransport::new()
         .map(QqMusicClient::new)
         .map(|client| {
             QqMusicProvider::new_with_refresh_activation(
                 client,
-                cfg!(debug_assertions)
-                    && matches!(
-                        std::env::var("FURA_QQ_WECHAT_REFRESH_EXPERIMENT").as_deref(),
-                        Ok("1" | "true")
-                    ),
+                qq_refresh_experiment_enabled(
+                    cfg!(debug_assertions),
+                    std::env::var("FURA_QQ_WECHAT_REFRESH_EXPERIMENT")
+                        .ok()
+                        .as_deref(),
+                ),
             )
         })
         .map_err(|_| ())
@@ -1515,11 +1520,33 @@ mod tests {
         QqMusicRefreshVerification, begin_qq_music_account_summary_load, clear_start_attempt,
         failed_start, map_account_summary_failure, map_desktop_quick_failure, map_error,
         map_persistence_error, map_transfer_error, map_verification_failure,
-        reserve_qq_music_wechat_qr_login_start, start_attempt_guard, write_transfer_artifacts,
+        qq_refresh_experiment_enabled, reserve_qq_music_wechat_qr_login_start, start_attempt_guard,
+        write_transfer_artifacts,
     };
     use provider_api::{AccountSummaryError, AuthenticationError, DesktopQuickAuthenticationError};
     use provider_qqmusic::QqMusicCredentialTransferError as ProviderCredentialTransferError;
     use qqmusic_client::{CredentialPersistenceError, CredentialTransferError, InvalidCredential};
+
+    #[test]
+    fn refresh_experiment_requires_debug_build_and_explicit_opt_in() {
+        assert!(!qq_refresh_experiment_enabled(false, None));
+        assert!(!qq_refresh_experiment_enabled(false, Some("1")));
+        assert!(!qq_refresh_experiment_enabled(false, Some("true")));
+        assert!(!qq_refresh_experiment_enabled(true, None));
+        assert!(!qq_refresh_experiment_enabled(true, Some("TRUE")));
+        assert!(qq_refresh_experiment_enabled(true, Some("1")));
+        assert!(qq_refresh_experiment_enabled(true, Some("true")));
+    }
+
+    #[test]
+    fn release_profile_cannot_enable_refresh_from_environment_value() {
+        if !cfg!(debug_assertions) {
+            assert!(!qq_refresh_experiment_enabled(
+                cfg!(debug_assertions),
+                Some("1"),
+            ));
+        }
+    }
 
     #[test]
     fn bridge_failure_mapping_is_typed_and_complete() {

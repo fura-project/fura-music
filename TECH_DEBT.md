@@ -311,39 +311,50 @@ separate Human Decision defines Queue provenance and retention behavior.
 
 ## TD-015 — Refresh foundations lack atomic Provider/vault continuation
 
-**Status:** Partially resolved; production protocol gate open
+**Status:** Partially resolved; bounded protocol PASS, production activation open
 
-**Problem:** The QQ WeChat candidate now implements the machine-verifiable
-continuation mechanics, but its exact Fura Web-profile request still lacks the
-required bounded disposable-session proof. Production activation therefore
-remains disabled. NetEase remains outside this QQ-specific V1 and still has no
-accepted minimal refresh-Cookie contract.
+**Problem:** The QQ WeChat candidate implements the machine-verifiable
+continuation mechanics and its exact Fura Web-profile request passed the bounded
+disposable-session gate on 2026-10-22. Production activation nevertheless
+remains disabled pending the separate Human decision required by this workstream.
+NetEase remains outside this QQ-specific V1 and still has no accepted minimal
+refresh-Cookie contract.
 
-**Why accepted:** Current public QQ implementations corroborate the complete
-WeChat material shape, but the current families use an Android-shaped outer
-profile or fabricated device/install identity. They do not prove that Fura's
-existing lightweight Web envelope is accepted. Synthetic correctness cannot
-authorize real-account traffic or production activation.
+**Why accepted:** The live gate proved only one bounded disposable WeChat
+session: exactly one refresh and one account verification accepted the current
+lightweight Web envelope. It did not authorize broad account automation,
+another login type/profile, or Release behavior. Production activation remains
+a Human-owned product/risk decision rather than an inference from one PASS.
 
 **Impact:** Rust owns refreshability, candidate/account validation, generation
 and stale commit; Flutter only serializes opaque current/stage storage and waits
 for durable acknowledgement. Startup recovery, lifecycle checkpoints and
 safe-read retry-once are wired, but release users still truthfully reauthenticate
-after an owning credential rejection until the Human protocol gate passes.
+after an owning credential rejection until the Human authorizes and the project
+validates the still-disabled Release activation change.
+Resume now retries a retained durable stage before preparing a new rotation,
+and replacement/logout epochs invalidate both in-flight snapshots and their
+pending recovery wrapper. These corrections close the known local lifecycle
+gaps; the 2026-10-22 bounded PASS supplies the V1 wire evidence, not production
+or cross-platform acceptance.
 
-**Risk:** Enabling the candidate without the real-session gate could encounter a
-previously unseen signature/device/risk requirement. A Human run must stop
-rather than rotate profiles, fabricate identity or retry through a risk control.
+**Risk:** A single accepted disposable session does not prove long-duration,
+cross-platform or broad-account behavior. Future 429, secondary verification,
+account mismatch or device/signature requirements must remain hard stops rather
+than trigger profile rotation, fabricated identity or retries.
 
-**Suggested solution:** Execute the bounded disposable WeChat-session gate: at
-most one refresh, one account verification and one ordinary authenticated read,
-with no retained request bodies, URLs, cookies or session material. If accepted,
-replace the release-disabled activation decision without widening supported
-login types. Keep QQ type 2, NetEase and every other Provider out of this route.
+**Suggested solution:** After explicit Human authorization, make only the
+minimal Release activation change for the already-tested WeChat candidate and
+rerun Release, lifecycle and soak validation. Keep QQ type 2, QQ quick login,
+NetEase and every other Provider out of this route. The retained ignored
+Debug-only harness is `crates/qqmusic-client/tests/live_wechat_refresh_gate.rs`;
+account verification was the bounded authenticated read, so the PASS required
+no additional ordinary request.
 
 **Trigger condition:** The machine implementation and synthetic regression
-matrix were completed on 2026-10-21. Resume only when the Human explicitly
-authorizes/provides the disposable-session protocol observation; see
+matrix completed on 2026-10-21 and the bounded protocol gate passed on
+2026-10-22. Resume production activation only when the Human explicitly
+authorizes that separate change; see
 `docs/research/provider-playback-session-audit-2026-10-06.md`.
 
 ## TD-016 — Persistent media-object cache and native retirement bounds

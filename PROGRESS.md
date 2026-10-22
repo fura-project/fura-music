@@ -2,18 +2,18 @@
 execution:
   mode: HUMAN_DIRECTED
   work_domain: CORE
-  state: WAITING_FOR_HUMAN_PROTOCOL_GATE
+  state: WAITING_FOR_HUMAN_PRODUCTION_ACTIVATION
   acceptance_milestone: QQ_SELF_HEALING_SESSION_V1
   active_workstream: QQ_SESSION_CONTINUATION
-  current_task: QQ_REFRESH_COORDINATOR_RECOVERY_AND_BOUNDED_READ_RETRY
-  next_action: HUMAN_DISPOSABLE_WECHAT_SESSION_PROTOCOL_GATE
+  current_task: QQ_WECHAT_PROTOCOL_GATE_PASSED
+  next_action: HUMAN_RELEASE_ACTIVATION_DECISION
 ---
 
 # Current State
 
-- **2026-10-21 Human-directed CORE / QQ self-healing session V1:** initial
-  HEAD/tracked `origin/main` remain
-  `0d555f8e09dafdd5c7eb0c6d8cc98d6615735b10`; the pre-existing uncommitted
+- **2026-10-21 Human-directed CORE / QQ self-healing session V1:** committed
+  implementation baseline HEAD/tracked `origin/main` is
+  `476c4cfd485c94dea37984a33e36f9b1202c8b43`; the pre-existing uncommitted
   cross-platform packaging candidate is preserved and not rewritten by this
   workstream. QQ now has a Provider-owned complete-decision single-flight,
   exact generation/account refresh reservation, same-account opaque rotation,
@@ -27,19 +27,60 @@ execution:
   hard-disabled; Debug requires an explicit Human experiment gate. Current
   public sources corroborate the WeChat rotation fields but use Android-shaped
   outer profiles/device identity, so they do not prove Fura's existing `ct=11`
-  Web envelope. No real credential or account traffic was used. TD-015 is only
-  partially resolved pending one bounded disposable-session refresh plus
-  account verification and optional ordinary read. Pinned Bridge generation,
-  Rust format, 658 workspace tests, 121 QQ Provider tests, 111 Bridge tests,
-  strict affected-library Clippy, Dart format/analyze, 93 affected Flutter tests
-  and privacy hygiene checks pass. The complete Flutter run retains one
-  unrelated committed Settings failure after 999 passes, reproduced unchanged
-  from a read-only baseline archive. Workspace/all-target Clippy retains 46
+  Web envelope. On 2026-10-22 the bounded disposable-session gate classified
+  that exact envelope `PASS`: the first QR expired before scan and sent no
+  refresh; the replacement QR authenticated, followed by exactly one refresh
+  request and one account verification with an account summary present. No
+  additional ordinary read was necessary, no risk-control response occurred,
+  and both transient QR files were removed. TD-015 remains partially resolved
+  only because Release activation still requires a separate Human decision.
+  The post-commit audit found
+  and corrected an uncommitted resume-recovery gap: resume now reconciles a
+  retained staged rotation before preparing a new refresh. Rotation snapshot,
+  fallback and cleanup paths validate their epoch; a newer replacement clears
+  the stale pending recovery owner; and every temporary current/staged byte
+  buffer is zeroed even when reclassification throws. The app-lifetime
+  continuation serializes read-rejection and resume work. A Debug-only ignored
+  live gate now creates a private transient QR, performs exactly one refresh
+  and one account verification, prints only a typed classification and removes
+  the QR. Its three offline tests pass. Release-profile testing with the
+  activation environment value set proves the production gate remains disabled.
+  Rust format, workspace/all-target tests, strict affected-library Clippy, Dart
+  format/analyze, 49 focused recovery tests, the broader affected Flutter batch
+  and privacy hygiene checks pass. The complete Flutter run retains exactly one
+  unrelated committed Settings failure after 1008 passes. Workspace/all-target
+  Clippy retains 46
   Rust-1.98 `unused_async_trait_impl` errors in pre-existing test transports;
   this task's affected libraries are clean and the gate was not hidden with an
   allowance or unrelated rewrite. See the 2026-10-21 addendum
   in [the session audit](docs/research/provider-playback-session-audit-2026-10-06.md).
-  This checkpoint is authorized for a local commit; no push is authorized.
+  The corrective candidate is intentionally uncommitted and unpushed. The
+  Debug protocol gate is complete; Release refresh remains hard-disabled until
+  the Human separately authorizes the minimal production-gate change.
+
+- **2026-10-09 Human-directed CI / Packaging / Artifact Security:** initial
+  HEAD and tracked/live `origin/main` are
+  `0d555f8e09dafdd5c7eb0c6d8cc98d6615735b10`, with a clean worktree. The four
+  failed jobs in run `37769693045` are investigated from their complete logs;
+  failed SHA `7fd3329ab359267d9e90a0a83384a4e8fe6b9624` is evidence, not a reset
+  target. Only packaging, build-path privacy, artifact inspection and their
+  tests/documentation are in scope. Settings and other product behavior remain
+  unchanged; the earlier Settings Human visual gate is not closed by this task.
+  Local candidate, negative evidence, precise native-platform gaps and review
+  commands are recorded in
+  [the packaging investigation](docs/development/ci-packaging-2026-10-09.md).
+  Fresh ARM64/x64 Release APK build, complete native/manifest/verifier payload
+  checks and final privacy audits pass. The pinned AppImage builds/extracts;
+  438-ELF final audit and actual ordinary-user X11-window startup pass in both
+  Ubuntu 24.04 and Fedora 43 clean OCI filesystems without preinstalled app
+  runtime libraries. Privacy regressions, download failures, relevant packaging
+  tests, source identity/privacy, actionlint/ShellCheck and diff checks pass.
+  Original Windows/macOS first-party artifacts were not uploaded by the failed
+  jobs; their exact section-level origins and fresh MSVC/Xcode final artifacts,
+  signatures/loading/startup remain NOT VERIFIED. The Apple-only strip guard
+  retains the negative LLVM indirect-export evidence rather than claiming a
+  proxy pass. There is no fresh complete hosted workflow success claim.
+  No commit, push or new hosted workflow run is authorized.
 
 - **2026-10-09 two official M3 representatives, pending Human review:** initial
   HEAD/tracked origin/main `5a51b73b180e878f529ba011fbd1b0a059535c6c`, clean tree.

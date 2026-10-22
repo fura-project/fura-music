@@ -98,6 +98,8 @@ Future<void> main(List<String> arguments) async {
   );
   final qqSessionContinuation = QqSessionContinuationCoordinator(
     qqCredentialVault,
+    recoverStagedCredential:
+        qqAuthenticationGateway.recoverStagedCredentialIfPresent,
   );
   final netEaseAuthenticationGateway = RustNeteaseAuthenticationGateway(
     credentialVault: netEaseCredentialVault,

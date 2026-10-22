@@ -400,6 +400,142 @@ void main() {
     expect(await staged.read(), orderedEquals(<int>[2]));
   });
 
+  test('resume recovery retries a retained staged candidate', () async {
+    final current = _MemoryVault(Uint8List.fromList(<int>[1]));
+    final staged = _MemoryVault(Uint8List.fromList(<int>[2]));
+    var verificationCalls = 0;
+    final gateway = RustQqMusicAuthenticationGateway(
+      credentialVault: SerializedCredentialVault(current, stagedVault: staged),
+      credentialRotationRestorer:
+          ({required currentSecretBytes, required stagedSecretBytes}) =>
+              const bridge.QqMusicStagedRecovery(
+                action: bridge.QqMusicStagedRecoveryAction.verifyCandidate,
+              ),
+      verificationOperationFactory: () => _FakeVerificationOperation(
+        verificationCalls++ == 0
+            ? CredentialVerificationResult.network
+            : CredentialVerificationResult.authenticated,
+      ),
+      credentialExporter: () => bridge.QqMusicCredentialExport(
+        secretBytes: Uint8List.fromList(<int>[2]),
+      ),
+    );
+
+    expect(
+      await gateway.restoreCredential(),
+      CredentialRestoreResult.verificationRequired,
+    );
+    expect(
+      await gateway.beginCredentialVerification().run(),
+      CredentialVerificationResult.network,
+    );
+    expect(
+      await gateway.recoverStagedCredentialIfPresent(),
+      StagedCredentialRecoveryResult.recovered,
+    );
+    expect(verificationCalls, 2);
+    expect(await current.read(), orderedEquals(<int>[2]));
+    expect(await staged.read(), isNull);
+  });
+
+  test('resume recovery is a no-op when no stage exists', () async {
+    final gateway = RustQqMusicAuthenticationGateway(
+      credentialVault: SerializedCredentialVault(
+        _MemoryVault(Uint8List.fromList(<int>[1])),
+        stagedVault: _MemoryVault(),
+      ),
+    );
+
+    expect(
+      await gateway.recoverStagedCredentialIfPresent(),
+      StagedCredentialRecoveryResult.notNeeded,
+    );
+  });
+
+  test('replacement invalidates an in-flight staged snapshot read', () async {
+    final current = _MemoryVault(Uint8List.fromList(<int>[1]));
+    final staged = _GatedReadVault(Uint8List.fromList(<int>[2]));
+    final vault = SerializedCredentialVault(current, stagedVault: staged);
+    var importerCalls = 0;
+    final gateway = RustQqMusicAuthenticationGateway(
+      credentialVault: vault,
+      credentialRotationRestorer:
+          ({required currentSecretBytes, required stagedSecretBytes}) =>
+              const bridge.QqMusicStagedRecovery(
+                action: bridge.QqMusicStagedRecoveryAction.stale,
+              ),
+      credentialImporter: (_) {
+        importerCalls++;
+        return CredentialRestoreResult.verificationRequired;
+      },
+    );
+
+    final restore = gateway.restoreCredential();
+    await staged.readStarted.future;
+    final replacement = vault.publishReplacement(Uint8List.fromList(<int>[9]));
+    staged.releaseRead.complete();
+
+    expect(await restore, CredentialRestoreResult.coreUnavailable);
+    await replacement;
+    expect(importerCalls, 0);
+    expect(await current.read(), orderedEquals(<int>[9]));
+    expect(await staged.read(), isNull);
+  });
+
+  test(
+    'replacement wins while rejected candidate fallback is pending',
+    () async {
+      final current = _MemoryVault(Uint8List.fromList(<int>[1]));
+      final staged = _MemoryVault(Uint8List.fromList(<int>[2]));
+      final vault = SerializedCredentialVault(current, stagedVault: staged);
+      final verification = _GatedVerificationOperation(
+        CredentialVerificationResult.rejected,
+      );
+      var verificationCalls = 0;
+      var importerCalls = 0;
+      final gateway = RustQqMusicAuthenticationGateway(
+        credentialVault: vault,
+        credentialRotationRestorer:
+            ({required currentSecretBytes, required stagedSecretBytes}) =>
+                const bridge.QqMusicStagedRecovery(
+                  action: bridge.QqMusicStagedRecoveryAction.verifyCandidate,
+                ),
+        credentialImporter: (_) {
+          importerCalls++;
+          return CredentialRestoreResult.verificationRequired;
+        },
+        verificationOperationFactory: () => verificationCalls++ == 0
+            ? verification
+            : const _FakeVerificationOperation(
+                CredentialVerificationResult.authenticated,
+              ),
+        credentialExporter: () => bridge.QqMusicCredentialExport(
+          secretBytes: Uint8List.fromList(<int>[2]),
+        ),
+      );
+
+      expect(
+        await gateway.restoreCredential(),
+        CredentialRestoreResult.verificationRequired,
+      );
+      final recovery = gateway.beginCredentialVerification().run();
+      await verification.started.future;
+      await vault.publishReplacement(Uint8List.fromList(<int>[9]));
+      verification.release.complete();
+
+      expect(await recovery, CredentialVerificationResult.replaced);
+      expect(importerCalls, 0);
+      expect(await current.read(), orderedEquals(<int>[9]));
+      expect(await staged.read(), isNull);
+      expect(
+        await gateway.beginCredentialVerification().run(),
+        CredentialVerificationResult.authenticated,
+      );
+      expect(verificationCalls, 2);
+      expect(await current.read(), orderedEquals(<int>[9]));
+    },
+  );
+
   test('rejected staged candidate falls back to valid current', () async {
     final current = _MemoryVault(Uint8List.fromList(<int>[1]));
     final staged = _MemoryVault(Uint8List.fromList(<int>[2]));
@@ -475,6 +611,46 @@ void main() {
       expect(await staged.read(), orderedEquals(<int>[2]));
     },
   );
+
+  test('failed recovery reclassification still zeroes both buffers', () async {
+    final current = _TrackingReadVault(Uint8List.fromList(<int>[1]))
+      ..failWrites = true;
+    final staged = _TrackingReadVault(Uint8List.fromList(<int>[2]));
+    var recoveryCalls = 0;
+    final gateway = RustQqMusicAuthenticationGateway(
+      credentialVault: SerializedCredentialVault(current, stagedVault: staged),
+      credentialRotationRestorer:
+          ({required currentSecretBytes, required stagedSecretBytes}) {
+            recoveryCalls++;
+            if (recoveryCalls == 2) {
+              throw StateError('synthetic reclassification failure');
+            }
+            return const bridge.QqMusicStagedRecovery(
+              action: bridge.QqMusicStagedRecoveryAction.verifyCandidate,
+            );
+          },
+      verificationOperationFactory: () => const _FakeVerificationOperation(
+        CredentialVerificationResult.authenticated,
+      ),
+      credentialExporter: () => bridge.QqMusicCredentialExport(
+        secretBytes: Uint8List.fromList(<int>[2]),
+      ),
+    );
+
+    expect(
+      await gateway.restoreCredential(),
+      CredentialRestoreResult.verificationRequired,
+    );
+    expect(
+      await gateway.beginCredentialVerification().run(),
+      CredentialVerificationResult.coreUnavailable,
+    );
+    expect(recoveryCalls, 2);
+    expect(current.lastRead, isNotNull);
+    expect(staged.lastRead, isNotNull);
+    expect(current.lastRead, everyElement(0));
+    expect(staged.lastRead, everyElement(0));
+  });
 
   test(
     'transactional sign out removes current and staged credentials',
@@ -611,6 +787,24 @@ class _FakeVerificationOperation implements CredentialVerificationOperation {
   Future<CredentialVerificationResult> run() async => result;
 }
 
+class _GatedVerificationOperation implements CredentialVerificationOperation {
+  _GatedVerificationOperation(this.result);
+
+  final CredentialVerificationResult result;
+  final Completer<void> started = Completer<void>();
+  final Completer<void> release = Completer<void>();
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<CredentialVerificationResult> run() async {
+    started.complete();
+    await release.future;
+    return result;
+  }
+}
+
 class _GatedDeleteVault implements CredentialVault {
   final Completer<void> deleteStarted = Completer<void>();
   final Completer<void> releaseDelete = Completer<void>();
@@ -657,5 +851,35 @@ class _MemoryVault implements CredentialVault {
   Future<void> write(Uint8List secretBytes) async {
     if (failWrites) throw StateError('synthetic write failure');
     value = Uint8List.fromList(secretBytes);
+  }
+}
+
+class _TrackingReadVault extends _MemoryVault {
+  _TrackingReadVault(super.value);
+
+  Uint8List? lastRead;
+
+  @override
+  Future<Uint8List?> read() async {
+    lastRead = await super.read();
+    return lastRead;
+  }
+}
+
+class _GatedReadVault extends _MemoryVault {
+  _GatedReadVault(super.value);
+
+  final Completer<void> readStarted = Completer<void>();
+  final Completer<void> releaseRead = Completer<void>();
+  var _gated = false;
+
+  @override
+  Future<Uint8List?> read() async {
+    if (!_gated) {
+      _gated = true;
+      readStarted.complete();
+      await releaseRead.future;
+    }
+    return super.read();
   }
 }

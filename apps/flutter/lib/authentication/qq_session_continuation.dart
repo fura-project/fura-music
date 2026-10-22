@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart' as bridge;
 
 enum QqSessionContinuationResult {
@@ -19,6 +22,7 @@ typedef QqRefreshCommit = bridge.QqMusicRefreshFailure? Function({
 typedef QqRefreshAbort = bridge.QqMusicRefreshFailure? Function({
   required int reservationId,
 });
+typedef QqStagedRecovery = Future<StagedCredentialRecoveryResult> Function();
 
 /// App-lifetime platform driver for the Rust-owned QQ refresh reservation.
 ///
@@ -32,6 +36,7 @@ class QqSessionContinuationCoordinator {
     QqRefreshVerify? verify,
     QqRefreshCommit? commit,
     QqRefreshAbort? abort,
+    this.recoverStagedCredential,
   }) : _prepareAfterReadRejection =
            prepareAfterReadRejection ??
            bridge.prepareQqMusicRefreshAfterReadRejection,
@@ -47,12 +52,44 @@ class QqSessionContinuationCoordinator {
   final QqRefreshVerify _verify;
   final QqRefreshCommit _commit;
   final QqRefreshAbort _abort;
+  final QqStagedRecovery? recoverStagedCredential;
+  Future<void> _tail = Future<void>.value();
 
-  Future<QqSessionContinuationResult> continueAfterReadRejection() =>
-      _continue(_prepareAfterReadRejection, rejectionTrigger: true);
+  Future<QqSessionContinuationResult> continueAfterReadRejection() => _enqueue(
+    () => _continue(_prepareAfterReadRejection, rejectionTrigger: true),
+  );
 
-  Future<QqSessionContinuationResult> checkpoint() =>
-      _continue(_prepareCheckpoint, rejectionTrigger: false);
+  Future<QqSessionContinuationResult> checkpoint() => _enqueue(() async {
+    final recover = recoverStagedCredential;
+    if (recover != null) {
+      final recovery = await recover();
+      final result = switch (recovery) {
+        StagedCredentialRecoveryResult.notNeeded => null,
+        StagedCredentialRecoveryResult.recovered =>
+          QqSessionContinuationResult.continued,
+        StagedCredentialRecoveryResult.temporarilyUnavailable =>
+          QqSessionContinuationResult.temporarilyUnavailable,
+        StagedCredentialRecoveryResult.reauthenticationRequired =>
+          QqSessionContinuationResult.reauthenticationRequired,
+        StagedCredentialRecoveryResult.replaced =>
+          QqSessionContinuationResult.replaced,
+      };
+      if (result != null) return result;
+    }
+    return _continue(_prepareCheckpoint, rejectionTrigger: false);
+  });
+
+  Future<T> _enqueue<T>(Future<T> Function() action) {
+    final result = Completer<T>();
+    _tail = _tail.then((_) async {
+      try {
+        result.complete(await action());
+      } catch (error, stackTrace) {
+        result.completeError(error, stackTrace);
+      }
+    });
+    return result.future;
+  }
 
   Future<QqSessionContinuationResult> _continue(
     QqRefreshPrepare prepare, {

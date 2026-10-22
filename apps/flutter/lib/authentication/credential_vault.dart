@@ -25,6 +25,8 @@ abstract interface class CredentialRotationVault implements CredentialVault {
 
   int reserveRotation();
 
+  bool isCurrent(int epoch);
+
   Future<bool> stageIfCurrent(int epoch, Uint8List secretBytes);
 
   Future<bool> publishIfCurrent(int epoch, Uint8List secretBytes);
@@ -76,6 +78,9 @@ class SerializedCredentialVault implements CredentialRotationVault {
 
   @override
   int reserveRotation() => _epoch;
+
+  @override
+  bool isCurrent(int epoch) => epoch == _epoch;
 
   @override
   Future<bool> stageIfCurrent(int epoch, Uint8List secretBytes) =>
