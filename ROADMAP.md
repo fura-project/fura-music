@@ -12,15 +12,17 @@ entitlement-respecting clear HTTPS media gate passes.
 **Sequence:** audit → playback/cache → profiles → QQ → NetEase → KuGou →
 refresh/persistence integration → soak. Infrastructure implementation is serial.
 
-**Current checkpoint (2026-10-22):** replay/cache/profile extraction and
+**Current checkpoint (2026-10-23):** replay/cache/profile extraction and
 one-shot synthetic refresh Client candidates remain implemented. QQ now also
 has a QQ-specific Provider-owned complete-decision single-flight, exact
 generation/account reservation, opaque current-plus-stage crash recovery,
 startup/local-expiry/resume checkpoints, and safe-read refresh-once/retry-once
 integration. Logout, same-account re-login and account replacement invalidate
-late refresh work; mutations are not replayed. These paths are synthetic/offline
-candidate evidence only. Release builds cannot activate refresh, and Debug
-activation requires the explicit `FURA_QQ_WECHAT_REFRESH_EXPERIMENT` gate.
+late refresh work; mutations are not replayed. Human authorized Release
+activation after the bounded disposable WeChat gate accepted the exact existing
+Fura `ct=11` Web envelope. Debug and Release now enable the same narrowly scoped
+WeChat continuation without consulting an environment variable; unsupported QQ
+login types and other Providers remain outside the route.
 The post-commit audit additionally makes resume reconcile a retained staged
 rotation before starting new work, serializes resume with read-rejection
 continuation, makes snapshot/fallback cleanup epoch-aware, and clears a stale
@@ -28,25 +30,25 @@ recovery owner after replacement. The separate ignored Debug gate used a
 private, create-new, transient QR. One disposable WeChat session accepted the
 exact Fura Web profile, one refresh request succeeded and one account
 verification returned an account summary; no additional ordinary read was
-needed and no risk-control response occurred. This proves the bounded wire
-candidate, but does not authorize Release activation. NetEase's minimal
-refresh-Cookie requirements and KuGou's ordinary device/session/media contract
-remain separate unresolved gates.
+needed and no risk-control response occurred. Release construction, lifecycle
+soak, full Rust tests, affected strict Clippy, Dart analysis, focused Flutter
+regressions and Linux Release build pass. NetEase's minimal refresh-Cookie
+requirements and KuGou's ordinary device/session/media contract remain separate
+unresolved gates.
 See [the source audit and acceptance matrix](docs/research/provider-playback-session-audit-2026-10-06.md).
 
 **Boundaries:** no sidecar/proxy, raw JSON Bridge, profile/risk rotation,
 unclassified hardware identity, private app secret, package spoofing, protected
 media unlock, cross-Provider source or unsafe mutation replay. No real stored
-account automation, unrelated UI/platform changes, commit or push. Mobile and
-real-session completion cannot be inferred from Linux synthetic playback.
+account automation, unrelated UI/platform changes or further live refresh
+probing. Mobile and long-duration real-session completion cannot be inferred
+from Linux synthetic playback plus one bounded disposable-session gate.
 
-**Next gate:** Human authorization for the minimal Release activation change.
-Until that explicit decision, the production constructor remains disabled even
-though the bounded Debug protocol gate passed. If authorized, preserve the
-exact WeChat-only envelope, current typed failures, single-flight/vault owner
-and no mutation replay; then rerun Release, lifecycle and soak gates. Physical
-mobile soak remains independent. This is a partial checkpoint, not completion
-of the P0 self-healing login objective.
+**Next gate:** no machine-actionable QQ WeChat V1 implementation remains.
+Physical mobile/desktop lifecycle soak and cross-platform native secure-storage
+behavior remain independent evidence, not blockers to the completed bounded V1
+implementation. Other QQ login types and NetEase require their own protocol and
+Human authority; they are not fallback routes for this completion.
 
 ## Human Review Workstream — long-list continuation and Roam completion (HD-035)
 

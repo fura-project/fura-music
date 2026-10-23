@@ -345,6 +345,82 @@ void main() {
       expect(checkpointPrepareCalls, 1);
     },
   );
+
+  test(
+    'repeated resume checkpoints serialize and leave no orphan stage',
+    () async {
+      final current = _MemoryVault()..value = Uint8List.fromList(<int>[1]);
+      final staged = _MemoryVault();
+      final vault = SerializedCredentialVault(current, stagedVault: staged);
+      var prepareCalls = 0;
+      var activePreparations = 0;
+      var maximumActivePreparations = 0;
+      var verificationCalls = 0;
+      var commitCalls = 0;
+      final coordinator = QqSessionContinuationCoordinator(
+        vault,
+        recoverStagedCredential: () async =>
+            StagedCredentialRecoveryResult.notNeeded,
+        prepareCheckpoint: () async {
+          final call = prepareCalls++;
+          activePreparations++;
+          if (activePreparations > maximumActivePreparations) {
+            maximumActivePreparations = activePreparations;
+          }
+          await Future<void>.delayed(Duration.zero);
+          activePreparations--;
+          return call == 0
+              ? bridge.QqMusicRefreshPreparation(
+                  reservationId: 17,
+                  stagedSecretBytes: Uint8List.fromList(<int>[2]),
+                  reusedNewGeneration: false,
+                )
+              : const bridge.QqMusicRefreshPreparation(
+                  reusedNewGeneration: false,
+                  failure: bridge.QqMusicRefreshFailure.notDue,
+                );
+        },
+        verify: ({required reservationId}) async {
+          expect(reservationId, 17);
+          verificationCalls++;
+          return bridge.QqMusicRefreshVerification(
+            currentSecretBytes: Uint8List.fromList(<int>[3]),
+          );
+        },
+        commit: ({required reservationId}) {
+          expect(reservationId, 17);
+          commitCalls++;
+          return null;
+        },
+        abort: ({required reservationId}) => null,
+      );
+
+      final results = await Future.wait(
+        List<Future<QqSessionContinuationResult>>.generate(
+          32,
+          (_) => coordinator.checkpoint(),
+        ),
+      );
+
+      expect(
+        results.where(
+          (result) => result == QqSessionContinuationResult.continued,
+        ),
+        hasLength(1),
+      );
+      expect(
+        results.where(
+          (result) => result == QqSessionContinuationResult.notNeeded,
+        ),
+        hasLength(31),
+      );
+      expect(maximumActivePreparations, 1);
+      expect(verificationCalls, 1);
+      expect(commitCalls, 1);
+      expect(await current.read(), orderedEquals(<int>[3]));
+      expect(await staged.read(), isNull);
+    },
+  );
 }
 
 class _MemoryVault implements CredentialVault {

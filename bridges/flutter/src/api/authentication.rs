@@ -31,24 +31,18 @@ pub(crate) type NativeProvider = QqMusicProvider<ReqwestTransport>;
 type NativeSession = QqMusicQrAuthenticationSession<ReqwestTransport>;
 type NativeDesktopQuickSession = QqMusicDesktopQuickAuthenticationSession<ReqwestTransport>;
 
-fn qq_refresh_experiment_enabled(debug_build: bool, value: Option<&str>) -> bool {
-    debug_build && matches!(value, Some("1" | "true"))
+const fn qq_refresh_activation_enabled() -> bool {
+    true
+}
+
+fn build_native_qq_music_provider(client: QqMusicClient<ReqwestTransport>) -> NativeProvider {
+    QqMusicProvider::new_with_refresh_activation(client, qq_refresh_activation_enabled())
 }
 
 static QQ_MUSIC_PROVIDER: LazyLock<Result<NativeProvider, ()>> = LazyLock::new(|| {
     ReqwestTransport::new()
         .map(QqMusicClient::new)
-        .map(|client| {
-            QqMusicProvider::new_with_refresh_activation(
-                client,
-                qq_refresh_experiment_enabled(
-                    cfg!(debug_assertions),
-                    std::env::var("FURA_QQ_WECHAT_REFRESH_EXPERIMENT")
-                        .ok()
-                        .as_deref(),
-                ),
-            )
-        })
+        .map(build_native_qq_music_provider)
         .map_err(|_| ())
 });
 static NEXT_START_ATTEMPT: AtomicU32 = AtomicU32::new(1);
@@ -1517,34 +1511,43 @@ mod tests {
         QqMusicCredentialTransferFailure, QqMusicCredentialVerificationFailure,
         QqMusicDesktopQuickLoginAccount, QqMusicDesktopQuickLoginFailure, QqMusicQrChallenge,
         QqMusicQrImageFormat, QqMusicQrLoginFailure, QqMusicRefreshPreparation,
-        QqMusicRefreshVerification, begin_qq_music_account_summary_load, clear_start_attempt,
-        failed_start, map_account_summary_failure, map_desktop_quick_failure, map_error,
-        map_persistence_error, map_transfer_error, map_verification_failure,
-        qq_refresh_experiment_enabled, reserve_qq_music_wechat_qr_login_start, start_attempt_guard,
-        write_transfer_artifacts,
+        QqMusicRefreshVerification, begin_qq_music_account_summary_load,
+        build_native_qq_music_provider, clear_start_attempt, failed_start,
+        map_account_summary_failure, map_desktop_quick_failure, map_error, map_persistence_error,
+        map_transfer_error, map_verification_failure, qq_refresh_activation_enabled,
+        reserve_qq_music_wechat_qr_login_start, start_attempt_guard, write_transfer_artifacts,
     };
     use provider_api::{AccountSummaryError, AuthenticationError, DesktopQuickAuthenticationError};
-    use provider_qqmusic::QqMusicCredentialTransferError as ProviderCredentialTransferError;
-    use qqmusic_client::{CredentialPersistenceError, CredentialTransferError, InvalidCredential};
+    use provider_qqmusic::{
+        QqMusicCredentialTransferError as ProviderCredentialTransferError, QqMusicRefreshFailure,
+        QqMusicRefreshTrigger,
+    };
+    use qqmusic_client::{
+        CredentialPersistenceError, CredentialTransferError, InvalidCredential, QqMusicClient,
+        ReqwestTransport,
+    };
 
     #[test]
-    fn refresh_experiment_requires_debug_build_and_explicit_opt_in() {
-        assert!(!qq_refresh_experiment_enabled(false, None));
-        assert!(!qq_refresh_experiment_enabled(false, Some("1")));
-        assert!(!qq_refresh_experiment_enabled(false, Some("true")));
-        assert!(!qq_refresh_experiment_enabled(true, None));
-        assert!(!qq_refresh_experiment_enabled(true, Some("TRUE")));
-        assert!(qq_refresh_experiment_enabled(true, Some("1")));
-        assert!(qq_refresh_experiment_enabled(true, Some("true")));
+    fn refresh_activation_is_enabled_without_an_experiment_environment() {
+        assert!(qq_refresh_activation_enabled());
     }
 
-    #[test]
-    fn release_profile_cannot_enable_refresh_from_environment_value() {
+    #[tokio::test]
+    async fn release_profile_enables_the_verified_wechat_continuation() {
         if !cfg!(debug_assertions) {
-            assert!(!qq_refresh_experiment_enabled(
-                cfg!(debug_assertions),
-                Some("1"),
+            assert!(qq_refresh_activation_enabled());
+            let provider = build_native_qq_music_provider(QqMusicClient::new(
+                ReqwestTransport::new().expect("native transport"),
             ));
+            assert_eq!(
+                provider
+                    .prepare_credential_refresh(QqMusicRefreshTrigger::Checkpoint {
+                        now_unix_seconds: 0,
+                    })
+                    .await,
+                Err(QqMusicRefreshFailure::NoCredential),
+                "the Release constructor must pass the activation gate before credential checks"
+            );
         }
     }
 

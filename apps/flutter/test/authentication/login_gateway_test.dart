@@ -218,6 +218,67 @@ void main() {
     },
   );
 
+  test(
+    'repeated restart restore sees only the converged current credential',
+    () async {
+      final current = _MemoryVault(Uint8List.fromList(<int>[1]));
+      final staged = _MemoryVault(Uint8List.fromList(<int>[2]));
+      final vault = SerializedCredentialVault(current, stagedVault: staged);
+      final firstGateway = RustQqMusicAuthenticationGateway(
+        credentialVault: vault,
+        credentialRotationRestorer:
+            ({required currentSecretBytes, required stagedSecretBytes}) =>
+                const bridge.QqMusicStagedRecovery(
+                  action: bridge.QqMusicStagedRecoveryAction.verifyCandidate,
+                ),
+        verificationOperationFactory: () => const _FakeVerificationOperation(
+          CredentialVerificationResult.authenticated,
+        ),
+        credentialExporter: () => bridge.QqMusicCredentialExport(
+          secretBytes: Uint8List.fromList(<int>[2]),
+        ),
+      );
+
+      expect(
+        await firstGateway.restoreCredential(),
+        CredentialRestoreResult.verificationRequired,
+      );
+      expect(
+        await firstGateway.beginCredentialVerification().run(),
+        CredentialVerificationResult.authenticated,
+      );
+
+      var stagedRecoveryCalls = 0;
+      var currentRestoreCalls = 0;
+      for (var restart = 0; restart < 16; restart++) {
+        final restartedGateway = RustQqMusicAuthenticationGateway(
+          credentialVault: vault,
+          credentialRotationRestorer:
+              ({required currentSecretBytes, required stagedSecretBytes}) {
+                stagedRecoveryCalls++;
+                return const bridge.QqMusicStagedRecovery(
+                  action: bridge.QqMusicStagedRecoveryAction.stale,
+                );
+              },
+          credentialImporter: (secretBytes) {
+            currentRestoreCalls++;
+            expect(secretBytes, orderedEquals(<int>[2]));
+            return CredentialRestoreResult.verificationRequired;
+          },
+        );
+        expect(
+          await restartedGateway.restoreCredential(),
+          CredentialRestoreResult.verificationRequired,
+        );
+      }
+
+      expect(stagedRecoveryCalls, 0);
+      expect(currentRestoreCalls, 16);
+      expect(await current.read(), orderedEquals(<int>[2]));
+      expect(await staged.read(), isNull);
+    },
+  );
+
   test('startup cleans a committed current plus matching stage', () async {
     final current = _MemoryVault(Uint8List.fromList(<int>[2]));
     final staged = _MemoryVault(Uint8List.fromList(<int>[2]));

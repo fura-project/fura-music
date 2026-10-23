@@ -2,61 +2,59 @@
 execution:
   mode: HUMAN_DIRECTED
   work_domain: CORE
-  state: WAITING_FOR_HUMAN_PRODUCTION_ACTIVATION
+  state: COMPLETE
   acceptance_milestone: QQ_SELF_HEALING_SESSION_V1
   active_workstream: QQ_SESSION_CONTINUATION
-  current_task: QQ_WECHAT_PROTOCOL_GATE_PASSED
-  next_action: HUMAN_RELEASE_ACTIVATION_DECISION
+  current_task: QQ_WECHAT_RELEASE_ACTIVATION_COMPLETE
+  next_action: NONE_WITHIN_QQ_WECHAT_V1
 ---
 
 # Current State
 
-- **2026-10-21 Human-directed CORE / QQ self-healing session V1:** committed
-  implementation baseline HEAD/tracked `origin/main` is
-  `476c4cfd485c94dea37984a33e36f9b1202c8b43`; the pre-existing uncommitted
-  cross-platform packaging candidate is preserved and not rewritten by this
-  workstream. QQ now has a Provider-owned complete-decision single-flight,
-  exact generation/account refresh reservation, same-account opaque rotation,
-  serialized current-plus-stage secure-vault recovery, startup/local-expiry/
-  resume checkpoints and safe-read refresh-once/retry-once integration. Logout,
-  account switch and identical-account re-login dominate late refresh; writes
-  are never replayed. Synthetic tests cover ten triggers/one refresh, ten
-  rejecting reads/one retry each, stage/publication/commit failures, all startup
-  slot shapes, malformed/stale/transient recovery, terminal failure non-loops,
-  unsupported QQ type, redaction and two-slot logout. Release activation remains
-  hard-disabled; Debug requires an explicit Human experiment gate. Current
-  public sources corroborate the WeChat rotation fields but use Android-shaped
-  outer profiles/device identity, so they do not prove Fura's existing `ct=11`
-  Web envelope. On 2026-10-22 the bounded disposable-session gate classified
-  that exact envelope `PASS`: the first QR expired before scan and sent no
-  refresh; the replacement QR authenticated, followed by exactly one refresh
-  request and one account verification with an account summary present. No
-  additional ordinary read was necessary, no risk-control response occurred,
-  and both transient QR files were removed. TD-015 remains partially resolved
-  only because Release activation still requires a separate Human decision.
-  The post-commit audit found
-  and corrected an uncommitted resume-recovery gap: resume now reconciles a
-  retained staged rotation before preparing a new refresh. Rotation snapshot,
-  fallback and cleanup paths validate their epoch; a newer replacement clears
-  the stale pending recovery owner; and every temporary current/staged byte
-  buffer is zeroed even when reclassification throws. The app-lifetime
-  continuation serializes read-rejection and resume work. A Debug-only ignored
-  live gate now creates a private transient QR, performs exactly one refresh
-  and one account verification, prints only a typed classification and removes
-  the QR. Its three offline tests pass. Release-profile testing with the
-  activation environment value set proves the production gate remains disabled.
-  Rust format, workspace/all-target tests, strict affected-library Clippy, Dart
-  format/analyze, 49 focused recovery tests, the broader affected Flutter batch
-  and privacy hygiene checks pass. The complete Flutter run retains exactly one
-  unrelated committed Settings failure after 1008 passes. Workspace/all-target
-  Clippy retains 46
-  Rust-1.98 `unused_async_trait_impl` errors in pre-existing test transports;
-  this task's affected libraries are clean and the gate was not hidden with an
-  allowance or unrelated rewrite. See the 2026-10-21 addendum
-  in [the session audit](docs/research/provider-playback-session-audit-2026-10-06.md).
-  The corrective candidate is intentionally uncommitted and unpushed. The
-  Debug protocol gate is complete; Release refresh remains hard-disabled until
-  the Human separately authorizes the minimal production-gate change.
+- **2026-10-23 Human-directed CORE / QQ self-healing session V1 complete:** the
+  published pre-activation baseline is
+  `5667e6fb4188d4eef922f2d2f57d15ef12d94dc4`; the pre-existing uncommitted
+  cross-platform packaging candidate remains preserved and outside this
+  workstream. Human authorized the minimal Release activation after the bounded
+  disposable-session gate accepted the exact existing Fura WeChat `ct=11` Web
+  envelope. The native QQ Provider constructor now always enables that
+  evidence-bounded continuation in Debug and Release; production correctness
+  no longer reads `FURA_QQ_WECHAT_REFRESH_EXPERIMENT`. The retained ignored live
+  harness still requires its own explicit opt-in and was not run again.
+  Credential eligibility remains Provider-owned and WeChat-only: QQ type 2,
+  desktop quick login, QQ Music App login, NetEase, KuGou and every other
+  Provider cannot enter this route. The same app-lifetime coordinator owns
+  startup/local-expiry/resume/read-rejection continuation; Rust retains the
+  complete-decision single-flight, exact generation/account reservation and
+  candidate validation; the serialized current-plus-stage vault owns durable
+  rotation and crash recovery. Safe reads retry at most once, mutations are
+  never replayed, and logout, account switch and identical-account re-login
+  dominate late work. Post-commit lifecycle corrections remain in force:
+  retained stages reconcile on resume, snapshot/fallback cleanup is epoch-aware,
+  replacement clears obsolete recovery ownership, and temporary opaque buffers
+  are zeroed even when reclassification throws.
+
+  Release-profile tests construct the actual native Provider and reach
+  `NoCredential` rather than `ProductionGateDisabled`; the same result holds
+  whether the former experiment environment value is absent, `0`, `1` or
+  `true`. Pinned FRB 2.13.0 generation, Rust format, all workspace/all-target
+  tests, strict Clippy for the three affected production libraries, Dart
+  format/analyze, 66 focused credential/continuation/read tests, privacy hygiene
+  and 21 privacy regressions pass. Lifecycle soak performs 32 concurrent resume
+  checkpoints, 16 restart restores, and 20 repetitions each of complete refresh
+  single-flight, ten concurrent rejected reads and logout/re-login dominance;
+  no duplicate flight or orphan staged credential remains. Linux Release builds
+  successfully and contains no legacy experiment-gate string. The complete
+  Flutter suite reaches 1010 passes and retains exactly one unrelated committed
+  Settings finder failure. Workspace/all-target strict Clippy remains red only
+  on 49 Rust-1.98 test-only `unused_async_trait_impl` diagnostics in pre-existing
+  transports; affected production libraries are clean and no allowance or
+  unrelated rewrite was added. This completes the machine-verifiable QQ WeChat
+  V1 production implementation. It does not complete physical-device or
+  long-duration account soak, cross-platform native secure-storage evidence,
+  other QQ login types, NetEase refresh or any other Provider. See the
+  2026-10-23 activation record in
+  [the session audit](docs/research/provider-playback-session-audit-2026-10-06.md).
 
 - **2026-10-09 Human-directed CI / Packaging / Artifact Security:** initial
   HEAD and tracked/live `origin/main` are

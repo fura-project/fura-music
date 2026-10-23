@@ -332,9 +332,9 @@ impl<T> QqMusicProvider<T> {
         Self::new_with_refresh_activation(client, false)
     }
 
-    /// Enables the evidence-bounded `WeChat` refresh candidate for an explicitly
-    /// gated integration environment. Production callers must keep this false
-    /// until the disposable-session protocol gate is accepted.
+    /// Enables the evidence-bounded `WeChat` refresh candidate for callers that
+    /// have accepted its protocol and risk-control gate. Eligibility remains
+    /// credential-owned: unsupported QQ login types never enter this path.
     #[must_use]
     pub fn new_with_refresh_activation(client: QqMusicClient<T>, refresh_enabled: bool) -> Self {
         Self {

@@ -696,3 +696,55 @@ constructor remains hard-disabled, with its environment-variable rejection
 proved in an actual Release-profile test. The only next product action is a
 separate Human decision on the minimal Release-gate change; physical-platform
 and longer-duration soak remain independent evidence gates.
+
+### 2026-10-23 Human-authorized Release activation
+
+Human explicitly authorized production activation for only the already-proved
+QQ Music WeChat candidate and its existing Fura Web envelope. The native Bridge
+constructor now passes an unconditional activation decision to the existing
+QQ-specific Provider. It no longer reads
+`FURA_QQ_WECHAT_REFRESH_EXPERIMENT`; the ignored Debug live harness retains its
+own explicit opt-in solely for bounded protocol observation. No Provider
+construction framework, generic authentication abstraction, device/profile
+strategy or fallback route was added.
+
+The activation does not weaken eligibility. `CredentialRefreshError` still
+admits only the complete WeChat rotation material and rejects unsupported login
+types before transport. The Provider still owns one complete refresh decision
+per exact generation/account, and Flutter's app-lifetime coordinator still owns
+only the durable opaque current/stage acknowledgement sequence. Startup,
+locally-known expiry, application resume and authenticated-read rejection use
+that same owner. Safe reads retry their original operation at most once;
+mutations remain single-dispatch and are never replayed. Logout, account
+replacement and identical-account re-login continue to dominate stale work.
+
+No further real QQ request was made for this activation. The 2026-10-22 bounded
+PASS remains the V1 wire evidence. Machine validation adds:
+
+- an actual Release-profile construction test that reaches `NoCredential`
+  rather than `ProductionGateDisabled`, plus Debug/Release checks with the old
+  experiment value absent, `0`, `1` and `true`;
+- 32 concurrent resume checkpoints and 16 restart-restore cycles with one
+  convergence and no orphan stage;
+- 20 repetitions each of the Provider complete-flight single-flight, ten
+  concurrent rejected safe reads and logout/identical-re-login dominance;
+- pinned FRB 2.13.0 generation, Rust format, workspace/all-target tests,
+  affected production-library strict Clippy, Dart format/analyze, 66 focused
+  Flutter credential/continuation/read tests, privacy hygiene and 21 privacy
+  regressions;
+- a successful Linux Release build whose bundle contains no legacy experiment
+  gate string.
+
+The complete Flutter suite reaches 1010 passes and retains the same unrelated
+Settings finder failure. Workspace/all-target strict Clippy remains red only on
+49 Rust-1.98 test-only `unused_async_trait_impl` diagnostics in pre-existing
+transports; the affected production libraries are clean. These retained failures
+are not weakened or reclassified as QQ defects.
+
+QQ WeChat Self-Healing Session V1 is therefore production-implementation
+complete within its evidenced scope. This does not prove physical-device or
+long-duration account soak, Android/iOS/macOS/Windows native secure-storage
+behavior, any other QQ login type, NetEase refresh, KuGou or another Provider.
+HTTP 429, CAPTCHA, security/secondary verification, account mismatch and any
+new device/signature/private-secret/package-attestation requirement remain hard
+stops; they never authorize another profile or bypass attempt.
