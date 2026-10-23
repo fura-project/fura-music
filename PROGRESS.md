@@ -3,13 +3,54 @@ execution:
   mode: HUMAN_DIRECTED
   work_domain: CORE
   state: COMPLETE
-  acceptance_milestone: QQ_SELF_HEALING_SESSION_V1
-  active_workstream: QQ_SESSION_CONTINUATION
-  current_task: QQ_WECHAT_RELEASE_ACTIVATION_COMPLETE
-  next_action: NONE_WITHIN_QQ_WECHAT_V1
+  acceptance_milestone: QQ_TYPE2_AND_NETEASE_REFRESH_FOUNDATIONS
+  active_workstream: PROVIDER_SESSION_CONTINUATION
+  current_task: OFFLINE_IMPLEMENTATION_AND_RESEARCH_VALIDATION
+  next_action: HUMAN_OPERATED_QQ_TYPE2_PROTOCOL_GATE
 ---
 
 # Current State
+
+- **2026-10-23 QQ Type 2 refresh foundation + NetEase refresh investigation:**
+  QQ `loginType=2` now has one explicit, bounded
+  `music.login.LoginServer/Login` candidate using the existing Fura Web outer
+  profile. It requires the independently retained open/access/refresh tokens,
+  refresh key and absolute expiry before transport; it has no QQConnect or
+  profile fallback. QQ QR and desktop quick-login fixtures prove those response
+  fields and expiry survive decoding and secure-storage rotation. The existing
+  Provider generation, complete-decision single-flight, staged vault recovery,
+  startup/resume/read-rejection continuation and mutation no-replay owner are
+  reused in offline tests. Activation is now login-type-specific: the Release
+  constructor continues to enable only the previously approved WeChat path and
+  rejects QQ Type 2 before network. A separate ignored, Debug-only, private-QR
+  harness is prepared for one Human-operated QQ Type 2 refresh plus one account
+  verification; it was not run and no stored credential was read.
+
+  NetEase is classified **CONDITIONAL**, not production-ready. Version-two
+  opaque credentials can retain a distinct optional `MUSIC_R_U`, while legacy
+  v1 documents import without inventing it. QR key/poll/body sources now retain
+  that field and opt-in diagnostics report only source-level presence booleans.
+  The one-shot WEAPI candidate refuses missing `MUSIC_R_U` before network,
+  sends only the evidenced U/R/CSRF material plus `os=pc`, requires the
+  endpoint-specific `bizCode=201`, requires complete `MUSIC_U` + `MUSIC_R_U`
+  response material and rejects an unchanged/no-cookie response; all failure
+  paths retain the old credential. It remains disconnected from
+  Provider continuation and production. The unresolved evidence is whether
+  Fura's current type-1 WEAPI QR actually receives an independent
+  `MUSIC_R_U`, followed by a bounded same-account refresh verification. No real
+  NetEase request was made.
+
+  Final machine verification passes the complete Rust workspace/all-target
+  test suite, all 233 QQ Client unit tests plus the non-live Type 2 gate check,
+  124 QQ Provider tests, 49 NetEase Client deterministic tests, 70 NetEase
+  Provider deterministic tests and 113 native Bridge tests. The five affected
+  production libraries are clean under strict Clippy; workspace/all-target
+  strict Clippy retains exactly 46 pre-existing Rust 1.98 test-only
+  `unused_async_trait_impl` diagnostics and no other lint. Dart formatting
+  checks 302 files with zero changes, `dart analyze` is clean, 100 focused
+  Flutter credential/continuation/login tests pass, `git diff --check` and the
+  privacy-hygiene audit pass. No FRB contract changed, so generated Bridge code
+  was not regenerated. Both real-account gates remain unrun.
 
 - **2026-10-23 Human-directed CORE / QQ self-healing session V1 complete:** the
   published pre-activation baseline is

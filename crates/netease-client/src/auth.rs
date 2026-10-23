@@ -200,12 +200,38 @@ fn merge_set_cookies(existing: &str, set_cookies: &[String]) -> Result<String, E
         values.insert(name.into(), value.into());
     }
     for set_cookie in set_cookies {
-        let pair = set_cookie
-            .split(';')
-            .next()
-            .ok_or(Error::ResponseShapeMismatch)?;
+        let mut parts = set_cookie.split(';');
+        let pair = parts.next().ok_or(Error::ResponseShapeMismatch)?;
         let (name, value) = pair.split_once('=').ok_or(Error::ResponseShapeMismatch)?;
-        values.insert(name.trim().into(), value.trim().into());
+        let name = name.trim();
+        let value = value.trim();
+        let is_authentication_cookie = matches!(name, "MUSIC_U" | "MUSIC_R_U" | "__csrf");
+        let mut deleted = value.is_empty();
+        for attribute in parts {
+            if let Some((attribute, attribute_value)) = attribute.trim().split_once('=') {
+                if is_authentication_cookie
+                    && attribute.eq_ignore_ascii_case("domain")
+                    && !matches!(
+                        attribute_value.to_ascii_lowercase().as_str(),
+                        "music.163.com" | ".music.163.com"
+                    )
+                {
+                    return Err(Error::ResponseShapeMismatch);
+                }
+                if attribute.eq_ignore_ascii_case("max-age") {
+                    let seconds = attribute_value
+                        .trim()
+                        .parse::<i64>()
+                        .map_err(|_| Error::ResponseShapeMismatch)?;
+                    deleted |= seconds <= 0;
+                }
+            }
+        }
+        if deleted {
+            values.remove(name);
+        } else {
+            values.insert(name.into(), value.into());
+        }
     }
     if values.len() > 64
         || values
@@ -221,8 +247,31 @@ fn merge_set_cookies(existing: &str, set_cookies: &[String]) -> Result<String, E
         .join("; "))
 }
 
+fn cookie_header_has(cookie: &str, expected_name: &str) -> bool {
+    cookie.split(';').any(|pair| {
+        pair.trim()
+            .split_once('=')
+            .is_some_and(|(name, value)| name.trim() == expected_name && !value.trim().is_empty())
+    })
+}
+
+fn set_cookies_have(cookies: &[String], expected_name: &str) -> bool {
+    cookies
+        .iter()
+        .any(|cookie| cookie_header_has(cookie, expected_name))
+}
+
 #[derive(Clone, Eq, PartialEq)]
 pub struct Credential {
+    version: u8,
+    provider: String,
+    music_u: String,
+    music_r_u: Option<String>,
+    csrf: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StoredCredentialV1 {
     version: u8,
     provider: String,
     music_u: String,
@@ -230,21 +279,48 @@ pub struct Credential {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct StoredCredential {
+struct StoredCredentialV2 {
     version: u8,
     provider: String,
     music_u: String,
+    music_r_u: Option<String>,
     csrf: String,
 }
+#[derive(Deserialize)]
+struct StoredCredentialHeader {
+    version: u8,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CredentialRefreshError {
+    NotRefreshable,
+    Network,
+    RateLimited,
+    RiskControl,
+    SecondaryVerificationRequired,
+    CredentialRejected,
+    ProtocolUnavailable,
+    InvalidResponse,
+    IncompleteRotation,
+    NoRotation,
+}
+
+impl std::fmt::Display for CredentialRefreshError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "NetEase credential refresh: {self:?}")
+    }
+}
+
+impl std::error::Error for CredentialRefreshError {}
 impl std::fmt::Debug for Credential {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("NetEaseCredential([REDACTED])")
     }
 }
 impl Credential {
-    fn refreshed_from_cookies(&self, cookies: &[String]) -> Result<Self, Error> {
+    fn refreshed_from_cookies(&self, cookies: &[String]) -> Result<Self, CredentialRefreshError> {
         if cookies.len() > 32 || cookies.iter().any(|c| c.len() > 8192) {
-            return Err(Error::ResponseBound);
+            return Err(CredentialRefreshError::InvalidResponse);
         }
         let mut replacement = self.clone();
         let mut known = BTreeMap::new();
@@ -253,14 +329,14 @@ impl Credential {
             let (name, value) = parts
                 .next()
                 .and_then(|p| p.split_once('='))
-                .ok_or(Error::ResponseShapeMismatch)?;
+                .ok_or(CredentialRefreshError::InvalidResponse)?;
             let name = name.trim();
-            if !matches!(name, "MUSIC_U" | "__csrf") {
+            if !matches!(name, "MUSIC_U" | "MUSIC_R_U" | "__csrf") {
                 continue;
             }
             let value = value.trim();
             if known.insert(name, value).is_some_and(|old| old != value) {
-                return Err(Error::ResponseShapeMismatch);
+                return Err(CredentialRefreshError::InvalidResponse);
             }
             for attribute in parts {
                 if let Some((attribute, value)) = attribute.trim().split_once('=') {
@@ -270,15 +346,15 @@ impl Credential {
                             "music.163.com" | ".music.163.com"
                         )
                     {
-                        return Err(Error::ResponseShapeMismatch);
+                        return Err(CredentialRefreshError::InvalidResponse);
                     }
                     if attribute.eq_ignore_ascii_case("max-age") {
                         let seconds = value
                             .trim()
                             .parse::<i64>()
-                            .map_err(|_| Error::ResponseShapeMismatch)?;
+                            .map_err(|_| CredentialRefreshError::InvalidResponse)?;
                         if seconds <= 0 {
-                            return Err(Error::CredentialRejected);
+                            return Err(CredentialRefreshError::CredentialRejected);
                         }
                     }
                 }
@@ -286,27 +362,46 @@ impl Credential {
             match name {
                 "MUSIC_U" => {
                     if value.is_empty() {
-                        return Err(Error::CredentialRejected);
+                        return Err(CredentialRefreshError::CredentialRejected);
                     }
                     replacement.music_u = value.into();
+                }
+                "MUSIC_R_U" => {
+                    if value.is_empty() {
+                        return Err(CredentialRefreshError::CredentialRejected);
+                    }
+                    replacement.music_r_u = Some(value.into());
                 }
                 "__csrf" => replacement.csrf = value.into(),
                 _ => unreachable!(),
             }
         }
-        replacement.validate()?;
+        if !known.contains_key("MUSIC_U") || !known.contains_key("MUSIC_R_U") {
+            return Err(CredentialRefreshError::IncompleteRotation);
+        }
+        replacement
+            .validate()
+            .map_err(|_| CredentialRefreshError::InvalidResponse)?;
+        if replacement == *self {
+            return Err(CredentialRefreshError::NoRotation);
+        }
         Ok(replacement)
     }
 
     fn validate(&self) -> Result<(), Error> {
-        if self.version != 1
+        if self.version != 2
             || self.provider != "netease-cloud-music"
             || self.music_u.is_empty()
             || self.music_u.len() > 4096
+            || self
+                .music_r_u
+                .as_ref()
+                .is_some_and(|value| value.is_empty() || value.len() > 4096)
             || self.csrf.len() > 256
             || !self
                 .music_u
                 .bytes()
+                .chain(self.music_r_u.as_deref().unwrap_or_default().bytes())
                 .chain(self.csrf.bytes())
                 .all(|b| b.is_ascii_graphic() && !matches!(b, b';' | b',' | b'"' | b'\\'))
         {
@@ -319,7 +414,7 @@ impl Credential {
     /// Rejects invalid internal session invariants.
     pub fn export(&self) -> Result<Vec<u8>, Error> {
         self.validate()?;
-        serde_json::to_vec(&json!({"version":self.version,"provider":self.provider,"music_u":self.music_u,"csrf":self.csrf})).map_err(|_|Error::ResponseShapeMismatch)
+        serde_json::to_vec(&json!({"version":self.version,"provider":self.provider,"music_u":self.music_u,"music_r_u":self.music_r_u,"csrf":self.csrf})).map_err(|_|Error::ResponseShapeMismatch)
     }
     /// Imports only a candidate; the Provider must verify it before authentication.
     /// # Errors
@@ -328,13 +423,35 @@ impl Credential {
         if bytes.len() > 8192 {
             return Err(Error::ResponseBound);
         }
-        let stored: StoredCredential =
+        let header: StoredCredentialHeader =
             serde_json::from_slice(bytes).map_err(|_| Error::ResponseShapeMismatch)?;
-        let value = Self {
-            version: stored.version,
-            provider: stored.provider,
-            music_u: stored.music_u,
-            csrf: stored.csrf,
+        let value = match header.version {
+            1 => {
+                let stored: StoredCredentialV1 =
+                    serde_json::from_slice(bytes).map_err(|_| Error::ResponseShapeMismatch)?;
+                if stored.version != 1 {
+                    return Err(Error::ResponseShapeMismatch);
+                }
+                Self {
+                    version: 2,
+                    provider: stored.provider,
+                    music_u: stored.music_u,
+                    music_r_u: None,
+                    csrf: stored.csrf,
+                }
+            }
+            2 => {
+                let stored: StoredCredentialV2 =
+                    serde_json::from_slice(bytes).map_err(|_| Error::ResponseShapeMismatch)?;
+                Self {
+                    version: stored.version,
+                    provider: stored.provider,
+                    music_u: stored.music_u,
+                    music_r_u: stored.music_r_u,
+                    csrf: stored.csrf,
+                }
+            }
+            _ => return Err(Error::ResponseShapeMismatch),
         };
         value.validate()?;
         Ok(value)
@@ -354,6 +471,22 @@ impl Credential {
     pub(crate) fn cookie(&self) -> String {
         format!("MUSIC_U={}; __csrf={}", self.music_u, self.csrf)
     }
+    fn refresh_cookie(&self) -> Result<String, CredentialRefreshError> {
+        let music_r_u = self
+            .music_r_u
+            .as_deref()
+            .ok_or(CredentialRefreshError::NotRefreshable)?;
+        Ok(format!(
+            "MUSIC_U={}; MUSIC_R_U={music_r_u}; __csrf={}; os=pc",
+            self.music_u, self.csrf
+        ))
+    }
+    /// Returns only whether independently captured refresh material exists.
+    /// The value itself never crosses this diagnostics-safe boundary.
+    #[must_use]
+    pub const fn has_refresh_material(&self) -> bool {
+        self.music_r_u.is_some()
+    }
     pub(crate) fn media_context(&self) -> Result<(String, Value), Error> {
         self.validate()?;
         let request_id = format!("{}_{}", unix_millis()?, random_chars(b"0123456789", 4)?);
@@ -368,6 +501,7 @@ impl Credential {
             return Err(Error::ResponseBound);
         }
         let mut music_u: Option<String> = None;
+        let mut music_r_u: Option<String> = None;
         let mut csrf: Option<String> = None;
         let mut pairs = cookie
             .split(';')
@@ -376,6 +510,7 @@ impl Credential {
             if let Some((name, value)) = pair.split_once('=') {
                 let target = match name.trim() {
                     "MUSIC_U" => &mut music_u,
+                    "MUSIC_R_U" => &mut music_r_u,
                     "__csrf" => &mut csrf,
                     _ => continue,
                 };
@@ -395,9 +530,10 @@ impl Credential {
             return Err(Error::ResponseBound);
         }
         let value = Self {
-            version: 1,
+            version: 2,
             provider: "netease-cloud-music".into(),
             music_u: music_u.ok_or(Error::ResponseShapeMismatch)?,
+            music_r_u,
             csrf: csrf.unwrap_or_default(),
         };
         value.validate()?;
@@ -414,17 +550,68 @@ impl<T: Transport> NeteaseClient<T> {
     /// candidate is deliberately not connected to production auto-refresh.
     /// # Errors
     /// Fails closed on rejection, unknown business codes and malformed rotation.
-    pub async fn refresh_credential(&self, credential: &Credential) -> Result<Credential, Error> {
-        credential.validate()?;
-        let (_, cookies) = self
-            .request(
-                "/api/login/token/refresh",
-                json!({}),
-                false,
-                Some(&credential.cookie()),
-            )
-            .await?;
+    pub async fn refresh_credential(
+        &self,
+        credential: &Credential,
+    ) -> Result<Credential, CredentialRefreshError> {
+        credential
+            .validate()
+            .map_err(|_| CredentialRefreshError::InvalidResponse)?;
+        let cookie = credential.refresh_cookie()?;
+        let (response, cookies) = self
+            .raw_request("/api/login/token/refresh", json!({}), false, Some(&cookie))
+            .await
+            .map_err(map_credential_refresh_transport_error)?;
+        match response_code(&response).map_err(|_| CredentialRefreshError::InvalidResponse)? {
+            200 => {}
+            301 => return Err(CredentialRefreshError::CredentialRejected),
+            429 => return Err(CredentialRefreshError::RateLimited),
+            8821 => return Err(CredentialRefreshError::RiskControl),
+            8830 => return Err(CredentialRefreshError::SecondaryVerificationRequired),
+            _ => return Err(CredentialRefreshError::ProtocolUnavailable),
+        }
+        let biz_code = response
+            .get("bizCode")
+            .and_then(|value| {
+                value
+                    .as_i64()
+                    .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
+            })
+            .ok_or(CredentialRefreshError::InvalidResponse)?;
+        match biz_code {
+            201 => {}
+            400 | 504 => return Err(CredentialRefreshError::CredentialRejected),
+            429 => return Err(CredentialRefreshError::RateLimited),
+            8821 => return Err(CredentialRefreshError::RiskControl),
+            8830 => return Err(CredentialRefreshError::SecondaryVerificationRequired),
+            _ => return Err(CredentialRefreshError::ProtocolUnavailable),
+        }
         credential.refreshed_from_cookies(&cookies)
+    }
+}
+
+const fn map_credential_refresh_transport_error(error: Error) -> CredentialRefreshError {
+    match error {
+        Error::RateLimited => CredentialRefreshError::RateLimited,
+        Error::SecurityVerificationRequired | Error::AccountRestricted => {
+            CredentialRefreshError::RiskControl
+        }
+        Error::SecondaryVerificationRequired | Error::VerificationRejected => {
+            CredentialRefreshError::SecondaryVerificationRequired
+        }
+        Error::CredentialRejected | Error::AuthenticationRequired => {
+            CredentialRefreshError::CredentialRejected
+        }
+        Error::TemporaryNetworkFailure => CredentialRefreshError::Network,
+        Error::ProtocolUnavailable
+        | Error::EntitlementDenied
+        | Error::CopyrightRestricted
+        | Error::RegionRestricted
+        | Error::TrackUnavailable
+        | Error::UpstreamUnknown => CredentialRefreshError::ProtocolUnavailable,
+        Error::ResponseShapeMismatch | Error::InputBound | Error::ResponseBound => {
+            CredentialRefreshError::InvalidResponse
+        }
     }
 }
 
@@ -435,7 +622,7 @@ mod refresh_tests {
     use std::sync::Mutex;
     struct Fake {
         requests: Mutex<Vec<Request>>,
-        code: i64,
+        body: Value,
         cookies: Vec<String>,
     }
     impl Transport for Fake {
@@ -446,22 +633,25 @@ mod refresh_tests {
             self.requests.lock().unwrap().push(r);
             std::future::ready(Ok(Response {
                 status: 200,
-                body: serde_json::to_vec(&json!({"code":self.code})).unwrap(),
+                body: serde_json::to_vec(&self.body).unwrap(),
                 set_cookies: self.cookies.clone(),
             }))
         }
     }
     fn credential() -> Credential {
-        Credential::from_browser_cookie_header(b"MUSIC_U=synthetic-old; __csrf=synthetic-csrf")
-            .unwrap()
+        Credential::from_browser_cookie_header(
+            b"MUSIC_U=synthetic-old; MUSIC_R_U=synthetic-refresh-old; __csrf=synthetic-csrf",
+        )
+        .unwrap()
     }
     #[tokio::test]
     async fn refresh_is_one_weapi_attempt_and_only_rotates_known_cookie_fields() {
         let client = NeteaseClient::new(Fake {
             requests: Mutex::new(vec![]),
-            code: 200,
+            body: json!({"code":200,"bizCode":201}),
             cookies: vec![
                 "MUSIC_U=synthetic-new; Domain=.music.163.com; Secure; HttpOnly".into(),
+                "MUSIC_R_U=synthetic-refresh-new; Domain=music.163.com; Secure; HttpOnly".into(),
                 "__csrf=synthetic-new-csrf; Path=/".into(),
                 "browser_device=must-not-persist; Path=/".into(),
             ],
@@ -496,7 +686,9 @@ mod refresh_tests {
         );
         assert_eq!(
             requests[0].cookie(),
-            Some("MUSIC_U=synthetic-old; __csrf=synthetic-csrf")
+            Some(
+                "MUSIC_U=synthetic-old; MUSIC_R_U=synthetic-refresh-old; __csrf=synthetic-csrf; os=pc"
+            )
         );
     }
     #[test]
@@ -505,45 +697,72 @@ mod refresh_tests {
         for (cookies, expected) in [
             (
                 vec!["MUSIC_U=a".into(), "MUSIC_U=b".into()],
-                Error::ResponseShapeMismatch,
+                CredentialRefreshError::InvalidResponse,
             ),
             (
                 vec!["MUSIC_U=a; Domain=evil.test".into()],
-                Error::ResponseShapeMismatch,
+                CredentialRefreshError::InvalidResponse,
             ),
             (
                 vec!["MUSIC_U=; Max-Age=0".into()],
-                Error::CredentialRejected,
+                CredentialRefreshError::CredentialRejected,
             ),
             (
                 vec!["MUSIC_U=a; Max-Age=-1".into()],
-                Error::CredentialRejected,
+                CredentialRefreshError::CredentialRejected,
             ),
             (
                 vec!["MUSIC_U=a; Max-Age=unknown".into()],
-                Error::ResponseShapeMismatch,
+                CredentialRefreshError::InvalidResponse,
             ),
-            (vec!["MUSIC_U=a".into(); 33], Error::ResponseBound),
+            (
+                vec!["MUSIC_U=a".into(); 33],
+                CredentialRefreshError::InvalidResponse,
+            ),
         ] {
             assert_eq!(old.refreshed_from_cookies(&cookies), Err(expected));
         }
         assert_eq!(
-            old.refreshed_from_cookies(&["unrelated=ignored".into()])
-                .unwrap(),
-            old
+            old.refreshed_from_cookies(&["unrelated=ignored".into()]),
+            Err(CredentialRefreshError::IncompleteRotation)
+        );
+        assert_eq!(
+            old.refreshed_from_cookies(&[
+                "MUSIC_U=synthetic-old".into(),
+                "MUSIC_R_U=synthetic-refresh-old".into()
+            ]),
+            Err(CredentialRefreshError::NoRotation)
         );
     }
 
     #[tokio::test]
     async fn rejection_and_unclassified_codes_do_not_install_cookies_or_retry() {
-        for (code, expected) in [
-            (301, Error::CredentialRejected),
-            (8821, Error::UpstreamUnknown),
+        for (body, expected) in [
+            (
+                json!({"code":301,"bizCode":201}),
+                CredentialRefreshError::CredentialRejected,
+            ),
+            (
+                json!({"code":8821,"bizCode":201}),
+                CredentialRefreshError::RiskControl,
+            ),
+            (
+                json!({"code":200,"bizCode":400}),
+                CredentialRefreshError::CredentialRejected,
+            ),
+            (json!({"code":200}), CredentialRefreshError::InvalidResponse),
+            (
+                json!({"code":200,"bizCode":999}),
+                CredentialRefreshError::ProtocolUnavailable,
+            ),
         ] {
             let client = NeteaseClient::new(Fake {
                 requests: Mutex::new(vec![]),
-                code,
-                cookies: vec!["MUSIC_U=must-not-install".into()],
+                body,
+                cookies: vec![
+                    "MUSIC_U=must-not-install".into(),
+                    "MUSIC_R_U=must-not-install".into(),
+                ],
             });
             let old = credential();
             let retained = old.clone();
@@ -570,7 +789,7 @@ mod refresh_tests {
         let retained = old.clone();
         assert_eq!(
             client.refresh_credential(&old).await,
-            Err(Error::TemporaryNetworkFailure)
+            Err(CredentialRefreshError::Network)
         );
         assert_eq!(old, retained);
         assert_eq!(
@@ -578,12 +797,84 @@ mod refresh_tests {
             1
         );
     }
+
+    #[tokio::test]
+    async fn legacy_or_missing_refresh_material_fails_before_network() {
+        let client = NeteaseClient::new(Fake {
+            requests: Mutex::new(vec![]),
+            body: json!({"code":200,"bizCode":201}),
+            cookies: vec![],
+        });
+        let legacy = Credential::import(
+            br#"{"version":1,"provider":"netease-cloud-music","music_u":"legacy-u","csrf":"legacy-csrf"}"#,
+        )
+        .expect("legacy v1 credential");
+        assert!(!legacy.has_refresh_material());
+        assert_eq!(
+            client.refresh_credential(&legacy).await,
+            Err(CredentialRefreshError::NotRefreshable)
+        );
+        assert!(client.transport.requests.lock().unwrap().is_empty());
+        let migrated = Credential::import(&legacy.export().expect("v2 export")).unwrap();
+        assert_eq!(migrated, legacy);
+        assert_eq!(
+            Credential::import(
+                br#"{"version":2,"provider":"netease-cloud-music","music_u":"legacy-u","music_r_u":"","csrf":"legacy-csrf"}"#,
+            ),
+            Err(Error::ResponseShapeMismatch)
+        );
+    }
+
+    #[test]
+    fn refresh_material_is_preserved_from_each_qr_cookie_source() {
+        let from_key_or_poll_set_cookie = Credential::from_cookie_sources(
+            "MUSIC_U=synthetic-u; MUSIC_R_U=synthetic-r; __csrf=synthetic-csrf",
+            None,
+        )
+        .expect("merged QR Set-Cookie source");
+        assert!(from_key_or_poll_set_cookie.has_refresh_material());
+
+        let from_confirmed_body = Credential::from_cookie_sources(
+            "MUSIC_U=synthetic-u; __csrf=synthetic-csrf",
+            Some("MUSIC_R_U=synthetic-r"),
+        )
+        .expect("803 body cookie source");
+        assert!(from_confirmed_body.has_refresh_material());
+        assert_eq!(
+            Credential::from_cookie_sources(
+                "MUSIC_U=synthetic-u; MUSIC_R_U=first",
+                Some("MUSIC_R_U=second")
+            ),
+            Err(Error::ResponseShapeMismatch)
+        );
+        let debug = format!("{from_confirmed_body:?}");
+        assert!(!debug.contains("synthetic-"));
+    }
+
+    #[test]
+    fn auth_set_cookie_domain_and_deletion_are_strict() {
+        assert_eq!(
+            merge_set_cookies(
+                "MUSIC_U=old; MUSIC_R_U=refresh",
+                &["MUSIC_R_U=replaced; Domain=evil.test".into()]
+            ),
+            Err(Error::ResponseShapeMismatch)
+        );
+        let deleted = merge_set_cookies(
+            "MUSIC_U=old; MUSIC_R_U=refresh; __csrf=csrf",
+            &["MUSIC_R_U=; Max-Age=0; Domain=.music.163.com".into()],
+        )
+        .expect("deletion is represented by absence");
+        assert!(!cookie_header_has(&deleted, "MUSIC_R_U"));
+    }
 }
 /// Raw key stays inside Rust; only its locally encoded image is presented.
 pub struct QrKey {
     key: String,
     cookie: String,
     chain_id: String,
+    refresh_material_from_key_set_cookie: bool,
+    refresh_material_from_prior_poll_set_cookie: bool,
 }
 
 #[derive(Clone)]
@@ -926,10 +1217,16 @@ impl<T: Transport> NeteaseClient<T> {
         {
             return Err(Error::ResponseShapeMismatch);
         }
+        let refresh_material_from_key_set_cookie = set_cookies_have(&set_cookies, "MUSIC_R_U");
+        qr_debug(format_args!(
+            "phase=key_refresh_material source=key_set_cookie present={refresh_material_from_key_set_cookie}"
+        ));
         Ok(QrKey {
             key: key.into(),
             cookie: merge_set_cookies(&cookie, &set_cookies)?,
             chain_id,
+            refresh_material_from_key_set_cookie,
+            refresh_material_from_prior_poll_set_cookie: false,
         })
     }
     /// Exactly one explicit poll; no background loop or automatic approval.
@@ -950,6 +1247,10 @@ impl<T: Transport> NeteaseClient<T> {
                 web_qr_headers(Some(&key.chain_id)),
             )
             .await?;
+        let refresh_material_from_poll_set_cookie = set_cookies_have(&cookies, "MUSIC_R_U");
+        let body_cookie = v.get("cookie").and_then(Value::as_str);
+        let refresh_material_from_body =
+            body_cookie.is_some_and(|cookie| cookie_header_has(cookie, "MUSIC_R_U"));
         key.cookie = merge_set_cookies(&key.cookie, &cookies)?;
         let code = v
             .get("code")
@@ -958,12 +1259,28 @@ impl<T: Transport> NeteaseClient<T> {
         qr_debug(format_args!("phase=poll code={code}"));
         match code {
             800 => Ok(QrPoll::Expired),
-            801 => Ok(QrPoll::Waiting),
-            802 => Ok(QrPoll::Scanned),
-            803 => Ok(QrPoll::Confirmed(Credential::from_cookie_sources(
-                &key.cookie,
-                v.get("cookie").and_then(Value::as_str),
-            )?)),
+            801 => {
+                key.refresh_material_from_prior_poll_set_cookie |=
+                    refresh_material_from_poll_set_cookie;
+                Ok(QrPoll::Waiting)
+            }
+            802 => {
+                key.refresh_material_from_prior_poll_set_cookie |=
+                    refresh_material_from_poll_set_cookie;
+                Ok(QrPoll::Scanned)
+            }
+            803 => {
+                let credential = Credential::from_cookie_sources(&key.cookie, body_cookie)?;
+                qr_debug(format_args!(
+                    "phase=confirmed_refresh_material key_set_cookie={} prior_poll_set_cookie={} confirmed_set_cookie={} body_cookie={} persisted_candidate={}",
+                    key.refresh_material_from_key_set_cookie,
+                    key.refresh_material_from_prior_poll_set_cookie,
+                    refresh_material_from_poll_set_cookie,
+                    refresh_material_from_body,
+                    credential.has_refresh_material(),
+                ));
+                Ok(QrPoll::Confirmed(credential))
+            }
             8821 => Err(Error::SecurityVerificationRequired),
             8830 => Err(Error::SecondaryVerificationRequired),
             _ => Err(Error::UpstreamUnknown),
@@ -1643,16 +1960,16 @@ mod qr_request_tests {
                 json!({"code":200,"unikey":"synthetic-safe-key"}),
                 json!({
                     "code":803,
-                    "cookie":"MUSIC_U=synthetic-session; __csrf=synthetic-csrf",
+                    "cookie":"MUSIC_U=synthetic-session; MUSIC_R_U=synthetic-refresh-session; __csrf=synthetic-csrf",
                 }),
             ])),
             requests: Arc::new(Mutex::new(Vec::new())),
         });
         let mut key = client.qr_key().await.unwrap();
-        assert!(matches!(
-            client.qr_poll(&mut key).await,
-            Ok(QrPoll::Confirmed(_))
-        ));
+        let QrPoll::Confirmed(credential) = client.qr_poll(&mut key).await.unwrap() else {
+            panic!("QR should confirm")
+        };
+        assert!(credential.has_refresh_material());
     }
 
     #[tokio::test]

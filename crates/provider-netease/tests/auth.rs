@@ -170,14 +170,17 @@ fn credential_documents_reject_foreign_versions_injections_and_oversize() {
     let bytes = credential();
     let c = Credential::import(&bytes).unwrap();
     assert_eq!(format!("{c:?}"), "NetEaseCredential([REDACTED])");
+    let current = c.export().expect("legacy credential migrates to v2");
     for (key, value) in [
-        ("version", json!(2)),
+        ("version", json!(3)),
         ("provider", json!("qq-music")),
         ("music_u", json!("bad\r\nCookie: injected")),
+        ("music_r_u", json!("bad\r\nCookie: injected")),
+        ("music_r_u", json!("")),
         ("csrf", json!("bad;evil")),
         ("music_u", json!("")),
     ] {
-        let mut v: Value = serde_json::from_slice(&bytes).unwrap();
+        let mut v: Value = serde_json::from_slice(&current).unwrap();
         v[key] = value;
         assert!(Credential::import(&serde_json::to_vec(&v).unwrap()).is_err());
     }

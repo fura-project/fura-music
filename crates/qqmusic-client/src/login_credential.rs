@@ -74,6 +74,8 @@ struct RawCredential {
     #[serde(default, rename = "keyExpiresIn")]
     lifetime: Option<u64>,
     #[serde(default)]
+    expired_at: Option<u64>,
+    #[serde(default)]
     openid: Option<String>,
     #[serde(default)]
     access_token: Option<String>,
@@ -161,11 +163,23 @@ pub(crate) fn decode_login_credential(
             raw.encrypted_uin,
         ));
 
-    match (raw.created_at.unwrap_or(0), raw.lifetime.unwrap_or(0)) {
-        (0, 0) => {}
-        (created_at, lifetime) => {
+    match (
+        raw.created_at.unwrap_or(0),
+        raw.lifetime.unwrap_or(0),
+        raw.expired_at.unwrap_or(0),
+    ) {
+        (0, 0, 0) => {}
+        (0, 0, expires_at) => {
+            let expiry = CredentialExpiry::from_expires_at(expires_at)
+                .map_err(LoginCredentialError::InvalidExpiry)?;
+            credential = credential.with_expiry(expiry);
+        }
+        (created_at, lifetime, expires_at) => {
             let expiry = CredentialExpiry::new(created_at, lifetime)
                 .map_err(LoginCredentialError::InvalidExpiry)?;
+            if expires_at != 0 && expiry.expires_at_unix_seconds() != expires_at {
+                return Err(LoginCredentialError::InvalidExpiry(InvalidCredentialExpiry));
+            }
             credential = credential.with_expiry(expiry);
         }
     }

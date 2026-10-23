@@ -243,7 +243,7 @@ Field decisions:
 | ct/cv/platform/appver/os/Referer/UA | PUBLIC_PROTOCOL | Preserve established per-capability values, do not rotate profiles on risk. |
 | NetEase requestId, local request nonce | REQUEST_NONCE | Generate only the already-evidenced nonce; never treat as hardware identity. |
 | QQ music_key/access/refresh/open/union material; NetEase MUSIC_U/__csrf | SESSION_OWNED | Rust-owned, redacted, only opaque vault bytes cross FFI. |
-| NetEase MUSIC_R_U | SESSION_OWNED candidate | Evidence suggests dedicated refresh material; not absorbed into the stored schema without accepted minimal contract/rotation proof. |
+| NetEase MUSIC_R_U | SESSION_OWNED candidate | Retained as an independent optional v2 field when actually observed; never synthesized from MUSIC_U. Production refresh remains disabled pending type-1 QR and same-account gate evidence. |
 | KuGou register response dfid | SERVER_ISSUED_INSTALL candidate | Output provenance observed, full ordinary registration/media gate not satisfied. |
 | KuGou mid/uuid and registration hardware-shaped inputs | INSTALL_SCOPED candidate / DEVICE_UNCLASSIFIED | No fabricated device, persistence or production media. |
 | Official package/certificate/private signing key | PACKAGE_ATTESTATION / PRIVATE_APP_SECRET | Prohibited. |
@@ -252,21 +252,26 @@ Field decisions:
 
 ### Refresh foundations versus production continuation
 
-QQ now has an explicit one-shot `refresh_credential` Client candidate for
-WeChat's complete corroborated material set. It bounds requests/responses,
-refuses unsupported login types/incomplete rotation/account changes and returns
-coarse failures without retry. It does not install the new credential. The
-outer Web-compatible profile still requires evidence; implementing an Android
-identity/signature just to refresh is not permitted. QQ loginType=2 is not
-extrapolated from one family.
+QQ now has explicit one-shot `refresh_credential` request shapes for WeChat and
+QQ `loginType=2`. Both use the bounded existing Fura Web outer profile and
+`music.login.LoginServer/Login`; the Type 2 shape requires open/access/refresh
+tokens, refresh key and absolute expiry. There is no automatic
+`QQConnectLogin/QQLogin`, profile or device fallback. WeChat alone has a bounded
+wire PASS and Release activation. Type 2 remains independently gated off in
+production until its prepared Human-operated disposable-session gate passes.
 
-NetEase has an explicit one-shot WEAPI Client candidate. It checks the existing
-business envelope before merging only MUSIC_U/__csrf, rejects conflicting,
-foreign-domain, malformed, revoked and oversized known cookies, and preserves
-the input on failure. Unknown cookies are ignored, not persisted. Current
-evidence for EAPI+MUSIC_R_U means the minimal existing credential cannot be
-called long-term refreshable. Unknown security codes are not guessed into a
-logout outcome. No browser CookieJar or install fingerprint was added.
+NetEase has an explicit one-shot WEAPI Client candidate, still disconnected
+from production. A v2 credential retains a distinct optional `MUSIC_R_U`; v1
+imports retain no refreshability rather than copying `MUSIC_U`. The candidate
+fails before transport without `MUSIC_R_U`, requires outer code 200 plus
+endpoint-specific `bizCode=201`, requires complete returned `MUSIC_U` and
+`MUSIC_R_U`, sends the evidenced `os=pc` field, and rejects an unchanged or
+unrelated-cookie response. Conflicting,
+foreign-domain, malformed, revoked and oversized known cookies fail closed; the
+input remains unchanged. QR diagnostics record only whether `MUSIC_R_U` was
+present in key Set-Cookie, prior poll Set-Cookie, confirmed Set-Cookie, 803 body
+cookie and the persisted candidate. No value, fragment, hash, length, account,
+browser CookieJar or install fingerprint is logged or added.
 
 The following production requirements are **NOT IMPLEMENTED**, rather than
 merely untested: refresh coordinator/single-flight refresh, near-expiry/startup/
@@ -748,3 +753,96 @@ behavior, any other QQ login type, NetEase refresh, KuGou or another Provider.
 HTTP 429, CAPTCHA, security/secondary verification, account mismatch and any
 new device/signature/private-secret/package-attestation requirement remain hard
 stops; they never authorize another profile or bypass attempt.
+
+### 2026-10-23 QQ Type 2 offline foundation and independent gate
+
+This follow-up does not change the WeChat V1 acceptance. It adds one separately
+gated QQ `loginType=2` candidate and deliberately leaves its production flag
+false. The request shape is supported by two current source observations, with
+different weight:
+
+- [L-1124/QQMusicApi `login.py` at `27861e5`](https://github.com/L-1124/QQMusicApi/blob/27861e51432ea6b6e88dc35c4e8c8e239c0339e8/qqmusic_api/modules/login.py#L121-L185)
+  builds `music.login.LoginServer/Login` for Type 2 with open/access/refresh
+  tokens, absolute expiry, music identity/key, refresh key and `loginMode=2`.
+- [amtoaer/lyrune `login.rs` at `02141a7`](https://github.com/amtoaer/lyrune/blob/02141a7c900162af8fe30f68bee1fe531e088ad9/crates/lyrune-api/src/login.rs#L135-L175)
+  independently retains the `LoginServer/Login` family and its refresh-key
+  materials, but also contains a QQConnect branch with a different `ct=19`
+  profile. Fura does not adopt that branch or treat it as a fallback.
+
+Fura keeps the already-verified Web `ct=11` outer envelope. Missing any required
+Type 2 field or absolute expiry returns `NotRefreshable` before transport.
+Responses must remain the same account/login type and retain a complete next
+rotation. Rate limiting, risk control, secondary verification, credential
+rejection and protocol/shape failure remain distinct, diagnostics-safe results.
+The Provider now has independent WeChat and Type 2 activation bits. Production
+constructors set only the WeChat bit; offline Type 2 tests explicitly opt into
+the second bit and exercise the same single-flight/stage/verify/commit owner.
+
+`crates/qqmusic-client/tests/live_qq_type2_refresh_gate.rs` is ignored and
+Debug-only. It reads no stored credential, writes one create-new private
+transient QR, performs at most one refresh and exactly one account verification,
+and logs no identity or secret material. It has not been run. A Human scan and
+confirmation are the next required evidence. HTTP 429, risk/secondary
+verification, account mismatch, or a device/signature/private-secret request
+ends the gate without endpoint/profile fallback. Even a PASS does not authorize
+Release activation.
+
+After explicit Human authorization, the disposable gate entry point is:
+
+```sh
+FURA_QQ_TYPE2_REFRESH_PROTOCOL_GATE=1 \
+FURA_QQ_TYPE2_REFRESH_QR_PATH=/absolute/private/qq-type2-refresh-gate \
+cargo test --locked -p qqmusic-client \
+  --test live_qq_type2_refresh_gate -- \
+  --ignored --nocapture --test-threads=1
+```
+
+The path must not already exist. The harness adds the actual image extension,
+creates it with create-new semantics and Unix mode `0600`, and removes it on
+drop. The command is documentation, not authorization; it was not run in this
+workstream.
+
+Offline proof covers the exact request, missing material before transport,
+complete rotation, login/account boundaries, rate/risk/secondary failures,
+ten-waiter single-flight, stage/verify/commit and identical-account re-login
+dominance. Existing shared Provider/vault regressions continue to cover logout,
+account replacement, publication failure, startup/recovery and safe-read retry
+without introducing a second lifecycle owner. The production constructor's
+WeChat activation still sends zero Type 2 refresh requests.
+
+### 2026-10-23 NetEase refresh feasibility result
+
+Result: **CONDITIONAL**. The strongest current WEAPI evidence is
+[chaunsin/netease-cloud-music at `7c46657`](https://github.com/chaunsin/netease-cloud-music/blob/7c46657b42383372b8c5a7f425f4565e10e6b69a/api/weapi/login.go#L232-L267),
+which records `/weapi/login/token/refresh`, endpoint-specific `bizCode`
+semantics and an observed requirement for `MUSIC_R_U`. A second type-1 product
+integration, [go-musicfox/netease-music at `912f2cf`](https://github.com/go-musicfox/netease-music/blob/912f2cf2b8bf772c804c6cd4b4f31f11773c7b93/service/login_refresh_service.go#L10-L22),
+uses the same WEAPI endpoint through a shared CookieJar but does not prove its
+minimal cookie set. The EAPI implementation in
+[AstronW/netease-qq-music-api at `11d8c5c`](https://github.com/AstronW/netease-qq-music-api/blob/11d8c5c0e23fb74169292516592b5efe9ac59540/src/platform/netease/api.rs#L464-L537)
+explicitly sends `MUSIC_R_U`, but its Type 3 profile/device fields and fallback
+that copies `MUSIC_U` into `MUSIC_R_U` are not adopted. The
+[api-enhanced refresh wrapper at `19c7dad`](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/blob/19c7dad6db7d660954c7a615a686ff0acb030f91/module/login_refresh.js#L1-L20)
+only proves the endpoint and Set-Cookie forwarding, not complete rotation or
+same-account verification. These projects also share NeteaseCloudMusicApi
+lineage, so they are not counted as four independent protocol votes.
+
+Fura previously dropped `MUSIC_R_U` from QR Set-Cookie/body sources and treated
+outer code 200 plus unrelated/no cookies as a successful unchanged credential.
+The offline foundation now stores an actually observed `MUSIC_R_U` separately,
+imports v1 credentials as non-refreshable, requires `bizCode=201`, complete
+returned U/R material and a changed candidate, sends only U/R/CSRF plus the
+evidenced `os=pc` compatibility field, and retains the old session on every
+failure. It does not add a device/install identity. Production Provider
+continuation remains absent. What is still
+missing is one separately authorized type-1 QR observation proving whether an
+independent `MUSIC_R_U` is delivered, followed only if present by a bounded
+single refresh and same-account verification. No real NetEase request was made
+for this investigation.
+
+The deterministic NetEase Client and Provider suites, full Rust workspace
+tests, affected production-library strict Clippy, source privacy audit, Dart
+analysis/format and focused Flutter vault/login regressions pass. Workspace
+all-target strict Clippy remains red only on 46 pre-existing Rust 1.98
+test-fixture `unused_async_trait_impl` diagnostics; no allowance or unrelated
+test rewrite was added.

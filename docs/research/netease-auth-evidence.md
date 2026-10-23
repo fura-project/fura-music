@@ -2,6 +2,78 @@
 
 Date: 2026-09-12. Authority: HD-023 + HD-024 plus the 2026-09-12 Linux Human regression. **HUMAN_EVIDENCE_REQUIRED for every real-account claim.** Two rebuilt-Linux attempts reached 801 waiting and 802 scanned/awaiting confirmation, then terminated with the explicitly decoded 8821 security-verification outcome. No credential, account data, phone number, SMS code or cookie was supplied to or collected by the Agent.
 
+## 2026-10-23 long-term refresh investigation: CONDITIONAL
+
+No real NetEase credential was read and no service request was sent in this
+investigation. The current type-1 WEAPI QR pipeline merges key-response
+Set-Cookie, subsequent poll Set-Cookie and the 803 body `cookie`, but its former
+v1 credential parser retained only `MUSIC_U` and `__csrf`. It therefore could
+not answer whether the service had supplied independent `MUSIC_R_U` refresh
+material. The former one-shot refresh candidate also accepted outer code 200
+with no relevant Set-Cookie and returned the unchanged credential as success.
+
+The offline foundation now:
+
+- imports existing v1 secure-storage bytes as a valid current session with no
+  invented refreshability;
+- exports v2 bytes with an optional, independent `MUSIC_R_U` only when actually
+  observed; it never copies `MUSIC_U` into that field;
+- retains R material from QR key/poll Set-Cookie and 803 body cookie, rejecting
+  conflicts, hostile domains, deletion and malformed/oversized fields;
+- exposes opt-in diagnostics containing only source/presence booleans for key
+  Set-Cookie, prior poll Set-Cookie, confirmed Set-Cookie, 803 body and the
+  final candidate—never a value, fragment, hash, length, account or body;
+- fails `NotRefreshable` before network when R material is absent;
+- sends the WEAPI candidate with the independently retained U/R/CSRF cookies
+  and the evidence-backed `os=pc` compatibility field, without synthesizing a
+  device or installation identity;
+- requires outer code 200, endpoint-specific `bizCode=201`, complete returned
+  `MUSIC_U` plus `MUSIC_R_U`, and a changed candidate; unrelated/no cookies,
+  partial rotation and unchanged rotation are explicit failures;
+- keeps the input credential unchanged for network, rate-limit, risk,
+  secondary-verification, rejection, protocol and response failures.
+
+The evidence boundary remains narrow. The WEAPI candidate and `MUSIC_R_U`
+requirement are most directly documented by
+[chaunsin/netease-cloud-music](https://github.com/chaunsin/netease-cloud-music/blob/7c46657b42383372b8c5a7f425f4565e10e6b69a/api/weapi/login.go#L232-L267).
+[go-musicfox/netease-music](https://github.com/go-musicfox/netease-music/blob/912f2cf2b8bf772c804c6cd4b4f31f11773c7b93/service/login_refresh_service.go#L10-L22)
+uses the same endpoint through an implicit shared CookieJar and cannot prove
+that U+CSRF alone is sufficient. The explicit R-cookie EAPI flow in
+[AstronW/netease-qq-music-api](https://github.com/AstronW/netease-qq-music-api/blob/11d8c5c0e23fb74169292516592b5efe9ac59540/src/platform/netease/api.rs#L464-L537)
+depends on a different Type 3/device profile and includes an unsupported U-to-R
+fallback. [api-enhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/blob/19c7dad6db7d660954c7a615a686ff0acb030f91/module/login_refresh.js#L1-L20)
+forwards Set-Cookie on code 200 but does not establish complete rotation or
+same-account verification. Shared NeteaseCloudMusicApi lineage limits the
+independence of these observations.
+
+Production auto-refresh is still disabled. The missing gate is a separately
+authorized Human type-1 QR session that records only whether R material appears.
+If absent, no refresh request is allowed. If present and separately authorized,
+the maximum next experiment is one refresh and one same-account verification,
+stopping immediately on 429, 8821, 8830, CAPTCHA, account mismatch or any new
+device/signature/private-secret requirement. This is `CONDITIONAL`, not GO.
+
+The minimum first observation reuses the existing ignored QR/account gate with
+the presence-only diagnostic enabled:
+
+```sh
+FURA_NETEASE_QR_DEBUG=1 \
+FURA_NETEASE_HUMAN_QR=I_APPROVE_QR_AND_ACCOUNT_READS \
+cargo test --locked -p provider-netease --test human_qr -- \
+  --ignored --nocapture --test-threads=1
+```
+
+This command may establish only the R-material provenance and the already
+bounded QR/account restore result. It must not be followed by a refresh request
+without a separate Human authorization. The Agent did not run it.
+
+Deterministic verification passes v1 import/v2 export, missing-R zero-network,
+exact one-shot request, complete/partial/no-change rotation, domain/deletion/
+size/conflict bounds, QR-source preservation, transport/rate/risk/business-code
+classification, NetEase Provider restore/authentication regressions and the
+full Rust workspace. These checks do not replace the missing type-1 QR presence
+observation or same-account live verification.
+
 ## 2026-09-14 external QR-confirmation handoff candidate
 
 The direct QR and mobile-EAPI phone-code implementations remain the first-line

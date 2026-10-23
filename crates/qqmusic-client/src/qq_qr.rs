@@ -175,6 +175,24 @@ impl<T> QqMusicClient<T>
 where
     T: HttpTransport,
 {
+    /// Exchanges the authorization captured by an [`QqQrSession`] after its
+    /// poll result becomes [`QqQrPollResult::Authorized`]. The authorization
+    /// remains opaque and can be consumed only once.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`QqQrError::MissingAuthorization`] if the session has not been
+    /// authorized or its one-time authorization was already consumed.
+    pub async fn exchange_authorized_qq_qr(
+        &self,
+        session: &mut QqQrSession,
+    ) -> Result<Credential, QqQrError<T::Error>> {
+        let authorization = session
+            .take_authorization()
+            .ok_or(QqQrError::MissingAuthorization)?;
+        self.exchange_qq_qr(&authorization).await
+    }
+
     /// Creates a first-party QQ Web QR challenge.
     ///
     /// # Errors
@@ -733,7 +751,14 @@ mod tests {
                     "str_musicid": "456",
                     "musickey": "secret-music-key",
                     "loginType": 2,
-                    "refresh_token": "secret-refresh"
+                    "openid": "secret-open",
+                    "access_token": "secret-access",
+                    "refresh_token": "secret-refresh",
+                    "refresh_key": "secret-refresh-key",
+                    "unionid": "secret-union",
+                    "encryptUin": "secret-encrypted-uin",
+                    "musickeyCreateTime": 1_900_000_000,
+                    "keyExpiresIn": 100_000_000
                 }
             }
         });
@@ -767,6 +792,20 @@ mod tests {
 
         assert_eq!(credential.login_type(), LoginType::QQ);
         assert_eq!(credential.music_id(), "456");
+        assert_eq!(credential.expires_at_unix_seconds(), Some(2_000_000_000));
+        assert_eq!(credential.session_secrets().open_id(), Some("secret-open"));
+        assert_eq!(
+            credential.session_secrets().access_token(),
+            Some("secret-access")
+        );
+        assert_eq!(
+            credential.session_secrets().refresh_token(),
+            Some("secret-refresh")
+        );
+        assert_eq!(
+            credential.session_secrets().refresh_key(),
+            Some("secret-refresh-key")
+        );
         let requests = client.transport().requests();
         assert!(!requests[2].redirects_are_followed());
         assert!(!requests[3].redirects_are_followed());

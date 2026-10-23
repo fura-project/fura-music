@@ -10,6 +10,8 @@ pub enum CredentialRefreshError {
     Network,
     RateLimited,
     CredentialRejected,
+    RiskControl,
+    SecondaryVerificationRequired,
     ProtocolUnavailable,
     InvalidResponse,
     AccountChanged,
@@ -24,11 +26,6 @@ impl std::error::Error for CredentialRefreshError {}
 const RESULT_KEY: &str = "music.login.LoginServer.Login";
 
 fn request(credential: &Credential) -> Result<HttpRequest, CredentialRefreshError> {
-    // Only WeChat's full material set is corroborated by two current wire
-    // families. Do not extrapolate the QQ loginType=2 shape from a port.
-    if credential.login_type() != LoginType::WECHAT {
-        return Err(CredentialRefreshError::UnsupportedLoginType);
-    }
     let secrets = credential.session_secrets();
     let required = |value: Option<&str>| {
         value
@@ -36,13 +33,28 @@ fn request(credential: &Credential) -> Result<HttpRequest, CredentialRefreshErro
             .ok_or(CredentialRefreshError::NotRefreshable)
             .map(str::to_owned)
     };
-    let param = json!({
-        "openid": required(secrets.open_id())?,
-        "refresh_token": required(secrets.refresh_token())?,
-        "str_musicid": credential.music_id(), "musickey": credential.music_key(),
-        "unionid": required(secrets.union_id())?,
-        "refresh_key": required(secrets.refresh_key())?, "loginMode": 2,
-    });
+    // Each accepted login type has one evidence-backed request shape. There is
+    // deliberately no endpoint fallback: a rejected QQ request must remain a
+    // protocol-gate result rather than trying a different identity surface.
+    let param = match credential.login_type() {
+        LoginType::WECHAT => json!({
+            "openid": required(secrets.open_id())?,
+            "refresh_token": required(secrets.refresh_token())?,
+            "str_musicid": credential.music_id(), "musickey": credential.music_key(),
+            "unionid": required(secrets.union_id())?,
+            "refresh_key": required(secrets.refresh_key())?, "loginMode": 2,
+        }),
+        LoginType::QQ => json!({
+            "openid": required(secrets.open_id())?,
+            "access_token": required(secrets.access_token())?,
+            "refresh_token": required(secrets.refresh_token())?,
+            "expired_in": credential.expires_at_unix_seconds()
+                .ok_or(CredentialRefreshError::NotRefreshable)?,
+            "musicid": credential.music_id(), "musickey": credential.music_key(),
+            "refresh_key": required(secrets.refresh_key())?, "loginMode": 2,
+        }),
+        _ => return Err(CredentialRefreshError::UnsupportedLoginType),
+    };
     let body = serde_json::to_vec(&json!({
         "comm": {"cv":crate::profile::WEB_MODERN_VERSION,"v":crate::profile::WEB_MODERN_VERSION,
             "ct":crate::profile::WEB_MODERN_TYPE,"tmeAppID":crate::profile::WEB_APP_ID,
@@ -64,8 +76,11 @@ fn request(credential: &Credential) -> Result<HttpRequest, CredentialRefreshErro
 
 impl<T: HttpTransport> QqMusicClient<T> {
     /// One explicit refresh attempt; the caller must verify the result and
-    /// durably persist rotation before installing it. This is not wired into
-    /// production auto-refresh pending live Web-profile compatibility proof.
+    /// durably persist rotation before installing it. This method does not
+    /// activate refresh by itself. QQ `loginType=2` remains production-gated
+    /// pending a Human-operated live
+    /// Web-profile compatibility proof; this protocol method itself performs
+    /// exactly one request for either supported credential type.
     /// # Errors
     /// Returns only coarse failures, never upstream bodies or secrets.
     pub async fn refresh_credential(
@@ -106,7 +121,39 @@ impl<T: HttpTransport> QqMusicClient<T> {
             | crate::login_credential::LoginCredentialError::Upstream {
                 login_code: Some(2001),
                 ..
+            }
+            | crate::login_credential::LoginCredentialError::Upstream {
+                global_code: 104_604,
+                ..
+            }
+            | crate::login_credential::LoginCredentialError::Upstream {
+                login_code: Some(104_604),
+                ..
             } => CredentialRefreshError::RateLimited,
+            crate::login_credential::LoginCredentialError::Upstream {
+                global_code,
+                login_code,
+            } if [global_code, login_code.unwrap_or(0)]
+                .iter()
+                .any(|c| matches!(c, 20_271 | 20_277 | 20_278 | 20_279 | 20_450)) =>
+            {
+                CredentialRefreshError::RiskControl
+            }
+            crate::login_credential::LoginCredentialError::Upstream {
+                global_code,
+                login_code,
+            } if [global_code, login_code.unwrap_or(0)]
+                .iter()
+                .any(|c| matches!(c, 20_272 | 20_274)) =>
+            {
+                CredentialRefreshError::SecondaryVerificationRequired
+            }
+            crate::login_credential::LoginCredentialError::Upstream {
+                global_code,
+                login_code,
+            } if global_code == 20_261 || login_code == Some(20_261) => {
+                CredentialRefreshError::ProtocolUnavailable
+            }
             _ => CredentialRefreshError::InvalidResponse,
         })?;
         if refreshed.music_id() != credential.music_id() {
@@ -123,17 +170,24 @@ mod tests {
     use super::*;
     use crate::{CredentialSessionSecrets, HttpResponse};
     use std::sync::Mutex;
-    fn credential() -> Credential {
-        Credential::new("123456", "synthetic-key", LoginType::WECHAT)
+    fn credential(login_type: LoginType) -> Credential {
+        let mut credential = Credential::new("123456", "synthetic-key", login_type)
             .unwrap()
             .with_session_secrets(CredentialSessionSecrets::new(
                 Some("synthetic-open".into()),
-                None,
+                Some("synthetic-access".into()),
                 Some("synthetic-refresh".into()),
                 Some("synthetic-refresh-key".into()),
                 Some("synthetic-union".into()),
                 None,
-            ))
+            ));
+        if login_type == LoginType::QQ {
+            credential = credential.with_expiry(
+                crate::CredentialExpiry::from_expires_at(2_000_000_000)
+                    .expect("absolute fixture expiry"),
+            );
+        }
+        credential
     }
     struct Fake {
         reply: serde_json::Value,
@@ -154,7 +208,7 @@ mod tests {
     }
     #[tokio::test]
     async fn exact_material_rotation_account_and_redaction() {
-        let old = credential();
+        let old = credential(LoginType::WECHAT);
         let client = QqMusicClient::new(Fake {
             reply: json!({"code":0,RESULT_KEY:{"code":0,"data":{
             "str_musicid":"123456","musickey":"rotated-key","loginType":1,
@@ -198,7 +252,9 @@ mod tests {
                 requests: Mutex::new(vec![]),
             });
             assert_eq!(
-                client.refresh_credential(&credential()).await,
+                client
+                    .refresh_credential(&credential(LoginType::WECHAT))
+                    .await,
                 Err(expected)
             );
             assert_eq!(client.transport().requests.lock().unwrap().len(), 1);
@@ -239,7 +295,7 @@ mod tests {
                 status,
                 calls: std::sync::atomic::AtomicUsize::new(0),
             });
-            let old = credential();
+            let old = credential(LoginType::WECHAT);
             let retained = old.clone();
             let error = client.refresh_credential(&old).await.unwrap_err();
             assert_eq!(error, expected);
@@ -263,27 +319,120 @@ mod tests {
             requests: Mutex::new(vec![]),
         });
         assert_eq!(
-            client.refresh_credential(&credential()).await,
+            client
+                .refresh_credential(&credential(LoginType::WECHAT))
+                .await,
             Err(CredentialRefreshError::AccountChanged)
         );
-        let unsupported = Credential::new("123456", "synthetic-key", LoginType::QQ).unwrap();
+        let unsupported =
+            Credential::new("123456", "synthetic-key", LoginType::QQ_MUSIC_APP).unwrap();
         assert_eq!(
             client.refresh_credential(&unsupported).await,
             Err(CredentialRefreshError::UnsupportedLoginType)
         );
         assert_eq!(client.transport().requests.lock().unwrap().len(), 1);
         assert!(matches!(
-            request(
-                &credential().with_session_secrets(CredentialSessionSecrets::new(
+            request(&credential(LoginType::WECHAT).with_session_secrets(
+                CredentialSessionSecrets::new(
                     Some("x".repeat(4097)),
                     None,
                     Some("r".into()),
                     Some("k".into()),
                     Some("u".into()),
                     None,
-                ))
-            ),
+                )
+            )),
             Err(CredentialRefreshError::NotRefreshable)
         ));
+    }
+
+    #[tokio::test]
+    async fn qq_type_two_uses_one_explicit_login_server_shape() {
+        let old = credential(LoginType::QQ);
+        let client = QqMusicClient::new(Fake {
+            reply: json!({"code":0,RESULT_KEY:{"code":0,"data":{
+                "str_musicid":"123456","musickey":"rotated-key","loginType":2,
+                "openid":"synthetic-open","access_token":"rotated-access",
+                "refresh_token":"rotated-refresh","refresh_key":"rotated-refresh-key",
+                "expired_at":2_100_000_000
+            }}}),
+            requests: Mutex::new(vec![]),
+        });
+
+        let refreshed = client.refresh_credential(&old).await.unwrap();
+        assert_eq!(refreshed.login_type(), LoginType::QQ);
+        assert_eq!(refreshed.expires_at_unix_seconds(), Some(2_100_000_000));
+        assert_eq!(
+            refreshed.session_secrets().access_token(),
+            Some("rotated-access")
+        );
+        let requests = client.transport().requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        let body: serde_json::Value =
+            serde_json::from_slice(requests[0].body_bytes().unwrap()).unwrap();
+        assert_eq!(body["comm"]["tmeLoginType"], 2);
+        assert_eq!(
+            body[RESULT_KEY]["param"],
+            json!({
+                "openid":"synthetic-open","access_token":"synthetic-access",
+                "refresh_token":"synthetic-refresh","expired_in":2_000_000_000_u64,
+                "musicid":"123456","musickey":"synthetic-key",
+                "refresh_key":"synthetic-refresh-key","loginMode":2
+            })
+        );
+    }
+
+    #[test]
+    fn qq_type_two_missing_any_required_material_sends_no_request() {
+        let without_expiry = Credential::new("123456", "synthetic-key", LoginType::QQ)
+            .unwrap()
+            .with_session_secrets(CredentialSessionSecrets::new(
+                Some("open".into()),
+                Some("access".into()),
+                Some("refresh".into()),
+                Some("key".into()),
+                None,
+                None,
+            ));
+        assert!(matches!(
+            request(&without_expiry),
+            Err(CredentialRefreshError::NotRefreshable)
+        ));
+        let missing_access =
+            credential(LoginType::QQ).with_session_secrets(CredentialSessionSecrets::new(
+                Some("open".into()),
+                None,
+                Some("refresh".into()),
+                Some("key".into()),
+                None,
+                None,
+            ));
+        assert!(matches!(
+            request(&missing_access),
+            Err(CredentialRefreshError::NotRefreshable)
+        ));
+    }
+
+    #[tokio::test]
+    async fn qq_refresh_risk_and_secondary_codes_are_typed_without_retry() {
+        for (code, expected) in [
+            (104_604, CredentialRefreshError::RateLimited),
+            (20_271, CredentialRefreshError::RiskControl),
+            (
+                20_272,
+                CredentialRefreshError::SecondaryVerificationRequired,
+            ),
+            (20_261, CredentialRefreshError::ProtocolUnavailable),
+        ] {
+            let client = QqMusicClient::new(Fake {
+                reply: json!({"code":0,RESULT_KEY:{"code":code}}),
+                requests: Mutex::new(vec![]),
+            });
+            assert_eq!(
+                client.refresh_credential(&credential(LoginType::QQ)).await,
+                Err(expected)
+            );
+            assert_eq!(client.transport().requests.lock().unwrap().len(), 1);
+        }
     }
 }

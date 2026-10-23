@@ -52,8 +52,7 @@ impl std::error::Error for InvalidLoginType {}
 /// an otherwise unexpired key is still accepted by QQ Music.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CredentialExpiry {
-    created_at_unix_seconds: u64,
-    lifetime_seconds: u64,
+    expires_at_unix_seconds: u64,
 }
 
 impl CredentialExpiry {
@@ -75,15 +74,32 @@ impl CredentialExpiry {
         }
 
         Ok(Self {
-            created_at_unix_seconds,
-            lifetime_seconds,
+            expires_at_unix_seconds: created_at_unix_seconds + lifetime_seconds,
+        })
+    }
+
+    /// Builds expiry metadata from the absolute timestamp returned by some QQ
+    /// login and refresh envelopes.
+    ///
+    /// # Errors
+    ///
+    /// Rejects zero and the Unix epoch's first second. Version-one secure
+    /// storage normalizes absolute expiry to a one-second origin plus the
+    /// remaining lifetime, so both components must stay non-zero.
+    pub const fn from_expires_at(
+        expires_at_unix_seconds: u64,
+    ) -> Result<Self, InvalidCredentialExpiry> {
+        if expires_at_unix_seconds <= 1 {
+            return Err(InvalidCredentialExpiry);
+        }
+        Ok(Self {
+            expires_at_unix_seconds,
         })
     }
 
     #[must_use]
     pub const fn expires_at_unix_seconds(self) -> u64 {
-        // The constructor proves this addition cannot overflow.
-        self.created_at_unix_seconds + self.lifetime_seconds
+        self.expires_at_unix_seconds
     }
 }
 
@@ -265,6 +281,16 @@ impl Credential {
         &self.session_secrets
     }
 
+    /// Returns the absolute protocol expiry when the login response supplied
+    /// reliable lifetime metadata.
+    #[must_use]
+    pub const fn expires_at_unix_seconds(&self) -> Option<u64> {
+        match self.expiry {
+            Some(expiry) => Some(expiry.expires_at_unix_seconds()),
+            None => None,
+        }
+    }
+
     /// Returns whether both credentials belong to the same QQ Music account.
     ///
     /// This comparison deliberately stays in Rust so platform storage code can
@@ -312,8 +338,8 @@ impl Credential {
     /// document cannot be encoded.
     pub fn encode_for_secure_storage(&self) -> Result<Vec<u8>, CredentialPersistenceError> {
         let expiry = self.expiry.map(|expiry| StoredCredentialExpiry {
-            created_at_unix_seconds: expiry.created_at_unix_seconds,
-            lifetime_seconds: expiry.lifetime_seconds,
+            created_at_unix_seconds: 1,
+            lifetime_seconds: expiry.expires_at_unix_seconds() - 1,
         });
         let secrets = &self.session_secrets;
         let document = StoredCredentialV1 {
@@ -796,6 +822,13 @@ mod tests {
         assert!(CredentialExpiry::new(0, 300).is_err());
         assert!(CredentialExpiry::new(1_000, 0).is_err());
         assert!(CredentialExpiry::new(u64::MAX, 1).is_err());
+        assert!(CredentialExpiry::from_expires_at(1).is_err());
+        assert_eq!(
+            CredentialExpiry::from_expires_at(1_300)
+                .expect("absolute expiry")
+                .expires_at_unix_seconds(),
+            1_300
+        );
     }
 
     #[test]

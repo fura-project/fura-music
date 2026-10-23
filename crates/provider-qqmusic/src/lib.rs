@@ -42,7 +42,7 @@ use provider_api::{
 use qqmusic_client::{
     Credential, CredentialPersistenceError, CredentialRefreshError, CredentialRestorePlan,
     CredentialRotation, CredentialRotationError, CredentialTransferError,
-    CredentialTransferPackage, CredentialVerificationError, HttpTransport,
+    CredentialTransferPackage, CredentialVerificationError, HttpTransport, LoginType,
     QqDesktopQuickLoginError, QqDesktopQuickLoginSession, QqMusicAlbumDetailsError,
     QqMusicAlbumFavoriteError, QqMusicAlbumFavoriteState, QqMusicAlbumSearchError,
     QqMusicAlbumSummary, QqMusicAlbumTracksError, QqMusicArtistAlbumsError,
@@ -206,6 +206,28 @@ struct CdnDispatchCacheEntry {
 
 const QQ_REFRESH_SAFETY_WINDOW_SECONDS: u64 = 5 * 60;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct QqRefreshActivation {
+    wechat: bool,
+    qq_type_two: bool,
+}
+
+impl QqRefreshActivation {
+    fn allows(self, login_type: LoginType) -> bool {
+        if login_type == LoginType::WECHAT {
+            self.wechat
+        } else if login_type == LoginType::QQ {
+            self.qq_type_two
+        } else {
+            false
+        }
+    }
+
+    const fn any(self) -> bool {
+        self.wechat || self.qq_type_two
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicRefreshTrigger {
     AuthenticatedReadRejection,
@@ -313,7 +335,7 @@ pub struct QqMusicProvider<T> {
     consumed_credential_transfer_sessions: Mutex<HashSet<String>>,
     cdn_dispatch_cache: tokio::sync::Mutex<Option<CdnDispatchCacheEntry>>,
     media_cache: tokio::sync::Mutex<provider_api::MediaResolutionCache>,
-    refresh_enabled: bool,
+    refresh_activation: QqRefreshActivation,
     next_refresh_reservation: AtomicU32,
     refresh: Mutex<QqRefreshCoordinatorState>,
 }
@@ -337,6 +359,21 @@ impl<T> QqMusicProvider<T> {
     /// credential-owned: unsupported QQ login types never enter this path.
     #[must_use]
     pub fn new_with_refresh_activation(client: QqMusicClient<T>, refresh_enabled: bool) -> Self {
+        Self::new_with_refresh_activations(client, refresh_enabled, false)
+    }
+
+    /// Selectively enables evidence-bounded refresh protocol candidates.
+    ///
+    /// Production callers must keep `qq_type_two_enabled` false until the
+    /// Human-operated QQ gate has passed. This constructor exists so the QQ
+    /// candidate can exercise the same owner, staging, recovery and
+    /// single-flight lifecycle offline without piggybacking on `WeChat`'s gate.
+    #[must_use]
+    pub fn new_with_refresh_activations(
+        client: QqMusicClient<T>,
+        wechat_enabled: bool,
+        qq_type_two_enabled: bool,
+    ) -> Self {
         Self {
             login: WechatQrLoginCoordinator::new(client),
             credential: Arc::new(Mutex::new(QqCredentialOwner::default())),
@@ -346,7 +383,10 @@ impl<T> QqMusicProvider<T> {
             consumed_credential_transfer_sessions: Mutex::new(HashSet::new()),
             cdn_dispatch_cache: tokio::sync::Mutex::new(None),
             media_cache: tokio::sync::Mutex::new(provider_api::MediaResolutionCache::default()),
-            refresh_enabled,
+            refresh_activation: QqRefreshActivation {
+                wechat: wechat_enabled,
+                qq_type_two: qq_type_two_enabled,
+            },
             next_refresh_reservation: AtomicU32::new(1),
             refresh: Mutex::new(QqRefreshCoordinatorState::Idle),
         }
@@ -918,7 +958,7 @@ where
         &self,
         trigger: QqMusicRefreshTrigger,
     ) -> Result<QqMusicRefreshPrepareResult, QqMusicRefreshFailure> {
-        if !self.refresh_enabled {
+        if !self.refresh_activation.any() {
             if matches!(trigger, QqMusicRefreshTrigger::AuthenticatedReadRejection) {
                 let mut credential = credential_guard(&self.credential);
                 if matches!(
@@ -988,6 +1028,24 @@ where
                     generation: state.generation(),
                 }
             };
+
+            if !self
+                .refresh_activation
+                .allows(source.credential.login_type())
+            {
+                if matches!(trigger, QqMusicRefreshTrigger::AuthenticatedReadRejection) {
+                    let mut credential = credential_guard(&self.credential);
+                    if credential.generation() == source.generation
+                        && matches!(
+                            &*credential,
+                            QqMusicCredentialState::ContinuationRequired(_)
+                        )
+                    {
+                        credential.replace(QqMusicCredentialState::SignedOut);
+                    }
+                }
+                return Err(QqMusicRefreshFailure::ProductionGateDisabled);
+            }
 
             let wait = {
                 let mut refresh = refresh_guard(&self.refresh);
@@ -3118,7 +3176,9 @@ const fn map_refresh_error(error: CredentialRefreshError) -> QqMusicRefreshFailu
         CredentialRefreshError::CredentialRejected | CredentialRefreshError::AccountChanged => {
             QqMusicRefreshFailure::ReauthenticationRequired
         }
-        CredentialRefreshError::ProtocolUnavailable => QqMusicRefreshFailure::ServiceUnavailable,
+        CredentialRefreshError::RiskControl
+        | CredentialRefreshError::SecondaryVerificationRequired
+        | CredentialRefreshError::ProtocolUnavailable => QqMusicRefreshFailure::ServiceUnavailable,
         CredentialRefreshError::InvalidResponse => QqMusicRefreshFailure::InvalidResponse,
     }
 }
@@ -4947,6 +5007,11 @@ mod tests {
         verification_calls: AtomicUsize,
     }
 
+    struct QqTypeTwoRefreshAndVerifyTransport {
+        refresh_calls: AtomicUsize,
+        verification_calls: AtomicUsize,
+    }
+
     struct RejectingReadsThenRefreshTransport {
         account_calls: AtomicUsize,
         refresh_calls: AtomicUsize,
@@ -5340,6 +5405,47 @@ mod tests {
                         }
                     }))
                     .expect("refresh response"),
+                )
+            } else {
+                self.verification_calls.fetch_add(1, Ordering::SeqCst);
+                VerificationTransport::new(0).response
+            };
+            std::future::ready(Ok(response))
+        }
+    }
+
+    impl HttpTransport for QqTypeTwoRefreshAndVerifyTransport {
+        type Error = Infallible;
+
+        fn execute(
+            &self,
+            request: HttpRequest,
+        ) -> impl std::future::Future<Output = Result<HttpResponse, Self::Error>> + Send {
+            let body: Value =
+                serde_json::from_slice(request.body_bytes().expect("authenticated request body"))
+                    .expect("request JSON");
+            let response = if body.get("music.login.LoginServer.Login").is_some() {
+                self.refresh_calls.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(body["comm"]["tmeLoginType"], 2);
+                HttpResponse::new(
+                    200,
+                    serde_json::to_vec(&json!({
+                        "code": 0,
+                        "music.login.LoginServer.Login": {
+                            "code": 0,
+                            "data": {
+                                "str_musicid": "123456",
+                                "musickey": "rotated-qq-key",
+                                "loginType": 2,
+                                "openid": "synthetic-qq-open",
+                                "access_token": "rotated-qq-access",
+                                "refresh_token": "rotated-qq-refresh",
+                                "refresh_key": "rotated-qq-refresh-key",
+                                "expired_at": 2_100_000_000_u64
+                            }
+                        }
+                    }))
+                    .expect("QQ refresh response"),
                 )
             } else {
                 self.verification_calls.fetch_add(1, Ordering::SeqCst);
@@ -7435,6 +7541,154 @@ mod tests {
         let mut owner = super::credential_guard(&provider.credential);
         let snapshot = owner.snapshot().expect("authenticated snapshot");
         owner.mark_continuation_required(&snapshot);
+    }
+
+    fn set_qq_type_two_continuation<T>(provider: &QqMusicProvider<T>) {
+        let credential = Credential::new("123456", "old-qq-key", LoginType::QQ)
+            .expect("QQ fixture credential")
+            .with_expiry(
+                CredentialExpiry::from_expires_at(2_000_000_000).expect("QQ fixture expiry"),
+            )
+            .with_session_secrets(CredentialSessionSecrets::new(
+                Some("synthetic-qq-open".into()),
+                Some("synthetic-qq-access".into()),
+                Some("synthetic-qq-refresh".into()),
+                Some("synthetic-qq-refresh-key".into()),
+                None,
+                None,
+            ));
+        let mut owner = super::credential_guard(&provider.credential);
+        owner.replace(super::QqMusicCredentialState::authenticated(credential));
+        let snapshot = owner.snapshot().expect("QQ authenticated snapshot");
+        owner.mark_continuation_required(&snapshot);
+    }
+
+    #[tokio::test]
+    async fn production_wechat_activation_does_not_enable_qq_type_two() {
+        let provider = QqMusicProvider::new_with_refresh_activation(
+            QqMusicClient::new(QqTypeTwoRefreshAndVerifyTransport {
+                refresh_calls: AtomicUsize::new(0),
+                verification_calls: AtomicUsize::new(0),
+            }),
+            true,
+        );
+        set_qq_type_two_continuation(&provider);
+
+        assert_eq!(
+            provider
+                .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection)
+                .await,
+            Err(QqMusicRefreshFailure::ProductionGateDisabled)
+        );
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .refresh_calls
+                .load(Ordering::SeqCst),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn qq_type_two_uses_the_existing_single_flight_stage_verify_commit_owner() {
+        let provider = Arc::new(QqMusicProvider::new_with_refresh_activations(
+            QqMusicClient::new(QqTypeTwoRefreshAndVerifyTransport {
+                refresh_calls: AtomicUsize::new(0),
+                verification_calls: AtomicUsize::new(0),
+            }),
+            false,
+            true,
+        ));
+        set_qq_type_two_continuation(&provider);
+
+        let leader = provider
+            .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection)
+            .await
+            .expect("QQ leader candidate")
+            .preparation
+            .expect("QQ stage document");
+        let mut waiters = Vec::new();
+        for _ in 0..9 {
+            let provider = Arc::clone(&provider);
+            waiters.push(tokio::spawn(async move {
+                provider
+                    .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection)
+                    .await
+            }));
+        }
+        tokio::task::yield_now().await;
+        provider
+            .verify_staged_refresh_candidate(leader.reservation_id)
+            .await
+            .expect("QQ candidate verification");
+        provider
+            .commit_staged_refresh_candidate(leader.reservation_id)
+            .expect("QQ candidate commit");
+
+        for waiter in waiters {
+            let result = waiter.await.expect("QQ waiter").expect("shared QQ result");
+            assert_eq!(
+                result.state,
+                QqMusicRefreshPrepareState::ReusedNewGeneration
+            );
+        }
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .refresh_calls
+                .load(Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .verification_calls
+                .load(Ordering::SeqCst),
+            1
+        );
+        assert!(provider.has_authenticated_credential());
+    }
+
+    #[tokio::test]
+    async fn qq_type_two_late_commit_cannot_cross_an_identical_account_relogin() {
+        let provider = QqMusicProvider::new_with_refresh_activations(
+            QqMusicClient::new(QqTypeTwoRefreshAndVerifyTransport {
+                refresh_calls: AtomicUsize::new(0),
+                verification_calls: AtomicUsize::new(0),
+            }),
+            false,
+            true,
+        );
+        set_qq_type_two_continuation(&provider);
+
+        let preparation = provider
+            .prepare_credential_refresh(QqMusicRefreshTrigger::AuthenticatedReadRejection)
+            .await
+            .expect("QQ candidate")
+            .preparation
+            .expect("QQ reservation");
+        provider
+            .verify_staged_refresh_candidate(preparation.reservation_id)
+            .await
+            .expect("verified QQ candidate");
+
+        set_authenticated(&provider, "123456");
+        assert_eq!(
+            provider.commit_staged_refresh_candidate(preparation.reservation_id),
+            Err(QqMusicRefreshFailure::Replaced)
+        );
+        assert!(provider.has_authenticated_credential());
+        assert_eq!(
+            provider
+                .client()
+                .transport()
+                .refresh_calls
+                .load(Ordering::SeqCst),
+            1
+        );
     }
 
     #[tokio::test]

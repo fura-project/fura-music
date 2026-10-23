@@ -37,6 +37,19 @@ requirements and KuGou's ordinary device/session/media contract remain separate
 unresolved gates.
 See [the source audit and acceptance matrix](docs/research/provider-playback-session-audit-2026-10-06.md).
 
+The next bounded foundation is also implemented offline. QQ `loginType=2` has
+one explicit `LoginServer/Login` request shape, complete material checks,
+typed risk outcomes and the same Provider/vault lifecycle tests, but its
+activation flag is independent and false in the production constructor. Its
+ignored disposable-QR gate is prepared but has not run, so production remains
+blocked on that Human-operated wire result. NetEase now preserves optional
+`MUSIC_R_U`, imports legacy v1 storage, records only source-presence diagnostics
+and rejects code-only/no-rotation refresh responses. Its offline WEAPI shape
+uses the evidenced U/R/CSRF cookies plus `os=pc`. Upstream evidence makes WEAPI
+refresh plausible but does not prove Fura type-1 QR receives independent
+refresh material; NetEase therefore remains `CONDITIONAL` and disconnected
+from production continuation.
+
 **Boundaries:** no sidecar/proxy, raw JSON Bridge, profile/risk rotation,
 unclassified hardware identity, private app secret, package spoofing, protected
 media unlock, cross-Provider source or unsafe mutation replay. No real stored
@@ -45,6 +58,10 @@ probing. Mobile and long-duration real-session completion cannot be inferred
 from Linux synthetic playback plus one bounded disposable-session gate.
 
 **Next gate:** no machine-actionable QQ WeChat V1 implementation remains.
+QQ Type 2 requires the prepared Human-operated disposable protocol gate before
+any Release activation decision. NetEase requires a separately authorized
+type-1 QR presence observation before even deciding whether a one-shot refresh
+gate is safe; it has no production continuation authorization.
 Physical mobile/desktop lifecycle soak and cross-platform native secure-storage
 behavior remain independent evidence, not blockers to the completed bounded V1
 implementation. Other QQ login types and NetEase require their own protocol and

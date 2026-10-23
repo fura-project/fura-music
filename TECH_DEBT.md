@@ -311,13 +311,16 @@ separate Human Decision defines Queue provenance and retention behavior.
 
 ## TD-015 — Refresh foundations lack atomic Provider/vault continuation
 
-**Status:** Partially resolved; QQ WeChat V1 complete, other session families open
+**Status:** Partially resolved; QQ WeChat V1 complete, QQ Type 2 offline foundation ready, NetEase conditional
 
 **Problem:** QQ WeChat V1 now has machine-verifiable continuation mechanics, a
 bounded disposable-session protocol PASS for the exact Fura Web profile, and
-Human-authorized Release activation. The broader debt remains because QQ type 2,
-desktop quick login, QQ Music App login and NetEase do not share this evidenced
-contract; NetEase still has no accepted minimal refresh-Cookie contract.
+Human-authorized Release activation. The broader debt remains because QQ Type 2
+now has an independently gated offline candidate but no live wire PASS or
+Release authority. NetEase now retains a distinct optional `MUSIC_R_U` and
+enforces strict candidate rotation, but still has no evidence that Fura's
+current type-1 QR obtains that material or that the candidate refresh verifies
+the same account. QQ Music App login remains outside both contracts.
 
 **Why accepted:** The live gate proved exactly one bounded disposable WeChat
 session, and the later Human decision authorized only that same envelope for
@@ -329,9 +332,12 @@ and risk decisions rather than inferences from the QQ WeChat PASS.
 and stale commit; Flutter only serializes opaque current/stage storage and waits
 for durable acknowledgement. Release users with the verified WeChat credential
 can now continue through startup, expiry, resume and safe-read rejection. Safe
-reads retry at most once and mutations are never replayed. Unsupported QQ login
-types and other Providers still truthfully require their own reauthentication or
-future evidenced continuation.
+reads retry at most once and mutations are never replayed. QQ Type 2 and other
+Providers still truthfully require their own Human-operated protocol evidence
+and activation decision. QQ Type 2 does not piggyback on the WeChat Release
+gate. NetEase legacy sessions import without fabricated refresh material and
+fail `NotRefreshable` before network; the disconnected offline candidate uses
+only the evidenced U/R/CSRF cookies plus `os=pc`.
 Resume now retries a retained durable stage before preparing a new rotation,
 and replacement/logout epochs invalidate both in-flight snapshots and their
 pending recovery wrapper. These corrections close the known local lifecycle
@@ -344,11 +350,13 @@ account mismatch or device/signature requirements must remain hard stops rather
 than trigger profile rotation, fabricated identity or retries.
 
 **Suggested solution:** Keep the completed QQ WeChat V1 route narrow and monitor
-typed risk-control outcomes without automatic profile rotation. Treat QQ type 2,
-QQ quick login, QQ Music App login and NetEase as independent future tasks that
-need their own wire evidence and Human authorization. The retained ignored
-Debug-only harness is `crates/qqmusic-client/tests/live_wechat_refresh_gate.rs`;
-do not rerun it merely because Release activation is complete.
+typed risk-control outcomes without automatic profile rotation. Run QQ Type 2
+only through the prepared ignored
+`crates/qqmusic-client/tests/live_qq_type2_refresh_gate.rs` after direct Human
+authorization and QR interaction; a PASS still requires a separate Release
+decision. NetEase first needs a separately authorized type-1 QR presence
+observation, not a profile fallback. The retained WeChat harness should not be
+rerun merely because another login type is under study.
 
 **Trigger condition:** QQ WeChat V1 completed on 2026-10-23. Reopen only for a
 reproduced V1 correctness/risk-control defect or separately authorized

@@ -2,8 +2,8 @@
 mod auth;
 mod catalog;
 pub use auth::{
-    Account, CreatedPlaylist, Credential, QrKey, QrPoll, RecentSongsSnapshot, SmsLoginChallenge,
-    UserPlaylist, UserPlaylistPage,
+    Account, CreatedPlaylist, Credential, CredentialRefreshError, QrKey, QrPoll,
+    RecentSongsSnapshot, SmsLoginChallenge, UserPlaylist, UserPlaylistPage,
 };
 mod crypto;
 mod lyrics;

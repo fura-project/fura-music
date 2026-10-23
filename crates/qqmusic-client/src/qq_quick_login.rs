@@ -745,7 +745,7 @@ mod tests {
         QqDesktopQuickLoginError, hash33, masked_account_hint, parse_ticket_response,
         ticket_exchange_redirect,
     };
-    use crate::{HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient};
+    use crate::{Credential, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient};
 
     struct FakeTransport {
         responses: Mutex<VecDeque<HttpResponse>>,
@@ -784,6 +784,19 @@ mod tests {
             200,
             br#"var var_sso_uin_list=[{"uin":1234567890,"account":1234567890,"face_index":1,"gender":0,"nickname":"Synthetic listener","client_type":1,"uin_flag":0}];ptui_getuins_CB(var_sso_uin_list);"#.to_vec(),
         )
+    }
+
+    fn assert_refreshable_qq_credential(credential: &Credential) {
+        assert_eq!(credential.login_type(), LoginType::QQ);
+        assert_eq!(credential.expires_at_unix_seconds(), Some(2_000_000_000));
+        assert_eq!(
+            credential.session_secrets().access_token(),
+            Some("secret-access")
+        );
+        assert_eq!(
+            credential.session_secrets().refresh_key(),
+            Some("secret-refresh-key")
+        );
     }
 
     fn legacy_account_response() -> HttpResponse {
@@ -907,7 +920,14 @@ mod tests {
                 "data": {
                     "str_musicid": "456",
                     "musickey": "secret-music-key",
-                    "loginType": 2
+                    "loginType": 2,
+                    "openid": "secret-open",
+                    "access_token": "secret-access",
+                    "refresh_token": "secret-refresh",
+                    "refresh_key": "secret-refresh-key",
+                    "unionid": "secret-union",
+                    "encryptUin": "secret-encrypted-uin",
+                    "expired_at": 2_000_000_000
                 }
             }
         });
@@ -959,7 +979,7 @@ mod tests {
                 )
             });
 
-        assert_eq!(credential.login_type(), LoginType::QQ);
+        assert_refreshable_qq_credential(&credential);
         let requests = client.transport().requests();
         assert_eq!(
             requests[1].url(),
