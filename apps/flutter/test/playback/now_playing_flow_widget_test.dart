@@ -737,6 +737,7 @@ void main() {
     );
     if (const bool.fromEnvironment('QUALITY_NOTICE_VISUAL_REVIEW')) {
       await tester.pump();
+      await tester.pump();
       await _captureQualityNoticeFrame(tester, 'light-entry-000ms');
       await tester.pump(const Duration(milliseconds: 125));
       await _captureQualityNoticeFrame(tester, 'light-entry-125ms');
@@ -753,19 +754,29 @@ void main() {
     final snackBarFinder = find.byKey(
       const ValueKey('playback-quality-snackbar'),
     );
+    final toastSurfaceFinder = find.byKey(
+      const ValueKey('playback-quality-toast-surface'),
+    );
     expect(notice, findsOneWidget);
     expect(find.byType(SnackBar), findsOneWidget);
+    expect(toastSurfaceFinder, findsOneWidget);
     final snackBar = tester.widget<SnackBar>(snackBarFinder);
+    final toastSurface = tester.widget<Material>(toastSurfaceFinder);
     final noticeContext = tester.element(notice);
     expect(snackBar.behavior, SnackBarBehavior.floating);
+    expect(snackBar.clipBehavior, Clip.none);
+    expect(snackBar.backgroundColor, Colors.transparent);
+    expect(snackBar.elevation, 0);
+    expect(snackBar.shape, const StadiumBorder());
     expect(
-      snackBar.backgroundColor,
-      Theme.of(noticeContext).colorScheme.inverseSurface,
+      toastSurface.color,
+      Theme.of(noticeContext).colorScheme.surfaceContainerHighest,
     );
-    expect(snackBar.elevation, 6);
+    expect(toastSurface.elevation, 3);
+    expect(toastSurface.shape, const StadiumBorder());
     expect(
-      (snackBar.shape! as RoundedRectangleBorder).borderRadius,
-      const BorderRadius.all(Radius.circular(4)),
+      tester.getSize(toastSurfaceFinder).width,
+      lessThan(tester.getSize(snackBarFinder).width),
     );
     expect(
       find.descendant(
@@ -788,10 +799,7 @@ void main() {
       ),
     );
     if (const bool.fromEnvironment('QUALITY_NOTICE_VISUAL_REVIEW')) {
-      await expectLater(
-        find.byType(MusicApp),
-        matchesGoldenFile(Uri.file(_qualityNoticeReviewPath('light'))),
-      );
+      await _captureQualityNoticeFrame(tester, 'light');
     }
 
     await tester.tap(find.byKey(const ValueKey('now-playing-quality')));
@@ -832,7 +840,7 @@ void main() {
     );
   });
 
-  testWidgets('quality notice uses the dark Material inverse surface', (
+  testWidgets('quality notice uses the dark Material surfaceContainerHighest', (
     tester,
   ) async {
     await _prepareQualityNoticeVisualReview(tester);
@@ -864,23 +872,30 @@ void main() {
     await tester.pumpAndSettle();
 
     final notice = find.byKey(const ValueKey('playback-transient-notice'));
+    final toastSurfaceFinder = find.byKey(
+      const ValueKey('playback-quality-toast-surface'),
+    );
     expect(notice, findsOneWidget);
+    expect(toastSurfaceFinder, findsOneWidget);
     final context = tester.element(notice);
     final snackBar = tester.widget<SnackBar>(
       find.byKey(const ValueKey('playback-quality-snackbar')),
     );
+    final toastSurface = tester.widget<Material>(toastSurfaceFinder);
     expect(Theme.of(context).brightness, Brightness.dark);
+    expect(snackBar.clipBehavior, Clip.none);
+    expect(snackBar.backgroundColor, Colors.transparent);
+    expect(snackBar.elevation, 0);
+    expect(snackBar.shape, const StadiumBorder());
     expect(
-      snackBar.backgroundColor,
-      Theme.of(context).colorScheme.inverseSurface,
+      toastSurface.color,
+      Theme.of(context).colorScheme.surfaceContainerHighest,
     );
-    expect(snackBar.elevation, 6);
+    expect(toastSurface.elevation, 3);
+    expect(toastSurface.shape, const StadiumBorder());
     expect(tester.getSemantics(notice).flagsCollection.isLiveRegion, isTrue);
     if (const bool.fromEnvironment('QUALITY_NOTICE_VISUAL_REVIEW')) {
-      await expectLater(
-        find.byType(MusicApp),
-        matchesGoldenFile(Uri.file(_qualityNoticeReviewPath('dark'))),
-      );
+      await _captureQualityNoticeFrame(tester, 'dark');
     }
     expect(tester.takeException(), isNull);
   });
@@ -3233,11 +3248,25 @@ String _qualityNoticeReviewPath(String brightness) {
       'quality-$brightness-${width.toInt()}-$scaleLabel.png';
 }
 
-Future<void> _captureQualityNoticeFrame(WidgetTester tester, String state) =>
-    expectLater(
+Future<void> _captureQualityNoticeFrame(
+  WidgetTester tester,
+  String state,
+) async {
+  final previousShadows = debugDisableShadows;
+  debugDisableShadows = false;
+  try {
+    for (final renderObject in tester.allRenderObjects) {
+      renderObject.markNeedsPaint();
+    }
+    await tester.pump();
+    await expectLater(
       find.byType(MusicApp),
       matchesGoldenFile(Uri.file(_qualityNoticeReviewPath(state))),
     );
+  } finally {
+    debugDisableShadows = previousShadows;
+  }
+}
 
 String? _nowPlayingTitle(WidgetTester tester) =>
     tester.widget<Text>(find.byKey(const ValueKey('now-playing-title'))).data;

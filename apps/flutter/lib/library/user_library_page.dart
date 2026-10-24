@@ -1402,6 +1402,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       SnackBar(
         key: const ValueKey('playback-quality-snackbar'),
         behavior: SnackBarBehavior.floating,
+        clipBehavior: Clip.none,
         duration: const Duration(milliseconds: 1800),
         margin: playbackSnackBarMargin(
           viewportWidth: MediaQuery.sizeOf(context).width,
@@ -1410,13 +1411,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           settingsOpen: settingsOpen,
           expandedNowPlayingOpen: expandedNowPlayingOpen,
         ),
-        // The app theme intentionally styles other SnackBars. These values are
-        // the Flutter 3.47.1 Material 3 defaults, scoped to playback feedback.
-        backgroundColor: colors.inverseSurface,
-        elevation: 6,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(4)),
-        ),
+        padding: EdgeInsets.zero,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shape: const StadiumBorder(),
         onVisible: () {
           if (!mounted || !identical(_playbackNoticeController, controller)) {
             return;
@@ -1426,14 +1424,41 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             messenger.hideCurrentSnackBar();
           }
         },
-        content: Semantics(
-          key: const ValueKey('playback-transient-notice'),
-          liveRegion: true,
-          label: message,
-          child: Text(
-            message,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: colors.onInverseSurface,
+        content: Center(
+          heightFactor: 1,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: _PlaybackToastTransition(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Material(
+                  key: const ValueKey('playback-quality-toast-surface'),
+                  color: colors.surfaceContainerHighest,
+                  surfaceTintColor: Colors.transparent,
+                  elevation: 3,
+                  shadowColor: colors.shadow.withValues(alpha: 0.20),
+                  shape: const StadiumBorder(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    child: Semantics(
+                      key: const ValueKey('playback-transient-notice'),
+                      liveRegion: true,
+                      label: message,
+                      child: Text(
+                        message,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colors.onSurface,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -4596,4 +4621,42 @@ String _semanticLabel(AppLocalizations l10n, UserPlaylistSummary playlist) {
   return count == null
       ? playlist.title
       : '${playlist.title}, ${l10n.libraryPlaylistCount(count)}';
+}
+
+class _PlaybackToastTransition extends StatelessWidget {
+  const _PlaybackToastTransition({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final animation = context
+        .findAncestorWidgetOfExactType<SnackBar>()
+        ?.animation;
+    if (animation == null ||
+        MediaQuery.accessibleNavigationOf(context) ||
+        MediaQuery.disableAnimationsOf(context)) {
+      return child;
+    }
+    return AnimatedBuilder(
+      animation: animation,
+      child: child,
+      builder: (context, child) {
+        final raw = animation.value.clamp(0.0, 1.0);
+        final isReversing =
+            animation.status == AnimationStatus.reverse ||
+            animation.status == AnimationStatus.dismissed;
+        final curved = isReversing
+            ? Curves.easeInCubic.transform(raw)
+            : Curves.easeOutCubic.transform(raw);
+        return Opacity(
+          opacity: curved.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(0, (1.0 - curved) * 6.0),
+            child: Transform.scale(scale: 0.92 + (0.08 * curved), child: child),
+          ),
+        );
+      },
+    );
+  }
 }

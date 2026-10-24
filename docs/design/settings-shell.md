@@ -62,10 +62,47 @@ At 390×844:
 
 The Human reported that the earlier opaque-transition fix left an unwanted pale panel behind Settings and playlist detail. The backing now uses the same `Theme.scaffoldBackgroundColor` as the normal content canvas and resting toolbar, while retaining full opacity, clipping and content-only fading for the entire entry/exit transition. Sidebar/player container roles and all accepted geometry remain unchanged. This is one consistent canvas role, not a hard-coded light color; dark mode follows its existing theme. The corrected candidate requires Human visual review.
 
-## Current anchored choices and inline details, 2026-10-08
+## Current Android Material You anchored choices and inline details, 2026-10-23
 
-**Design source:** the latest explicit Human interaction restoration.
+**Design source:** explicit Human task and subsequent visual correction (`没有android味道 ai味道太重了`).
 **Status:** implemented candidate; `HUMAN_REVIEW`, not visual acceptance.
+
+- **Section headings (`_SettingsSectionHeading`):** unboxed Android Material You
+  typography directly on the page canvas (`titleLarge` title + `bodyMedium`
+  `onSurfaceVariant` description on wide layouts; `labelLarge` `primary`
+  `PreferenceCategory` label on compact layouts). Redundant boxed header cards,
+  icon squares, and multi-category overview chip strips are prohibited.
+- **Grouped surface (`_SettingsGroup`):** one quiet, borderless
+  `colorScheme.surfaceContainerLow` container (`16` dp radius) per section with
+  subtle inset hairline dividers (`indent: 56`, `endIndent: 20`), never
+  `Border.all` outlines or nested cards.
+- **Simple enum choices (`_SettingsChoiceTile` / `_FuraSettingsRow`):**
+  `Theme`, `Music service`, `Language`, `Default playback quality` and
+  `Lyric auxiliary` use SDK M3 `MenuAnchor`, `MenuController` and
+  `MenuItemButton` with unboxed `24` dp leading icons (`onSurfaceVariant`).
+  On wide layouts (`_fitsInline`), the trailing trigger is a borderless tonal
+  stadium pill (`surfaceContainerHigh`, shifting to `secondaryContainer` while
+  the popup or disclosure is active) containing the current value and rotating
+  chevron (`AnimatedRotation`, `200` ms `Curves.easeInOutCubic`). On compact or
+  2x-text stacked layouts, rows use classic two-line Android `Preference`
+  composition (title above plain `onSurfaceVariant` value text, unboxed chevron
+  trailing).
+- **Detailed Color Source (`_SettingsColorDisclosure`):** expands inline inside
+  the existing `surfaceContainerLow` group via `AnimatedSize` (`200` ms
+  `Curves.easeInOutCubic`, or direct layout under reduced motion), separated by
+  an inset hairline divider (`indent: 56`, `endIndent: 20`), with unboxed
+  full-width Android M3 `Radio` rows (`MaterialType.transparency` + `InkWell`)
+  and an unboxed availability + 5-dot effective `ColorScheme` palette row
+  aligned at `56` dp start indent.
+- **Validation:** `dart format --output=none --set-exit-if-changed`,
+  `dart analyze`, `flutter test test/settings/` (104/104 pass across 40
+  viewport/locale/brightness/text-scale variants and motion capture), and
+  `flutter test test/widget_test.dart --plain-name "settings"` (11/11 pass).
+
+## Historical anchored choices and inline details, 2026-10-08
+
+**Design source:** the earlier explicit Human interaction restoration.
+**Status:** superseded by the 2026-10-23 Android Material You refinement above.
 Starting HEAD and tracked origin/main:
 `9377611976202aed92219085a491258d970aaa73`; initial worktree clean.
 This supersedes the interaction contracts below, not the accepted Shell,

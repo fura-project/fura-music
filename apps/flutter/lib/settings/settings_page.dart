@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
@@ -360,12 +359,16 @@ class _SettingsPageState extends State<SettingsPage> {
         : widget.systemLightColorScheme;
     return [
       _SettingsSectionHeading(
+        section: SettingsSection.appearance,
         label: l10n.settingsAppearanceLabel,
         headingKey: const ValueKey('settings-appearance-section'),
+        settings: widget.settings,
+        compact: compact,
+        showOverviewStrip: widget.searchQuery.trim().isEmpty && !compact,
       ),
       _SettingsGroup(
         children: [
-          _SettingsThemeChoice(
+          _SettingsChoiceTile<AppThemePreference>(
             controlKey: const ValueKey('settings-theme-selector'),
             icon: Icons.brightness_auto_rounded,
             title: l10n.settingsAppearanceCompactLabel,
@@ -391,11 +394,15 @@ class _SettingsPageState extends State<SettingsPage> {
             onSelected: (theme) =>
                 _save(widget.settings.copyWith(theme: theme)),
           ),
-          _SettingsColorDropdown(
+          _SettingsColorDisclosure(
             controlKey: const ValueKey('settings-color-source-selector'),
             icon: Icons.palette_outlined,
             title: l10n.settingsColorSourceLabel,
             current: widget.settings.colorSource,
+            currentLabel: _colorSourceSummary(
+              widget.settings.colorSource,
+              l10n,
+            ),
             choices: [
               _SettingsChoice(
                 key: const ValueKey('settings-color-source-system'),
@@ -431,8 +438,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   List<Widget> _musicServiceSection(BuildContext context, bool compact) => [
     _SettingsSectionHeading(
+      section: SettingsSection.musicService,
       label: context.l10n.settingsMusicServiceLabel,
       headingKey: const ValueKey('settings-music-service-section'),
+      settings: widget.settings,
+      compact: compact,
+      showOverviewStrip: widget.searchQuery.trim().isEmpty && !compact,
     ),
     _SettingsGroup(
       children: [
@@ -463,8 +474,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   List<Widget> _languageSection(BuildContext context, bool compact) => [
     _SettingsSectionHeading(
+      section: SettingsSection.language,
       label: context.l10n.settingsLanguageLabel,
       headingKey: const ValueKey('settings-language-section'),
+      settings: widget.settings,
+      compact: compact,
+      showOverviewStrip: widget.searchQuery.trim().isEmpty && !compact,
     ),
     _SettingsGroup(
       children: [
@@ -500,8 +515,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   List<Widget> _playbackSection(BuildContext context, bool compact) => [
     _SettingsSectionHeading(
+      section: SettingsSection.playback,
       label: context.l10n.settingsPlaybackSectionLabel,
       headingKey: const ValueKey('settings-playback-section'),
+      settings: widget.settings,
+      compact: compact,
+      showOverviewStrip: widget.searchQuery.trim().isEmpty && !compact,
     ),
     _SettingsGroup(
       children: [
@@ -674,245 +693,107 @@ class _SettingsChoice<T> {
 
 class _SettingsSectionHeading extends StatelessWidget {
   const _SettingsSectionHeading({
+    required this.section,
     required this.label,
     required this.headingKey,
+    required this.settings,
+    required this.compact,
+    required this.showOverviewStrip,
   });
+  final SettingsSection section;
   final String label;
   final Key headingKey;
+  final AppSettings settings;
+  final bool compact;
+  final bool showOverviewStrip;
+
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-    child: Semantics(
-      header: true,
-      child: Text(
-        label,
-        key: headingKey,
-        style: Theme.of(context).textTheme.titleSmall
-            ?.copyWith(color: Theme.of(context).colorScheme.primary),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final l10n = context.l10n;
+    if (compact) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+        child: Semantics(
+          header: true,
+          child: Text(
+            label,
+            key: headingKey,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: colors.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              label,
+              key: headingKey,
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: colors.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            section.description(l10n),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _SettingsGroup extends StatelessWidget {
   const _SettingsGroup({required this.children});
   final List<Widget> children;
   @override
-  Widget build(BuildContext context) => Theme(
-    // One quiet surface per section; never one selected-color card per row.
-    data: Theme.of(context).copyWith(listTileTheme: const ListTileThemeData()),
-    child: Material(
-      key: const ValueKey('settings-group'),
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: MusicRadii.content,
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          for (var index = 0; index < children.length; index++) ...[
-            if (index > 0) const SizedBox(height: 4),
-            children[index],
-          ],
-        ],
-      ),
-    ),
-  );
-}
-
-/// The Human-reviewed official modal sheet is scoped to Theme only.
-class _SettingsThemeChoice extends StatefulWidget {
-  const _SettingsThemeChoice({
-    required this.controlKey,
-    required this.icon,
-    required this.title,
-    required this.current,
-    required this.choices,
-    required this.enabled,
-    required this.onSelected,
-  });
-  final Key controlKey;
-  final IconData icon;
-  final String title;
-  final AppThemePreference current;
-  final List<_SettingsChoice<AppThemePreference>> choices;
-  final bool enabled;
-  final Future<void> Function(AppThemePreference) onSelected;
-  @override
-  State<_SettingsThemeChoice> createState() => _SettingsThemeChoiceState();
-}
-
-class _SettingsThemeChoiceState extends State<_SettingsThemeChoice>
-    with WidgetsBindingObserver {
-  final _focusNode = FocusNode();
-  ModalBottomSheetRoute<AppThemePreference>? _route;
-  int _revision = 0;
-  bool _opening = false;
-  bool _focusReturnPending = false;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void didUpdateWidget(covariant _SettingsThemeChoice oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.current != widget.current ||
-        oldWidget.enabled != widget.enabled) {
-      _revision++;
-    }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _returnFocus();
-  }
-
-  void _returnFocus() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !widget.enabled || !_focusReturnPending) return;
-      final lifecycle = WidgetsBinding.instance.lifecycleState;
-      if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
-      _focusReturnPending = false;
-      _focusNode.requestFocus();
-    });
-    WidgetsBinding.instance.scheduleFrame();
-  }
-
-  Future<void> _choose(BuildContext sheetContext) async {
-    if (!widget.enabled || _opening) return;
-    _opening = true;
-    final snapshot = widget.current;
-    final revision = ++_revision;
-    final selected = await showModalBottomSheet<AppThemePreference>(
-      context: sheetContext,
-      showDragHandle: true,
-      useSafeArea: true,
-      isScrollControlled: true,
-      constraints: const BoxConstraints(maxWidth: 640),
-      builder: (context) {
-        _route =
-            ModalRoute.of(context)!
-                as ModalBottomSheetRoute<AppThemePreference>;
-        void close(AppThemePreference? value) {
-          if (!mounted ||
-              revision != _revision ||
-              widget.current != snapshot ||
-              !widget.enabled ||
-              !_route!.isCurrent) {
-            return;
-          }
-          Navigator.of(context).pop(value);
-        }
-
-        return Shortcuts(
-          shortcuts: const {
-            SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
-          },
-          child: Actions(
-            actions: {
-              DismissIntent: CallbackAction<DismissIntent>(
-                onInvoke: (_) {
-                  Navigator.of(context).pop();
-                  return null;
-                },
-              ),
-            },
-            child: SafeArea(
-              top: false,
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          widget.title,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                      RadioGroup<AppThemePreference>(
-                        groupValue: snapshot,
-                        onChanged: close,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            for (final choice in widget.choices)
-                              RadioListTile<AppThemePreference>(
-                                key: choice.key,
-                                value: choice.value,
-                                toggleable: true,
-                                title: Text(choice.label),
-                                autofocus: choice.value == snapshot,
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Theme(
+      // One quiet surface per section; never one selected-color card per row.
+      data: Theme.of(context)
+          .copyWith(listTileTheme: const ListTileThemeData()),
+      child: Material(
+        key: const ValueKey('settings-group'),
+        color: colors.surfaceContainerLow,
+        borderRadius: MusicRadii.content,
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            for (var index = 0; index < children.length; index++) ...[
+              if (index > 0)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  indent: 56,
+                  endIndent: 20,
+                  color: colors.outlineVariant.withValues(alpha: 0.28),
                 ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-    // Wait for the SDK route's exit motion before returning row focus.
-    await _route?.completed;
-    _route = null;
-    _opening = false;
-    if (!mounted) return;
-    if (revision == _revision &&
-        widget.enabled &&
-        widget.current == snapshot &&
-        selected != null &&
-        selected != snapshot) {
-      await widget.onSelected(selected);
-    }
-    if (!mounted) return;
-    _focusReturnPending = true;
-    _returnFocus();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    final route = _route;
-    if (route != null && route.isActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (route.isActive) route.navigator?.removeRoute(route);
-      });
-    }
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Theme(
-    // Keep the existing ColorScheme, but use SDK M3 sheet defaults locally.
-    data: Theme.of(context)
-        .copyWith(bottomSheetTheme: const BottomSheetThemeData()),
-    child: Builder(
-      builder: (context) => _FuraSettingsRow(
-        key: widget.controlKey,
-        icon: widget.icon,
-        title: widget.title,
-        value: widget.choices
-            .singleWhere((c) => c.value == widget.current)
-            .label,
-        valueKey: const ValueKey('settings-theme-selector-current'),
-        focusNode: _focusNode,
-        enabled: widget.enabled,
-        onTap: () => unawaited(_choose(context)),
+              children[index],
+            ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
-/// Other settings retain their existing anchored presentation in this trial.
+/// Compact SDK menu presentation; the existing Settings owner saves values.
 class _SettingsChoiceTile<T> extends StatefulWidget {
   const _SettingsChoiceTile({
     required this.controlKey,
@@ -945,6 +826,7 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
   LocalHistoryEntry? _backEntry;
   bool _disposing = false;
   bool _selecting = false;
+  bool _menuOpen = false;
   int _revision = 0;
   bool _focusReturnPending = false;
 
@@ -1005,6 +887,9 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
   }
 
   void _opened() {
+    if (mounted && !_disposing && !_menuOpen) {
+      setState(() => _menuOpen = true);
+    }
     final route = ModalRoute.of(context);
     if (route == null) return;
     final entry = LocalHistoryEntry(
@@ -1022,6 +907,9 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
     _backEntry = null;
     entry?.remove();
     if (_disposing) return;
+    if (mounted && _menuOpen) {
+      setState(() => _menuOpen = false);
+    }
     _focusReturnPending = true;
     _returnFocus();
   }
@@ -1057,6 +945,11 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    final duration = reduced
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
     final selected = widget.choices.singleWhere(
       (choice) => choice.value == widget.current,
     );
@@ -1113,8 +1006,23 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
         valueKey: ValueKey('${(widget.controlKey as ValueKey).value}-current'),
         valueAnchorKey: _valueKey,
         enabled: widget.enabled,
+        active: _menuOpen,
         focusNode: _focusNode,
         onTap: _choose,
+        trailing: AnimatedRotation(
+          turns: _menuOpen ? .5 : 0,
+          duration: duration,
+          curve: Curves.easeInOutCubic,
+          child: Icon(
+            Icons.expand_more_rounded,
+            size: 20,
+            color: widget.enabled
+                ? (_menuOpen
+                      ? theme.colorScheme.onSecondaryContainer
+                      : theme.colorScheme.onSurfaceVariant)
+                : theme.disabledColor,
+          ),
+        ),
       ),
     );
   }
@@ -1130,6 +1038,9 @@ class _FuraSettingsRow extends StatelessWidget {
     required this.focusNode,
     required this.onTap,
     this.valueAnchorKey,
+    this.trailing,
+    this.expanded,
+    this.active = false,
     this.enabled = true,
     super.key,
   });
@@ -1137,20 +1048,36 @@ class _FuraSettingsRow extends StatelessWidget {
   final String title, value;
   final Key valueKey;
   final bool enabled;
+  final bool active;
   final FocusNode focusNode;
   final VoidCallback? onTap;
   final Key? valueAnchorKey;
+  final Widget? trailing;
+  final bool? expanded;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final titleStyle = theme.textTheme.bodyLarge!.copyWith(
-      color: enabled ? theme.colorScheme.onSurface : theme.disabledColor,
+      color: enabled ? colors.onSurface : theme.disabledColor,
     );
     final valueStyle = theme.textTheme.bodyMedium!.copyWith(
-      color: enabled ? theme.colorScheme.onSurfaceVariant : theme.disabledColor,
+      color: enabled
+          ? (active ? colors.onSecondaryContainer : colors.onSurfaceVariant)
+          : theme.disabledColor,
+    );
+    final trailingIcon = ExcludeSemantics(
+      child:
+          trailing ??
+          Icon(
+            Icons.expand_more_rounded,
+            size: 20,
+            color: colors.onSurfaceVariant,
+          ),
     );
     return Semantics(
       button: true,
+      expanded: expanded,
       enabled: enabled,
       child: Focus(
         canRequestFocus: false,
@@ -1177,10 +1104,10 @@ class _FuraSettingsRow extends StatelessWidget {
                   constraints: const BoxConstraints(minHeight: 64),
                   child: Padding(
                     padding: const EdgeInsetsDirectional.fromSTEB(
-                      16,
-                      12,
-                      16,
-                      12,
+                      20,
+                      14,
+                      20,
+                      14,
                     ),
                     child: Row(
                       children: [
@@ -1189,41 +1116,54 @@ class _FuraSettingsRow extends StatelessWidget {
                             icon,
                             size: 24,
                             color: enabled
-                                ? theme.colorScheme.onSurfaceVariant
+                                ? colors.onSurfaceVariant
                                 : theme.disabledColor,
                           ),
                         ),
                         const SizedBox(width: 16),
-                        Expanded(
-                          child: inline
-                              ? Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(title, style: titleStyle),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    valueText,
-                                  ],
-                                )
-                              : Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(title, style: titleStyle),
-                                    const SizedBox(height: 4),
-                                    valueText,
-                                  ],
-                                ),
-                        ),
-                        ...[
+                        if (inline) ...[
+                          Expanded(child: Text(title, style: titleStyle)),
                           const SizedBox(width: 16),
-                          ExcludeSemantics(
-                            child: Icon(
-                              Icons.expand_more_rounded,
-                              size: 24,
-                              color: theme.colorScheme.onSurfaceVariant,
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: active
+                                  ? colors.secondaryContainer
+                                  : colors.surfaceContainerHigh,
+                              borderRadius: const BorderRadius.all(
+                                Radius.circular(999),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsetsDirectional.fromSTEB(
+                                14,
+                                6,
+                                10,
+                                6,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  valueText,
+                                  const SizedBox(width: 4),
+                                  trailingIcon,
+                                ],
+                              ),
                             ),
                           ),
+                        ] else ...[
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(title, style: titleStyle),
+                                const SizedBox(height: 2),
+                                valueText,
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          trailingIcon,
                         ],
                       ],
                     ),
@@ -1238,13 +1178,14 @@ class _FuraSettingsRow extends StatelessWidget {
   }
 }
 
-/// Only Color Source uses the official select-only DropdownMenu.
-class _SettingsColorDropdown extends StatefulWidget {
-  const _SettingsColorDropdown({
+/// Detailed configuration stays inside the existing grouped surface.
+class _SettingsColorDisclosure extends StatefulWidget {
+  const _SettingsColorDisclosure({
     required this.controlKey,
     required this.icon,
     required this.title,
     required this.current,
+    required this.currentLabel,
     required this.choices,
     required this.availability,
     required this.availabilityKey,
@@ -1253,28 +1194,41 @@ class _SettingsColorDropdown extends StatefulWidget {
   });
   final Key controlKey;
   final IconData icon;
-  final String title, availability;
+  final String title, currentLabel, availability;
   final AppColorSourcePreference current;
   final List<_SettingsChoice<AppColorSourcePreference>> choices;
   final Key availabilityKey;
   final bool enabled;
   final Future<void> Function(AppColorSourcePreference) onSelected;
   @override
-  State<_SettingsColorDropdown> createState() => _SettingsColorDropdownState();
+  State<_SettingsColorDisclosure> createState() =>
+      _SettingsColorDisclosureState();
 }
 
-class _SettingsColorDropdownState extends State<_SettingsColorDropdown> {
+class _SettingsColorDisclosureState extends State<_SettingsColorDisclosure> {
   final _focusNode = FocusNode();
-  int _revision = 0;
+  final _optionFocus = {
+    for (final value in AppColorSourcePreference.values) value: FocusNode(),
+  };
+  bool _expanded = false;
   bool _selecting = false;
+  int _revision = 0;
 
   @override
-  void didUpdateWidget(covariant _SettingsColorDropdown oldWidget) {
+  void didUpdateWidget(covariant _SettingsColorDisclosure oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.current != widget.current ||
-        oldWidget.enabled != widget.enabled) {
+    if (oldWidget.current != widget.current || !widget.enabled) {
       _revision++;
     }
+  }
+
+  void _toggle() {
+    if (!widget.enabled) return;
+    setState(() {
+      _revision++;
+      _expanded = !_expanded;
+    });
+    if (!_expanded) _focusNode.requestFocus();
   }
 
   Future<void> _select(
@@ -1285,6 +1239,7 @@ class _SettingsColorDropdownState extends State<_SettingsColorDropdown> {
     if (!mounted ||
         !widget.enabled ||
         _selecting ||
+        !_expanded ||
         value == null ||
         value == snapshot ||
         widget.current != snapshot ||
@@ -1292,157 +1247,186 @@ class _SettingsColorDropdownState extends State<_SettingsColorDropdown> {
       return;
     }
     _selecting = true;
-    _revision++;
     try {
       await widget.onSelected(value);
     } finally {
       _selecting = false;
-      // Recreate SDK display state from the authoritative owner after rollback,
-      // rather than retaining DropdownMenu's optimistic selected label.
-      if (mounted) setState(() => _revision++);
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && widget.enabled && _expanded) {
+            // Rollback focuses the authoritative selection, not an unsaved value.
+            _optionFocus[widget.current]!.requestFocus();
+          }
+        });
+        WidgetsBinding.instance.scheduleFrame();
+      }
     }
   }
 
   @override
   void dispose() {
     _focusNode.dispose();
+    for (final focus in _optionFocus.values) {
+      focus.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    final duration = reduced
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
     final snapshot = widget.current;
     final revision = _revision;
-    double measure(String label) {
-      final painter = TextPainter(
-        text: TextSpan(text: label, style: theme.textTheme.bodyLarge),
-        textDirection: Directionality.of(context),
-        textScaler: MediaQuery.textScalerOf(context),
-        locale: Localizations.localeOf(context),
-      )..layout();
-      final width = painter.width;
-      painter.dispose();
-      return width;
-    }
-
-    final preferredWidth =
-        widget.choices
-            .map((c) => measure(c.label))
-            .reduce((a, b) => a > b ? a : b) +
-        80;
-    return Padding(
-      key: widget.controlKey,
-      padding: const EdgeInsets.all(16),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final available = (constraints.maxWidth - 40).clamp(
-            0.0,
-            double.infinity,
-          );
-          final controlWidth = preferredWidth.clamp(0.0, available);
-          final inline = measure(widget.title) + 16 + controlWidth <= available;
-          final dropdown = Theme(
-            // Reset only this representative selector's presentation overrides.
-            // SDK M3 defaults + the real project ColorScheme match the reference.
-            data: theme.copyWith(
-              dropdownMenuTheme: const DropdownMenuThemeData(),
-              menuTheme: const MenuThemeData(),
-              inputDecorationTheme: const InputDecorationThemeData(),
-            ),
-            child: Semantics(
-              label: widget.title,
-              child: DropdownMenu<AppColorSourcePreference>(
-                key: ValueKey('settings-color-dropdown-$revision'),
-                width: controlWidth,
-                focusNode: _focusNode,
-                selectOnly: true,
-                enableSearch: false,
-                enableFilter: false,
-                requestFocusOnTap: true,
-                enabled: widget.enabled,
-                initialSelection: snapshot,
-                inputDecorationTheme: const InputDecorationThemeData(
-                  filled: true,
-                ),
-                dropdownMenuEntries: [
-                  for (final choice in widget.choices)
-                    DropdownMenuEntry(
-                      value: choice.value,
-                      label: choice.label,
-                      labelWidget: Text(choice.label, key: choice.key),
-                    ),
-                ],
-                onSelected: (value) =>
-                    unawaited(_select(value, snapshot, revision)),
-              ),
-            ),
-          );
-          return Column(
+    final details = _expanded
+        ? Column(
+            key: const ValueKey('settings-color-details'),
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Icon(
-                      widget.icon,
-                      size: 24,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: inline
-                        ? Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  widget.title,
-                                  style: theme.textTheme.bodyLarge,
-                                ),
+              Divider(
+                height: 1,
+                thickness: 1,
+                indent: 56,
+                endIndent: 20,
+                color: colors.outlineVariant.withValues(alpha: 0.22),
+              ),
+              RadioGroup<AppColorSourcePreference>(
+                groupValue: snapshot,
+                onChanged: (value) =>
+                    unawaited(_select(value, snapshot, revision)),
+                child: Column(
+                  children: [
+                    for (final choice in widget.choices)
+                      MergeSemantics(
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: InkWell(
+                            key: choice.key,
+                            canRequestFocus: false,
+                            onTap: widget.enabled
+                                ? () => unawaited(
+                                    _select(choice.value, snapshot, revision),
+                                  )
+                                : null,
+                            child: Padding(
+                              padding: const EdgeInsetsDirectional.fromSTEB(
+                                44,
+                                10,
+                                20,
+                                10,
                               ),
-                              const SizedBox(width: 16),
-                              dropdown,
-                            ],
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.title,
-                                style: theme.textTheme.bodyLarge,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Radio<AppColorSourcePreference>(
+                                    value: choice.value,
+                                    enabled: widget.enabled,
+                                    focusNode: _optionFocus[choice.value],
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 4,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            choice.label,
+                                            style: theme.textTheme.bodyLarge,
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            choice.description!,
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  color:
+                                                      colors.onSurfaceVariant,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 8),
-                              dropdown,
-                            ],
+                            ),
                           ),
-                  ),
-                ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
               Padding(
-                padding: const EdgeInsetsDirectional.only(start: 40, top: 8),
+                padding: const EdgeInsetsDirectional.fromSTEB(56, 4, 20, 16),
                 child: Wrap(
                   spacing: 12,
                   runSpacing: 8,
+                  alignment: WrapAlignment.spaceBetween,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
                       widget.availability,
                       key: widget.availabilityKey,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: colors.onSurfaceVariant,
                       ),
                     ),
-                    _SettingsPalettePreview(scheme: theme.colorScheme),
+                    _SettingsPalettePreview(scheme: colors),
                   ],
                 ),
               ),
             ],
-          );
-        },
-      ),
+          )
+        : const SizedBox(width: double.infinity, height: 0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _FuraSettingsRow(
+          key: widget.controlKey,
+          icon: widget.icon,
+          title: widget.title,
+          value: widget.currentLabel,
+          valueKey: const ValueKey('settings-color-source-selector-current'),
+          focusNode: _focusNode,
+          enabled: widget.enabled,
+          expanded: _expanded,
+          active: _expanded,
+          onTap: _toggle,
+          trailing: AnimatedRotation(
+            turns: _expanded ? .5 : 0,
+            duration: duration,
+            curve: Curves.easeInOutCubic,
+            child: Icon(
+              Icons.expand_more_rounded,
+              size: 20,
+              color: widget.enabled
+                  ? (_expanded
+                        ? colors.onSecondaryContainer
+                        : colors.onSurfaceVariant)
+                  : theme.disabledColor,
+            ),
+          ),
+        ),
+        // A zero-duration AnimatedSize mutates during layout on the pinned SDK.
+        // Reduced-motion renders the final layout directly instead.
+        if (reduced)
+          details
+        else
+          AnimatedSize(
+            key: const ValueKey('settings-color-size'),
+            duration: duration,
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            child: details,
+          ),
+      ],
     );
   }
 }
@@ -1469,7 +1453,7 @@ bool _fitsInline(
   }
 
   return width >= 560 &&
-      measure(title, titleStyle) + measure(value, valueStyle) + 144 <= width;
+      measure(title, titleStyle) + measure(value, valueStyle) + 160 <= width;
 }
 
 class _SettingsPalettePreview extends StatelessWidget {
@@ -1527,7 +1511,9 @@ class _CompactSettingsMenu extends StatelessWidget {
             ),
           ),
           Material(
-            type: MaterialType.transparency,
+            color: colors.surfaceContainerLow,
+            borderRadius: MusicRadii.content,
+            clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
                 for (
@@ -1538,8 +1524,9 @@ class _CompactSettingsMenu extends StatelessWidget {
                   if (index > 0)
                     Divider(
                       height: 1,
-                      indent: 68,
-                      color: colors.outlineVariant,
+                      indent: 56,
+                      endIndent: 16,
+                      color: colors.outlineVariant.withValues(alpha: 0.28),
                     ),
                   _CompactSettingsMenuTile(
                     key: ValueKey(
@@ -1592,11 +1579,15 @@ class _CompactSettingsMenuTile extends StatelessWidget {
           child: Row(
             children: [
               SizedBox(
-                width: 40,
-                height: 40,
-                child: Icon(section.icon, color: colors.onSurfaceVariant),
+                width: 24,
+                height: 24,
+                child: Icon(
+                  section.icon,
+                  size: 24,
+                  color: colors.onSurfaceVariant,
+                ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

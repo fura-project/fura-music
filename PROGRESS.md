@@ -1,15 +1,65 @@
 ---
 execution:
   mode: HUMAN_DIRECTED
-  work_domain: CORE
-  state: COMPLETE
-  acceptance_milestone: QQ_TYPE2_AND_NETEASE_REFRESH_FOUNDATIONS
-  active_workstream: PROVIDER_SESSION_CONTINUATION
-  current_task: OFFLINE_IMPLEMENTATION_AND_RESEARCH_VALIDATION
-  next_action: HUMAN_OPERATED_QQ_TYPE2_PROTOCOL_GATE
+  work_domain: UI
+  state: HUMAN_REVIEW
+  acceptance_milestone: ANDROID_TOAST_AND_SETTINGS_M3_REFINEMENT
+  active_workstream: SETTINGS_AND_PLAYBACK_UI
+  current_task: ANDROID_NATIVE_TOAST_AND_SETTINGS_M3_INTERACTION
+  next_action: HUMAN_VISUAL_REVIEW
 ---
 
 # Current State
+
+- **2026-10-23 Human-directed UI / Android 12+ playback quality Toast and
+  Android Material You Settings refinement:** Human selected `HUMAN_DIRECTED` /
+  `UI` for two bounded tasks: (1) replace the rectangular playback-quality
+  switch notice with an Android 12+ system-style floating capsule Toast and
+  authentic entrance/exit motion, and (2) refine Settings so simple enum
+  preferences use compact anchored dropdown selectors (`MenuAnchor` /
+  `MenuItemButton`), detailed Color Source expands inline with smooth
+  animation, and the page follows native Android Material You (Material 3)
+  visual hierarchy rather than nested bordered web-card containers.
+
+  In `UserLibraryPage`, `_presentPendingPlaybackNotice()` now renders a
+  centered bottom-floating `StadiumBorder` pill (`playback-quality-toast-surface`)
+  using Android 12+ AOSP `toast_frame.xml` same-brightness
+  `colorScheme.surfaceContainerHighest` and `colorScheme.onSurface` text with
+  soft elevation (`3`), replacing the rectangular box and inverted
+  `inverseSurface` banner. Because Flutter Material 3 floating `SnackBar`
+  defaults `clipBehavior` to `Clip.hardEdge` and wraps its child in
+  `ClipRect` + `Align(heightFactor: _heightM3Animation)`, large bottom margins
+  (`100`–`152` dp) were previously clipped for the first `62.5%` of the
+  entrance animation and wiped upward with a hard edge; setting
+  `clipBehavior: Clip.none` and wrapping the pill in `_PlaybackToastTransition`
+  (full-range opacity fade, `0.92 <-> 1.0` scale, and `6` dp vertical float)
+  eliminates the clip wipe while preserving `SnackBar` timer and replacement
+  ownership.
+
+  In `SettingsPage`, the five simple enum settings (`Theme`, `Music service`,
+  `Language`, `Default playback quality`, and `Lyric auxiliary`) use SDK M3
+  `MenuAnchor` / `MenuController` / `MenuItemButton` triggered from a
+  borderless tonal stadium capsule (`surfaceContainerHigh`, shifting to
+  `secondaryContainer` with a rotating chevron while open) on wide layouts and
+  a classic two-line Android `Preference` row on compact layouts. `Color Source`
+  expands inline inside the existing borderless `surfaceContainerLow` group via
+  `AnimatedSize` and `AnimatedRotation` (`200` ms `Curves.easeInOutCubic`, or
+  direct layout under reduced motion), with unboxed Android M3 `Radio` rows,
+  inset hairline dividers, and the five effective `ColorScheme` swatches.
+  Following Human visual feedback rejecting AI-style nested `Border.all`
+  cards, square icon boxes, and redundant top category overview chips, all
+  artificial container outlines and overview pills were removed in favor of
+  unboxed canvas section typography (`titleLarge` + `bodyMedium` description on
+  desktop; `labelLarge` `primary` `PreferenceCategory` heading on compact) and
+  unboxed `24` dp preference icons.
+
+  Final machine verification passes `dart format --output=none
+  --set-exit-if-changed`, `dart analyze`, all 104 `test/settings/` tests
+  (including the 40-variant responsive/locale/theme/text-scale matrix and
+  inline motion sequence), all 11 Settings Shell tests in `test/widget_test.dart`,
+  and all 5 playback quality notice tests in
+  `test/playback/now_playing_flow_widget_test.dart`. Pre-existing uncommitted
+  CI/packaging files remain untouched. Gate remains `HUMAN_REVIEW`.
 
 - **2026-10-23 QQ Type 2 refresh foundation + NetEase refresh investigation:**
   QQ `loginType=2` now has one explicit, bounded
