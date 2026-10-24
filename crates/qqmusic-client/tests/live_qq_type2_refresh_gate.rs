@@ -140,7 +140,7 @@ async fn acquire_disposable_qq_credential(
     };
     eprintln!("FURA_QQ_TYPE2_REFRESH_GATE interaction=SCAN_QR status=READY");
 
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(180);
+    let deadline = tokio::time::Instant::now() + Duration::from_mins(3);
     loop {
         if tokio::time::Instant::now() >= deadline {
             report(
