@@ -846,3 +846,20 @@ analysis/format and focused Flutter vault/login regressions pass. Workspace
 all-target strict Clippy remains red only on 46 pre-existing Rust 1.98
 test-fixture `unused_async_trait_impl` diagnostics; no allowance or unrelated
 test rewrite was added.
+
+### 2026-10-24 official-Web NetEase session capture and restore
+
+The formal WebView and existing isolated Linux Chromium/CDP paths now retain
+independent optional R material; no other browser profile or login protocol was
+added. Pending/account verification and V2 export precede secure publication.
+Late vault reads cannot stage after logout/new login/Controller retirement,
+concurrent restores coalesce, and old rejection cleanup cannot delete a newer
+publication. Rejection of an unpersisted Web candidate leaves the previous
+saved document alone. A tested 8 KiB header-versus-JSON framing mismatch is
+closed by checking the final storage document bound in Client validation.
+
+The current Human observation is official-Web first, presence-only, and
+does not call refresh. Low-level QR evidence is a separate control. Third-party
+refresh sources remain reference; the Fura live refresh gate is still pending,
+Release auto-refresh disabled. See the [current implementation, safe diagnostic
+schema and exact Human steps](netease-official-web-session-v1.md).

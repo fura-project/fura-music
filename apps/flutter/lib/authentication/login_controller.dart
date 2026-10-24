@@ -778,6 +778,7 @@ class LoginController extends ChangeNotifier {
   }
 
   void cancel() {
+    _cancelPendingRestore();
     ++_generation;
     _verificationOperation?.cancel();
     _verificationOperation = null;
@@ -961,8 +962,17 @@ class LoginController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  void _cancelPendingRestore() {
+    final gateway = _gateway;
+    if (gateway is CancellableCredentialRestoreGateway) {
+      (gateway as CancellableCredentialRestoreGateway)
+          .cancelCredentialRestore();
+    }
+  }
+
   @override
   void dispose() {
+    _cancelPendingRestore();
     _disposed = true;
     ++_generation;
     _verificationOperation?.cancel();

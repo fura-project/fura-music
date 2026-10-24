@@ -213,6 +213,39 @@ async fn official_browser_cookie_is_only_staged_until_account_verification() {
 }
 
 #[tokio::test]
+async fn official_web_v2_refresh_material_is_verified_and_survives_restart() {
+    for with_refresh in [false, true] {
+        let (p, calls, _) = provider(vec![Reply::Json(account()), Reply::Json(account())]);
+        let candidate = if with_refresh {
+            "MUSIC_U=synthetic-session; MUSIC_R_U=independent-refresh; __csrf=synthetic-csrf"
+        } else {
+            "MUSIC_U=synthetic-session"
+        };
+        p.import_browser_credential(candidate.as_bytes()).unwrap();
+        assert!(!p.has_authenticated_credential());
+        assert!(p.export_credential().unwrap().is_none());
+        p.verify_pending_credential().await.unwrap();
+        let document = p.export_credential().unwrap().unwrap();
+        let stored: Value = serde_json::from_slice(&document).unwrap();
+        assert_eq!(stored["version"], 2);
+        assert_eq!(
+            stored["music_r_u"],
+            if with_refresh {
+                json!("independent-refresh")
+            } else {
+                Value::Null
+            }
+        );
+        p.sign_out();
+        p.import_credential(&document).unwrap();
+        assert!(!p.has_authenticated_credential());
+        p.verify_restored_credential().await.unwrap();
+        assert_eq!(p.export_credential().unwrap(), Some(document));
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+}
+
+#[tokio::test]
 async fn sms_code_login_is_one_provider_owned_session_and_persists_only_after_account_check() {
     let (provider, calls, authenticated_calls) = provider(vec![
         Reply::Json(json!({"code":200})),

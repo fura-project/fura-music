@@ -2,7 +2,8 @@
 //!
 //! This module never inspects a user's normal browser profile. Every attempt
 //! owns a fresh `0700` profile and a loopback-only, ephemeral CDP endpoint.
-//! Only `MUSIC_U` and optional `__csrf` are retained from `Storage.getCookies`.
+//! Only `MUSIC_U`, independent optional `MUSIC_R_U` and optional `__csrf`
+//! are retained from `Storage.getCookies`.
 
 use std::collections::BTreeSet;
 use std::env;
@@ -532,7 +533,43 @@ async fn wait_for_credential(
 }
 
 fn credential_candidate(cookies: &[CdpCookie]) -> Result<Option<Vec<u8>>, CaptureFailure> {
+    let result = build_credential_candidate(cookies);
+    if std::env::var("FURA_NETEASE_WEB_REFRESH_DEBUG").as_deref() == Ok("1") {
+        eprintln!(
+            "{}",
+            capture_observation(cookies, matches!(result, Ok(Some(_))))
+        );
+    }
+    result
+}
+
+fn capture_observation(cookies: &[CdpCookie], valid: bool) -> String {
+    let observed = |name: &str| {
+        cookies.iter().any(|cookie| {
+            matches!(cookie.domain.as_str(), "music.163.com" | ".music.163.com")
+                && cookie.name == name
+                && !cookie.value.is_empty()
+        })
+    };
+    format!(
+        "FURA_NETEASE_WEB_REFRESH_DEBUG path=linux_isolated_chromium phase=capture observed_music_u={} observed_music_r_u={} observed_csrf={} candidate_valid={valid}",
+        observed("MUSIC_U"),
+        observed("MUSIC_R_U"),
+        observed("__csrf"),
+    )
+}
+
+pub(crate) fn report_web_account_verification() {
+    if std::env::var("FURA_NETEASE_WEB_REFRESH_DEBUG").as_deref() == Ok("1") {
+        eprintln!(
+            "FURA_NETEASE_WEB_REFRESH_DEBUG path=linux_isolated_chromium phase=account_verification_entered success=true"
+        );
+    }
+}
+
+fn build_credential_candidate(cookies: &[CdpCookie]) -> Result<Option<Vec<u8>>, CaptureFailure> {
     let mut music_u: Option<&str> = None;
+    let mut music_r_u: Option<&str> = None;
     let mut csrf: Option<&str> = None;
     for cookie in cookies
         .iter()
@@ -540,6 +577,7 @@ fn credential_candidate(cookies: &[CdpCookie]) -> Result<Option<Vec<u8>>, Captur
     {
         let target = match cookie.name.as_str() {
             "MUSIC_U" => &mut music_u,
+            "MUSIC_R_U" => &mut music_r_u,
             "__csrf" => &mut csrf,
             _ => continue,
         };
@@ -555,6 +593,7 @@ fn credential_candidate(cookies: &[CdpCookie]) -> Result<Option<Vec<u8>>, Captur
         return Ok(None);
     };
     if !valid_cookie_value(music_u, 4096)
+        || music_r_u.is_some_and(|value| !valid_cookie_value(value, 4096))
         || csrf.is_some_and(|value| !valid_cookie_value(value, 256))
     {
         return Err(CaptureFailure::InvalidCredential);
@@ -564,9 +603,17 @@ fn credential_candidate(cookies: &[CdpCookie]) -> Result<Option<Vec<u8>>, Captur
     );
     candidate.extend_from_slice(b"MUSIC_U=");
     candidate.extend_from_slice(music_u.as_bytes());
+    if let Some(music_r_u) = music_r_u {
+        candidate.extend_from_slice(b"; MUSIC_R_U=");
+        candidate.extend_from_slice(music_r_u.as_bytes());
+    }
     if let Some(csrf) = csrf {
         candidate.extend_from_slice(b"; __csrf=");
         candidate.extend_from_slice(csrf.as_bytes());
+    }
+    if candidate.len() > 8192 {
+        candidate.zeroize();
+        return Err(CaptureFailure::InvalidCredential);
     }
     Ok(Some(candidate))
 }
@@ -781,6 +828,89 @@ mod tests {
         let malformed = vec![cookie("MUSIC_U", "bad;value", "music.163.com")];
         assert_eq!(
             credential_candidate(&malformed),
+            Err(CaptureFailure::InvalidCredential)
+        );
+    }
+
+    #[test]
+    fn optional_refresh_material_survives_into_a_v2_candidate_without_invention() {
+        for include_r in [false, true] {
+            for include_csrf in [false, true] {
+                let mut cookies = vec![cookie("MUSIC_U", "synthetic-u", "music.163.com")];
+                if include_r {
+                    cookies.push(cookie("MUSIC_R_U", "independent-r", ".music.163.com"));
+                    cookies.push(cookie("MUSIC_R_U", "independent-r", "music.163.com"));
+                }
+                if include_csrf {
+                    cookies.push(cookie("__csrf", "synthetic-c", "music.163.com"));
+                }
+                cookies.push(cookie("MUSIC_R_U", "foreign", ".163.com"));
+                cookies.push(cookie("MUSIC_U", "foreign", "music.163.com.evil"));
+                let bytes = credential_candidate(&cookies).unwrap().unwrap();
+                let credential =
+                    netease_client::Credential::from_browser_cookie_header(&bytes).unwrap();
+                assert_eq!(credential.has_refresh_material(), include_r);
+                let document: Value =
+                    serde_json::from_slice(&credential.export().unwrap()).unwrap();
+                assert_eq!(document["version"], 2);
+                assert_eq!(document["music_u"], "synthetic-u");
+                assert_eq!(
+                    document["music_r_u"],
+                    if include_r {
+                        json!("independent-r")
+                    } else {
+                        Value::Null
+                    }
+                );
+                assert_eq!(
+                    document["csrf"],
+                    if include_csrf { "synthetic-c" } else { "" }
+                );
+                assert_eq!(
+                    capture_observation(&cookies, true),
+                    format!(
+                        "FURA_NETEASE_WEB_REFRESH_DEBUG path=linux_isolated_chromium phase=capture observed_music_u=true observed_music_r_u={include_r} observed_csrf={include_csrf} candidate_valid=true"
+                    )
+                );
+            }
+        }
+        assert_eq!(
+            credential_candidate(&[cookie("MUSIC_R_U", "only-r", "music.163.com")]),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn refresh_cookie_conflict_deletion_characters_and_aggregate_bound_fail_closed() {
+        for invalid in [
+            String::new(),
+            "bad;value".into(),
+            "bad\r\nvalue".into(),
+            "bad\\value".into(),
+            "非ASCII".into(),
+            "r".repeat(4097),
+        ] {
+            assert_eq!(
+                credential_candidate(&[
+                    cookie("MUSIC_U", "u", "music.163.com"),
+                    cookie("MUSIC_R_U", &invalid, "music.163.com"),
+                ]),
+                Err(CaptureFailure::InvalidCredential)
+            );
+        }
+        assert_eq!(
+            credential_candidate(&[
+                cookie("MUSIC_U", "u", "music.163.com"),
+                cookie("MUSIC_R_U", "one", "music.163.com"),
+                cookie("MUSIC_R_U", "two", ".music.163.com"),
+            ]),
+            Err(CaptureFailure::InvalidCredential)
+        );
+        assert_eq!(
+            credential_candidate(&[
+                cookie("MUSIC_U", &"u".repeat(4096), "music.163.com"),
+                cookie("MUSIC_R_U", &"r".repeat(4096), "music.163.com"),
+            ]),
             Err(CaptureFailure::InvalidCredential)
         );
     }

@@ -319,8 +319,15 @@ Human-authorized Release activation. The broader debt remains because QQ Type 2
 now has an independently gated offline candidate but no live wire PASS or
 Release authority. NetEase now retains a distinct optional `MUSIC_R_U` and
 enforces strict candidate rotation, but still has no evidence that Fura's
-current type-1 QR obtains that material or that the candidate refresh verifies
-the same account. QQ Music App login remains outside both contracts.
+current official-Web session obtains that material or that the candidate
+refresh verifies the same account. Its WebView/isolated-Chromium capture and
+ordinary restore foundation is now implemented and verified offline; that
+does not activate refresh. QQ Music App login remains outside both contracts.
+
+On 2026-10-24 Human also reported one successful Linux automatic restore after
+restarting `flutter run`. The new Debug process had no Linux capture-presence
+diagnostic enabled, so independent R capture, persisted document version and
+real refresh remain unproven. This narrows the local restore gate only.
 
 **Why accepted:** The live gate proved exactly one bounded disposable WeChat
 session, and the later Human decision authorized only that same envelope for
@@ -354,8 +361,10 @@ typed risk-control outcomes without automatic profile rotation. Run QQ Type 2
 only through the prepared ignored
 `crates/qqmusic-client/tests/live_qq_type2_refresh_gate.rs` after direct Human
 authorization and QR interaction; a PASS still requires a separate Release
-decision. NetEase first needs a separately authorized type-1 QR presence
-observation, not a profile fallback. The retained WeChat harness should not be
+decision. NetEase first needs a maintainer-operated official-Web presence and
+restart observation through the existing WebView/isolated Chromium owner;
+low-level QR is only an independent control. See
+`docs/research/netease-official-web-session-v1.md`. The retained WeChat harness should not be
 rerun merely because another login type is under study.
 
 **Trigger condition:** QQ WeChat V1 completed on 2026-10-23. Reopen only for a

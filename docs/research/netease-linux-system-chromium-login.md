@@ -6,6 +6,14 @@ Implementation status: Human-accepted Linux login; broader account and media evi
 
 ## Outcome
 
+**2026-10-24 bounded extension:** the same isolated Chromium/CDP owner now
+captures independent optional `MUSIC_R_U` as well as U/CSRF on the same exact
+domains. V2/account verification and the existing vault retain it only when
+actually observed. The architecture/lifecycle evidence below is historical;
+its U/CSRF-only allowlist is superseded by this three-name extension. New
+material-capture/restart observation is NOT RUN and does not inherit the old
+login PASS. See [the current guide](netease-official-web-session-v1.md).
+
 The bounded native-browser experiment passed every prerequisite and the same
 architecture is now integrated behind the existing NetEase
 `OfficialWebAuthenticationGateway` on Linux. Fura launches an already-installed

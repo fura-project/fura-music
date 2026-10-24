@@ -407,14 +407,22 @@ impl Credential {
         {
             return Err(Error::ResponseShapeMismatch);
         }
+        // Every accepted credential must be restorable through the existing
+        // bounded V1/V2 document boundary, including JSON framing overhead.
+        if self.encoded_document()?.len() > 8192 {
+            return Err(Error::ResponseBound);
+        }
         Ok(())
+    }
+    fn encoded_document(&self) -> Result<Vec<u8>, Error> {
+        serde_json::to_vec(&json!({"version":self.version,"provider":self.provider,"music_u":self.music_u,"music_r_u":self.music_r_u,"csrf":self.csrf})).map_err(|_|Error::ResponseShapeMismatch)
     }
     /// Opaque secure-storage bytes, never a presentation or logging value.
     /// # Errors
     /// Rejects invalid internal session invariants.
     pub fn export(&self) -> Result<Vec<u8>, Error> {
         self.validate()?;
-        serde_json::to_vec(&json!({"version":self.version,"provider":self.provider,"music_u":self.music_u,"music_r_u":self.music_r_u,"csrf":self.csrf})).map_err(|_|Error::ResponseShapeMismatch)
+        self.encoded_document()
     }
     /// Imports only a candidate; the Provider must verify it before authentication.
     /// # Errors
@@ -823,6 +831,31 @@ mod refresh_tests {
             ),
             Err(Error::ResponseShapeMismatch)
         );
+    }
+
+    #[test]
+    fn accepted_browser_candidate_always_fits_the_existing_storage_import_bound() {
+        // A Cookie header may fit 8 KiB while its V2 JSON document does not.
+        let oversized_document = format!(
+            "MUSIC_U={}; MUSIC_R_U={}",
+            "u".repeat(4096),
+            "r".repeat(4030)
+        );
+        assert!(oversized_document.len() <= 8192);
+        assert_eq!(
+            Credential::from_browser_cookie_header(oversized_document.as_bytes()),
+            Err(Error::ResponseBound)
+        );
+
+        let bounded = format!(
+            "MUSIC_U={}; MUSIC_R_U={}; __csrf=c",
+            "u".repeat(4096),
+            "r".repeat(3900)
+        );
+        let credential = Credential::from_browser_cookie_header(bounded.as_bytes()).unwrap();
+        let encoded = credential.export().unwrap();
+        assert!(encoded.len() <= 8192);
+        assert_eq!(Credential::import(&encoded).unwrap(), credential);
     }
 
     #[test]

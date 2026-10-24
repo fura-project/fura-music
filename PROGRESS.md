@@ -1,15 +1,68 @@
 ---
 execution:
   mode: HUMAN_DIRECTED
-  work_domain: UI
+  work_domain: CORE
   state: HUMAN_REVIEW
-  acceptance_milestone: ANDROID_TOAST_AND_SETTINGS_M3_REFINEMENT
-  active_workstream: SETTINGS_AND_PLAYBACK_UI
-  current_task: ANDROID_NATIVE_TOAST_AND_SETTINGS_M3_INTERACTION
-  next_action: HUMAN_VISUAL_REVIEW
+  acceptance_milestone: NETEASE_OFFICIAL_WEB_CAPTURE_AND_RESTORE_V1
+  active_workstream: NETEASE_SESSION_FOUNDATION
+  current_task: OFFICIAL_WEB_CAPTURE_AND_RESTORE_VERIFIED_OFFLINE
+  next_action: HUMAN_OFFICIAL_WEB_REFRESH_MATERIAL_OBSERVATION
 ---
 
 # Current State
+
+- **2026-10-24 Human-directed Core / NetEase official-Web session V1:** current
+  implementation baseline is `7435c5178cb33d8b5114fddf5f7a5d8189435bd0`, with a
+  clean worktree at task start. The existing WebView and isolated Linux
+  Chromium/CDP adapters now retain required `MUSIC_U`, independent optional
+  `MUSIC_R_U` and optional CSRF on the same exact NetEase domains. No R material
+  is fabricated; no-R sessions still authenticate normally. Candidate staging,
+  account verification and the existing Credential V2/independent vault remain
+  the only authentication/storage route. Native browser cleanup, timeout,
+  cancellation and Profile isolation were retained.
+
+  NetEase gateway restore now coalesces pending vault reads and checks its
+  operation epoch before Rust import. Logout, a new official login and retired
+  Controllers cancel late reads before they can stage credentials. Explicit
+  saved-credential rejection cleans only its owning vault epoch. A test first
+  exposed that applying rejection cleanup to a new unpersisted Web candidate
+  would delete the previous saved session; that case now preserves the old
+  document. Another failing regression proved that an under-8-KiB Cookie header
+  could serialize beyond the existing V2 import bound. Rust now checks the
+  actual encoded document bound before accepting the credential; the limit was
+  not increased. Both failures are preserved as reproducing regression cases.
+
+  `FURA_NETEASE_WEB_REFRESH_DEBUG=1` emits only path, presence and fixed
+  validation/verification/persistence booleans. It never logs values, lengths,
+  hashes, identities, authorization URLs, Profile paths or CDP identifiers.
+  An adapter not observing R is not a server-level absence claim. The
+  [official-Web-first Human observation guide](docs/research/netease-official-web-session-v1.md)
+  is ready. On 2026-10-24 Human reported that restarting with `flutter run`
+  automatically restored the existing NetEase login. A new Linux Debug app
+  process was observed, so this is one Human-reported Linux restart/restore
+  PASS, not merely hot reload. Linux capture-presence diagnostics were not
+  enabled in that process: independent R capture, document version and real
+  refresh remain unobserved/NOT RUN. No credential was inspected or exported
+  by the Agent; the maintainer-operated app performed its ordinary restore.
+  WEAPI remains the single disconnected refresh candidate;
+  there is no production refresh activation, EAPI fallback or invented expiry.
+
+  Final machine checks pass the complete locked Rust workspace/all-target test
+  suite, all 122 current Flutter authentication tests and the complete Shell
+  regression file (the auth/Shell combined run passed 244 before the final
+  diagnostic opt-out test). Dart analysis is clean; formatting checks 304
+  files with zero changes; Linux Release build, Rust format, privacy hygiene
+  and diff checks pass. All-target strict Clippy passes for `netease-client`,
+  `provider-netease` and the Flutter Rust Bridge, including their tests. Whole-workspace
+  strict all-target Clippy retains the existing QQ test-only Rust 1.98
+  `unused_async_trait_impl` failures; those unrelated fixtures were not changed.
+  No Bridge signature/DTO changed, so generated files were not regenerated.
+
+  States: `AUTO_RESTORE_IMPLEMENTED`, `WEB_REFRESH_MATERIAL_CAPTURE_READY`,
+  `LIVE_REFRESH_EVIDENCE_PENDING`, `PRODUCTION_AUTO_REFRESH_DISABLED`. Prior
+  Settings visual acceptance below remains `HUMAN_REVIEW`; QQ WeChat, QQ Type 2,
+  playback and packaging implementation were left untouched. Human subsequently
+  authorized a local commit; no push is authorized by this checkpoint.
 
 - **2026-10-23 Human-directed UI / Android 12+ playback quality Toast and
   Android Material You Settings refinement:** Human selected `HUMAN_DIRECTED` /

@@ -6,6 +6,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:webview_all/webview_all.dart';
 
+import 'netease_web_refresh_diagnostics.dart';
+
 const neteaseOfficialLoginUri = 'https://music.163.com/#/login';
 
 enum OfficialWebLoginFailure {
@@ -38,10 +40,18 @@ class OfficialWebLoginException implements Exception {
 /// Values are deliberately kept local to one broker attempt. Callers must not
 /// retain or log them.
 class OfficialWebCookie {
-  const OfficialWebCookie({required this.name, required this.value});
+  const OfficialWebCookie({
+    required this.name,
+    required this.value,
+    this.domain = 'music.163.com',
+  });
 
   final String name;
   final String value;
+  final String domain;
+
+  @override
+  String toString() => 'OfficialWebCookie([REDACTED])';
 }
 
 /// A visible WebView session owned by one official-login attempt.
@@ -91,11 +101,13 @@ class PlatformNeteaseOfficialWebLoginBroker extends ChangeNotifier
     OfficialWebRuntime? runtime,
     this._pollInterval = const Duration(seconds: 1),
     this._attemptTimeout = const Duration(minutes: 5),
+    this.diagnostics = const NeteaseWebRefreshDiagnostics(),
   }) : _runtime = runtime ?? WebViewAllOfficialWebRuntime();
 
   final OfficialWebRuntime _runtime;
   final Duration _pollInterval;
   final Duration _attemptTimeout;
+  final NeteaseWebRefreshDiagnostics diagnostics;
 
   OfficialWebLoginPresentationStage _presentationStage =
       OfficialWebLoginPresentationStage.idle;
@@ -190,7 +202,13 @@ class PlatformNeteaseOfficialWebLoginBroker extends ChangeNotifier
             .readCookies(Uri.parse(neteaseOfficialLoginUri))
             .timeout(_runtimeOperationTimeout);
         if (!_isCurrent(generation)) break;
-        candidate = _minimalCredentialCandidate(cookies);
+        try {
+          candidate = _minimalCredentialCandidate(cookies);
+          _reportCapture(cookies, candidate != null);
+        } on OfficialWebLoginException {
+          _reportCapture(cookies, false);
+          rethrow;
+        }
         if (candidate != null) {
           _setPresentation(
             stage: OfficialWebLoginPresentationStage.finishing,
@@ -278,6 +296,21 @@ class PlatformNeteaseOfficialWebLoginBroker extends ChangeNotifier
   }
 
   bool _isCurrent(int generation) => _active && generation == _generation;
+
+  void _reportCapture(List<OfficialWebCookie> cookies, bool valid) {
+    bool observed(String name) => cookies.any(
+      (cookie) =>
+          _allowedCookieDomain(cookie.domain) &&
+          cookie.name == name &&
+          cookie.value.isNotEmpty,
+    );
+    diagnostics.capture(
+      musicU: observed('MUSIC_U'),
+      musicRU: observed('MUSIC_R_U'),
+      csrf: observed('__csrf'),
+      structurallyValid: valid,
+    );
+  }
 
   void _wakeAttempt(int generation) {
     if (!_isCurrent(generation)) return;
@@ -372,11 +405,27 @@ class WebViewAllOfficialWebRuntime implements OfficialWebRuntime {
 
   @override
   Future<List<OfficialWebCookie>> readCookies(Uri uri) async {
+    if (uri.scheme != 'https' ||
+        uri.host != 'music.163.com' ||
+        uri.hasPort ||
+        uri.userInfo.isNotEmpty) {
+      throw const OfficialWebLoginException(
+        OfficialWebLoginFailure.invalidCredential,
+      );
+    }
     final cookies = await _cookieManager.getCookies(domain: uri);
     return cookies
-        .where((cookie) => cookie.name == 'MUSIC_U' || cookie.name == '__csrf')
+        .where(
+          (cookie) =>
+              _allowedCookieDomain(cookie.domain) &&
+              const {'MUSIC_U', 'MUSIC_R_U', '__csrf'}.contains(cookie.name),
+        )
         .map(
-          (cookie) => OfficialWebCookie(name: cookie.name, value: cookie.value),
+          (cookie) => OfficialWebCookie(
+            name: cookie.name,
+            value: cookie.value,
+            domain: cookie.domain,
+          ),
         )
         .toList(growable: false);
   }
@@ -455,8 +504,10 @@ bool isOfficialLoginWebsiteDataCleared(
 
 Uint8List? _minimalCredentialCandidate(List<OfficialWebCookie> cookies) {
   String? musicU;
+  String? musicRU;
   String? csrf;
   for (final cookie in cookies) {
+    if (!_allowedCookieDomain(cookie.domain)) continue;
     if (cookie.name == 'MUSIC_U') {
       if (musicU != null && musicU != cookie.value) {
         throw const OfficialWebLoginException(
@@ -464,6 +515,13 @@ Uint8List? _minimalCredentialCandidate(List<OfficialWebCookie> cookies) {
         );
       }
       musicU = cookie.value;
+    } else if (cookie.name == 'MUSIC_R_U') {
+      if (musicRU != null && musicRU != cookie.value) {
+        throw const OfficialWebLoginException(
+          OfficialWebLoginFailure.invalidCredential,
+        );
+      }
+      musicRU = cookie.value;
     } else if (cookie.name == '__csrf') {
       if (csrf != null && csrf != cookie.value) {
         throw const OfficialWebLoginException(
@@ -475,16 +533,27 @@ Uint8List? _minimalCredentialCandidate(List<OfficialWebCookie> cookies) {
   }
   if (musicU == null) return null;
   if (!_validCookieValue(musicU, maxLength: 4096) ||
+      musicRU != null && !_validCookieValue(musicRU, maxLength: 4096) ||
       csrf != null && !_validCookieValue(csrf, maxLength: 256)) {
     throw const OfficialWebLoginException(
       OfficialWebLoginFailure.invalidCredential,
     );
   }
-  final candidate = csrf == null
-      ? 'MUSIC_U=$musicU'
-      : 'MUSIC_U=$musicU; __csrf=$csrf';
+  final candidate = [
+    'MUSIC_U=$musicU',
+    if (musicRU != null) 'MUSIC_R_U=$musicRU',
+    if (csrf != null) '__csrf=$csrf',
+  ].join('; ');
+  if (candidate.length > 8192) {
+    throw const OfficialWebLoginException(
+      OfficialWebLoginFailure.invalidCredential,
+    );
+  }
   return Uint8List.fromList(ascii.encode(candidate));
 }
+
+bool _allowedCookieDomain(String domain) =>
+    domain == 'music.163.com' || domain == '.music.163.com';
 
 bool _validCookieValue(String value, {required int maxLength}) {
   if (value.isEmpty || value.length > maxLength) return false;

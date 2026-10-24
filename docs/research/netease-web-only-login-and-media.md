@@ -6,6 +6,12 @@ Execution: Human-confirmed login plus machine-verified compatibility repair
 
 ## Outcome
 
+The [2026-10-24 official-Web session checkpoint](netease-official-web-session-v1.md)
+extends only capture/restore: optional independent R is preserved with U/CSRF,
+while the same product login entry, account verification and separate vault
+remain. Its new Human observation and real refresh are NOT RUN; the existing
+media compatibility and prior Linux login evidence below have not been widened.
+
 The Human confirmed that the isolated Linux system-browser route completes a
 real NetEase login and returns to a signed-in Fura Library. That observation
 accepts the Linux login handoff itself. It does not by itself prove every

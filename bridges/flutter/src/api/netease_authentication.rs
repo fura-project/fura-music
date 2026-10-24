@@ -291,6 +291,8 @@ pub async fn authenticate_netease_with_system_browser(
         });
     }
 
+    #[cfg(target_os = "linux")]
+    crate::linux_system_chromium::report_web_account_verification();
     let verification = provider.verify_pending_credential().await;
     let still_current = *lock_attempt(&ACTIVE_SYSTEM_BROWSER) == Some(attempt_id);
     if !still_current {

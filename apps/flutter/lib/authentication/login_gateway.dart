@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
+import 'package:flutterustmusic/authentication/netease_web_refresh_diagnostics.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart' as bridge;
 import 'package:flutterustmusic/src/rust/api/netease_authentication.dart'
     as netease_bridge;
@@ -249,6 +250,15 @@ abstract interface class QqMusicAuthenticationGateway {
 abstract interface class ProviderAuthenticationPresentation {
   String get providerId;
 }
+
+/// Cancels a vault read before it can stage a retired login context in Rust.
+abstract interface class CancellableCredentialRestoreGateway {
+  void cancelCredentialRestore();
+}
+
+typedef OfficialWebCredentialStager = CredentialRestoreResult Function(
+  Uint8List secretBytes,
+);
 
 /// Optional pacing for providers whose QR status endpoint returns immediately.
 ///
@@ -622,11 +632,18 @@ class RustNeteaseAuthenticationGateway
         ProviderAuthenticationPresentation,
         OfficialWebAuthenticationGateway,
         OfficialWebOnlyAuthenticationGateway,
-        OfficialWebAuthenticationPresentation {
+        OfficialWebAuthenticationPresentation,
+        CancellableCredentialRestoreGateway {
   RustNeteaseAuthenticationGateway({
     CredentialVault? credentialVault,
     OfficialWebLoginBroker? officialWebLoginBroker,
     CredentialSignOutCore? credentialSignOutCore,
+    CredentialRestoreImporter? credentialImporter,
+    CredentialPersistenceExporter? credentialExporter,
+    CredentialVerificationOperationFactory? verificationOperationFactory,
+    bool Function()? authenticatedCredentialReader,
+    OfficialWebCredentialStager? officialWebCredentialStager,
+    this.diagnostics = const NeteaseWebRefreshDiagnostics(),
   }) : _credentialVault = SerializedCredentialVault(
          credentialVault ??
              PlatformCredentialVault(
@@ -640,21 +657,60 @@ class RustNeteaseAuthenticationGateway
            !kIsWeb &&
            defaultTargetPlatform == TargetPlatform.linux,
        _credentialSignOutCore =
-           credentialSignOutCore ?? netease_bridge.signOutNetease;
+           credentialSignOutCore ?? netease_bridge.signOutNetease,
+       _credentialImporter =
+           credentialImporter ?? _restoreNeteaseCredentialInRust,
+       _credentialExporter =
+           credentialExporter ??
+           netease_bridge.exportNeteaseCredentialForSecureStorage,
+       _verificationOperationFactory =
+           verificationOperationFactory ??
+           _reserveRustNeteaseCredentialVerification,
+       _authenticatedCredentialReader =
+           authenticatedCredentialReader ??
+           netease_bridge.neteaseHasAuthenticatedCredential,
+       _officialWebCredentialStager =
+           officialWebCredentialStager ??
+           _stageNeteaseOfficialWebCredentialInRust;
 
-  final CredentialVault _credentialVault;
+  final SerializedCredentialVault _credentialVault;
   final OfficialWebLoginBroker _officialWebLoginBroker;
   final bool _usesLinuxSystemBrowser;
   final _SystemBrowserOfficialWebPresentation _systemBrowserPresentation =
       _SystemBrowserOfficialWebPresentation();
   final CredentialSignOutCore _credentialSignOutCore;
+  final CredentialRestoreImporter _credentialImporter;
+  final CredentialPersistenceExporter _credentialExporter;
+  final CredentialVerificationOperationFactory _verificationOperationFactory;
+  final bool Function() _authenticatedCredentialReader;
+  final OfficialWebCredentialStager _officialWebCredentialStager;
+  final NeteaseWebRefreshDiagnostics diagnostics;
+  int _sessionEpoch = 0;
+  Future<CredentialRestoreResult>? _pendingRestore;
+  CredentialVerificationOperation? _pendingVerification;
+  bool _pendingCandidateFromWeb = false;
+
+  NeteaseWebLoginPath get _webPath => _usesLinuxSystemBrowser
+      ? NeteaseWebLoginPath.linuxIsolatedChromium
+      : NeteaseWebLoginPath.webView;
+
+  void _invalidateSessionWork() {
+    ++_sessionEpoch;
+    _pendingRestore = null;
+    _pendingVerification?.cancel();
+    _pendingVerification = null;
+  }
+
+  @override
+  void cancelCredentialRestore() {
+    if (_pendingRestore != null) _invalidateSessionWork();
+  }
 
   @override
   String get providerId => 'netease-cloud-music';
 
   @override
-  bool get hasAuthenticatedCredential =>
-      netease_bridge.neteaseHasAuthenticatedCredential();
+  bool get hasAuthenticatedCredential => _authenticatedCredentialReader();
 
   @override
   LoginStartOperation beginStart() =>
@@ -681,32 +737,63 @@ class RustNeteaseAuthenticationGateway
       _usesLinuxSystemBrowser ? null : _officialWebLoginBroker.activeView;
 
   @override
-  OfficialWebAuthenticationOperation beginOfficialWebLogin() =>
-      _usesLinuxSystemBrowser
-      ? _RustNeteaseSystemBrowserAuthenticationOperation(
-          netease_bridge.reserveNeteaseSystemBrowserLogin(),
-          _systemBrowserPresentation,
-        )
-      : _RustNeteaseOfficialWebAuthenticationOperation(_officialWebLoginBroker);
+  OfficialWebAuthenticationOperation beginOfficialWebLogin() {
+    _invalidateSessionWork();
+    _pendingCandidateFromWeb = true;
+    return _usesLinuxSystemBrowser
+        ? _RustNeteaseSystemBrowserAuthenticationOperation(
+            netease_bridge.reserveNeteaseSystemBrowserLogin(),
+            _systemBrowserPresentation,
+          )
+        : _RustNeteaseOfficialWebAuthenticationOperation(
+            _officialWebLoginBroker,
+            stager: _officialWebCredentialStager,
+            verificationFactory: beginCredentialVerification,
+            diagnostics: diagnostics,
+          );
+  }
 
   @override
-  CredentialVerificationOperation beginCredentialVerification() =>
-      _VaultCleaningCredentialVerificationOperation(
-        _reserveRustNeteaseCredentialVerification(),
-        _credentialVault,
-      );
+  CredentialVerificationOperation beginCredentialVerification() {
+    _pendingVerification?.cancel();
+    final epoch = _sessionEpoch;
+    final operation = _NeteaseVaultVerificationOperation(
+      _verificationOperationFactory(),
+      _credentialVault,
+      isCurrent: () => epoch == _sessionEpoch,
+      cleanupRejected: !_pendingCandidateFromWeb,
+    );
+    _pendingVerification = operation;
+    return operation;
+  }
 
   @override
   Future<CredentialPersistenceResult> persistAuthenticatedCredential() async {
-    final export = netease_bridge.exportNeteaseCredentialForSecureStorage();
+    final epoch = _sessionEpoch;
+    final export = _credentialExporter();
     final secretBytes = export.secretBytes;
     if (secretBytes == null) {
       return CredentialPersistenceResult.noAuthenticatedCredential;
     }
     try {
-      await _credentialVault.write(secretBytes);
+      // Replacement owns a new vault epoch synchronously. Logout and newer
+      // login publication can invalidate a queued old write before it starts.
+      await _credentialVault.publishReplacement(secretBytes);
+      if (epoch != _sessionEpoch) {
+        return CredentialPersistenceResult.noAuthenticatedCredential;
+      }
+      diagnostics.checkpoint(
+        _webPath,
+        NeteaseWebLoginCheckpoint.securePersistence,
+        success: true,
+      );
       return CredentialPersistenceResult.stored;
     } on Object {
+      diagnostics.checkpoint(
+        _webPath,
+        NeteaseWebLoginCheckpoint.securePersistence,
+        success: false,
+      );
       return CredentialPersistenceResult.storageUnavailable;
     } finally {
       secretBytes.fillRange(0, secretBytes.length, 0);
@@ -714,7 +801,21 @@ class RustNeteaseAuthenticationGateway
   }
 
   @override
-  Future<CredentialRestoreResult> restoreCredential() async {
+  Future<CredentialRestoreResult> restoreCredential() {
+    final pending = _pendingRestore;
+    if (pending != null) return pending;
+    _pendingVerification?.cancel();
+    _pendingVerification = null;
+    final epoch = ++_sessionEpoch;
+    late final Future<CredentialRestoreResult> operation;
+    operation = _restoreCredential(epoch).whenComplete(() {
+      if (identical(_pendingRestore, operation)) _pendingRestore = null;
+    });
+    _pendingRestore = operation;
+    return operation;
+  }
+
+  Future<CredentialRestoreResult> _restoreCredential(int epoch) async {
     Uint8List? secretBytes;
     try {
       secretBytes = await _credentialVault.read();
@@ -724,7 +825,14 @@ class RustNeteaseAuthenticationGateway
       return CredentialRestoreResult.storageUnavailable;
     }
     try {
-      return _restoreNeteaseCredentialInRust(secretBytes);
+      if (epoch != _sessionEpoch) {
+        return CredentialRestoreResult.coreUnavailable;
+      }
+      final result = _credentialImporter(secretBytes);
+      if (result == CredentialRestoreResult.verificationRequired) {
+        _pendingCandidateFromWeb = false;
+      }
+      return result;
     } on Object {
       return CredentialRestoreResult.coreUnavailable;
     } finally {
@@ -734,6 +842,7 @@ class RustNeteaseAuthenticationGateway
 
   @override
   Future<CredentialSignOutResult> signOut() async {
+    _invalidateSessionWork();
     final browserCleanupSucceeded = _usesLinuxSystemBrowser
         ? await _cancelLinuxSystemBrowserForSignOut()
         : await _clearEmbeddedOfficialWebSession();
@@ -745,7 +854,7 @@ class RustNeteaseAuthenticationGateway
       return CredentialSignOutResult.coreUnavailable;
     }
     try {
-      await _credentialVault.delete();
+      await _credentialVault.deleteTransaction();
       return browserCleanupSucceeded
           ? CredentialSignOutResult.signedOut
           : CredentialSignOutResult.browserCleanupFailed;
@@ -900,9 +1009,17 @@ OfficialWebAuthenticationFailure _mapSystemBrowserFailure(
 
 class _RustNeteaseOfficialWebAuthenticationOperation
     implements OfficialWebAuthenticationOperation {
-  _RustNeteaseOfficialWebAuthenticationOperation(this._broker);
+  _RustNeteaseOfficialWebAuthenticationOperation(
+    this._broker, {
+    required this.stager,
+    required this.verificationFactory,
+    required this.diagnostics,
+  });
 
   final OfficialWebLoginBroker _broker;
+  final OfficialWebCredentialStager stager;
+  final CredentialVerificationOperationFactory verificationFactory;
+  final NeteaseWebRefreshDiagnostics diagnostics;
   CredentialVerificationOperation? _verification;
   bool _cancelled = false;
 
@@ -954,7 +1071,7 @@ class _RustNeteaseOfficialWebAuthenticationOperation
 
     CredentialRestoreResult staged;
     try {
-      staged = _stageNeteaseOfficialWebCredentialInRust(secretBytes);
+      staged = stager(secretBytes);
     } on Object {
       staged = CredentialRestoreResult.coreUnavailable;
     } finally {
@@ -978,7 +1095,12 @@ class _RustNeteaseOfficialWebAuthenticationOperation
       );
     }
 
-    final verification = _reserveRustNeteaseCredentialVerification();
+    final verification = verificationFactory();
+    diagnostics.checkpoint(
+      NeteaseWebLoginPath.webView,
+      NeteaseWebLoginCheckpoint.accountVerification,
+      success: true,
+    );
     _verification = verification;
     final result = await verification.run();
     debugPrint(
@@ -1241,6 +1363,58 @@ class _RecoveryCredentialVerificationOperation
     // publication/cleanup against the replacement indefinitely.
     onResolved();
     return CredentialVerificationResult.replaced;
+  }
+}
+
+/// NetEase restore verification shares the existing Provider owner. The vault
+/// epoch prevents a late rejection from deleting a newer official-web login.
+class _NeteaseVaultVerificationOperation
+    implements CredentialVerificationOperation {
+  _NeteaseVaultVerificationOperation(
+    this._inner,
+    this._vault, {
+    required this.isCurrent,
+    required this.cleanupRejected,
+  }) : _vaultEpoch = _vault.reserveRotation();
+
+  final CredentialVerificationOperation _inner;
+  final SerializedCredentialVault _vault;
+  final bool Function() isCurrent;
+  final bool cleanupRejected;
+  final int _vaultEpoch;
+  bool _cancelled = false;
+
+  @override
+  bool cancel() {
+    _cancelled = true;
+    return _inner.cancel();
+  }
+
+  @override
+  Future<CredentialVerificationResult> run() async {
+    if (_cancelled || !isCurrent()) {
+      return CredentialVerificationResult.replaced;
+    }
+    CredentialVerificationResult result;
+    try {
+      result = await _inner.run();
+    } on Object {
+      result = CredentialVerificationResult.coreUnavailable;
+    }
+    if (_cancelled || !isCurrent()) {
+      return CredentialVerificationResult.replaced;
+    }
+    if (result != CredentialVerificationResult.rejected || !cleanupRejected) {
+      return result;
+    }
+    try {
+      final deleted = await _vault.deleteTransactionIfCurrent(_vaultEpoch);
+      return deleted && !_cancelled && isCurrent()
+          ? result
+          : CredentialVerificationResult.replaced;
+    } on Object {
+      return CredentialVerificationResult.rejectedStorageCleanupFailed;
+    }
   }
 }
 

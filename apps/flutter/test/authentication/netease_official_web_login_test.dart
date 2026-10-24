@@ -4,9 +4,168 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
+import 'package:flutterustmusic/authentication/netease_web_refresh_diagnostics.dart';
 import 'package:webview_all/webview_all.dart';
 
 void main() {
+  test('web refresh observations are opt-in and accept only booleans and fixed states', () {
+    final lines = <String>[];
+    final diagnostics = NeteaseWebRefreshDiagnostics(
+      enabledOverride: false,
+      sink: lines.add,
+    );
+    diagnostics.capture(
+      musicU: true,
+      musicRU: true,
+      csrf: true,
+      structurallyValid: true,
+    );
+    diagnostics.checkpoint(
+      NeteaseWebLoginPath.webView,
+      NeteaseWebLoginCheckpoint.securePersistence,
+      success: true,
+    );
+    expect(lines, isEmpty);
+  });
+  test(
+    'native cookie adapter retains only exact-domain authentication names',
+    () async {
+      final runtime = WebViewAllOfficialWebRuntime(
+        cookieManager: _CookieManager([
+          const WebViewCookie(
+            name: 'MUSIC_U',
+            value: 'u',
+            domain: 'music.163.com',
+          ),
+          const WebViewCookie(
+            name: 'MUSIC_R_U',
+            value: 'r',
+            domain: '.music.163.com',
+          ),
+          const WebViewCookie(
+            name: '__csrf',
+            value: 'c',
+            domain: 'music.163.com',
+          ),
+          const WebViewCookie(
+            name: 'MUSIC_R_U',
+            value: 'foreign',
+            domain: '.163.com',
+          ),
+          const WebViewCookie(
+            name: 'MUSIC_U',
+            value: 'foreign',
+            domain: 'music.163.com.evil',
+          ),
+          const WebViewCookie(
+            name: 'unrelated',
+            value: 'ignored',
+            domain: 'music.163.com',
+          ),
+        ]),
+      );
+      final cookies = await runtime.readCookies(
+        Uri.parse(neteaseOfficialLoginUri),
+      );
+      expect(cookies.map((cookie) => cookie.name), [
+        'MUSIC_U',
+        'MUSIC_R_U',
+        '__csrf',
+      ]);
+      expect(cookies.map((cookie) => cookie.value), ['u', 'r', 'c']);
+      expect(cookies.toString(), isNot(contains('foreign')));
+      await expectLater(
+        runtime.readCookies(Uri.parse('https://example.com')),
+        throwsA(isA<OfficialWebLoginException>()),
+      );
+    },
+  );
+
+  test('all optional refresh and CSRF combinations preserve exact observed values', () async {
+    for (final includeR in [false, true]) {
+      for (final includeCsrf in [false, true]) {
+        final cookies = [
+          const OfficialWebCookie(name: 'MUSIC_U', value: 'synthetic-u'),
+          if (includeR)
+            const OfficialWebCookie(name: 'MUSIC_R_U', value: 'independent-r'),
+          if (includeCsrf)
+            const OfficialWebCookie(name: '__csrf', value: 'synthetic-c'),
+          if (includeR)
+            const OfficialWebCookie(
+              name: 'MUSIC_R_U',
+              value: 'independent-r',
+              domain: '.music.163.com',
+            ),
+          const OfficialWebCookie(
+            name: 'MUSIC_R_U',
+            value: 'foreign',
+            domain: '.163.com',
+          ),
+        ];
+        final runtime = _FakeOfficialWebRuntime(cookieResults: [cookies]);
+        final lines = <String>[];
+        final broker = PlatformNeteaseOfficialWebLoginBroker(
+          runtime: runtime,
+          pollInterval: const Duration(milliseconds: 1),
+          diagnostics: NeteaseWebRefreshDiagnostics(
+            enabledOverride: true,
+            sink: lines.add,
+          ),
+        );
+        final bytes = (await broker.authenticate())!;
+        expect(
+          ascii.decode(bytes),
+          [
+            'MUSIC_U=synthetic-u',
+            if (includeR) 'MUSIC_R_U=independent-r',
+            if (includeCsrf) '__csrf=synthetic-c',
+          ].join('; '),
+        );
+        expect(
+          lines.single,
+          'FURA_NETEASE_WEB_REFRESH_DEBUG path=web_view phase=capture observed_music_u=true observed_music_r_u=$includeR observed_csrf=$includeCsrf candidate_valid=true',
+        );
+        expect(lines.join(), isNot(contains('synthetic')));
+        expect(lines.join(), isNot(contains('independent-r')));
+        expect(runtime.clearCalls, 2);
+        expect(runtime.sessions.single.closed, isTrue);
+      }
+    }
+  });
+
+  test(
+    'refresh material cannot replace missing MUSIC_U or authorize login',
+    () async {
+      final runtime = _FakeOfficialWebRuntime(
+        cookieResults: [
+          const [
+            OfficialWebCookie(name: 'MUSIC_R_U', value: 'only-r'),
+            OfficialWebCookie(
+              name: 'MUSIC_U',
+              value: 'foreign',
+              domain: 'evil.example',
+            ),
+          ],
+        ],
+      );
+      final broker = PlatformNeteaseOfficialWebLoginBroker(
+        runtime: runtime,
+        pollInterval: const Duration(milliseconds: 1),
+        attemptTimeout: const Duration(milliseconds: 15),
+      );
+      await expectLater(
+        broker.authenticate(),
+        throwsA(
+          isA<OfficialWebLoginException>().having(
+            (error) => error.failure,
+            'failure',
+            OfficialWebLoginFailure.timedOut,
+          ),
+        ),
+      );
+      expect(runtime.sessions.single.closed, isTrue);
+    },
+  );
   test('reports unavailable without creating or clearing a session', () async {
     final runtime = _FakeOfficialWebRuntime(isSupported: false);
     final broker = PlatformNeteaseOfficialWebLoginBroker(runtime: runtime);
@@ -243,6 +402,33 @@ void main() {
         OfficialWebCookie(name: 'MUSIC_U', value: 'two'),
       ],
       const [OfficialWebCookie(name: 'MUSIC_U', value: 'bad;value')],
+      const [
+        OfficialWebCookie(name: 'MUSIC_U', value: 'u'),
+        OfficialWebCookie(name: 'MUSIC_R_U', value: 'r1'),
+        OfficialWebCookie(name: 'MUSIC_R_U', value: 'r2'),
+      ],
+      for (final invalidR in [
+        '',
+        'bad;value',
+        'bad\\value',
+        'bad\r\nvalue',
+        '非ASCII',
+        List.filled(4097, 'r').join(),
+      ])
+        [
+          const OfficialWebCookie(name: 'MUSIC_U', value: 'u'),
+          OfficialWebCookie(name: 'MUSIC_R_U', value: invalidR),
+        ],
+      [
+        OfficialWebCookie(
+          name: 'MUSIC_U',
+          value: List.filled(4096, 'u').join(),
+        ),
+        OfficialWebCookie(
+          name: 'MUSIC_R_U',
+          value: List.filled(4096, 'r').join(),
+        ),
+      ],
       [
         OfficialWebCookie(
           name: 'MUSIC_U',
@@ -340,6 +526,16 @@ void main() {
       expect(runtime.clearCalls, 3);
     },
   );
+}
+
+class _CookieManager implements WebViewCookieManager {
+  _CookieManager(this.cookies);
+  final List<WebViewCookie> cookies;
+  @override
+  Future<List<WebViewCookie>> getCookies({required Uri domain}) async =>
+      cookies;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _FakeOfficialWebRuntime implements OfficialWebRuntime {

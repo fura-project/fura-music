@@ -2,6 +2,29 @@
 
 Date: 2026-09-12. Authority: HD-023 + HD-024 plus the 2026-09-12 Linux Human regression. **HUMAN_EVIDENCE_REQUIRED for every real-account claim.** Two rebuilt-Linux attempts reached 801 waiting and 802 scanned/awaiting confirmation, then terminated with the explicitly decoded 8821 security-verification outcome. No credential, account data, phone number, SMS code or cookie was supplied to or collected by the Agent.
 
+## 2026-10-24 official-Web capture and restore checkpoint
+
+The current product's official WebView and Linux isolated Chromium adapters now
+preserve independent optional `MUSIC_R_U` alongside required U and optional
+CSRF, through existing Credential V2, Pending/account verification and the
+same independent vault. Missing R still permits ordinary login. Restore now
+coalesces vault reads and cancels late imports across logout, replacement and
+Controller retirement; rejection cleanup is scoped to the owning saved
+credential, while an unpersisted Web candidate cannot delete the previous one.
+Rust also enforces the final serialized-document bound before accepting a
+candidate. No production refresh lifecycle is enabled.
+
+The next observation prioritizes the **official product login**, not low-level
+QR: use `FURA_NETEASE_WEB_REFRESH_DEBUG=1` and report only fixed path/checkpoint
+states and three presence booleans. Not observing R in an adapter cannot prove
+the server never issued it. Human reported one successful automatic NetEase
+restore after rerunning `flutter run` on Linux on 2026-10-24; a new Debug app
+process was confirmed. Capture-presence diagnostics were not enabled, so this
+does not establish independent R capture or a V2 document version. Official-Web
+refresh-material observation and real refresh remain **NOT RUN**. See the [current implementation and Human observation
+guide](netease-official-web-session-v1.md); the dated QR command below is only
+an independent historical/control entry point.
+
 ## 2026-10-23 long-term refresh investigation: CONDITIONAL
 
 No real NetEase credential was read and no service request was sent in this
