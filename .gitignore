@@ -12,3 +12,5 @@
 !.env.example
 credentials/
 fixtures/private/
+__pycache__/
+*.pyc

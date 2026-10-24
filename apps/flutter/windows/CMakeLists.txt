@@ -32,6 +32,12 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# Packaging-only privacy flags. Keep ordinary Debug/IDE builds unchanged.
+# The PDB reference is a linker concern, not a Rust source-path mapping.
+if(DEFINED ENV{FURA_PRIVATE_BUILD} AND "$ENV{FURA_PRIVATE_BUILD}" STREQUAL "1")
+  add_link_options("/PDBALTPATH:%_PDB%")
+endif()
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by
@@ -56,6 +62,19 @@ add_subdirectory("runner")
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+
+# Both plugins use Microsoft's WIL error macros. Its documented level 2 keeps
+# line numbers/return addresses/error handling but does not embed __FILE__.
+# This is build-time avoidance, not an artifact-audit DLL exemption. MSVC's
+# C# /pathmap option is not a supported C++ compiler switch.
+if(DEFINED ENV{FURA_PRIVATE_BUILD} AND "$ENV{FURA_PRIVATE_BUILD}" STREQUAL "1")
+  foreach(FURA_WIL_TARGET audioplayers_windows_plugin webview_all_windows_plugin)
+    if(TARGET ${FURA_WIL_TARGET})
+      target_compile_definitions(${FURA_WIL_TARGET} PRIVATE
+        "$<$<NOT:$<CONFIG:Debug>>:RESULT_DIAGNOSTICS_LEVEL=2>")
+    endif()
+  endforeach()
+endif()
 
 
 # === Installation ===

@@ -1,0 +1,314 @@
+{
+  "sources": [
+    {
+      "url": "https://github.com/media-kit/libmpv-android-video-build/releases/download/v1.1.7/default-arm64-v8a.jar",
+      "sha256": "4363dfa5d3d415b91c1f16f6fb90c3fe59a77dfd3f9b824d2b24b492d6b09df9"
+    },
+    {
+      "url": "https://github.com/media-kit/libmpv-android-video-build/releases/download/v1.1.7/default-x86_64.jar",
+      "sha256": "90268cd15f0766e07fb8e427388c621161177c9eb343c544f327bd63232bb236"
+    },
+    {
+      "url": "https://github.com/media-kit/libmpv-darwin-build/releases/download/v0.6.0/libmpv-xcframeworks_v0.6.0_macos-universal-video-default.tar.gz",
+      "sha256": "84d2ad98e046e82c6dc34d8547d76c2afeaee89c0f53032773be8985c95536d6"
+    }
+  ],
+  "payloads": [
+    {
+      "payload": "lib/arm64-v8a/libmpv.so",
+      "format": "ELF",
+      "upstream_sha256": "adf83fde58a9f6751ce6e83b9b187f651425d53ec0e20da04deb8dfb4aa775e1",
+      "root": "/home/runner",
+      "strings": [
+        {
+          "section": ".rodata",
+          "length": 313,
+          "sha256": "a3f50f073c0fc7c67e3eaa3a0368348c3b8679d6ad72218facdd71ea2dd9d5ee"
+        },
+        {
+          "section": ".rodata",
+          "length": 329,
+          "sha256": "74eb2c5de37c026a92a904ad6caa95c20a4691e0ab1777e96f1b71f6f3fd6805"
+        },
+        {
+          "section": ".rodata",
+          "length": 4970,
+          "sha256": "3282c1b49ae2bfd311c5210783165afd373a09ce84b879df6385a06e251088cf"
+        }
+      ]
+    },
+    {
+      "payload": "lib/x86_64/libmpv.so",
+      "format": "ELF",
+      "upstream_sha256": "f030e9a1a4d4664e89d7160a3d4528cd5875ee023ff6262e16e95aac28ffaec5",
+      "root": "/home/runner",
+      "strings": [
+        {
+          "section": ".rodata",
+          "length": 310,
+          "sha256": "f4d0656ffc109919e7ccf42292b48c1070728a3a4494c432ac206437685303f6"
+        },
+        {
+          "section": ".rodata",
+          "length": 326,
+          "sha256": "7bf19c5072c0afec32af4f92f6fc8ada48b11001aa854a01b9aaaa924f034fdb"
+        },
+        {
+          "section": ".rodata",
+          "length": 4961,
+          "sha256": "5133d649e47d7f92203e90ed609932b492807704ca1b488bc16173fe89f67660"
+        }
+      ]
+    },
+    {
+      "payload": "Contents/Frameworks/Mpv.framework/Versions/A/Mpv",
+      "format": "Mach-O",
+      "upstream_sha256": "146c00e1c7fec9e51114d74c41c530e72967e2a59a91147439cbd07d118c4ea5",
+      "root": "/Users/runner",
+      "strings": [
+        {
+          "section": "__TEXT,__cstring",
+          "length": 107,
+          "sha256": "5cbaa4cc1bd9b7c4b44242aac259c81b3006dd66011a3969447298cc99e260c2"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 107,
+          "sha256": "c8604dbe884881a0d9cc365685522eaed17d4e9688310c10d91dad308e947724"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 2222,
+          "sha256": "5cacaad0f8c69b05e53d2919cbf9d8677fe568780c02c15cfae1dc531aabe488"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 2222,
+          "sha256": "7b6fa695103e17005747ee6e25f0d994b2a5f0eec2846a0a651a12bac1d86ace"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 2238,
+          "sha256": "7ce879b50c75777b1eac57ed9b52a1f47b1324a20e465e4b907bbc9e41c252f3"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 2238,
+          "sha256": "81ce0e195be246b8d1104444065e2e1ead597626f945abf730c791039a6d866a"
+        }
+      ],
+      "loadable_sha256": "b614af6e62cb478411a3d9c924b2434b2b198bbb7da44b1d9768769f3adf1c06",
+      "linkedit_sha256": "fe5e0d2427e5849588538c904ff428a58ae9341004ef480a3e8d9af2cdca7a5b"
+    },
+    {
+      "payload": "Contents/Frameworks/Avcodec.framework/Versions/A/Avcodec",
+      "format": "Mach-O",
+      "upstream_sha256": "a195e9dd8f7923060295534f374570d5dee44c2786a2b40bfce6a4ec30116de5",
+      "root": "/Users/runner",
+      "strings": [
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5580,
+          "sha256": "75a8c09e664357664b275d6b7906c1fe71e3312548b4e73468d25dfe8bb908c4"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5583,
+          "sha256": "41180b88ceb84005dd1692db868cd674ecea77c6a17410ef4b0c5a257eabcdb6"
+        }
+      ],
+      "loadable_sha256": "ea9e651c2def938076a5ac1a262e5c6b3e9b31c08118fc97646f20e4be7ec536",
+      "linkedit_sha256": "c54487328f47ca3bb9c91fd10c8a4c7ba83d0e7ebcd163e1cdd5883978b1cac9"
+    },
+    {
+      "payload": "Contents/Frameworks/Xml2.framework/Versions/A/Xml2",
+      "format": "Mach-O",
+      "upstream_sha256": "b7a264b5d7bc61d75e415f4f34b8cc50561d389586eabc30eaf0f0a5bc52cc35",
+      "root": "/Users/runner",
+      "strings": [
+        {
+          "section": "__TEXT,__cstring",
+          "length": 108,
+          "sha256": "20820b56bbeb7896554fae049d4d4a781b2726ba2f12af281770af0ece139726"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 108,
+          "sha256": "51b229fb45ee27699465a667976be744e8d40451cf19a08fbe3dcc9c2e901b96"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 110,
+          "sha256": "258551e5c462bade6c39f3117ff545292958320cfa910fb6b6006c3962bb1049"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 110,
+          "sha256": "f972bd478c46146c19b2d0db64a2d5c781a46e51678bb960c62027e2cb2616af"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 112,
+          "sha256": "38bef61a75d0dcbdef3205355a160d4480a66ff98f677743c432569e8dc136fc"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 112,
+          "sha256": "5bcd368babb42f5b489664dbd27d888a130574aaa6d9739882520782c92cb268"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 112,
+          "sha256": "6b7b3c4605e4fcae8fb63d6509531a87fce1b4ecdd350640934268c8d3c70a2e"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 112,
+          "sha256": "c5a64efd43122a2eb1095879bbc1a42b496d7289d12f88efeac59023df85f781"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 113,
+          "sha256": "57a9d69d082e0d3c714203169eee320c8acba66de4478660fe9404ed8ba380f8"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 113,
+          "sha256": "b8b8bd5478d234580e491c189d05db994b1c9c7eb087742516363a5c3656c2da"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 113,
+          "sha256": "c4adf077333a9ca33ad3e393b8032ffddb4cb1b9b0b30eaaf5222dee93efc9b2"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 113,
+          "sha256": "c9212231d05e4098495452cc9b9fd05fc38ac8c51f9b89f74f532741b72dc5ad"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 118,
+          "sha256": "6742f1ad22aa2c2b3bdbc42607b5b30b125aff21ac656a5342a84145ead37671"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 118,
+          "sha256": "e6bcf725c1d6ae9a9e27bb54fcbe6b61b18651c420d7db9dfa1ff34cbf51fa64"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 120,
+          "sha256": "1f3aea44f0a5fc7c74eccb629561da38c03be7237881745c442889ee02a5abbd"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 120,
+          "sha256": "6343325cdbdc56305efa21f8786b138a88c8b82e3869dcbd81c0415dcef1ee3b"
+        }
+      ],
+      "loadable_sha256": "50134770fff140e638d705334de502f49747d3b32deece9b6f43cf8c36571d13",
+      "linkedit_sha256": "bff60535c97b9062c47e8c332e5d6a5de13df0c07a5afd6ec15e22aefe25c8e1"
+    },
+    {
+      "payload": "Contents/Frameworks/Swscale.framework/Versions/A/Swscale",
+      "format": "Mach-O",
+      "upstream_sha256": "4fbebcf1e348cd5911031b0cb581b3243028286d770aa0d71374771bcded1f60",
+      "root": "/Users/runner",
+      "strings": [
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5580,
+          "sha256": "75a8c09e664357664b275d6b7906c1fe71e3312548b4e73468d25dfe8bb908c4"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5583,
+          "sha256": "41180b88ceb84005dd1692db868cd674ecea77c6a17410ef4b0c5a257eabcdb6"
+        }
+      ],
+      "loadable_sha256": "773e9f7a01c3bad639b4e20296783ac05c4dca2a5a048afdcb0489014da142cd",
+      "linkedit_sha256": "91b4d5f76fd9e06e0842a38e1e436621a810a6baa4adf2431d3f686f05db3856"
+    },
+    {
+      "payload": "Contents/Frameworks/Avutil.framework/Versions/A/Avutil",
+      "format": "Mach-O",
+      "upstream_sha256": "9452c06fe678ca33986d54782c41b21239629e702f7f982a727988e56289a594",
+      "root": "/Users/runner",
+      "strings": [
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5580,
+          "sha256": "75a8c09e664357664b275d6b7906c1fe71e3312548b4e73468d25dfe8bb908c4"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5583,
+          "sha256": "41180b88ceb84005dd1692db868cd674ecea77c6a17410ef4b0c5a257eabcdb6"
+        }
+      ],
+      "loadable_sha256": "ed428430105034d2f9d73fdc0372c49f7b18b9ebf5a48a19d569e14b4e7e73bb",
+      "linkedit_sha256": "fc9d305f7d60f4d8e48ececa907b82daca8294aa35304a40ba52c22c5273cc32"
+    },
+    {
+      "payload": "Contents/Frameworks/Avfilter.framework/Versions/A/Avfilter",
+      "format": "Mach-O",
+      "upstream_sha256": "c4dd589266b91c2ce7054548c118d055a761a915ddf8f929b23637230e5fa886",
+      "root": "/Users/runner",
+      "strings": [
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5580,
+          "sha256": "75a8c09e664357664b275d6b7906c1fe71e3312548b4e73468d25dfe8bb908c4"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5583,
+          "sha256": "41180b88ceb84005dd1692db868cd674ecea77c6a17410ef4b0c5a257eabcdb6"
+        }
+      ],
+      "loadable_sha256": "07a517a2079ddcfac5906f8ddbfe996e08b549c860eb4fe0d7bfe953ef416b39",
+      "linkedit_sha256": "507c6f99c1c52d1e07ba1f62a16e128c88b5cb20663fb30e636be77456c5939e"
+    },
+    {
+      "payload": "Contents/Frameworks/Swresample.framework/Versions/A/Swresample",
+      "format": "Mach-O",
+      "upstream_sha256": "71b90caff23f37483128d2ed1a2173b3f96f01192791cadf08294d493e78cb88",
+      "root": "/Users/runner",
+      "strings": [
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5580,
+          "sha256": "75a8c09e664357664b275d6b7906c1fe71e3312548b4e73468d25dfe8bb908c4"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5583,
+          "sha256": "41180b88ceb84005dd1692db868cd674ecea77c6a17410ef4b0c5a257eabcdb6"
+        }
+      ],
+      "loadable_sha256": "aa3bf54d8453e141dbfaec3ceaa54bc6954c080590b93305a0bc13f3f77f8369",
+      "linkedit_sha256": "26f4001898896646feaacafd0d9d7f6a758c07a4e444fa05c325973fdb04e372"
+    },
+    {
+      "payload": "Contents/Frameworks/Avformat.framework/Versions/A/Avformat",
+      "format": "Mach-O",
+      "upstream_sha256": "4651005d7f9eabc4380e631044fd5710398404a4bcab34d0703334bdbb53e144",
+      "root": "/Users/runner",
+      "strings": [
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5580,
+          "sha256": "75a8c09e664357664b275d6b7906c1fe71e3312548b4e73468d25dfe8bb908c4"
+        },
+        {
+          "section": "__TEXT,__cstring",
+          "length": 5583,
+          "sha256": "41180b88ceb84005dd1692db868cd674ecea77c6a17410ef4b0c5a257eabcdb6"
+        }
+      ],
+      "loadable_sha256": "d0e1377f4de5e2f913478b7c1bd6aa6637b9abcf4e64eb92e5c5d0c9f166092f",
+      "linkedit_sha256": "1419f557e89d661a6efe04289034f377c6128e33f8ff2db8060169052a71ea32"
+    }
+  ]
+}

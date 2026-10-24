@@ -23,15 +23,46 @@ def encoded_rust_flags(
     existing: str,
     source_root: Path,
     user_home: Path,
+    target: str = "linux",
 ) -> str:
     flags = [flag for flag in existing.split("\x1f") if flag]
     flags.extend(
         [
-            f"--remap-path-prefix={source_root.resolve()}=/fura-source",
             f"--remap-path-prefix={user_home.resolve()}=/fura-build",
+            f"--remap-path-prefix={source_root.resolve()}=/fura-source",
         ]
     )
-    return "\x1f".join(dict.fromkeys(flags))
+    if target == "windows":
+        # Rust remapping does not affect the linker's CodeView/RSDS PDB path.
+        flags.extend(["-C", "link-arg=/PDBALTPATH:%_PDB%"])
+    # Do not deduplicate individual tokens: repeated -C is meaningful.
+    return "\x1f".join(flags)
+
+
+def native_build_environment(environment: dict[str, str], target: str,
+                             source: Path, home: Path) -> None:
+    environment["FURA_PRIVATE_BUILD"] = "1"
+    if target == "macos":
+        # Flutter's supported FLUTTER_XCODE_* mechanism applies these settings
+        # to Runner and source-built plugins; it does not rewrite vendored code.
+        settings = {
+            "COPY_PHASE_STRIP": "YES",
+            "DEPLOYMENT_POSTPROCESSING": "YES",
+            "STRIP_INSTALLED_PRODUCT": "YES",
+            "STRIP_STYLE": "non-global",
+        }
+        maps = " ".join(
+            f'"-ffile-prefix-map={root.resolve()}={replacement}" '
+            f'"-fdebug-prefix-map={root.resolve()}={replacement}"'
+            for root, replacement in ((home, "/fura-build"), (source, "/fura-source"))
+        )
+        settings["OTHER_CFLAGS"] = "$(inherited) " + maps
+        settings["OTHER_CPLUSPLUSFLAGS"] = "$(inherited) " + maps
+        for name, value in settings.items():
+            key = "FLUTTER_XCODE_" + name
+            if name.startswith("OTHER_") and key in environment:
+                value = environment[key] + " " + maps
+            environment[key] = value
 
 
 def run(command: list[str], environment: dict[str, str]) -> None:
@@ -59,7 +90,9 @@ def main() -> int:
         environment.get("CARGO_ENCODED_RUSTFLAGS", ""),
         REPOSITORY_ROOT,
         Path.home(),
+        build_arguments[0],
     )
+    native_build_environment(environment, build_arguments[0], REPOSITORY_ROOT, Path.home())
 
     # Generated package: vs file: registrant URIs must not share an incremental
     # kernel. Flutter keys its kernel by dart-defines, not by this URI mapping.

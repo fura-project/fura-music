@@ -5,12 +5,6 @@ script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
 # shellcheck source=packaging/linux/lib.sh
 source "$script_dir/lib.sh"
 
-test "$#" -eq 1 || die 'usage: fetch_appimage_tools.sh DESTINATION'
-destination=$1
-require_command curl
-require_command sha256sum
-require_empty_directory "$destination"
-
 linuxdeploy_url='https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage'
 linuxdeploy_sha256='c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d'
 appimagetool_url='https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage'
@@ -18,8 +12,9 @@ appimagetool_sha256='ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb3
 gtk_plugin_commit='7a3fbc31a9e5075073ff8790f26effbac5f84453'
 gtk_plugin_url="https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/${gtk_plugin_commit}/linuxdeploy-plugin-gtk.sh"
 gtk_plugin_sha256='b0f4cbc684a0103a9651f0955b635eaea0096b3a66c0f5a2c2aa337960375171'
-runtime_url='https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64'
-runtime_sha256='1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf'
+runtime_version='20251108'
+runtime_url="https://github.com/AppImage/type2-runtime/releases/download/${runtime_version}/runtime-x86_64"
+runtime_sha256='2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d'
 
 download_and_verify() {
   local url=$1
@@ -30,6 +25,15 @@ download_and_verify() {
   printf '%s  %s\n' "$sha256" "$output" | sha256sum --check --status || \
     die "checksum mismatch for $url"
 }
+
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  return 0
+fi
+test "$#" -eq 1 || die 'usage: fetch_appimage_tools.sh DESTINATION'
+destination=$1
+require_command curl
+require_command sha256sum
+require_empty_directory "$destination"
 
 download_and_verify "$linuxdeploy_url" "$linuxdeploy_sha256" \
   "$destination/linuxdeploy-x86_64.AppImage"
@@ -52,6 +56,7 @@ linuxdeploy_gtk_commit=$gtk_plugin_commit
 linuxdeploy_gtk_sha256=$gtk_plugin_sha256
 appimagetool=1.9.1
 appimagetool_sha256=$appimagetool_sha256
+type2_runtime=$runtime_version
 type2_runtime_url=$runtime_url
 type2_runtime_sha256=$runtime_sha256
 TOOLS

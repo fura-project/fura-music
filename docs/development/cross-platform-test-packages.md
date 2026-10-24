@@ -20,6 +20,13 @@ These artifacts are not releases. They retain the current generated application 
 
 There is no Web artifact because the product's Rust core, secure-storage, native audio/video, and operating-system media integrations are native-target capabilities; Web is not a supported product target.
 
+Build-path privacy remains a strict final-artifact gate. The pinned AppImage
+runtime and narrowly fingerprinted public upstream mpv/FFmpeg runtime strings,
+including their evidence, rejection tests and native-platform proof limits,
+are documented in [the 2026-10-09 investigation](ci-packaging-2026-10-09.md).
+This does not exempt first-party binaries, entire runner HOME directories,
+personal identifiers, or unverified third-party/debug metadata.
+
 ## What CI proves
 
 Before packaging begins, one Ubuntu job runs the locked Rust workspace format, test, and strict Clippy gates plus Dart formatting, `dart analyze`, and all Flutter tests. Platform jobs then prove that the named source revision compiles into the named package. The no-define test request is D: MediaKit plus Flutter Media Session. Android, Windows and macOS resolve that request directly; Linux deliberately resolves it to MediaKit plus Fura MPRIS; iOS deliberately resolves it to MediaKit plus AudioService. These effective-platform rules do not imply native runtime acceptance.
