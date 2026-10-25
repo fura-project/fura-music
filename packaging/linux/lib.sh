@@ -29,6 +29,19 @@ require_directory() {
   test -d "$1" || die "required directory is missing: $1"
 }
 
+stage_appimage_mime_database() {
+  local appdir=$1
+  local definitions=$2
+  local mime_root="$appdir/usr/share/mime"
+  require_command update-mime-database
+  test -s "$definitions" || die 'AppImage MIME definitions missing or empty'
+  mkdir -p "$mime_root/packages"
+  install -m 0644 "$definitions" "$mime_root/packages/freedesktop.org.xml"
+  XDG_DATA_DIRS="$appdir/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" \
+    update-mime-database "$mime_root" || die 'AppImage MIME cache generation failed'
+  test -s "$mime_root/mime.cache" || die 'AppImage MIME cache missing or empty'
+}
+
 verify_elf_needed_dependency() {
   local elf_file=$1
   local soname=$2

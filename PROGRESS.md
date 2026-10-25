@@ -2,14 +2,55 @@
 execution:
   mode: HUMAN_DIRECTED
   work_domain: CORE
-  state: HUMAN_REVIEW
-  acceptance_milestone: NETEASE_OFFICIAL_WEB_CAPTURE_AND_RESTORE_V1
-  active_workstream: NETEASE_SESSION_FOUNDATION
-  current_task: OFFICIAL_WEB_CAPTURE_AND_RESTORE_VERIFIED_OFFLINE
-  next_action: HUMAN_OFFICIAL_WEB_REFRESH_MATERIAL_OBSERVATION
+  state: BLOCKED
+  acceptance_milestone: CROSS_PLATFORM_DEVELOPMENT_PACKAGE_NATIVE_ACCEPTANCE
+  active_workstream: CI_PACKAGING_PRIVACY_AND_SANDBOX
+  current_task: LOCAL_BUILD_MAP_AND_SANDBOX_FIXES_NATIVE_GATES_OPEN
+  next_action: AUTHORIZED_WINDOWS_MACOS_AND_NATIVE_APPIMAGE_RUNNER_VERIFICATION
 ---
 
 # Current State
+
+- **2026-10-25 Human-directed Core / cross-platform CI follow-up:** inspected
+  run `40162179664` at `2cec96a` without changing clean local HEAD `f50c987`.
+  Fixed the Windows wrapper's missing slash-spelled Rust path maps and added
+  crate-scoped clang-cl file-prefix mapping for AWS-LC native C runtime strings
+  that Rust flags cannot rewrite. Cargo target/build-script fingerprint checks
+  and fixed, non-exempting origin hints verify the selected build inputs.
+  Real rustc/Cargo and MSVC-target PE narrow/wide-source regressions pass, but
+  the failed Windows DLL was not
+  uploaded and native MSVC DLL/ZIP acceptance remains **NOT RUN**.
+
+  macOS strip failures now name independent format/slice, loadable, LINKEDIT/
+  dyld, export, CPU, dependency/install-name and remaining-debug categories.
+  All runtime guards and pinned upstream fingerprints remain strict. Eight
+  upstream Mach-O fingerprints reproduce; LLVM stripping still demonstrates
+  rejected indirect-export corruption. The native macOS failure's actual
+  invariant and its corrective fix remain **UNFINISHED / NOT RUN**, because
+  there is no authorized Xcode host or failed app artifact here.
+
+  AppImage's hosted Docker UID-map denial remains **ENVIRONMENT_BLOCKED**, not
+  a failed application-launch result. The bounded ordinary-user preflight now
+  reports safe fixed categories and remains fatal when prerequisites fail.
+  Local real-window checks on both target userspaces exposed an additional
+  nested WebKit sandbox defect in AppRun's temporary symlink library view.
+  Real read-only bind mounts fix helper/ELF-loader visibility; the old launcher
+  reproduces failure, while sandboxed synthetic local HTML loads on Ubuntu and
+  Fedora with observed WebProcess `Seccomp=2`, zero effective capabilities.
+  A candidate was locally repacked from the existing CI Release payload; this
+  is not a new Flutter/Rust compile or remote CI pass. Further investigation
+  traced the MiniBrowser/GTK pixbuf crash to missing MIME data. AppImage now
+  stages the standard definitions/cache and package notice, with missing-cache
+  audit and generation regressions. The final repack passes actual windows,
+  PNG resource decoding, sandboxed HTML and the earlier toolbar case on both
+  targets, including AppDir paths with spaces. Pre-fix failures remain recorded.
+
+  See the [per-platform evidence and native-runner plan](docs/development/ci-packaging-2026-10-25.md).
+  No auth/Provider/UI/playback/Bridge code changed, no protection was relaxed,
+  and the implementation phase performed no commit/push/merge/Actions rerun.
+  Human subsequently authorized a local Git checkpoint only. Earlier product and
+  Human-review checkpoints below remain historical evidence, not acceptance
+  of these packaging changes. Whole-task gate remains **BLOCKED**.
 
 - **2026-10-24 Human-directed Core / NetEase official-Web session V1:** current
   implementation baseline is `7435c5178cb33d8b5114fddf5f7a5d8189435bd0`, with a

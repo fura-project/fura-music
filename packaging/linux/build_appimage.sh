@@ -11,7 +11,7 @@ output_directory=$2
 ci_run_number=$3
 [[ "$ci_run_number" =~ ^[0-9]+$ ]] || die 'CI run number must be numeric'
 output_directory=$(prepare_empty_output_directory "$output_directory")
-for command in curl dpkg-query file patchelf readelf jq mksquashfs; do
+for command in curl dpkg-query file patchelf readelf jq mksquashfs update-mime-database; do
   require_command "$command"
 done
 validate_distribution_assets
@@ -37,6 +37,10 @@ install -m 0644 "$desktop_file" "$appdir/usr/share/applications/${app_id}.deskto
 install -m 0644 "$icon_file" \
   "$appdir/usr/share/icons/hicolor/512x512/apps/${app_id}.png"
 cp -a "$notices_directory/." "$appdir/usr/share/doc/flutterustmusic/"
+
+# GdkPixbuf's format recognition needs MIME data even for GTK's built-in PNG
+# icons. The clean target base deliberately does not supply application data.
+stage_appimage_mime_database "$appdir" /usr/share/mime/packages/freedesktop.org.xml
 
 copy_package_runtime_paths() {
   local package=$1

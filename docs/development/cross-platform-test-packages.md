@@ -27,6 +27,11 @@ are documented in [the 2026-10-09 investigation](ci-packaging-2026-10-09.md).
 This does not exempt first-party binaries, entire runner HOME directories,
 personal identifiers, or unverified third-party/debug metadata.
 
+The [2026-10-25 follow-up](ci-packaging-2026-10-25.md) records the current
+Windows remap candidate, classified macOS strip blocker, verified AppRun nested
+sandbox mount fix, and hosted AppImage namespace `ENVIRONMENT_BLOCKED` result.
+Local runtime checks do not close those native CI acceptance gates.
+
 ## What CI proves
 
 Before packaging begins, one Ubuntu job runs the locked Rust workspace format, test, and strict Clippy gates plus Dart formatting, `dart analyze`, and all Flutter tests. Platform jobs then prove that the named source revision compiles into the named package. The no-define test request is D: MediaKit plus Flutter Media Session. Android, Windows and macOS resolve that request directly; Linux deliberately resolves it to MediaKit plus Fura MPRIS; iOS deliberately resolves it to MediaKit plus AudioService. These effective-platform rules do not imply native runtime acceptance.

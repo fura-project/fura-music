@@ -135,7 +135,7 @@ def scan_payload(data: bytes, patterns: dict[str, bytes], payload: str,
     lower = data.lower()
     findings = set()
     for label, pattern in patterns.items():
-        for regex in pattern_regexes(pattern):
+        for codec, regex in zip(("utf-8", "utf-16le", "utf-16be"), pattern_regexes(pattern), strict=True):
             for match in regex.finditer(lower):
                 if delegated and any(a <= match.start() and match.end() <= b
                                      for a, b in delegated):
@@ -152,11 +152,31 @@ def scan_payload(data: bytes, patterns: dict[str, bytes], payload: str,
                         "format": fmt, "section": safe_display(section, patterns),
                         "offset": match.start(), "stage": "final-artifact",
                         "provenance": "PINNED_UPSTREAM_RUNTIME_STRING" if classified else "UNCLASSIFIED_REJECTED",
+                        # Byte patterns may overlap at an adjacent NUL. This
+                        # names the matcher, not proven string framing.
+                        "pattern_encoding": codec,
+                        "origin_hint": path_origin_hint(data, match.start(), match.end(), fmt, codec),
                     })
                 if classified:
                     continue
                 findings.add(label)
     return findings
+
+
+def path_origin_hint(data: bytes, start: int, end: int, fmt: str, codec: str = "utf-8") -> str:
+    """Fixed structural hints only; never disclose path bytes or relax audit.
+
+    A hint is not source attribution: only the failed artifact/compiler chain
+    can prove that. RSDS is the PE CodeView GUID+age+path record layout.
+    """
+    if fmt == "PE" and codec == "utf-8" and start >= 24 and data[start - 24:start - 20] == b"RSDS":
+        return "PE_CODEVIEW_PDB"
+    suffix = data[end:end + 512].decode(codec, errors="ignore").split("\0", 1)[0].replace("\\", "/").lower()
+    if suffix.startswith("/.cargo/registry/src/") and ".rs" in suffix:
+        return "RUST_REGISTRY_SOURCE"
+    if re.search(r"\.(?:c|cc|cpp|h|hpp)$", suffix):
+        return "NATIVE_C_SOURCE_PATH"
+    return "UNKNOWN"
 
 
 def scan_archive_or_payload(data: bytes, patterns: dict[str, bytes], payload: str,

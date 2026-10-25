@@ -168,4 +168,25 @@ expect_failure 'Cargo version is empty' \
     bash "$script_dir/lib.sh" "$cargo_empty_output"
 test ! -e "$cargo_empty_output"
 
-printf '%s\n' 'packaging path and build-info targeted tests passed'
+mime_definitions="$test_root/freedesktop.org.xml"
+printf '%s\n' \
+  '<?xml version="1.0" encoding="UTF-8"?>' \
+  '<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">' \
+  '<mime-type type="application/x-fura-mime-regression"><glob pattern="*.fura-mime-regression"/></mime-type>' \
+  '</mime-info>' > "$mime_definitions"
+mime_appdir="$test_root/mime-appdir"
+mkdir "$mime_appdir"
+stage_appimage_mime_database "$mime_appdir" "$mime_definitions"
+test -s "$mime_appdir/usr/share/mime/mime.cache"
+grep -aq 'application/x-fura-mime-regression' "$mime_appdir/usr/share/mime/mime.cache"
+
+printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$fake_bin/update-mime-database"
+chmod 0755 "$fake_bin/update-mime-database"
+# A successful tool exit without the actual cache must not pass packaging.
+# shellcheck disable=SC2016
+expect_failure 'AppImage MIME cache missing or empty' \
+  env PATH="$fake_bin:$PATH" bash -c \
+    'source "$1"; stage_appimage_mime_database "$2" "$3"' \
+    bash "$script_dir/lib.sh" "$test_root/empty-mime-appdir" "$mime_definitions"
+
+printf '%s\n' 'packaging path, build-info and MIME-cache targeted tests passed'

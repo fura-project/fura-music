@@ -6,13 +6,17 @@ import contextlib
 import hashlib
 import io
 import json
+import os
+import shutil
+import shlex
 import sys
 import struct
+import subprocess
 import tempfile
 import unittest
 import zipfile
 from contextlib import nullcontext
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest.mock import patch
 
 
@@ -74,6 +78,209 @@ def runtime_macho_fixture(content: bytes, target: int = 8) -> bytes:
 
 
 class PrivacyAuditTests(unittest.TestCase):
+    def test_macos_invalid_slice_extent_is_classified_as_format_not_dyld(self) -> None:
+        data = struct.pack(">II", 0xcafebabe, 1) + struct.pack(">IIIII", 0x1000007, 3, 4096, 32, 0)
+        with tempfile.TemporaryDirectory() as directory:
+            binary = Path(directory) / "malformed"
+            binary.write_bytes(data)
+            with self.assertRaisesRegex(RuntimeError, "MACHO_FORMAT_OR_SLICES_INVALID"):
+                mac_strip.native_snapshot(binary)
+
+    def test_windows_native_build_script_fingerprint_must_record_selected_compiler_and_maps(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env = {}
+            with patch.object(privacy_build.shutil, "which", return_value="clang-cl"):
+                privacy_build.windows_aws_lc_environment(env, Path("/source"), Path("/builder"))
+            with self.assertRaisesRegex(RuntimeError, "NOT_APPLIED"):
+                privacy_build.verify_windows_aws_lc_flags(root, env)
+            record = root / "x86_64-pc-windows-msvc/release/.fingerprint/aws-lc-sys-hash/run-build-script-build-script-main.json"
+            record.parent.mkdir(parents=True)
+            values = [{"RerunIfEnvChanged": {"var": key, "val": value}} for key, value in env.items()]
+            for local in ([], values):
+                record.write_text(json.dumps({"local": local}))
+                if not local:
+                    with self.assertRaisesRegex(RuntimeError, "NOT_APPLIED"):
+                        privacy_build.verify_windows_aws_lc_flags(root, env)
+                else:
+                    with contextlib.redirect_stdout(io.StringIO()) as output:
+                        privacy_build.verify_windows_aws_lc_flags(root, env)
+                    self.assertNotIn("/builder", output.getvalue())
+
+    def test_windows_native_maps_are_scoped_to_aws_lc_and_preserve_caller_flags(self) -> None:
+        environment = {"CC": "unchanged-default-compiler", "CFLAGS": "/DKEEP=1"}
+        with patch.object(privacy_build.shutil, "which", return_value="clang-cl"):
+            privacy_build.native_build_environment(environment, "windows", Path("/source with spaces"), Path("/builder"))
+        self.assertEqual(environment["CC"], "unchanged-default-compiler")
+        self.assertEqual(environment["CFLAGS"], "/DKEEP=1")
+        flags = shlex.split(environment["AWS_LC_SYS_HOST_CFLAGS_x86_64_pc_windows_msvc"])
+        self.assertIn("/DKEEP=1", flags)
+        self.assertIn("/clang:-ffile-prefix-map=/source with spaces=/fura-source", flags)
+        self.assertEqual(environment["AWS_LC_SYS_CMAKE_BUILDER"], "0")
+        with patch.object(privacy_build.shutil, "which", return_value=None):
+            with self.assertRaisesRegex(SystemExit, "CLANG_CL_REQUIRED"):
+                privacy_build.native_build_environment({}, "windows", Path("/source"), Path("/builder"))
+
+    @unittest.skipUnless(shutil.which("clang-cl") and shutil.which("lld-link"), "requires clang-cl/lld-link")
+    def test_native_c_file_macro_in_real_pe_requires_native_not_rust_maps(self) -> None:
+        # Actual MSVC-target PE generation on the local host; NOT a native
+        # Windows Fura build. No CRT/SDK or upstream crypto replacement.
+        with tempfile.TemporaryDirectory(prefix="fura native PE ") as directory:
+            root = Path(directory)
+            home = root / "synthetic builder"
+            home.mkdir()
+            source = home / "dependency.c"
+            source.write_text('#define WIDE_(x) L##x\n#define WIDE(x) WIDE_(x)\n'
+                              '__declspec(dllexport) const char *build_file(void) { return __FILE__; }\n'
+                              '__declspec(dllexport) const unsigned short *wide_file(void) { return WIDE(__FILE__); }')
+            obj, dll = root / "dependency.obj", root / "dependency.dll"
+            env = dict(os.environ, CARGO_ENCODED_RUSTFLAGS=privacy_build.encoded_rust_flags("", root, home))
+            configured = {}
+            privacy_build.windows_aws_lc_environment(configured, root, home)
+            maps = shlex.split(configured["AWS_LC_SYS_HOST_CFLAGS_x86_64_pc_windows_msvc"])
+            for flags, rejected in (([], True), (maps, False)):
+                subprocess.run(["clang-cl", "--target=x86_64-pc-windows-msvc", "/nologo", "/c",
+                                *flags, "/Fo" + str(obj), "--", str(source)],
+                               env=env, check=True, capture_output=True)
+                subprocess.run(["lld-link", "/dll", "/noentry", "/nodefaultlib", "/out:" + str(dll), str(obj)],
+                               check=True, capture_output=True)
+                data = dll.read_bytes()
+                self.assertEqual(native_sections.sections(data)[0], "PE")
+                diagnostics = []
+                findings = artifact_audit.scan_file(dll, artifact_audit.forbidden_patterns([str(home), str(root)]), diagnostics)
+                self.assertEqual(bool(findings), rejected)
+                if rejected:
+                    self.assertEqual({d["section"] for d in diagnostics}, {".rdata"})
+                    self.assertTrue({"utf-8", "utf-16le"}.issubset({d["pattern_encoding"] for d in diagnostics}))
+                    self.assertEqual({d["origin_hint"] for d in diagnostics}, {"NATIVE_C_SOURCE_PATH"})
+                if not rejected:
+                    self.assertTrue(b"/fura-build" in data.replace(b"\\", b"/"), "native source map was not emitted")
+
+    @unittest.skipUnless(shutil.which("cargo") and shutil.which("rustc"), "requires installed Cargo/rustc")
+    def test_real_cargo_preserves_encoded_flags_in_target_fingerprint_and_cdylib(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="fura cargo privacy ") as directory:
+            root = Path(directory)
+            source = root / "source"
+            home = root / "synthetic builder"
+            dependency = home / ".cargo/registry/src/synthetic-dependency"
+            for path in (source, dependency):
+                path.mkdir(parents=True)
+            (dependency / "Cargo.toml").write_text('[package]\nname="synthetic-dependency"\nversion="0.0.0"\n[lib]\npath="lib.rs"\n')
+            (dependency / "lib.rs").write_text("pub fn source() -> &'static str { file!() }")
+            (source / "Cargo.toml").write_text('[package]\nname="privacy-probe"\nversion="0.0.0"\n[lib]\npath="lib.rs"\ncrate-type=["cdylib"]\n[dependencies]\nsynthetic-dependency={path="' + dependency.as_posix() + '"}\n[workspace]\n')
+            (source / "lib.rs").write_text('#[unsafe(no_mangle)] pub fn source() -> &\'static str { synthetic_dependency::source() }')
+            host = next(line.split(": ", 1)[1] for line in subprocess.check_output(["rustc", "-vV"], text=True).splitlines() if line.startswith("host: "))
+            flags = privacy_build.encoded_rust_flags("", source, home,
+                                                    "windows" if sys.platform == "win32" else "linux")
+            env = dict(os.environ, CARGO_ENCODED_RUSTFLAGS=flags)
+            subprocess.run(["cargo", "build", "--offline", "--release", "--target", host,
+                            "--target-dir", str(root / "target")], cwd=source, env=env,
+                           check=True, capture_output=True)
+            fingerprint = next((root / "target" / host).rglob("lib-privacy_probe.json"))
+            self.assertEqual(json.loads(fingerprint.read_text())["rustflags"], flags.split("\x1f"))
+            library = next(p for p in fingerprint.parents[2].glob("*privacy_probe*") if p.suffix in (".so", ".dylib", ".dll"))
+            self.assertTrue(b"/fura-build" in library.read_bytes(), "mapped Rust source name was not emitted")
+            self.assertFalse(artifact_audit.scan_file(library, artifact_audit.forbidden_patterns([str(home), str(source)])))
+
+    def test_stabs_removal_and_string_relocation_preserve_runtime_fingerprint(self) -> None:
+        runtime_names = b"\0_alias\0_target\0_other\0"
+        debug_name = b"synthetic-debug-object.o\0"
+        names = runtime_names + debug_name
+        header = struct.pack("<IIIIIIII", 0xfeedfacf, 0x1000007, 3, 6, 1, 24, 0, 0)
+        command = struct.pack("<IIIIII", 2, 24, 56, 2, 88, len(names))
+        alias = struct.pack("<IBBHQ", 1, 0xb, 0, 0, 8)
+        debug = struct.pack("<IBBHQ", len(runtime_names), 0x66, 0, 1, 123)
+        before = header + command + debug + alias + names
+        after = indirect_macho_fixture()
+        self.assertTrue(mac_strip.has_debug(before))
+        self.assertFalse(mac_strip.has_debug(after))
+        self.assertEqual(native_sections.macho_linkedit_fingerprint(before),
+                         native_sections.macho_linkedit_fingerprint(after))
+        # No broad exclusion of the symbol table: aliases, runtime flags and
+        # CPU identities still change the fingerprint.
+        for change in ("weak-definition", "alias-target"):
+            changed = bytearray(alias)
+            if change == "weak-definition":
+                changed[6] = 0x80  # N_WEAK_DEF, runtime meaning
+            else:
+                struct.pack_into("<Q", changed, 8, 16)  # different alias target
+            altered = header + command + debug + changed + names
+            self.assertNotEqual(native_sections.macho_linkedit_fingerprint(before),
+                                native_sections.macho_linkedit_fingerprint(altered))
+
+    def test_macos_contract_diagnostics_classify_every_invariant_without_values(self) -> None:
+        before = dict(shape=("thin64", 1), loadable="hash1", linkedit="hash2",
+                      exports=b"private symbol", architectures=b"arm64", links=b"private path", debug=True)
+        after = dict(before, debug=False)
+        self.assertEqual(mac_strip.contract_failures(before, after), [])
+        categories = {"shape": "MACHO_FORMAT_OR_SLICES_CHANGED", "loadable": "LOADABLE_SECTIONS_CHANGED",
+                      "linkedit": "LINKEDIT_OR_DYLD_CHANGED", "exports": "EXPORTED_SYMBOLS_CHANGED",
+                      "architectures": "CPU_ARCHITECTURES_CHANGED", "links": "DYLIB_DEPENDENCY_OR_INSTALL_NAME_CHANGED"}
+        for field, category in categories.items():
+            with self.subTest(field=field):
+                self.assertEqual(mac_strip.contract_failures(before, dict(after, **{field: "changed-private-value"})), [category])
+        self.assertEqual(mac_strip.contract_failures(before, before), ["DEBUG_METADATA_REMAINS"])
+        self.assertEqual(len(mac_strip.contract_failures(before, dict.fromkeys(before, "changed"))), 7)
+
+    def test_cargo_fingerprint_checks_actual_target_flags_and_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            expected = "--remap-path-prefix=C:/Users/Builder=/fura-build\x1f-C\x1flink-arg=/PDBALTPATH:%_PDB%"
+            with self.assertRaisesRegex(RuntimeError, "EVIDENCE_MISSING"):
+                privacy_build.verify_windows_cargo_flags(root, expected)
+            fingerprint = root / "plugins/rust/cargokit_build/x86_64-pc-windows-msvc/release/.fingerprint/rust_lib_flutterustmusic-hash/lib-rust_lib_flutterustmusic.json"
+            fingerprint.parent.mkdir(parents=True)
+            for value in ("invalid-json", '{}', '[]', 'null', '{"rustflags": []}'):
+                fingerprint.write_text(value)
+                with self.assertRaises(RuntimeError):
+                    privacy_build.verify_windows_cargo_flags(root, expected)
+            fingerprint.write_text(json.dumps({"rustflags": expected.split("\x1f")}))
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                privacy_build.verify_windows_cargo_flags(root, expected)
+            self.assertIn("PRIVATE_RUST_FLAGS_VERIFIED", output.getvalue())
+            self.assertNotIn("C:/Users", output.getvalue())
+
+    def test_path_origin_diagnostics_are_fixed_hints_not_audit_exemptions(self) -> None:
+        patterns = artifact_audit.forbidden_patterns(["C:/Users/Builder"])
+        for data, hint in ((b"C:/Users/Builder/.cargo/registry/src/hash/dependency/src/lib.rs", "RUST_REGISTRY_SOURCE"),
+                           (b"RSDS" + bytes(20) + b"C:/Users/Builder/output.pdb\0", "PE_CODEVIEW_PDB")):
+            start = data.index(b"C:/Users")
+            self.assertEqual(artifact_audit.path_origin_hint(data, start, start + len(b"C:/Users/Builder"), "PE"), hint)
+            self.assertTrue(artifact_audit.scan_payload(data, patterns, "rust.dll"))
+
+    def test_windows_remapping_covers_cargo_slash_spellings(self) -> None:
+        class WindowsRoot(PureWindowsPath):
+            def resolve(self):
+                return self
+
+        flags = privacy_build.encoded_rust_flags(
+            "", WindowsRoot("D:/a/fura/fura"), WindowsRoot("C:/Users/CI Builder"),
+            "windows").split("\x1f")
+        for root, replacement in (("C:/Users/CI Builder", "/fura-build"),
+                                  ("D:/a/fura/fura", "/fura-source")):
+            for spelling in (root, root.replace("/", "\\")):
+                self.assertIn(f"--remap-path-prefix={spelling}={replacement}", flags)
+
+    @unittest.skipUnless(shutil.which("rustc"), "requires installed rustc")
+    def test_actual_rustc_textual_remap_requires_both_separator_spellings(self) -> None:
+        # Linux compiler evidence for Rust's textual remapper, NOT MSVC proof.
+        # The source filename itself deliberately uses Windows-style spelling.
+        if sys.platform == "win32":
+            self.skipTest("synthetic colon filename is a Unix-only fixture")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "C:/Users/CI Builder/registry/source.rs"
+            source.parent.mkdir(parents=True)
+            source.write_text("#[unsafe(no_mangle)] pub fn source() -> &'static str { file!() }")
+            output = root / "source.ll"
+            for prefixes, contains_private in ((["C:\\Users\\CI Builder"], True),
+                                               (["C:\\Users\\CI Builder", "C:/Users/CI Builder"], False)):
+                subprocess.run(["rustc", "--crate-type=lib", "--emit=llvm-ir",
+                                *[f"--remap-path-prefix={p}=/fura-build" for p in prefixes],
+                                "C:/Users/CI Builder/registry/source.rs", "-o", str(output)],
+                               cwd=root, check=True, capture_output=True)
+                self.assertEqual(b"C:/Users/CI Builder" in output.read_bytes(), contains_private)
+
     def test_macos_upstream_classification_rejects_altered_runtime_linkedit(self) -> None:
         text = b"public upstream /Users/runner/config\0"
         data = runtime_macho_fixture(text)
@@ -148,6 +355,7 @@ class PrivacyAuditTests(unittest.TestCase):
                 with (patch.object(mac_strip.sys, "platform", "darwin"),
                       patch.object(mac_strip, "has_debug", side_effect=lambda d: d == b"xdebug"),
                       patch.object(mac_strip, "sections", return_value=("Mach-O", [native_sections.Section("__TEXT,__text", 0, 1)])),
+                      patch.object(mac_strip, "container_shape", return_value=("thin64", 1)),
                       patch.object(mac_strip, "macho_linkedit_fingerprint", return_value="stable-aliases"),
                       patch.object(mac_strip, "command", fake_command),
                       contextlib.redirect_stdout(io.StringIO())):

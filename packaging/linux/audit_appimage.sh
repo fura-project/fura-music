@@ -11,6 +11,7 @@ report_directory=$2
 require_directory "$appdir"
 require_file "$appdir/AppRun"
 validate_bundle_shape "$appdir/usr/lib/flutterustmusic"
+test -s "$appdir/usr/share/mime/mime.cache" || die 'AppImage MIME cache missing or empty'
 mkdir -p "$report_directory"
 
 find "$appdir" -printf '%y %P %s bytes\n' | sort \

@@ -29,7 +29,8 @@ while IFS= read -r -d '' bundled_file; do
   if test -n "$owner"; then
     printf '%s\n' "${owner%%:*}" >> "$package_list"
   fi
-done < <(find "$appdir/usr/lib" "$appdir/usr/libexec" -type f -print0 2>/dev/null || true)
+done < <(find "$appdir/usr/lib" "$appdir/usr/libexec" \
+  "$appdir/usr/share/mime/packages" -type f -print0 2>/dev/null || true)
 
 sort -u "$package_list" -o "$package_list"
 while IFS= read -r package; do
