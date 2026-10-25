@@ -1025,6 +1025,17 @@ jobs:
         working-directory: apps/flutter
         run: flutter pub get
 
+      - name: Verify native macOS debug-strip contract
+        run: |
+          test "$(uname -s)" = Darwin
+          if ! xcrun --find clang > /dev/null 2>&1 ||
+             ! xcrun --find strip > /dev/null 2>&1; then
+            printf '%s\n' 'NATIVE_MACOS_XCODE_TOOLS_UNAVAILABLE' >&2
+            exit 1
+          fi
+          python3 scripts/ci/test_privacy_audits.py \
+            PrivacyAuditTests.test_native_macos_debug_strip_sign_load_and_zip_privacy
+
       - name: Build macOS Release app
         working-directory: apps/flutter
         run: python3 ../../scripts/ci/build_flutter_with_privacy.py macos --release

@@ -3,13 +3,44 @@ execution:
   mode: HUMAN_DIRECTED
   work_domain: CORE
   state: BLOCKED
-  acceptance_milestone: CROSS_PLATFORM_DEVELOPMENT_PACKAGE_NATIVE_ACCEPTANCE
-  active_workstream: CI_PACKAGING_PRIVACY_AND_SANDBOX
-  current_task: LOCAL_BUILD_MAP_AND_SANDBOX_FIXES_NATIVE_GATES_OPEN
-  next_action: AUTHORIZED_WINDOWS_MACOS_AND_NATIVE_APPIMAGE_RUNNER_VERIFICATION
+  acceptance_milestone: MACOS_RELEASE_DEBUG_METADATA_NATIVE_ACCEPTANCE
+  active_workstream: MACOS_RELEASE_DEBUG_METADATA
+  current_task: APPLE_COMPATIBILITY_MARKER_DETECTOR_FIX_VERIFIED_OFFLINE
+  next_action: AUTHORIZED_NATIVE_MACOS_FIXTURE_RELEASE_AND_ZIP_VERIFICATION
 ---
 
 # Current State
+
+- **2026-10-25 Human-directed Core / macOS Run-30 follow-up:** clean local
+  `3d2f4c2` was fast-forwarded to the requested `f238820` baseline after inspecting
+  its action-pin-only changes. Run `40188843560` confirms a successful 137.3 MB
+  Release build and only `DEBUG_METADATA_REMAINS`; the failed app was not uploaded.
+  Apple's pinned cctools source and the independently verified media archive
+  prove that its exact dyld compatibility `N_OPT` record is not source debug
+  metadata, despite setting `N_STAB` bits. The old predicate misclassifies six
+  real marker-only universal binaries, including the pinned Avcodec payload.
+  The candidate recognizes only the complete record and valid local/indirect
+  context; DWARF, real STABS, altered records and private paths remain rejected.
+
+  Diagnostics now separate per-architecture DWARF/STABS states without filenames,
+  symbols or tool output. Existing runtime/upstream fingerprints remain strict;
+  an independent indirect-table target guard closes a demonstrated blind spot
+  without changing committed upstream hashes. Preparation works on a private
+  copy, validates ad-hoc identity, signs inner-to-outer, strictly verifies and
+  rechecks runtime contracts before replacement. Failure/interruption rollback
+  and retained backup on rollback failure are tested. No stronger strip flags,
+  Xcode settings, privacy whitelist or other-platform implementation changed.
+
+  A native-only universal executable/framework compile-strip-sign-load-ZIP test
+  is wired into the macOS job before Release build. Linux deterministic gates
+  pass, but that test and the real Release app/ZIP remain
+  **NATIVE_MACOS_CI_NOT_RUN**. The original first object's exact identity is not
+  recoverable from the old ordinal-only log; no native acceptance is inferred.
+  See [macOS root cause, regression and exact native commands](docs/development/macos-debug-metadata-2026-10-25.md).
+  This is a verified offline code-fix candidate, not **COMPLETE**. The
+  implementation phase performed no Git publication or remote Actions run.
+  Human subsequently authorized the normal Git checkpoint and push; this does
+  not close the native acceptance gate or authorize a manual Actions run.
 
 - **2026-10-25 Human-directed Core / cross-platform CI follow-up:** inspected
   run `40162179664` at `2cec96a` without changing clean local HEAD `f50c987`.

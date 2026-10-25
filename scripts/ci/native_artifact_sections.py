@@ -124,6 +124,29 @@ def loadable_fingerprint(data: bytes, ranges: list[Section]) -> str:
     return digest.hexdigest()
 
 
+def macho_slices(data: bytes) -> list[bytes]:
+    """Validated 64-bit slices; offsets in each returned slice start at zero."""
+    slices = [data]
+    if data[:4] == b"\xca\xfe\xba\xbe":
+        count = struct.unpack_from(">I", data, 4)[0]
+        if not 0 < count <= 16:
+            raise ValueError("invalid Mach-O slice count")
+        slices = []
+        occupied = []
+        for i in range(count):
+            _, _, offset, size, _ = struct.unpack_from(">IIIII", data, 8 + i * 20)
+            if (offset < 8 + count * 20 or size < 32 or offset + size > len(data)
+                    or any(a < offset + size and offset < b for a, b in occupied)):
+                raise ValueError("invalid Mach-O slice extent")
+            occupied.append((offset, offset + size))
+            slices.append(data[offset:offset + size])
+    for slice_data in slices:
+        if slice_data[:4] != b"\xcf\xfa\xed\xfe":
+            raise ValueError("unsupported Mach-O runtime contract")
+        _mach_sections(slice_data, 0, 0)  # validates all command/table ranges
+    return slices
+
+
 def macho_linkedit_fingerprint(data: bytes) -> str:
     """Dyld data, external symbols and alias targets are ABI, not debug metadata.
 
@@ -131,22 +154,8 @@ def macho_linkedit_fingerprint(data: bytes) -> str:
     string-table index of an indirect export. Ignore physical table offsets,
     but require these runtime meanings to survive exactly, per architecture.
     """
-    slices = [data]
-    if data[:4] == b"\xca\xfe\xba\xbe":
-        count = struct.unpack_from(">I", data, 4)[0]
-        if count > 16:
-            raise ValueError("invalid Mach-O slice count")
-        slices = []
-        for i in range(count):
-            _, _, offset, size, _ = struct.unpack_from(">IIIII", data, 8 + i * 20)
-            if offset + size > len(data):
-                raise ValueError("invalid Mach-O slice extent")
-            slices.append(data[offset:offset + size])
     digest = hashlib.sha256()
-    for slice_data in slices:
-        if slice_data[:4] != b"\xcf\xfa\xed\xfe":
-            raise ValueError("unsupported Mach-O runtime contract")
-        _mach_sections(slice_data, 0, 0)  # validates all command/table ranges
+    for slice_data in macho_slices(data):
         digest.update(slice_data[4:16])  # CPU/subtype/file type
         count = struct.unpack_from("<I", slice_data, 16)[0]
         pos = 32
@@ -182,4 +191,53 @@ def macho_linkedit_fingerprint(data: bytes) -> str:
             pos += size
         for name, kind, section, description, value in sorted(symbols):
             digest.update(name + b"\0" + struct.pack("<BBH", kind, section, description) + value + b"\0")
+    return digest.hexdigest()
+
+
+def macho_indirect_fingerprint(data: bytes) -> str:
+    """Preserve indirect-table targets, allowing strip to renumber nlist entries.
+
+    Separate from the pinned upstream LINKEDIT fingerprint so its policy and
+    recorded digests remain unchanged. LOCAL/ABS sentinels are runtime values,
+    not indexes. Normal targets include full symbol and N_INDR alias meaning.
+    """
+    digest = hashlib.sha256()
+    for slice_data in macho_slices(data):
+        digest.update(slice_data[4:16])
+        _, ranges = sections(slice_data)
+        symbol_table = next((s for s in ranges if s.name == "symbol-table"), None)
+        strings = next((s for s in ranges if s.name == "symbol-strings"), None)
+        names = slice_data[strings.offset:strings.offset + strings.size] if strings is not None else b""
+        def symbol_name(at: int) -> bytes:
+            end = names.find(b"\0", at) if at < len(names) else -1
+            if end < 0:
+                raise ValueError("invalid indirect symbol name")
+            return names[at:end]
+        pos = 32
+        for _ in range(struct.unpack_from("<I", slice_data, 16)[0]):
+            command, size = struct.unpack_from("<II", slice_data, pos)
+            if command == 0xb:  # LC_DYSYMTAB
+                if size != 80:
+                    raise ValueError("invalid dynamic symbol command")
+                offset, count = struct.unpack_from("<II", slice_data, pos + 56)
+                if offset + count * 4 > len(slice_data):
+                    raise ValueError("invalid indirect table extent")
+                digest.update(struct.pack("<I", count))
+                for index in range(count):
+                    target = struct.unpack_from("<I", slice_data, offset + index * 4)[0]
+                    if target & 0xc0000000:
+                        if target not in (0x80000000, 0x40000000, 0xc0000000):
+                            raise ValueError("invalid indirect special target")
+                        digest.update(b"special" + struct.pack("<I", target))
+                        continue
+                    if symbol_table is None or strings is None or target >= symbol_table.size // 16:
+                        raise ValueError("invalid indirect symbol index")
+                    name, kind, section, description, value = struct.unpack_from(
+                        "<IBBHQ", slice_data, symbol_table.offset + target * 16)
+                    if kind & 0xe0:
+                        raise ValueError("indirect target is a debug record")
+                    target_value = symbol_name(value) if kind & 0xe == 0xa else str(value).encode()
+                    digest.update(b"symbol" + symbol_name(name) + b"\0"
+                                  + struct.pack("<BBH", kind, section, description) + target_value + b"\0")
+            pos += size
     return digest.hexdigest()
