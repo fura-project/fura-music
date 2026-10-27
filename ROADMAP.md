@@ -37,6 +37,13 @@ requirements and KuGou's ordinary device/session/media contract remain separate
 unresolved gates.
 See [the source audit and acceptance matrix](docs/research/provider-playback-session-audit-2026-10-06.md).
 
+**KuGou offline follow-up (2026-10-27):** the Human-authorized authenticated
+Standard investigation now has a [pinned route comparison and capture-only
+official-Web candidate](docs/research/kugou-authenticated-standard-v1.md), with
+one-shot session-generation guards and a prepared maintainer gate. No live
+window, automatic signer, verified-account/vault, production resolver or third
+UI service is activated; HD-031's supplement is a draft, not production approval.
+
 The next bounded foundation is also implemented offline. QQ `loginType=2` has
 one explicit `LoginServer/Login` request shape, complete material checks,
 typed risk outcomes and the same Provider/vault lifecycle tests, but its

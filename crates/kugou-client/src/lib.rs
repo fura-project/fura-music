@@ -9,6 +9,8 @@ mod profile;
 mod search;
 mod transport;
 
+pub mod web_playback_candidate;
+
 pub use catalog::{Ranking, RankingCollection, RankingPage, TrackDetails};
 pub use lyrics::{LyricLine, Lyrics};
 pub use search::{Album, Artist, SearchPage, SearchTrack};

@@ -1,5 +1,7 @@
 //! Provider-neutral mapping for the bounded `KuGou` public client.
 
+pub mod web_playback_candidate;
+
 use kugou_client::{Error, KuGouClient, SearchTrack, TrackDetails, Transport};
 use music_domain::{
     AlbumId, AlbumSummary, ArtistId, ArtistSummary, ProviderId, RankingGroup,

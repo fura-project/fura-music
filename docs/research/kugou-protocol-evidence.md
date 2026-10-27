@@ -4,6 +4,16 @@ Status: active bounded research for HD-031
 
 Last updated: 2026-09-27
 
+## 2026-10-27 authenticated Standard follow-up
+
+The dated public-only investigation below is retained, including the closed
+anonymous budget. A new Human task authorizes **offline authenticated-Web
+research and a disconnected capture-only candidate**, not live login or
+production activation. See the [current pinned route comparison, implementation
+and HD-031 supplement draft](kugou-authenticated-standard-v1.md). The draft is
+not an accepted product decision. No KuGou service request was made; normal
+Provider capability and UI exposure remain unchanged.
+
 Implementation rule: independent Rust, direct HTTPS, no sidecar and no copied
 third-party source.
 

@@ -3,13 +3,55 @@ execution:
   mode: HUMAN_DIRECTED
   work_domain: CORE
   state: BLOCKED
-  acceptance_milestone: MACOS_RELEASE_DEBUG_METADATA_NATIVE_ACCEPTANCE
-  active_workstream: MACOS_RELEASE_DEBUG_METADATA
-  current_task: APPLE_COMPATIBILITY_MARKER_DETECTOR_FIX_VERIFIED_OFFLINE
-  next_action: AUTHORIZED_NATIVE_MACOS_FIXTURE_RELEASE_AND_ZIP_VERIFICATION
+  acceptance_milestone: KUGOU_AUTHENTICATED_STANDARD_HUMAN_GATE
+  active_workstream: KUGOU_AUTHENTICATED_STANDARD_OFFLINE_CANDIDATE
+  current_task: OFFICIAL_WEB_CAPTURE_ONLY_CANDIDATE_VERIFIED_OFFLINE
+  next_action: SEPARATELY_AUTHORIZED_MAINTAINER_WEB_CONTEXT_AND_STANDARD_SOURCE_GATE
 ---
 
 # Current State
+
+- **2026-10-27 Human-directed Core / KuGou authenticated Standard V1:** clean
+  baseline `6f67814`; current task changes direction from exhausted anonymous
+  media probing to offline authenticated-Web evidence. Six exact repositories
+  were inspected (the five selected clients plus their MakcRe wire family).
+  Echo's server gitlink equals the inspected MakcRe commit, not an independent
+  protocol source. Aerome generates persistent mid/dfid and a Web signature;
+  it is not Cookie-only. The current authorized-app chain includes explicit
+  HTTP stages; .NET v5 still requires profile/session-derived signing, and
+  music-lib's Web variant is two-hop rather than Aerome's hash/Album one-hop.
+
+  A disconnected independent Rust candidate validates an already website-
+  generated single songinfo request. No signer/device generator, real account
+  operation, production resolver/capability, Vault, Bridge or Flutter route is
+  added. The existing public Transport and QQ/NetEase/macOS/other platform code
+  are preserved. One Rust owner holds Pending material, consumes its experiment
+  attempt before await and rejects stale logout/replacement/relogin results.
+  Restaging does not refill the budget. Full Standard/HTTPS/rights/identity
+  evidence is mandatory; risk/limit stops dominate ordinary error fields.
+
+  The manual tool is default-NOT_RUN, interactive/explicit-budget only, uses
+  hidden input without an echoing fallback and retains no private artifact.
+  It has no independently proved Web AccountSummary request; Human account
+  confirmation and request authorization are not mislabeled Authentication.
+  Automatic request generation, official-context provenance and real playback
+  remain unproved. The [route report and unaccepted HD-031 draft](docs/research/kugou-authenticated-standard-v1.md)
+  and [exact Human gate](docs/development/kugou-authenticated-standard-gate.md)
+  preserve these boundaries. Existing macOS native acceptance below remains open.
+
+  Validation: `cargo fmt --all -- --check`; locked all-target tests for
+  `kugou-client`/`provider-kugou` (34 pass, 2 default ignores); explicit offline
+  loopback TLS regression (1 additional pass, no KuGou DNS/service access);
+  strict all-target Clippy for both crates; 4 Python consent/privacy tests;
+  default wrapper and compiled Rust example both return NOT_RUN; source privacy,
+  application identity and `git diff --check` pass. The TLS fixture initially
+  failed certificate validation; its end-entity certificate correction retains
+  TLS verification. Prefix tests also reject ID3-only/non-audio data rather than
+  calling a label “usable media.” No Provider API/Bridge/Flutter production
+  signature changed, so no FRB generation or unrelated platform build is claimed.
+  The implementation phase performed no commit/push or Actions run. Human
+  subsequently authorized the normal Git checkpoint and push; that does not
+  authorize the live gate, production activation or a manual Actions run.
 
 - **2026-10-25 Human-directed Core / macOS Run-30 follow-up:** clean local
   `3d2f4c2` was fast-forwarded to the requested `f238820` baseline after inspecting

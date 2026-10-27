@@ -19,6 +19,11 @@ other service.
 
 ## KuGou production gate
 
+2026-10-27: the separately authorized [authenticated Standard offline
+candidate](../research/kugou-authenticated-standard-v1.md) does not change this
+gate. It is capture-only, has no verified account/vault or production resolver,
+and has made no live request. No third login UI or built-in inventory is added.
+
 The Core now contains a third provider-owned public read slice under
 `kugou-music`: existing Track Search, exact Track detail, Rankings and
 line-timed LRC. Its versioned opaque Track identity keeps `MixSongID` canonical
