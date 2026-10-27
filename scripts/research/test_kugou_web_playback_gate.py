@@ -1,87 +1,132 @@
-"""Offline guard/privacy checks; no account input or service requests."""
+"""Offline rejection/privacy checks for the retired standalone wrapper."""
+
+import ast
 import contextlib
-import getpass
 import io
-import json
+import os
+from pathlib import Path
 import sys
-from types import SimpleNamespace
 import unittest
-import warnings
 from unittest.mock import patch
 
-import kugou_web_playback_gate as gate
+
+EXPECTED = "KUGOU_GATE result=NOT_RUN reason=RUST_CALLER_REQUIRED\n"
+PRIVATE = "synthetic-private-sentinel"
+INVOCATIONS = (
+    (),
+    ("--human-authorized-once",),
+    ("--probe-range",),
+    ("--human-authorized-once", "--probe-range"),
+    ("--probe-range", "--human-authorized-once"),
+    ("--human-authorized-once", "--human-authorized-once", "--probe-range"),
+    ("--human-authorized-once=false", "--probe-range=true"),
+    ("--help",),
+    ("-h",),
+    ("--unknown", PRIVATE),
+    ("--cookie", "KugooID=42; t=" + PRIVATE),
+    ("--signed-url", "https://synthetic.invalid/songinfo?token=" + PRIVATE),
+    ("--token=" + PRIVATE,),
+    ("--track-opaque", PRIVATE),
+    ("--approved-media-host", "synthetic.invalid"),
+    ("--track-id", PRIVATE),
+    ("--current-track-id-file", "/synthetic/" + PRIVATE),
+    ("--export-current-track-id",),
+    ("--lookup", PRIVATE),
+    ("--human-authorized-once", "--probe-range", PRIVATE),
+    ("--", "https://synthetic.invalid/media?token=" + PRIVATE),
+)
 
 
 class GateTests(unittest.TestCase):
-    def test_default_and_noninteractive_entry_do_not_build_collect_or_request(self):
-        for argv in [["gate"], ["gate", "--human-authorized-once"]]:
-            with (patch.object(sys, "argv", argv),
-                  patch.object(sys.stdin, "isatty", return_value=False),
-                  patch.object(gate.subprocess, "run") as run,
-                  patch.object(gate.getpass, "getpass") as secret,
-                  contextlib.redirect_stdout(io.StringIO()) as output):
-                self.assertIn(gate.main(), (0, 1))
-            run.assert_not_called()
-            secret.assert_not_called()
-            self.assertIn("result=NOT_RUN", output.getvalue())
+    @classmethod
+    def setUpClass(cls):
+        script = Path(__file__).with_name("kugou_web_playback_gate.py")
+        cls.source = script.read_text(encoding="utf-8")
+        cls.code = compile(cls.source, str(script), "exec")
 
-    def test_hidden_input_refuses_echoing_fallback(self):
-        def fallback(_prompt):
-            warnings.warn("terminal unavailable", getpass.GetPassWarning)
-            self.fail("must not proceed to echoing input")
-        with patch.object(gate.getpass, "getpass", fallback):
-            with self.assertRaises(getpass.GetPassWarning):
-                gate.hidden("synthetic prompt")
+    def setUp(self):
+        self.output = self.enterContext(contextlib.redirect_stdout(io.StringIO()))
+        self.error = self.enterContext(contextlib.redirect_stderr(io.StringIO()))
+        # Compile before installing guards so even import-time behavior is checked.
+        self.guards = [
+            self.enterContext(patch(target, side_effect=AssertionError(target)))
+            for target in (
+                "builtins.input",
+                "builtins.open",
+                "io.open",
+                "os.open",
+                "os.getenv",
+                "getpass.getpass",
+                "subprocess.run",
+                "subprocess.Popen",
+                "os.system",
+                "os.popen",
+                "socket.socket",
+                "socket.create_connection",
+                "socket.getaddrinfo",
+                "urllib.request.urlopen",
+                "webbrowser.open",
+                "webbrowser.open_new",
+                "webbrowser.open_new_tab",
+                "webbrowser.get",
+            )
+        ]
+        self.stdin = self.enterContext(patch.object(sys, "stdin"))
+        self.enterContext(patch.object(sys, "__stdin__", self.stdin))
+        for method in ("read", "readline", "readlines"):
+            getattr(self.stdin, method).side_effect = AssertionError("stdin read")
+        self.enterContext(patch.dict(os.environ, {
+            "KUGOU_COOKIE": PRIVATE,
+            "KUGOU_TOKEN": PRIVATE,
+            "KUGOU_SIGNED_URL": "https://synthetic.invalid/?token=" + PRIVATE,
+            "KUGOU_TRACK_OPAQUE": PRIVATE,
+            "FURA_CURRENT_TRACK_ID_FILE": "/synthetic/" + PRIVATE,
+        }))
 
-    def test_declined_budget_never_builds_or_reads_secrets(self):
-        with (patch.object(sys, "argv", ["gate", "--human-authorized-once"]),
-              patch.object(sys.stdin, "isatty", return_value=True),
-              patch.object(sys.stderr, "isatty", return_value=True),
-              patch("builtins.input", return_value="NO"),
-              patch.object(gate.subprocess, "run") as run,
-              patch.object(gate, "hidden") as secret,
-              contextlib.redirect_stdout(io.StringIO()) as output):
-            self.assertEqual(gate.main(), 0)
-        run.assert_not_called()
-        secret.assert_not_called()
-        self.assertIn("CONSENT_NOT_GIVEN", output.getvalue())
+    def tearDown(self):
+        for guard in self.guards:
+            guard.assert_not_called()
+        self.assertEqual(self.stdin.mock_calls, [])
+        self.assertEqual(self.error.getvalue(), "")
 
-    def test_consented_wrapper_uses_stdin_only_clears_buffer_and_filters_child_output(self):
-        for child_output, expected in [
-            (b"KUGOU_GATE result=PASS scope=STANDARD_SOURCE_ONLY production_enabled=false\n", 0),
-            (b"Cookie=synthetic-private-secret\n", 1),
-        ]:
-            buffers = []
+    def test_source_has_no_secret_input_or_external_execution_path(self):
+        tree = ast.parse(self.source)
+        self.assertFalse(any(
+            isinstance(node, (ast.Import, ast.ImportFrom))
+            for node in ast.walk(tree)
+        ))
+        calls = [node.func for node in ast.walk(tree) if isinstance(node, ast.Call)]
+        self.assertTrue(all(isinstance(call, ast.Name) for call in calls))
+        self.assertEqual({call.id for call in calls}, {"print", "main", "SystemExit"})
 
-            def run(arguments, **options):
-                self.assertNotIn("synthetic-private-secret", " ".join(arguments))
-                self.assertNotIn("env", options)
-                if arguments[:2] == ["cargo", "build"]:
-                    self.assertNotIn("input", options)
-                    return SimpleNamespace(returncode=0)
-                if arguments[:2] == ["cargo", "metadata"]:
-                    return SimpleNamespace(returncode=0, stdout=b'{"target_directory":"/synthetic-target"}')
-                payload = options["input"]
-                self.assertIsInstance(payload, bytearray)
-                document = json.loads(payload)
-                self.assertEqual(document["cookie_header"], "KugooID=42; t=synthetic-private-secret")
-                self.assertTrue(document["probe_range"])
-                self.assertEqual(arguments[-1], "--human-authorized-once")
-                buffers.append(payload)
-                return SimpleNamespace(returncode=0, stdout=child_output, stderr=b"synthetic-private-secret")
+    def test_import_does_not_run_or_accept_input(self):
+        namespace = {"__name__": "kugou_web_playback_gate"}
+        exec(self.code, namespace)
+        self.assertNotIn("hidden", namespace)
+        self.assertEqual(self.output.getvalue(), "")
 
-            with (patch.object(sys, "argv", ["gate", "--human-authorized-once", "--probe-range"]),
-                  patch.object(sys.stdin, "isatty", return_value=True),
-                  patch.object(sys.stderr, "isatty", return_value=True),
-                  patch("builtins.input", side_effect=["AUTHORIZE ONE KUGOU WEB REQUEST", "YES"]),
-                  patch.object(gate, "hidden", side_effect=["KugooID=42; t=synthetic-private-secret", "synthetic-capture", "synthetic-track", "synthetic-media.kugou.com"]),
-                  patch.object(gate.subprocess, "run", side_effect=run) as process,
-                  contextlib.redirect_stdout(io.StringIO()) as output):
-                self.assertEqual(gate.main(), expected)
-            self.assertEqual(process.call_count, 3)
-            self.assertEqual(len(buffers), 1)
-            self.assertFalse(any(buffers[0]))
-            self.assertNotIn("synthetic-private-secret", output.getvalue())
+    def test_every_invocation_is_fixed_not_run_without_side_effects(self):
+        for entry in ("main", "script"):
+            for tty in (False, True):
+                for args in INVOCATIONS:
+                    with self.subTest(entry=entry, tty=tty, args=args):
+                        self.output.seek(0)
+                        self.output.truncate(0)
+                        self.stdin.isatty.return_value = tty
+                        with (patch.object(sys, "argv", ["gate", *args]),
+                              patch.object(self.error, "isatty", return_value=tty)):
+                            namespace = {"__name__": (
+                                "__main__" if entry == "script"
+                                else "kugou_web_playback_gate"
+                            )}
+                            if entry == "script":
+                                with self.assertRaises(SystemExit) as stopped:
+                                    exec(self.code, namespace)
+                                self.assertEqual(stopped.exception.code, 0)
+                            else:
+                                exec(self.code, namespace)
+                                self.assertEqual(namespace["main"](), 0)
+                        self.assertEqual(self.output.getvalue(), EXPECTED)
 
 
 if __name__ == "__main__":

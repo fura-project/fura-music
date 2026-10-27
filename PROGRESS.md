@@ -2,14 +2,63 @@
 execution:
   mode: HUMAN_DIRECTED
   work_domain: CORE
-  state: BLOCKED
+  state: HUMAN_REVIEW
   acceptance_milestone: KUGOU_AUTHENTICATED_STANDARD_HUMAN_GATE
-  active_workstream: KUGOU_AUTHENTICATED_STANDARD_OFFLINE_CANDIDATE
-  current_task: OFFICIAL_WEB_CAPTURE_ONLY_CANDIDATE_VERIFIED_OFFLINE
-  next_action: SEPARATELY_AUTHORIZED_MAINTAINER_WEB_CONTEXT_AND_STANDARD_SOURCE_GATE
+  active_workstream: KUGOU_AUTHENTICATED_STANDARD_CDP_OFFLINE_CANDIDATE
+  current_task: HUMAN_GATE_READY_RUST_CALLER_ONLY
+  next_action: AWAIT_SEPARATE_HUMAN_AUTHORITY_NO_LIVE_RUN
 ---
 
 # Current State
+
+- **2026-10-27 Human-directed Core / KuGou isolated CDP refinement:** clean
+  starting HEAD matches `0e1b51ec4cf7bdd8c57ab11f6c9dcc56fb661369`.
+  Existing offline candidate/protocol evidence is retained; no new protocol
+  investigation, real account, login/songinfo/media service call, production
+  Provider, Vault, FRB or Flutter wiring is added. Human clarified **Rust caller
+  only**, with the existing current Fura KuGou TrackId; no standalone command
+  manufactures current selection from manual opaque context, exports or lookup.
+  Old Python/Rust example entries are inert NOT_RUN and accept no secrets.
+
+  The existing Chromium owner provides a fresh `0700` profile, loopback CDP and
+  confirmed browser/profile cleanup. KuGou starts blank, arms request-stage Fetch
+  before official navigation, accepts only the exact HTTPS songinfo GET from a
+  proved official page/frame, acknowledges abort, reads only Storage Cookies,
+  and closes the browser before the sole Rust replay. Captures are owner,
+  generation and exact-TrackId bound. Optional fields are never generated or
+  repaired. Minimal replay preserves captured UA/Origin/Referer/optional Accept;
+  unsupported semantic headers or extra captured Cookie context fail closed.
+  Presence/fixed-category diagnostics contain no secret values.
+
+  Standard tier and MP3/Ogg/MP4-AAC format validation are independent, with
+  bounded signature/container checks and retained rights/full-track/duration/
+  filesize guards. Ogg/M4A Standard quality metadata is explicitly a synthetic
+  contract, not live-observed service semantics. A response-derived public-DNS
+  hostname is ephemeral; separate exact-source approval is required for one
+  4-KiB Range. No wildcard, persistence, fallback, redirect, downgrade or retry
+  is added. Capture/replay budgets are consumed before awaits; retirement and
+  same-account relogin invalidate late results, including optional Range.
+
+  Locked workspace/all-target tests, affected strict Clippy with the opt-in gate
+  feature, formatting, all 122 Flutter authentication tests, three Python tests,
+  privacy hygiene and whitespace checks pass. All six existing NetEase Chromium
+  tests are unchanged and pass. Installed headless Chrome was explicitly tested
+  only against synthetic loopback TLS: browser songinfo upstream **0**, Rust
+  replay total **1**, Range **0**, profile deleted and synthetic default profile
+  untouched. Real-browser testing exposed and resolved unsupported tab-target
+  attachment and navigation-pausing deadlock; lifecycle review added rejected-
+  close, forced-owned-child reap and stale-Range regressions. Fetch never detaches
+  voluntarily before confirmed browser exit. The reserved-host fixture rejection
+  remains recorded rather than weakening the public-host validator.
+
+  Status: **HUMAN_GATE_READY** for the disconnected Rust-caller machine contract;
+  **KUGOU_HUMAN_PLAYBACK_GATE=NOT_RUN**, production disabled. This is not live
+  website/account/playback acceptance or a runnable standalone Human command.
+  See the [gate evidence](docs/development/kugou-authenticated-standard-gate.md)
+  and [superseding contract](docs/research/kugou-authenticated-standard-v1.md).
+  The implementation phase performed no commit, push, production activation or
+  Human gate. Human subsequently authorized this local Git checkpoint only;
+  no push, live gate or production activation is authorized by that checkpoint.
 
 - **2026-10-27 Human-directed Core / KuGou authenticated Standard V1:** clean
   baseline `6f67814`; current task changes direction from exhausted anonymous

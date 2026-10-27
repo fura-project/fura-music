@@ -6,6 +6,7 @@
 //! are retained from `Storage.getCookies`.
 
 use std::collections::BTreeSet;
+use std::collections::VecDeque;
 use std::env;
 use std::fs::Metadata;
 use std::os::unix::ffi::OsStrExt;
@@ -28,6 +29,10 @@ use tokio::time::{sleep, timeout};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
 use url::{Host, Url};
 use zeroize::Zeroize;
+
+#[cfg(any(test, feature = "kugou-cdp-gate"))]
+#[allow(dead_code)] // Deliberately disconnected Rust caller entry, not an FRB API.
+pub(crate) mod kugou;
 
 const OFFICIAL_LOGIN_URL: &str = "https://music.163.com/#/login";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
@@ -75,6 +80,9 @@ struct RunningBrowser {
 struct CdpClient {
     socket: CdpSocket,
     next_id: u64,
+    retain_events: bool,
+    events: VecDeque<Value>,
+    event_bytes: usize,
 }
 
 #[derive(Deserialize)]
@@ -182,15 +190,25 @@ async fn start_browser(
     browser: &BrowserCandidate,
     is_current: &impl Fn() -> bool,
 ) -> Result<RunningBrowser, CaptureFailure> {
+    start_browser_at(browser, is_current, OFFICIAL_LOGIN_URL, &[]).await
+}
+
+async fn start_browser_at(
+    browser: &BrowserCandidate,
+    is_current: &impl Fn() -> bool,
+    entry: &str,
+    extra_args: &[String],
+) -> Result<RunningBrowser, CaptureFailure> {
     let profile = create_profile()?;
     let profile_path = profile.path().to_path_buf();
     let child = Command::new(&browser.binary)
-        .arg(format!("--app={OFFICIAL_LOGIN_URL}"))
+        .arg(format!("--app={entry}"))
         .arg(format!("--user-data-dir={}", profile_path.display()))
         .arg("--remote-debugging-address=127.0.0.1")
         .arg("--remote-debugging-port=0")
         .arg("--no-first-run")
         .arg("--no-default-browser-check")
+        .args(extra_args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -409,23 +427,41 @@ impl CdpClient {
             .await
             .map_err(|_| CaptureFailure::DevtoolsUnavailable)?
             .map_err(|_| CaptureFailure::DevtoolsUnavailable)?;
-        Ok(Self { socket, next_id: 1 })
+        Ok(Self {
+            socket,
+            next_id: 1,
+            retain_events: false,
+            events: VecDeque::new(),
+            event_bytes: 0,
+        })
     }
 
     async fn command(&mut self, method: &str, params: Value) -> Result<Value, CaptureFailure> {
+        self.session_command(None, method, params).await
+    }
+
+    async fn session_command(
+        &mut self,
+        session: Option<&str>,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, CaptureFailure> {
         let id = self.next_id;
         self.next_id = self
             .next_id
             .checked_add(1)
             .ok_or(CaptureFailure::DevtoolsInvalid)?;
-        self.socket
-            .send(Message::Text(
-                json!({"id": id, "method": method, "params": params})
-                    .to_string()
-                    .into(),
-            ))
-            .await
-            .map_err(|_| CaptureFailure::BrowserClosed)?;
+        let mut command = json!({"id": id, "method": method, "params": params});
+        if let Some(session) = session {
+            command["sessionId"] = json!(session);
+        }
+        timeout(
+            CDP_COMMAND_TIMEOUT,
+            self.socket.send(Message::Text(command.to_string().into())),
+        )
+        .await
+        .map_err(|_| CaptureFailure::DevtoolsUnavailable)?
+        .map_err(|_| CaptureFailure::BrowserClosed)?;
         timeout(CDP_COMMAND_TIMEOUT, async {
             while let Some(message) = self.socket.next().await {
                 let message = message.map_err(|_| CaptureFailure::BrowserClosed)?;
@@ -441,9 +477,30 @@ impl CdpClient {
                 let mut value: Value = serde_json::from_str(text.as_ref())
                     .map_err(|_| CaptureFailure::DevtoolsInvalid)?;
                 if value.get("id").and_then(Value::as_u64) != Some(id) {
+                    if self.retain_events && value.get("method").is_some() {
+                        self.queue_event(value, text.len())?;
+                    }
                     continue;
                 }
+                if value.get("sessionId").and_then(Value::as_str) != session {
+                    return Err(CaptureFailure::DevtoolsInvalid);
+                }
                 if value.get("error").is_some() {
+                    #[cfg(test)]
+                    if self.retain_events {
+                        let phase = match method {
+                            "Target.setAutoAttach" => "AUTO_ATTACH",
+                            "Fetch.enable" => "FETCH_ENABLE",
+                            "Fetch.failRequest" => "FETCH_ABORT",
+                            "Page.enable" => "PAGE_ENABLE",
+                            "Page.navigate" => "NAVIGATE",
+                            "Network.setBypassServiceWorker" => "BYPASS_WORKER",
+                            "Runtime.runIfWaitingForDebugger" => "RESUME",
+                            "Storage.getCookies" => "PROFILE_COOKIES",
+                            _ => "OTHER",
+                        };
+                        eprintln!("KUGOU_RUNTIME_CDP_ERROR_PHASE={phase}");
+                    }
                     return Err(CaptureFailure::DevtoolsInvalid);
                 }
                 return value
@@ -457,18 +514,66 @@ impl CdpClient {
         .map_err(|_| CaptureFailure::DevtoolsUnavailable)?
     }
 
+    fn queue_event(&mut self, value: Value, size: usize) -> Result<(), CaptureFailure> {
+        if self.events.len() >= 128 || self.event_bytes.saturating_add(size) > CDP_RESPONSE_LIMIT {
+            return Err(CaptureFailure::DevtoolsInvalid);
+        }
+        self.event_bytes += size;
+        self.events.push_back(value);
+        Ok(())
+    }
+
+    #[cfg(any(test, feature = "kugou-cdp-gate"))]
+    async fn next_event(&mut self) -> Result<Option<Value>, CaptureFailure> {
+        if let Some(value) = self.events.pop_front() {
+            // Account by serialization, conservatively clear only when drained.
+            if self.events.is_empty() {
+                self.event_bytes = 0;
+            }
+            return Ok(Some(value));
+        }
+        timeout(POLL_INTERVAL, async {
+            while let Some(message) = self.socket.next().await {
+                let message = message.map_err(|_| CaptureFailure::BrowserClosed)?;
+                match message {
+                    Message::Text(text) => {
+                        if text.len() > CDP_RESPONSE_LIMIT {
+                            return Err(CaptureFailure::DevtoolsInvalid);
+                        }
+                        let value: Value = serde_json::from_str(&text)
+                            .map_err(|_| CaptureFailure::DevtoolsInvalid)?;
+                        if value.get("method").is_some() {
+                            return Ok(Some(value));
+                        }
+                    }
+                    Message::Close(_) => return Err(CaptureFailure::BrowserClosed),
+                    _ => (),
+                }
+            }
+            Err(CaptureFailure::BrowserClosed)
+        })
+        .await
+        .unwrap_or(Ok(None))
+    }
+
     async fn request_close(&mut self) {
         let id = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
-        let _ = self
-            .socket
-            .send(Message::Text(
+        let _ = timeout(
+            Duration::from_secs(1),
+            self.socket.send(Message::Text(
                 json!({"id": id, "method": "Browser.close", "params": {}})
                     .to_string()
                     .into(),
-            ))
-            .await;
-        let _ = timeout(Duration::from_secs(1), self.socket.close(None)).await;
+            )),
+        )
+        .await;
+        // Detaching a Fetch session releases paused requests. KuGou must keep
+        // its connection until ALL browser processes are confirmed dead, even
+        // when Browser.close is rejected or does not terminate the browser.
+        if !self.retain_events {
+            let _ = timeout(Duration::from_secs(1), self.socket.close(None)).await;
+        }
     }
 }
 
@@ -642,9 +747,9 @@ fn require_active(child: &mut Child, is_current: &impl Fn() -> bool) -> Result<(
 
 async fn shutdown_browser(
     running: &mut RunningBrowser,
-    cdp: Option<&mut CdpClient>,
+    mut cdp: Option<&mut CdpClient>,
 ) -> Result<(), CaptureFailure> {
-    if let Some(cdp) = cdp {
+    if let Some(cdp) = cdp.as_mut() {
         cdp.request_close().await;
     }
     let child_closed = wait_child(&mut running.child, CLEAN_CLOSE_TIMEOUT).await?;
@@ -665,7 +770,24 @@ async fn shutdown_browser(
                 return Err(CaptureFailure::CleanupFailed);
             }
         }
-        let _ = timeout(TERMINATION_TIMEOUT, running.child.wait()).await;
+        // Profile scanning is not proof that the owned process exited (for
+        // example, a launcher may not retain the profile argument). Reap it
+        // explicitly before allowing Fetch detachment or deleting the profile.
+        if running
+            .child
+            .try_wait()
+            .map_err(|_| CaptureFailure::CleanupFailed)?
+            .is_none()
+        {
+            running
+                .child
+                .start_kill()
+                .map_err(|_| CaptureFailure::CleanupFailed)?;
+        }
+        timeout(TERMINATION_TIMEOUT, running.child.wait())
+            .await
+            .map_err(|_| CaptureFailure::CleanupFailed)?
+            .map_err(|_| CaptureFailure::CleanupFailed)?;
     }
     if !wait_for_profile_processes(&running.profile_path, TERMINATION_TIMEOUT).await {
         return Err(CaptureFailure::CleanupFailed);
@@ -678,6 +800,11 @@ async fn shutdown_browser(
         .map_err(|_| CaptureFailure::CleanupFailed)?;
     if running.profile_path.exists() || !profile_processes(&running.profile_path).is_empty() {
         return Err(CaptureFailure::CleanupFailed);
+    }
+    if let Some(cdp) = cdp
+        && cdp.retain_events
+    {
+        let _ = timeout(Duration::from_secs(1), cdp.socket.close(None)).await;
     }
     Ok(())
 }

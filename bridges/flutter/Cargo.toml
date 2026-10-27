@@ -8,6 +8,10 @@ repository.workspace = true
 [lib]
 crate-type = ["cdylib", "staticlib"]
 
+[features]
+# Disconnected Rust-only Human gate. No API/Provider production activation.
+kugou-cdp-gate = ["dep:kugou-client", "dep:provider-kugou"]
+
 [dependencies]
 flutter_rust_bridge = "=2.13.0"
 music-domain = { path = "../../crates/music-domain" }
@@ -24,6 +28,8 @@ jni = "0.22.4"
 rustls-platform-verifier = "0.7.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+kugou-client = { path = "../../crates/kugou-client", optional = true }
+provider-kugou = { path = "../../crates/provider-kugou", optional = true }
 futures-util = "0.3.31"
 nix = { version = "0.31.2", default-features = false, features = ["process", "signal"] }
 serde = { version = "1.0.228", features = ["derive"] }
@@ -33,6 +39,11 @@ tokio = { version = "1.53.1", features = ["fs", "io-util", "net", "process", "ti
 tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["connect", "handshake"] }
 url = "2.5.7"
 zeroize = "1.8.2"
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+kugou-client = { path = "../../crates/kugou-client" }
+provider-kugou = { path = "../../crates/provider-kugou" }
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

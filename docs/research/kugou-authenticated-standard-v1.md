@@ -1,5 +1,215 @@
 # KuGou authenticated Standard playback V1 — offline candidate
 
+## Current superseding contract: Rust caller and CDP
+
+Date: 2026-10-27, after the initial offline checkpoint. The Human clarified that
+the gate may be entered **only by a Rust caller already holding the existing,
+currently selected Fura KuGou `TrackId`**. No standalone CLI may manufacture that
+claim from pasted opaque context, an export/file or a new lookup. The manual
+secret-entry/Python live workflow below is dated history, not an available
+fallback. This refinement adds no new protocol research or live authority.
+
+Current implementation sources are
+`bridges/flutter/src/linux_system_chromium/kugou.rs`,
+`crates/kugou-client/src/web_playback_candidate.rs` and
+`crates/provider-kugou/src/web_playback_candidate.rs`, with their offline
+fixtures. Current offline machine verification is **HUMAN_GATE_READY** for the
+disconnected Rust-caller entry; exact checks, resolved negative evidence and the
+synthetic request-count oracle are recorded in the
+[gate evidence](../development/kugou-authenticated-standard-gate.md#stops-evidence-and-state).
+Do not reuse historical SHA256 or test counts below as validation of this changed
+worktree. **HUMAN GATE NOT_RUN.**
+No real Human/live run or production enabling is performed by this refinement.
+
+### Entry and one-shot ownership
+
+`linux_system_chromium::kugou::run_gate` is a private, crate-visible Linux Rust
+entry, compiled under tests or the opt-in `kugou-cdp-gate` feature. It is not an
+FRB export, Flutter action, production Provider/Authentication implementation or
+MediaResolver route. Feature compilation alone does not invoke it. A future
+authorized in-crate caller must own the actual selected `TrackId`, explicit
+Human one-request authority and current-selection/lifecycle checks; there is no
+live command or production wiring to stand in for that caller.
+
+The Python entry now unconditionally reports
+`KUGOU_GATE result=NOT_RUN reason=RUST_CALLER_REQUIRED`. The legacy Rust example
+reports `KUGOU_GATE result=NOT_RUN reason=OFFICIAL_WEB_CDP_OWNER_REQUIRED
+production_enabled=false` on one line. Neither accepts secret/TrackId input or
+launches IO. Old `--human-authorized-once` and `--probe-range` flags cannot
+reactivate the wrapper. No command performs a Human run.
+
+The Provider's `begin_capture(id)` consumes admission synchronously **before
+browser startup or any await** and binds a non-Clone token to that owner,
+generation and exact `TrackId`. `finish_capture` admits only that still-current
+reservation; `resolve_captured_once` consumes replay admission before transport
+await. Failure, dropped capture, cancellation, logout, Provider/account
+replacement or same-account relogin cannot refill the budget. Retiring the owner
+invalidates late results; risk/rate stops remain sticky. Callers must retire the
+generation, make `is_current` false and await cooperative cleanup rather than
+abort/drop the gate task to cancel browser work.
+
+### Official generation, pre-network abort and cleanup
+
+The browser starts at `about:blank` in a fresh isolated temporary `0700` profile,
+not a default/everyday browser profile or a QQ/NetEase session. CDP auto-attaches
+with page/iframe/worker targets paused, arms request-stage `Fetch` for the
+songinfo path family on every attached target before resume, including
+workers/popups (not unsupported tab/browser control targets), and only then navigates to
+`https://www.kugou.com/`. Ordinary website login/consent/account confirmation
+remain Human actions under separate explicit authority, not manual secret input
+to the gate. No ordinary browser Cookie database or Fura vault is read.
+
+Songinfo candidates are aborted first, including wrong-host/method/identity
+shapes. Only an exact HTTPS `wwwapi.kugou.com/play/songinfo` `GET` without body
+from a proved official `www.kugou.com` page/frame XHR/Fetch can be admitted.
+The owner awaits `Fetch.failRequest` acknowledgement **before** reading this
+profile's `Storage.getCookies`; it never continues a candidate or captures an
+already-delivered response. Interception stays armed through shutdown.
+Browser exit, profile-process termination and temporary-profile deletion must
+succeed before binding/replay. Fetch stays attached until the owned child and
+profile processes are dead, including rejected-close/forced-reap paths; closing
+CDP first could release paused requests. Cleanup failure blocks Rust replay.
+The actual installed-Chrome synthetic TLS test passes browser upstream=0 and
+Rust total=1. It is not a live KuGou/runtime compatibility PASS.
+
+Thus the budget is at most **one Rust songinfo request**, not one browser
+authorization plus another replay. There are zero Fura login/refresh/device
+registration or independent account-summary calls, no retry/redirect/fallback,
+and at most one separately approved `Range: bytes=0-4095` media probe. Normal
+official-page/login traffic also needs explicit Human authority; offline tests
+do not grant it. No manual Cookie/token/signature/signed-URL/HAR/clipboard/stdin
+or environment import is an alternate capture source. A public constructor's
+source label alone is not cryptographic provenance for arbitrary callers.
+
+### Exact identity and unchanged query
+
+Only the Provider decodes its existing
+`v1:<MixSongID>:<Standard hash>:<Audioid>:<duration seconds>:<Album ID>` context
+from the caller's actual KuGou `TrackId`. Known Album and full-duration context
+must already be present; no additional Fura Search/detail request fills gaps.
+The intercepted `hash` plus `album_id` must match that selection. Supplied
+`MixSongID`/`mix_song_id` and `album_audio_id` aliases, with normalized
+case/underscore/hyphen spellings, must agree with each other and with its
+MixSongID, not Audioid. Missing/conflicting identity or an unsupported alternate
+shape such as `audio_id`, `songid` or `encode_album_audio_id` stops as
+`OFFICIAL_WEB_TRACK_IDENTITY_UNPROVEN`, not a guessed conversion or second hop.
+
+Preserve the original URL/query unchanged. Optional signature, mid/uuid/dfid,
+userid/token, clienttime and profile selectors are not synthesized, repaired or
+made mandatory just because a reference client uses them. The old fixed
+appid/clientver prerequisite is superseded; no locally generated profile or
+signer replaces the official request. Supplied session fields must agree with
+the eligible Cookies; unrelated opaque query fields stay unchanged. A local
+300-second freshness bound starts at capture and is shortened by an older
+captured clienttime when present; it is not a claimed upstream expiry.
+
+### Minimal header and Cookie contract
+
+Replay preserves captured `User-Agent`, `Origin`, `Referer` and, if present,
+`Accept`. UA/Origin/Referer are required; Origin is exactly
+`https://www.kugou.com` and Referer has that exact HTTPS origin. This supersedes
+the historical Fura-UA variation without authorizing a manually forged UA.
+
+Only applicable-domain/path `KugooID` and `t` from the fresh profile's
+`Storage.getCookies` form the replay Cookie. Both are required; ambiguity,
+session mismatch or composite-only `KuGoo` fails closed. When CDP provides a
+captured Cookie header it must contain exactly those same two Cookies: extra
+device/analytics/composite Cookies reject the attempt rather than being
+silently discarded or blindly forwarded. An absent captured Cookie header does
+not prove the browser used no extra context; minimal replay compatibility is
+still unproved.
+
+`sec-*` client/fetch hints and language hints are deliberately omitted, as are
+browser encoding/transport headers. Arbitrary additional semantic headers such
+as Authorization, custom `x-*` signing fields, Range or Content-Type are rejected,
+not guessed or stripped. This is minimal replay, not byte-for-byte browser
+emulation. The separate API transport remains HTTPS-only with a 256 KiB bound,
+no system proxy, redirects or retries; the existing public transport allowlist
+is unchanged. Rejection does not authorize adding context or changing profiles.
+
+### Standard tier, three supported format classes
+
+**Standard is not MP3.** Format and quality are independent: the candidate has
+`Mp3`, `Ogg` (Opus/Vorbis) and `Mp4Aac` (`m4a`/`mp4`, bounded AAC-LC subset)
+format classes. The exact `data.quality == "standard"` rule is an explicitly
+**synthetic offline contract**, not live-observed songinfo semantics. Only
+absent quality metadata permits the legacy MP3 plus 128/128000 bitrate fixture
+to serve as conservative Standard evidence. Explicit null/unknown/higher or
+differently cased labels cannot fall back; `audio_name` is not a proved tier
+alias. Ogg/MP4Aac Standard fixtures require that explicit synthetic quality
+metadata. Source/tests do not establish that live KuGou emits it.
+
+All formats still require explicit non-preview/full-track permission, matching
+identity, known full duration and plausible full-file size. Neither a URL nor a
+quality label grants entitlement. Unsupported/encrypted formats, raw AAC, FLAC,
+unknown quality and quality escalation are excluded; no request negotiates a
+higher tier. Extensions and MIME labels alone are not media evidence.
+
+The optional prefix probe requires 206, exact Content-Range/total size,
+compatible MIME (or bounded octet-stream) and format-specific signatures within
+4096 bytes: two compatible MP3 Layer-III frames after any bounded ID3 tag; a
+complete Ogg identification packet/page with CRC; or MP4 initialization with a
+sound track and `mp4a` AAC-LC decoder configuration before media data. Malformed,
+truncated, encrypted or unsupported layouts fail closed. This bounded subset
+does not accept arbitrary media and does not prove audible/full playback or
+full-file integrity.
+
+### Response-derived, ephemeral media approval
+
+The old independently preobserved exact-KuGou-host allowlist is superseded. A
+validated HTTPS response may yield a new normalized public DNS hostname; no
+media request follows automatically. DNS-name checks reject IP/local/reserved
+name shapes but are not proof of ownership or resolved-address safety.
+
+`run_gate` reports `NEW_MEDIA_HOST_REQUIRES_APPROVAL` before asking Human to
+approve the optional one-range budget for **only that normalized hostname**.
+Never display/log the full media URL, path or query. Declining makes no media
+request. An approval token is ephemeral and bound to that exact returned source,
+not reusable for another source even on the same host. There is no wildcard,
+persistent allowlist or automatic trust expansion from a response. The media
+probe sends no API Cookie or added account token.
+
+### Current evidence boundary
+
+Current source fixtures cover client construction/identity/headers/Cookies,
+Standard Ogg/MP4Aac and legacy MP3 classification, bounded signatures, source-bound
+approval, Provider generations/one-shot admission and CDP abort/cleanup paths.
+The installed-Chrome runtime fixture is explicitly ignored by default and uses
+synthetic local TLS/site data. It was explicitly executed and passes browser
+upstream=0, Rust total=1, Range=0 and browser/profile isolation/cleanup. Locked
+workspace/all-target tests, affected strict Clippy with and without the opt-in
+gate feature, formatting, 122 Flutter authentication tests, three Python
+retirement/privacy tests and source privacy/diff checks pass. The candidate
+crates pass 53 tests; 29 new KuGou CDP/lifecycle tests and all six unchanged
+NetEase Chromium tests pass. **HUMAN_GATE_READY** describes only that offline
+Rust-caller machine contract. Historical results below still apply only to their
+dated implementation, and no synthetic result proves live compatibility.
+
+Diagnostics are fixed capture-source/presence flags and coarse outcomes, not
+credentials, their lengths/hashes, TrackId/hash/title, raw response/media, full
+URLs, CDP identifiers or private profile paths. Owned secret buffers have
+best-effort wiping, not guaranteed zeroization of every CDP/parser/HTTP copy.
+Risk/limit challenges dominate ordinary errors; undocumented codes do not prove
+region, copyright or expiry. The Rust entry's boolean describes only the optional
+prefix outcome, not full playback or global account verification.
+
+The Human gate remains **NOT_RUN**. Account-summary verification is still false;
+production resolution, secure KuGou credential persistence, ordinarily
+authorized autonomous request generation, capability/static routing and FRB/UI
+integration remain unenabled. Even future source/probe success cannot grant
+those scopes. The [maintainer gate](../development/kugou-authenticated-standard-gate.md)
+is the current operational contract, with no Human-run command.
+
+## Dated baseline evidence: before the CDP refinement
+
+The remainder records the initial 2026-10-27 protocol investigation and offline
+checkpoint. Its clean baseline, source hash, implementation descriptions,
+manual-wrapper instructions and PASS counts are **historical**, not claims
+about the current worktree. The current contract above supersedes the manual
+secret entry, Fura-UA/fixed-profile prerequisites, MP3-only rule and pre-run media
+allowlist. Pinned external protocol observations are preserved without new
+research or reinterpretation as live Fura evidence.
+
 Date: 2026-10-27. Mode: `HUMAN_DIRECTED / CORE`.
 Implementation baseline: `6f67814d3ea9f8db02d47bcea1b69269493c4b71`, clean worktree.
 Authority: the Human's **KuGou Authenticated Standard Playback V1** task.
@@ -10,7 +220,7 @@ Verified code/tooling snapshot SHA256 (changed non-Markdown relative name +
 NUL + bytes + NUL, sorted):
 `fe6bd2979116ab258c071dba3290a7814e07610dd1de8b42eeaaa0f03dd8f736`.
 
-## Decision and proof boundary
+### Historical decision and proof boundary
 
 Prefer **A: the user's isolated official website session → its own signed
 `GET https://wwwapi.kugou.com/play/songinfo` request → a strictly checked full
@@ -31,7 +241,7 @@ this shape fails. A public-Web signer is **not implemented**: public distributio
 and purpose of its salt still lack first-party evidence. Passing through the
 website's existing signature is not permission to copy that salt into Fura.
 
-## Pinned source comparison
+### Historical pinned source comparison
 
 All repositories were read as source, never executed or vendored. Sources
 outside Git are in the task-local `/tmp/fura-kugou-auth-20261027-YdB9aJ/`.
@@ -55,7 +265,7 @@ Independence is field-specific: .NET's device-registration comments explicitly
 refer to the JS hardware map. A different implementation language is not an
 extra independent wire vote; no such count is claimed for music-lib either.
 
-## Executable route matrix
+### Historical executable route matrix
 
 | Route | Login/session | Official target/method and shape | Signing/device; HTTPS | Evidence / Fura decision |
 | --- | --- | --- | --- | --- |
@@ -65,7 +275,7 @@ extra independent wire vote; no such count is claimed for music-lib either.
 | D, priv_url | token, userid, VIP tokens and entitlement | POST `tracker.kugou.com/v6/priv_url`; resource and tracker_param objects, qualities array; response multiple media candidates | Current .NET/music-lib HTTP, dsh tries HTTP fallback; signed hardware/install profile and possible protected media | **Not adopted**. No HTTP or encrypted-media fallback. |
 | Legacy anonymous | None | Prior exact-hash probes already failed | Old budget closed | Not repeated; not a prerequisite for authenticated feasibility. |
 
-### Field-specific classification
+#### Historical field-specific classification
 
 | Field | Provenance / meaning | Candidate policy |
 | --- | --- | --- |
@@ -78,7 +288,7 @@ extra independent wire vote; no such count is claimed for music-lib either.
 | Android salts/V5 key, hardware payload, kg-* identity headers | Client-profile/access-control or impersonation risk, distinct from ordinary timestamps | Not copied or sent. No App-vs-Web token exchange or device registration. |
 | selected media hostname | A returned host is not an allowlist | Human must independently observe and approve one exact KuGou DNS host before the gate. No wildcard, other Provider, IP or response-derived expansion. |
 
-## Engineering ownership and limits
+### Historical engineering ownership and limits
 
 `kugou-client::web_playback_candidate` independently implements validated
 Pending credential capture, a non-Clone exact signed request, a separate
@@ -128,7 +338,7 @@ sources: they do not authorize deleting credentials or attempting a new profile.
 There is no signature verifier: incorrect remote signatures remain coarse
 upstream rejection unless an independently evidenced code identifies them.
 
-## HD-031 supplement — DRAFT, not accepted production authority
+### Historical HD-031 supplement — DRAFT, not accepted production authority
 
 Proposed maintenance record:
 
@@ -144,7 +354,7 @@ Proposed maintenance record:
 The task itself authorizes the current offline work. This draft does not edit
 HD-031's accepted text or declare authenticated production use accepted.
 
-## Machine evidence
+### Historical machine evidence
 
 Baseline existing KuGou tests passed (20 offline; one live test ignored).
 New tests exercise real request construction and typed response decoding,
@@ -187,7 +397,7 @@ Final Rust and loopback outputs are `final-rust-tests.log` and
 `final-loopback-tls.log` in the task-local temporary evidence directory above;
 they contain synthetic/offline results, not service/account evidence.
 
-## State
+### Historical state
 
 | Claim | State | Proof boundary |
 | --- | --- | --- |
@@ -198,4 +408,5 @@ they contain synthetic/offline results, not service/account evidence.
 | KUGOU_FLUTTER_INTEGRATION | NOT_RUN | Intentionally outside this offline task; QQ/NetEase-only composition unchanged. |
 
 See the [maintainer gate](../development/kugou-authenticated-standard-gate.md)
-for exact command, input prerequisites, budget and hard stops.
+for the superseding Rust-caller prerequisites, budget and hard stops, not the
+retired manual-wrapper workflow. No command performs the Human run.
