@@ -4,12 +4,49 @@ execution:
   work_domain: CORE
   state: HUMAN_REVIEW
   acceptance_milestone: KUGOU_AUTHENTICATED_STANDARD_HUMAN_GATE
-  active_workstream: KUGOU_AUTHENTICATED_STANDARD_CDP_OFFLINE_CANDIDATE
-  current_task: HUMAN_GATE_READY_RUST_CALLER_ONLY
+  active_workstream: KUGOU_AUTHENTICATED_STANDARD_HUMAN_HARNESS
+  current_task: LIVE_HUMAN_GATE_READY
   next_action: AWAIT_SEPARATE_HUMAN_AUTHORITY_NO_LIVE_RUN
 ---
 
 # Current State
+
+- **2026-11-02 Human-directed Core / bounded KuGou Human harness:** clean
+  baseline and `origin/main` match `c0dc0915171d40865275c393d5d68abb76b0e848`.
+  The opt-in `kugou-cdp-gate` Rust executable now obtains its selected TrackId
+  only through one existing anonymous Public Search and Human ordinal selection.
+  Search authority, authenticated-gate authority and optional one-Range approval
+  are independent. Search admission is spent before await, never refilled; no
+  retry/page/detail/fallback or pasted TrackId/hash/context is accepted. Existing
+  Provider mapping/admission and `linux_system_chromium::kugou::run_gate` are
+  reused; CDP capture/replay source, Vault, FRB, Flutter, BuiltInProvider and
+  production MediaResolver remain unchanged. Public HTTPS transport explicitly
+  disables its hidden default protocol retry to preserve the one-request budget.
+
+  All 21 new offline harness regressions pass, including exact Provider identity,
+  two-phase authority, rejected foreign/incomplete context, concurrent/dropped
+  Search budgets, all-omitted/empty pages, terminal input and diagnostic privacy,
+  independent Range approval, feature exclusion and cooperative cancellation.
+  Final audit found a synchronous-terminal cancellation risk; feature-only signal
+  monitoring and cancellable bounded input now prevent a blocked Range prompt
+  from retaining retired authority, while awaiting the existing gate cleanup.
+  Locked affected all-target Rust tests, strict Clippy (with the opt-in feature),
+  formatting, six unchanged NetEase Chromium tests, three retired-entry tests,
+  source privacy/identity checks and whitespace checks pass. Existing installed
+  Chromium synthetic loopback still reports browser upstream **0**, Rust replay
+  **1**, Range **0**, deleted isolated profile and untouched synthetic default.
+  The real compiled harness's default/redirected/manual-input arguments are inert;
+  controlling-PTY Phase A rejection returns NOT_RUN before query input. Default
+  production dependencies exclude KuGou and a feature-less Release binary build
+  is rejected. See [harness evidence and exact future command](docs/development/kugou-authenticated-standard-gate.md).
+
+  State: **LIVE_HUMAN_GATE_READY** for offline/synthetic machine work only.
+  **KUGOU_HUMAN_PLAYBACK_GATE=NOT_RUN**. No real Search, login, songinfo or Range
+  was executed; the first live Human test requires separate authorization.
+  Production stays disabled. The implementation phase performed no protocol
+  reinvestigation, commit, push or Actions run. Human subsequently authorized the
+  normal Git checkpoint and push; this does not authorize a live gate, production
+  activation or manual Actions run. Prior dated checkpoints below remain evidence.
 
 - **2026-10-27 Human-directed Core / KuGou isolated CDP refinement:** clean
   starting HEAD matches `0e1b51ec4cf7bdd8c57ab11f6c9dcc56fb661369`.

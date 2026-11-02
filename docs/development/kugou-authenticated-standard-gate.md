@@ -1,13 +1,143 @@
 # Maintainer gate: KuGou official-Web Standard candidate
 
-Date: 2026-10-27, Rust-caller/CDP refinement. **HUMAN GATE NOT_RUN**.
-State: **HUMAN_GATE_READY**, scoped to the disconnected Rust-caller entry and
-offline machine contract below, not a standalone CLI or live compatibility.
+Date: 2026-11-02, bounded Rust-only Human harness follow-up to `c0dc091`.
+**HUMAN GATE NOT_RUN**. The harness adds a caller, not a different CDP protocol.
 See the [current contract and dated protocol evidence](../research/kugou-authenticated-standard-v1.md).
 Neither this document nor a build/test command authorizes account access,
 live traffic or production activation.
 
-## Rust caller only, no live command
+## Opt-in Rust harness: Search, ordinal, existing gate
+
+The `kugou-human-gate` binary requires `kugou-cdp-gate` and Linux. There is no
+default-feature, FRB, Flutter, BuiltInProvider, production MediaResolver or Vault
+entry. The binary compiles the existing private Chromium module directly from
+its original source; it does not copy CDP implementation or export a new API.
+Its default invocation is inert. `--interactive` merely opens Phase A; other
+arguments, redirected stdin/stdout/stderr and an unavailable controlling terminal
+return `KUGOU_GATE result=NOT_RUN`. No environment/file/clipboard identity or
+credential input exists. The retired entries below remain inert.
+
+Only after **separate Human authorization for a live run**, from the repository:
+
+```sh
+cargo run --offline --locked -p rust_lib_flutterustmusic --features kugou-cdp-gate --bin kugou-human-gate -- --interactive
+```
+
+`--offline` constrains Cargo dependency resolution, **not** the authorized
+runtime's HTTPS requests. Do not run this command unattended, with a terminal
+recorder or tee; presentation is shown only on the controlling terminal.
+
+1. Phase A displays `Budget: 1 anonymous KuGou public Search request`. Only the
+   exact phrase `AUTHORIZE ONE PUBLIC SEARCH` proceeds to query input. The existing
+   KuGou client/Provider performs page 1, size 10 once. A transport-owned atomic
+   budget is consumed before await; cancellation/error/concurrency/re-entry
+   cannot refill it. Public HTTPS transport now explicitly disables reqwest's
+   default protocol retry, as well as redirects. No second query, second page,
+   detail, ranking, automatic selection, fuzzy matching or source fallback exists.
+2. The controlling terminal shows only ordinal/title/artist/optional Album title/
+   duration. Human enters **one result number**, never opaque TrackId/hash/context.
+   The harness borrows that in-memory `TrackSearchItem`'s exact Provider `TrackId`.
+   Existing Provider `begin_capture` on a transport-less, disposable validation
+   owner verifies eligibility before Phase B; no second identity decoder is added.
+   This validation owner never captures/replays and cannot refill the real owner's
+   budget. Missing Album identity or full duration, foreign/malformed identity,
+   empty results, invalid ordinal, EOF or cancellation ends the run without CDP.
+   An absent presentation Album title alone is not absent private Album context.
+3. Phase B describes the isolated official browser, Human-owned login/account/
+   entitlement confirmation, pre-network browser-songinfo abort, browser cleanup,
+   at most one Rust songinfo and separately approved optional Range. Only the
+   exact phrase `AUTHORIZE ONE AUTHENTICATED GATE` creates the real gate owner and
+   calls existing `linux_system_chromium::kugou::run_gate` with the selected ID.
+   Declining produces `KUGOU_GATE result=NOT_RUN`, even though Search was consumed.
+4. Optional Range requires the later exact phrase `AUTHORIZE ONE RANGE`, after
+   displaying only the actual returned normalized hostname. Neither earlier
+   approval grants this request. Declining finishes with no Range.
+
+During CDP, SIGINT/SIGTERM invalidate the real owner and await existing cooperative
+cleanup rather than aborting its future. Close the isolated browser to cancel
+official-page work. No account/password/SMS/QR action is automated. Every existing
+risk/limit/verification stop remains fail-closed; a restart is not permission to
+bypass a stop. Search failures end this run, not permission for another endpoint.
+
+Structured diagnostics contain only budget=1, bounded result count (0–10), fixed
+selection/authority confirmation and fixed stop categories. Query/presentation,
+TrackId/hash/context, credentials and full URLs never enter those diagnostics or
+an application-created log. Public presentation is not persisted by the harness.
+
+The two-stage live request budget supersedes the earlier caller-only ban on new
+Search solely for this harness: **one Human-authorized anonymous Search**, then
+independent Phase B authority. It does not reopen old anonymous probe budgets or
+authorize any real run in this implementation task.
+
+## Harness machine evidence, 2026-11-02
+
+State: **LIVE_HUMAN_GATE_READY**; **KUGOU_HUMAN_PLAYBACK_GATE=NOT_RUN**.
+This is readiness to request a separately authorized first Human test, not live
+compatibility, account verification or production playback acceptance.
+
+Current implementation: `bridges/flutter/src/kugou_human_gate.rs`,
+`bridges/flutter/src/linux_system_chromium/kugou_harness.rs` and its `tests.rs`.
+The only existing implementation changes outside feature registration/module
+declaration are explicit `reqwest::retry::never()` in Public HTTPS transport.
+No dependency version or lockfile changed. No Bridge API changed, so FRB
+generation or Flutter integration is neither necessary nor claimed.
+
+Starting HEAD: `c0dc0915171d40865275c393d5d68abb76b0e848`. Scoped source
+SHA256: `532e02e4c73426074f1cf0e7e2f05b55a1491cf168c8c7a1022c706646bf8670`.
+The hash includes all six changed/new Rust and Cargo files, sorted by relative
+path; each contributes path, NUL, file bytes, NUL. Markdown is excluded. Temporary
+logs are outside Git under `/tmp/fura-kugou-harness-20261102-c6Ekxj/`; no real
+query, account, capture, cookie or media is present.
+
+| Check | Actual offline/synthetic result |
+| --- | --- |
+| `cargo fmt --all -- --check` | PASS |
+| `cargo test --offline --locked -p kugou-client -p provider-kugou --all-targets` | PASS: 53 tests; default public live test remains ignored |
+| `cargo test --offline --locked -p rust_lib_flutterustmusic --all-targets` | PASS: 144 tests; installed-browser explicit test remains ignored |
+| Same Bridge test with `--features kugou-cdp-gate` | PASS: 165 tests, including 21 new Harness tests; executable test target is inert |
+| `cargo clippy --offline --locked -p kugou-client -p provider-kugou --all-targets -- -D warnings` | PASS |
+| `cargo clippy --offline --locked -p rust_lib_flutterustmusic --all-targets --features kugou-cdp-gate -- -D warnings` | PASS |
+| Existing exact installed-Chromium loopback command below | PASS: browser upstream=0, Rust replay=1, Range=0, profile deleted |
+| `cargo test --offline --locked -p rust_lib_flutterustmusic --lib linux_system_chromium::tests::` | PASS: all six unchanged NetEase Chromium tests |
+| `python3 scripts/research/test_kugou_web_playback_gate.py` | PASS: three retired-entry/privacy tests |
+| `python3 scripts/ci/audit_privacy_hygiene.py` and `python3 scripts/ci/verify_application_identity.py` | PASS |
+| `git diff --check` | PASS |
+
+The 21 deterministic Harness tests cover unauthorized Search (0 sends), exact
+first-page Provider mapping and selected ordinal (identical titles with distinct
+identities), at most one send under error/completion/re-entry/concurrency/dropped
+future, empty/all-omitted pages, query/selection cancellation, invalid ordinal
+and pasted opaque context rejection, foreign Provider/malformed ID rejection,
+missing Album/full-duration context without detail, optional Album title,
+Phase B refusal with zero CDP admission, separate Range approval, bounded input,
+diagnostic/presentation separation, default Cargo feature/dependency fencing and
+owner retirement before awaited cleanup. The handoff test uses the real client
+decoder and Provider mapping with a synthetic public response; its gate recorder
+proves the exact ID passed at the boundary, while the existing unchanged CDP
+tests separately prove abort/cleanup/single replay. It is not a live Search test.
+
+The real feature-enabled executable builds. Default, redirected `--interactive`,
+and manual query/identity/cookie arguments all return only `KUGOU_GATE
+result=NOT_RUN`. A controlling-PTY run displayed the Phase A budget, accepted
+`NO` and exited with SEARCH_NOT_AUTHORIZED/NOT_RUN before query input. Cargo
+metadata and the default normal-dependency graph exclude the harness's KuGou
+dependencies. `cargo build --offline --locked -p rust_lib_flutterustmusic
+--release --no-default-features --bin kugou-human-gate` is intentionally rejected
+because the feature is required; no production binary is generated.
+
+Resolved negative evidence: initial binary source placement confused private
+submodule lookup; moving only the binary root beside the existing module fixed
+compilation without copying CDP. Initial use of a nonexistent public reqwest
+Policy API and a shadowed test helper were compile errors, corrected without
+weakening assertions. Final lifecycle audit proved that a synchronous terminal
+read on one runtime thread could delay cancellation while Range approval waited.
+The feature-only two-worker runtime now handles signals independently, retires
+owner/generation first and uses bounded `poll`-based terminal input. Regression
+shows partial input cancels without another keystroke, late approval is rejected,
+and the gate future is awaited to finish cleanup. No capture/replay-core change
+was needed. None of these failures is evidence about the real KuGou service.
+
+## Existing Rust gate ownership (unchanged)
 
 The only gate entry is `linux_system_chromium::kugou::run_gate` in
 `bridges/flutter/src/linux_system_chromium/kugou.rs`. It is a private,
@@ -16,13 +146,10 @@ crate-visible Linux Rust entry, compiled for tests or the opt-in
 Provider, Authentication implementation or MediaResolver route. Enabling that
 feature does not invoke the gate or enable production playback.
 
-The caller must already hold the selected **existing Fura KuGou `TrackId`** and
-its current owner/generation. A standalone CLI cannot establish that selection
-by accepting an opaque string, manufacturing a `TrackId`, reading an export or
-performing another lookup. There is no such CLI and no command in this guide
-performs a Human run. A future authorized in-crate caller must supply the real
-selection, explicit Human authority and cooperative lifecycle checks; do not
-add production wiring merely to make the experiment callable.
+The caller must hold the selected **existing Fura KuGou `TrackId`** and its current
+owner/generation. The harness obtains it only from existing Provider Search
+mapping, never a pasted opaque string, export or manufactured identity. It adds
+no production wiring and does not modify capture/replay implementation.
 
 The old Python wrapper and Rust example are retired, inert entries:
 
@@ -58,7 +185,7 @@ An unavailable Rust caller or missing selection leaves the gate **NOT_RUN**.
 - Optionally, at most **one** `Range: bytes=0-4095` request, only after separate
   approval of the returned source's exact normalized hostname. No API Cookie or
   added account token is sent to media; never display the media URL.
-- No redirect, retry, alternate profile/envelope, Fura Search/detail, another
+- No redirect, retry, alternate profile/envelope, additional Fura Search/detail, another
   track, backup source, HTTP downgrade, third-party API or quality escalation.
 
 A third-party README, synthetic fixture or previous checkpoint is not authority

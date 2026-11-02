@@ -34,6 +34,10 @@ use zeroize::Zeroize;
 #[allow(dead_code)] // Deliberately disconnected Rust caller entry, not an FRB API.
 pub(crate) mod kugou;
 
+#[cfg(feature = "kugou-cdp-gate")]
+#[allow(dead_code)] // Called only by the opt-in standalone research executable.
+pub(crate) mod kugou_harness;
+
 const OFFICIAL_LOGIN_URL: &str = "https://music.163.com/#/login";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
 const TARGET_TIMEOUT: Duration = Duration::from_secs(20);

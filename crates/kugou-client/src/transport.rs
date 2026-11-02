@@ -59,6 +59,9 @@ impl HttpsTransport {
         let client = reqwest::Client::builder()
             .https_only(true)
             .redirect(reqwest::redirect::Policy::none())
+            // A bounded public request must not be replayed by reqwest's
+            // default protocol-NACK retry policy below the Transport boundary.
+            .retry(reqwest::retry::never())
             .timeout(Duration::from_secs(20))
             .build()
             .map_err(|_| Error::TemporaryNetworkFailure)?;

@@ -10,7 +10,12 @@ crate-type = ["cdylib", "staticlib"]
 
 [features]
 # Disconnected Rust-only Human gate. No API/Provider production activation.
-kugou-cdp-gate = ["dep:kugou-client", "dep:provider-kugou"]
+kugou-cdp-gate = ["dep:kugou-client", "dep:provider-kugou", "tokio/signal", "tokio/rt-multi-thread", "nix/poll"]
+
+[[bin]]
+name = "kugou-human-gate"
+path = "src/kugou_human_gate.rs"
+required-features = ["kugou-cdp-gate"]
 
 [dependencies]
 flutter_rust_bridge = "=2.13.0"

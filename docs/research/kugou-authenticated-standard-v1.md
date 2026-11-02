@@ -1,6 +1,23 @@
 # KuGou authenticated Standard playback V1 — offline candidate
 
-## Current superseding contract: Rust caller and CDP
+## Current caller addition: bounded Human Search harness
+
+Date: 2026-11-02, starting at `c0dc0915171d40865275c393d5d68abb76b0e848`.
+Human explicitly authorized a feature-gated Rust-only caller that obtains one
+real Provider TrackId through existing KuGou Public Search, followed by Human
+ordinal selection and independent authenticated-gate authority. This supersedes
+the earlier no-new-lookup caller restriction only for this bounded harness.
+Protocol research and CDP capture/replay core are unchanged. No live Search,
+account, songinfo or Range is authorized or executed in this implementation task.
+
+The [maintainer guide](../development/kugou-authenticated-standard-gate.md#opt-in-rust-harness-search-ordinal-existing-gate)
+specifies the feature/terminal boundary, separate authority phrases, exact
+one-Search budget, identity/context validation and existing `run_gate` handoff.
+There is no pasted identity or secret input, persistence, Vault, FRB, Flutter,
+BuiltInProvider or production resolver. Readiness is scoped to offline/synthetic
+machine evidence; the first live Human gate needs separate authorization.
+
+## Dated contract: Rust caller and CDP, before the harness
 
 Date: 2026-10-27, after the initial offline checkpoint. The Human clarified that
 the gate may be entered **only by a Rust caller already holding the existing,
