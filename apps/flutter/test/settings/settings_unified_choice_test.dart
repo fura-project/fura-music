@@ -30,10 +30,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     final row = find.byKey(const ValueKey('settings-theme-selector'));
-    expect(
-      find.descendant(of: row, matching: find.byType(ListTile)),
-      findsNothing,
-    );
+    expect(tester.widget(row), isA<ListTile>());
     final idle = await _rowPixels(tester, boundary, row);
     final mouse = await tester.createGesture(kind: ui.PointerDeviceKind.mouse);
     await mouse.addPointer(location: const Offset(0, 0));
@@ -85,17 +82,16 @@ void main() {
     await tester.tap(row);
     await tester.pumpAndSettle();
     final option = find.byKey(const ValueKey('settings-theme-light'));
-    expect(find.byType(MenuItemButton), findsNWidgets(3));
+    expect(find.byType(PopupMenuItem<AppThemePreference>), findsNWidgets(3));
     expect(Theme.of(tester.element(option)).useMaterial3, isTrue);
     final panel = find
         .ancestor(
           of: option,
           matching: find.byWidgetPredicate(
-            (w) => w is Material && w.type == MaterialType.canvas,
+            (w) => w is Material && w.type == MaterialType.card,
           ),
         )
         .first;
-    // The SDK's desktop compact VisualDensity adjusts 160 dp by -8 dp.
     expect(tester.getSize(panel).width, inInclusiveRange(152, 320));
     expect(
       tester.getSize(find.byKey(const ValueKey('settings-group'))),
@@ -106,7 +102,7 @@ void main() {
     expect(nativeCalls, 0);
     await tester.tap(option);
     await tester.pumpAndSettle();
-    expect(find.byType(MenuItemButton), findsNothing);
+    expect(find.byType(PopupMenuItem<AppThemePreference>), findsNothing);
     expect(
       tester
           .widget<Text>(
@@ -133,10 +129,10 @@ void main() {
       await tester.tap(row);
       await tester.pumpAndSettle();
       final oldCallback = tester
-          .widget<MenuItemButton>(
+          .widget<PopupMenuItem<AppThemePreference>>(
             find.byKey(const ValueKey('settings-theme-light')),
           )
-          .onPressed!;
+          .onTap!;
       await owner.update(
         owner.settings.copyWith(theme: AppThemePreference.dark),
       );
@@ -146,14 +142,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(owner.settings.theme, AppThemePreference.dark);
       expect(storage.writes, 1);
-      expect(find.byType(MenuItemButton), findsNothing);
+      expect(find.byType(PopupMenuItem<AppThemePreference>), findsNothing);
       await tester.tap(row);
       await tester.pumpAndSettle();
       final disposed = tester
-          .widget<MenuItemButton>(
+          .widget<PopupMenuItem<AppThemePreference>>(
             find.byKey(const ValueKey('settings-theme-light')),
           )
-          .onPressed!;
+          .onTap!;
       await tester.pumpWidget(
         SettingsReviewHarness(owner: owner, showPage: false),
       );
@@ -161,7 +157,7 @@ void main() {
       disposed();
       await tester.pumpAndSettle();
       expect(storage.writes, 1);
-      expect(find.byType(MenuItemButton), findsNothing);
+      expect(find.byType(PopupMenuItem<AppThemePreference>), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -179,10 +175,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
     await tester.pumpAndSettle();
     final old = tester
-        .widget<MenuItemButton>(
+        .widget<PopupMenuItem<AppThemePreference>>(
           find.byKey(const ValueKey('settings-theme-light')),
         )
-        .onPressed!;
+        .onTap!;
     await owner.update(owner.settings.copyWith(theme: AppThemePreference.dark));
     await tester.pumpAndSettle();
     await owner.update(
@@ -210,10 +206,10 @@ void main() {
     await tester.tap(row);
     await tester.pumpAndSettle();
     final retired = tester
-        .widget<MenuItemButton>(
+        .widget<PopupMenuItem<AppThemePreference>>(
           find.byKey(const ValueKey('settings-theme-light')),
         )
-        .onPressed!;
+        .onTap!;
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     await tester.tap(row);
@@ -234,7 +230,7 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
-      expect(find.byType(MenuItemButton), findsNothing);
+      expect(find.byType(PopupMenuItem<AppThemePreference>), findsNothing);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
       expect(focus.hasFocus, isTrue);
@@ -248,26 +244,23 @@ void main() {
       final row = find.byKey(const ValueKey('settings-theme-selector'));
       await tester.tap(row);
       await tester.pumpAndSettle();
-      final menu = tester
-          .widget<MenuAnchor>(
-            find.ancestor(of: row, matching: find.byType(MenuAnchor)).first,
-          )
-          .controller!;
-      menu.close();
-      // The SDK stays isOpen while reversing its closing animation; another
-      // toggle during that transition must not write or leave a stale overlay.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump(const Duration(milliseconds: 50));
+      // The PopupRoute stays active while reversing its closing animation;
+      // another toggle during that transition must not write or leave a stale
+      // overlay.
       settingsRowInk(tester, row).onTap!();
       await tester.pumpAndSettle();
-      expect(menu.isOpen, isFalse);
+      expect(find.byType(PopupMenuItem<AppThemePreference>), findsNothing);
       expect(settingsRowInk(tester, row).focusNode!.hasFocus, isTrue);
       settingsRowInk(tester, row).onTap!();
       await tester.pumpAndSettle();
-      expect(menu.isOpen, isTrue);
+      expect(find.byType(PopupMenuItem<AppThemePreference>), findsNWidgets(3));
       expect(settingsRowInk(tester, row).focusNode!.hasFocus, isFalse);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
-      expect(menu.isOpen, isFalse);
+      expect(find.byType(PopupMenuItem<AppThemePreference>), findsNothing);
       expect(
         tester
             .widget<Text>(

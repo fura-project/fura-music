@@ -62,8 +62,8 @@ void main() {
                     ),
                     beforeSize,
                   );
-                  for (final menu in tester.widgetList<MenuItemButton>(
-                    find.byType(MenuItemButton),
+                  for (final menu in tester.widgetList<PopupMenuItem>(
+                    find.byWidgetPredicate((w) => w is PopupMenuItem),
                   )) {
                     final entry = find.byKey(menu.key!);
                     await tester.ensureVisible(entry);
@@ -86,9 +86,13 @@ void main() {
                 }
                 final target = find.byKey(ValueKey(option));
                 await tester.ensureVisible(target);
+                await tester.pumpAndSettle();
                 await tester.tap(target);
                 await tester.pumpAndSettle();
-                expect(find.byType(MenuItemButton), findsNothing);
+                expect(
+                  find.byWidgetPredicate((w) => w is PopupMenuItem),
+                  findsNothing,
+                );
                 if (detailed) {
                   expect(
                     find.byKey(const ValueKey('settings-color-details')),

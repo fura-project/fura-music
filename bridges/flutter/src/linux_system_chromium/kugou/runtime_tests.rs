@@ -10,6 +10,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{ChildStdin, ChildStdout};
 
 const TEST_NAME: &str = "linux_system_chromium::kugou::runtime_tests::offline_installed_chrome_intercept_abort_then_single_rust_tls_replay";
+const TWO_STAGE_TEST_NAME: &str = "linux_system_chromium::kugou::runtime_tests::offline_installed_chrome_two_stage_js_fulfill_abort_and_two_rust_requests";
 const WORKER: &str = "FURA_KUGOU_OFFLINE_RUNTIME_WORKER";
 const HASH: &str = "11111111111111111111111111111111";
 const SYNTHETIC_COOKIE: &str = "KugooID=42; t=synthetic-token";
@@ -25,9 +26,9 @@ type RuntimeResult<T> = Result<T, &'static str>;
 #[ignore = "explicit offline installed google-chrome-stable, Python and OpenSSL runtime"]
 async fn offline_installed_chrome_intercept_abort_then_single_rust_tls_replay() {
     let result = if env::var(WORKER).as_deref() == Ok("1") {
-        run_worker().await
+        run_worker(false).await
     } else {
-        run_isolated_worker().await
+        run_isolated_worker(TEST_NAME).await
     };
     if let Err(category) = result {
         eprintln!("KUGOU_RUNTIME_FAILURE={category}");
@@ -35,7 +36,21 @@ async fn offline_installed_chrome_intercept_abort_then_single_rust_tls_replay() 
     }
 }
 
-async fn run_isolated_worker() -> RuntimeResult<()> {
+#[tokio::test]
+#[ignore = "explicit offline installed google-chrome-stable, Python and OpenSSL two-stage runtime"]
+async fn offline_installed_chrome_two_stage_js_fulfill_abort_and_two_rust_requests() {
+    let result = if env::var(WORKER).as_deref() == Ok("1") {
+        run_worker(true).await
+    } else {
+        run_isolated_worker(TWO_STAGE_TEST_NAME).await
+    };
+    if let Err(category) = result {
+        eprintln!("KUGOU_RUNTIME_FAILURE={category}");
+        panic!("KUGOU_OFFLINE_TWO_STAGE_RUNTIME_FAILED");
+    }
+}
+
+async fn run_isolated_worker(test_name: &str) -> RuntimeResult<()> {
     let home = tempfile::tempdir().map_err(|_| "ISOLATION_SETUP_FAILED")?;
     let runtime = tempfile::tempdir().map_err(|_| "ISOLATION_SETUP_FAILED")?;
     let sentinel = home.path().join(".config/google-chrome/Default/sentinel");
@@ -46,7 +61,7 @@ async fn run_isolated_worker() -> RuntimeResult<()> {
     let output = Command::new(env::current_exe().map_err(|_| "WORKER_UNAVAILABLE")?)
         .args([
             "--exact",
-            TEST_NAME,
+            test_name,
             "--ignored",
             "--nocapture",
             "--test-threads=1",
@@ -105,13 +120,17 @@ async fn run_isolated_worker() -> RuntimeResult<()> {
 
 struct Fixture {
     child: Child,
-    input: ChildStdin,
-    output: BufReader<ChildStdout>,
+    control: std::sync::Arc<tokio::sync::Mutex<FixtureControl>>,
     _certificates: TempDir,
 }
 
+struct FixtureControl {
+    input: ChildStdin,
+    output: BufReader<ChildStdout>,
+}
+
 impl Fixture {
-    async fn start() -> RuntimeResult<Self> {
+    async fn start(two_stage: bool) -> RuntimeResult<Self> {
         let certificates = tempfile::tempdir().map_err(|_| "FIXTURE_SETUP_FAILED")?;
         let mut child = Command::new("python3")
             .arg(concat!(
@@ -119,6 +138,7 @@ impl Fixture {
                 "/src/linux_system_chromium/kugou/runtime_fixture.py"
             ))
             .arg(certificates.path())
+            .args(if two_stage { vec!["two-stage"] } else { vec![] })
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -129,46 +149,22 @@ impl Fixture {
         let output = BufReader::new(child.stdout.take().ok_or("FIXTURE_CONTROL_FAILED")?);
         Ok(Self {
             child,
-            input,
-            output,
+            control: std::sync::Arc::new(tokio::sync::Mutex::new(FixtureControl { input, output })),
             _certificates: certificates,
         })
     }
 
     async fn message(&mut self, bound: Duration) -> RuntimeResult<Value> {
-        let mut line = String::new();
-        let size = timeout(bound, self.output.read_line(&mut line))
-            .await
-            .map_err(|_| "FIXTURE_CONTROL_TIMEOUT")?
-            .map_err(|_| "FIXTURE_CONTROL_FAILED")?;
-        if size == 0 || size > 16 * 1024 {
-            return Err("FIXTURE_CONTROL_FAILED");
-        }
-        serde_json::from_str(&line).map_err(|_| "FIXTURE_CONTROL_FAILED")
+        self.control.lock().await.message(bound).await
     }
 
     async fn counts(&mut self, replayed: bool) -> RuntimeResult<()> {
-        timeout(IO_BOUND, self.input.write_all(b"COUNTS\n"))
-            .await
-            .map_err(|_| "FIXTURE_CONTROL_TIMEOUT")?
-            .map_err(|_| "FIXTURE_CONTROL_FAILED")?;
-        let counts = self.message(IO_BOUND).await?;
-        if counts
-            != json!({"page":1, "api":u8::from(replayed), "rust":u8::from(replayed),
-            "browser":0, "range":0, "rejected":0})
-        {
-            return Err(if replayed {
-                "REPLAY_REQUEST_COUNT_INVALID"
-            } else {
-                "BROWSER_REQUEST_ESCAPED_ABORT"
-            });
-        }
-        Ok(())
+        fixture_counts(&self.control, false, u8::from(replayed)).await
     }
 
     async fn stop(&mut self) -> RuntimeResult<()> {
         let stopped = timeout(IO_BOUND, async {
-            self.input.write_all(b"STOP\n").await?;
+            self.control.lock().await.input.write_all(b"STOP\n").await?;
             self.child.wait().await
         })
         .await;
@@ -186,21 +182,71 @@ impl Fixture {
     }
 }
 
-struct LoopbackTlsTransport(reqwest::Client);
+impl FixtureControl {
+    async fn message(&mut self, bound: Duration) -> RuntimeResult<Value> {
+        let mut line = String::new();
+        let size = timeout(bound, self.output.read_line(&mut line))
+            .await
+            .map_err(|_| "FIXTURE_CONTROL_TIMEOUT")?
+            .map_err(|_| "FIXTURE_CONTROL_FAILED")?;
+        if size == 0 || size > 16 * 1024 {
+            return Err("FIXTURE_CONTROL_FAILED");
+        }
+        serde_json::from_str(&line).map_err(|_| "FIXTURE_CONTROL_FAILED")
+    }
+}
+
+async fn fixture_counts(
+    control: &std::sync::Arc<tokio::sync::Mutex<FixtureControl>>,
+    two_stage: bool,
+    step: u8,
+) -> RuntimeResult<()> {
+    let mut control = control.lock().await;
+    timeout(IO_BOUND, control.input.write_all(b"COUNTS\n"))
+        .await
+        .map_err(|_| "FIXTURE_CONTROL_TIMEOUT")?
+        .map_err(|_| "FIXTURE_CONTROL_FAILED")?;
+    let counts = control.message(IO_BOUND).await?;
+    let mut expected = json!({"page":1,"api":step,"rust":step,"browser":0,"range":0,"rejected":0});
+    if two_stage {
+        expected["stage1"] = json!(u8::from(step >= 1));
+        expected["stage2"] = json!(u8::from(step >= 2));
+    }
+    if counts != expected {
+        return Err("UPSTREAM_REQUEST_COUNT_INVALID");
+    }
+    Ok(())
+}
+
+struct LoopbackTlsTransport {
+    client: reqwest::Client,
+    control: Option<std::sync::Arc<tokio::sync::Mutex<FixtureControl>>>,
+    cleaned: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
 
 impl WebPlaybackTransport for LoopbackTlsTransport {
     async fn send_web(
         &self,
         request: &CapturedWebRequest,
     ) -> Result<WebPlaybackResponse, WebPlaybackError> {
-        let expected = format!(
-            "https://wwwapi.kugou.com/play/songinfo?hash={HASH}&album_id=7&album_audio_id=9&mid=synthetic-mid&dfid=synthetic-dfid&userid=42&token=synthetic-token&signature=00000000000000000000000000000000"
-        );
+        let expected = if let Some(control) = &self.control {
+            if !self.cleaned.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(WebPlaybackError::InvalidCapture);
+            }
+            fixture_counts(control, true, 1)
+                .await
+                .map_err(|_| WebPlaybackError::InvalidCapture)?;
+            "https://wwwapi.kugou.com/play/songinfo?encode_album_audio_id=synthetic%2Fopaque%2Bserver%3Did".into()
+        } else {
+            format!(
+                "https://wwwapi.kugou.com/play/songinfo?hash={HASH}&album_id=7&album_audio_id=9&mid=synthetic-mid&dfid=synthetic-dfid&userid=42&token=synthetic-token&signature=00000000000000000000000000000000"
+            )
+        };
         if request.url() != expected || request.cookie_header() != SYNTHETIC_COOKIE {
             return Err(WebPlaybackError::InvalidCapture);
         }
         let mut replay = self
-            .0
+            .client
             .get(request.url())
             .header("Cookie", request.cookie_header())
             .header("X-Synthetic-Owner", "Rust");
@@ -225,6 +271,11 @@ impl WebPlaybackTransport for LoopbackTlsTransport {
             }
             body.extend_from_slice(&chunk);
         }
+        if let Some(control) = &self.control {
+            fixture_counts(control, true, 2)
+                .await
+                .map_err(|_| WebPlaybackError::InvalidResponse)?;
+        }
         Ok(WebPlaybackResponse {
             response: Response {
                 status,
@@ -234,17 +285,103 @@ impl WebPlaybackTransport for LoopbackTlsTransport {
             security_challenge: false,
         })
     }
+
+    async fn send_stage1(
+        &self,
+        request: &CapturedWebRequest,
+    ) -> Result<
+        kugou_client::web_playback_candidate::songinfo_stages::Stage1WireResponse,
+        WebPlaybackError,
+    > {
+        let control = self
+            .control
+            .as_ref()
+            .ok_or(WebPlaybackError::ProtocolUnsupported)?;
+        fixture_counts(control, true, 0)
+            .await
+            .map_err(|_| WebPlaybackError::InvalidCapture)?;
+        let query = Url::parse(request.url()).map_err(|_| WebPlaybackError::InvalidCapture)?;
+        if query.query_pairs().any(|(key, _)| {
+            matches!(
+                key.as_ref(),
+                "album_id" | "album_audio_id" | "encode_album_audio_id"
+            )
+        }) || request.cookie_header() != SYNTHETIC_COOKIE
+        {
+            return Err(WebPlaybackError::InvalidCapture);
+        }
+        let mut builder = self
+            .client
+            .get(request.url())
+            .header("Cookie", request.cookie_header())
+            .header("X-Synthetic-Owner", "Rust");
+        for (name, value) in request.replay_headers() {
+            builder = builder.header(name, value);
+        }
+        let mut response = builder
+            .send()
+            .await
+            .map_err(|_| WebPlaybackError::Network)?;
+        let status = response.status().as_u16();
+        let headers = response
+            .headers()
+            .iter()
+            .map(|(name, value)| {
+                Ok((
+                    name.as_str().to_owned(),
+                    value
+                        .to_str()
+                        .map_err(|_| WebPlaybackError::InvalidResponse)?
+                        .to_owned(),
+                ))
+            })
+            .collect::<Result<Vec<_>, WebPlaybackError>>()?;
+        let content_type = response
+            .headers()
+            .get("Content-Type")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        let mut body = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|_| WebPlaybackError::Network)?
+        {
+            if body.len() + chunk.len() > 16 * 1024 {
+                return Err(WebPlaybackError::ResponseBound);
+            }
+            body.extend_from_slice(&chunk);
+        }
+        fixture_counts(control, true, 1)
+            .await
+            .map_err(|_| WebPlaybackError::InvalidResponse)?;
+        eprintln!("KUGOU_RUNTIME_STAGE1_BROWSER_UPSTREAM=ZERO");
+        eprintln!("KUGOU_RUNTIME_STAGE1_RUST_UPSTREAM=ONE");
+        Ok(
+            kugou_client::web_playback_candidate::songinfo_stages::Stage1WireResponse::new(
+                WebPlaybackResponse {
+                    response: Response {
+                        status,
+                        content_type,
+                        body,
+                    },
+                    security_challenge: false,
+                },
+                headers,
+            ),
+        )
+    }
 }
 
-async fn run_worker() -> RuntimeResult<()> {
+async fn run_worker(two_stage: bool) -> RuntimeResult<()> {
     let installed =
         find_in_path("google-chrome-stable").ok_or("GOOGLE_CHROME_STABLE_UNAVAILABLE")?;
     let browser = discover_browser().map_err(|_| "BROWSER_DISCOVERY_FAILED")?;
     if browser.binary != std::fs::canonicalize(installed).map_err(|_| "BROWSER_DISCOVERY_FAILED")? {
         return Err("WRONG_INSTALLED_BROWSER");
     }
-    let mut fixture = Fixture::start().await?;
-    let result = run_capture(&mut fixture, &browser).await;
+    let mut fixture = Fixture::start(two_stage).await?;
+    let result = run_capture(&mut fixture, &browser, two_stage).await;
     let cleanup = fixture.stop().await;
     cleanup?;
     result?;
@@ -253,7 +390,11 @@ async fn run_worker() -> RuntimeResult<()> {
     Ok(())
 }
 
-async fn run_capture(fixture: &mut Fixture, browser: &BrowserCandidate) -> RuntimeResult<()> {
+async fn run_capture(
+    fixture: &mut Fixture,
+    browser: &BrowserCandidate,
+    two_stage: bool,
+) -> RuntimeResult<()> {
     let ready = fixture.message(Duration::from_secs(65)).await?;
     let port = ready["port"]
         .as_u64()
@@ -287,15 +428,22 @@ async fn run_capture(fixture: &mut Fixture, browser: &BrowserCandidate) -> Runti
         .resolve("wwwapi.kugou.com", address)
         .build()
         .map_err(|_| "TLS_TRANSPORT_SETUP_FAILED")?;
-    let owner = AuthenticatedStandardCandidate::new(LoopbackTlsTransport(client));
+    let cleaned = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let owner = AuthenticatedStandardCandidate::new(LoopbackTlsTransport {
+        client,
+        control: two_stage.then(|| fixture.control.clone()),
+        cleaned: cleaned.clone(),
+    });
     let id = TrackId::new(
         provider_kugou::provider_id(),
         format!("v1:9:{HASH}:8:180:7"),
     )
     .map_err(|_| "SYNTHETIC_TRACK_INVALID")?;
-    let attempt = owner
-        .begin_capture(&id)
-        .map_err(|_| "CAPTURE_ADMISSION_FAILED")?;
+    let mut attempt = Some(
+        owner
+            .begin_capture(&id)
+            .map_err(|_| "CAPTURE_ADMISSION_FAILED")?,
+    );
     if owner.begin_capture(&id).err() != Some(WebPlaybackError::AttemptConsumed) {
         return Err("CAPTURE_BUDGET_NOT_CONSUMED");
     }
@@ -323,7 +471,8 @@ async fn run_capture(fixture: &mut Fixture, browser: &BrowserCandidate) -> Runti
             "--host-resolver-rules=MAP www.kugou.com 127.0.0.1:{port}, MAP wwwapi.kugou.com 127.0.0.1:{port}, MAP * ~NOTFOUND"
         ),
     ];
-    let is_current = || owner.is_capture_current(&attempt);
+    let is_current =
+        owner.capture_current_check(attempt.as_ref().ok_or("CAPTURE_ADMISSION_FAILED")?);
     let mut running = start_browser_at(browser, &is_current, "about:blank", &args)
         .await
         .map_err(|failure| match failure {
@@ -353,6 +502,28 @@ async fn run_capture(fixture: &mut Fixture, browser: &BrowserCandidate) -> Runti
                 .await
                 .map_err(|_| "CDP_CONNECTION_FAILED")?,
         );
+        if two_stage {
+            let progress = timeout(
+                CAPTURE_BOUND,
+                capture_stages_in_browser(
+                    &owner,
+                    attempt.take().ok_or("CAPTURE_ADMISSION_FAILED")?,
+                    cdp.as_mut().ok_or("CDP_CONNECTION_FAILED")?,
+                    &mut running.child,
+                    &is_current,
+                    OFFICIAL_PAGE,
+                    Duration::from_secs(5),
+                ),
+            )
+            .await
+            .map_err(|_| "TWO_STAGE_CAPTURE_TIMEOUT")?
+            .map_err(|error| {
+                eprintln!("KUGOU_RUNTIME_TWO_STAGE_CATEGORY={error:?}");
+                "TWO_STAGE_CAPTURE_FAILED"
+            })?;
+            fixture_counts(&fixture.control, true, 1).await?;
+            return Ok(RuntimeCapture::Stages(progress));
+        }
         timeout(
             CAPTURE_BOUND,
             capture_in_browser(
@@ -364,6 +535,7 @@ async fn run_capture(fixture: &mut Fixture, browser: &BrowserCandidate) -> Runti
         )
         .await
         .map_err(|_| "BROWSER_CAPTURE_TIMEOUT")?
+        .map(RuntimeCapture::Legacy)
         .map_err(|failure| match failure {
             GateFailure::Browser(CaptureFailure::DevtoolsInvalid) => "CDP_PROTOCOL_REJECTED",
             GateFailure::Playback(WebPlaybackError::InvalidCapture) => "BROWSER_CAPTURE_INVALID",
@@ -409,12 +581,36 @@ async fn run_capture(fixture: &mut Fixture, browser: &BrowserCandidate) -> Runti
     eprintln!("KUGOU_RUNTIME_PROFILE_MODE=0700");
     eprintln!("KUGOU_RUNTIME_BROWSER_EXIT=CONFIRMED");
     eprintln!("KUGOU_RUNTIME_PROFILE=DELETED");
-    let capture = captured?;
+    cleaned.store(true, std::sync::atomic::Ordering::SeqCst);
+    let capture = match captured? {
+        RuntimeCapture::Stages(progress) => {
+            let source = source_after_cleanup(&owner, Ok(progress), Ok(()), &is_current)
+                .await
+                .map_err(|error| {
+                    eprintln!("KUGOU_RUNTIME_TWO_STAGE_CATEGORY={error:?}");
+                    "TWO_STAGE_REPLAY_FAILED"
+                })?;
+            if source.media_format() != MediaFormat::Mp3
+                || source.quality() != Some(WebQuality::Standard)
+            {
+                return Err("SYNTHETIC_SOURCE_INVALID");
+            }
+            drop(source);
+            fixture_counts(&fixture.control, true, 2).await?;
+            eprintln!("KUGOU_RUNTIME_STAGE1_FULFILL=CONFIRMED");
+            eprintln!("KUGOU_RUNTIME_STAGE2_BROWSER_UPSTREAM=ZERO");
+            eprintln!("KUGOU_RUNTIME_STAGE2_RUST_UPSTREAM=ONE");
+            eprintln!("KUGOU_RUNTIME_TOTAL_API_REQUESTS=TWO");
+            eprintln!("KUGOU_RUNTIME_RANGE_REQUESTS=ZERO");
+            return Ok(());
+        }
+        RuntimeCapture::Legacy(capture) => capture,
+    };
     fixture.counts(false).await?;
     eprintln!("KUGOU_RUNTIME_BROWSER_API_REQUESTS=ZERO");
     let bound = owner
         .finish_capture(
-            attempt,
+            attempt.take().ok_or("CAPTURE_ADMISSION_FAILED")?,
             capture,
             unix_seconds().map_err(|_| "CLOCK_INVALID")?,
         )
@@ -435,4 +631,9 @@ async fn run_capture(fixture: &mut Fixture, browser: &BrowserCandidate) -> Runti
     eprintln!("KUGOU_RUNTIME_TOTAL_API_REQUESTS=ONE");
     eprintln!("KUGOU_RUNTIME_RANGE_REQUESTS=ZERO");
     Ok(())
+}
+
+enum RuntimeCapture {
+    Legacy(OfficialWebCapture),
+    Stages(BrowserProgress),
 }

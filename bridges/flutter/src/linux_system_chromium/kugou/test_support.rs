@@ -1,4 +1,4 @@
-use super::super::*;
+use super::*;
 use kugou_client::{
     Response,
     web_playback_candidate::{CapturedWebRequest, WebPlaybackResponse},

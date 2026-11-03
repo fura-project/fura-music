@@ -1,15 +1,66 @@
 ---
 execution:
   mode: HUMAN_DIRECTED
-  work_domain: CORE
+  work_domain: UI
   state: HUMAN_REVIEW
-  acceptance_milestone: KUGOU_AUTHENTICATED_STANDARD_HUMAN_GATE
-  active_workstream: KUGOU_AUTHENTICATED_STANDARD_HUMAN_HARNESS
-  current_task: LIVE_HUMAN_GATE_READY
-  next_action: AWAIT_SEPARATE_HUMAN_AUTHORITY_NO_LIVE_RUN
+  acceptance_milestone: SETTINGS_SHELL_POPUP_MOBILE_SEARCH_TRANSITION_V1
+  active_workstream: SETTINGS_MATERIAL_YOU_AND_SHELL_TRANSITION
+  current_task: SETTINGS_POPUP_MOBILE_AND_SEARCH_RETURN_TRANSITION
+  next_action: AWAIT_HUMAN_VISUAL_REVIEW
 ---
 
 # Current State
+
+- **2026-11-02 Human-directed UI / Settings native `ListTile` + `PopupMenuButton` controls, mobile layout polish, and top search bar return transition:**
+  Addressed three concrete Human review directives (`现在问题是设置小弹窗像浮上去的一样 同时把手机版优化一下 还有设置返回主页时搜索框过渡没做好 会突然消失` and `改动1不是好不好看的问题 是本来就没有用原生组件 是我们拼接的 而且没有弹出收入动画`):
+  1. **Native Settings choice rows & animated popup menu (`apps/flutter/lib/settings/settings_page.dart`):**
+     Removed the custom-stitched `_FuraSettingsRow` and un-animated `MenuAnchor`, replacing both `_SettingsChoiceTile` and `_SettingsColorDisclosure` header rows with native Flutter Material `ListTile` (`contentPadding`, `minVerticalPadding`, `shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))`, `leading`, `title`, optional 2x/long-copy `subtitle`, and `trailing`). `_SettingsChoiceTile` now uses native `PopupMenuButton<T>` (`PopupMenuPosition.under`, `surfaceContainerHigh`, `16` dp rounded shape with subtle `outlineVariant` border) and `PopupMenuItem<T>`, providing Flutter's built-in Material 3 `_PopupMenuRoute` scale (`widthFactor`/`heightFactor`) and fade pop-open and collapse-close animations while preserving all revision-guarded save, rollback, keyboard traversal, Escape/Back dismissal, and deferred lifecycle focus-return guarantees.
+  2. **Mobile / compact Settings optimization (`apps/flutter/lib/settings/settings_page.dart`):**
+     Removed the redundant category label below the compact `AppBar` in `_SettingsSectionHeading` (rendering `section.description(l10n)` in `bodyMedium` `onSurfaceVariant`), tightened compact `SettingsPage` list padding to `16` dp horizontal / `8` dp top, lowered `_fitsInline`'s width gate to `280` dp so `390` dp mobile rows at `1x` text scale use the inline capsule trigger pill while `2x` / long copy falls back to `ListTile.subtitle` with a tonal circular chevron badge, and upgraded `_CompactSettingsMenuTile` with `40×40` dp tonal rounded icon badges (`secondaryContainer` at `0.55` alpha, `12` dp radius) and `indent: 72` dividers.
+  3. **Settings-to-Main top search bar return transition (`apps/flutter/lib/library/user_library_page.dart`):**
+     Fixed the root cause where returning from Settings over a destination with a collapsed header (`LikedSongs` with `_likedHeaderCollapsed` or `RecentPlays` with `_recentHeaderCollapsed`) flipped `likedHeaderOwnsTopBar` / `recentHeaderOwnsTopBar` on frame 1 (`embeddedShellRoute == null`), immediately removing `Scaffold.appBar` (`mainAppBar` containing the top search bar) and jumping the outgoing `SettingsPage` up by `56` dp during its `240` ms exit animation. `baseOwnsTopBar` now keeps `Scaffold.appBar` as `null` while `_ShellDetailTransition` retains `detailTopBar: mainAppBar` at the top of the outgoing detail surface throughout the `240` ms reverse transition. `_PrimaryShellTitle` also animates `showSearchShortcut` transitions via `TweenAnimationBuilder<double>` and `_ShellSearchField` preserves a constant `LayoutBuilder -> MenuAnchor` tree depth.
+  - **Verification:** `dart format --output=none --set-exit-if-changed`, `dart analyze`, `flutter test test/settings/` (104/104 pass across 40 viewport/locale/brightness/text-scale variants and popup scale/fade motion verification), and `flutter test test/widget_test.dart` Settings and LikedSongs suites pass. See [Settings Shell design contract](docs/design/settings-shell.md). State: **HUMAN_REVIEW**.
+
+- **2026-11-02 Human-directed Core / KuGou two-stage follow-up:** clean starting
+  HEAD and `origin/main` match `5add34ef8b435933625faca43bbc76c12b0b6468`.
+  Human reports that the first separately operated gate completed Search and
+  both approvals but stopped with **OFFICIAL_WEB_TRACK_IDENTITY_UNPROVEN**.
+  No challenge/rate/session rejection was reported. The old code aborts the
+  browser candidate and rejects identity before Rust replay, so this is negative
+  evidence about single-stage binding compatibility, not an upstream rejection
+  of a Fura songinfo request. No actual identity/request values were supplied.
+  The pinned independent two-hop implementation is the leading explanation,
+  still static third-party evidence rather than an observed official wire shape.
+
+  The offline V2 candidate binds an official paused Stage 1 to the exact hash,
+  validates any supplied recording/Album identity, spends its one upstream budget
+  before await, validates the server-issued encoded ID, and fulfills only the
+  unchanged supported representation to the paused page. Website JS must create
+  Stage 2. Its encoded bytes and session must match; it is aborted, browser/profile
+  cleanup completes, then the separate Stage 2 budget may be spent once. No
+  encoded-ID decoding/generation, endpoint/signing fallback, retry, third songinfo,
+  account/Vault, FRB, Flutter, BuiltInProvider or production activation is added.
+  A fully validated direct response is an independent one-request branch, not a
+  failed attempt followed by two-stage fallback. One Search and optional one
+  separately approved Range remain distinct from the two-songinfo budget.
+
+  Real installed Chromium with synthetic JavaScript and loopback TLS has already
+  demonstrated Stage 1 fulfill → JS-generated Stage 2 → abort → cleanup → replay:
+  browser upstream **0**, Rust upstream **2**, Range **0**, profile deleted and
+  synthetic default profile untouched. Final validation passes 72 affected KuGou
+  crate tests, 157 default Bridge tests, 179 feature-enabled Bridge tests, strict
+  affected Clippy, both explicit installed-Chromium synthetic runtimes, all six
+  unchanged NetEase Chromium tests, the retired-entry tests, format/privacy/
+  identity/whitespace checks and default production fencing. There are 33 new
+  deterministic regressions plus one new explicit browser runtime. A cancelled
+  declining Range prompt cannot report stale source success; diagnostic pipe
+  failures cannot unwind a paused Fetch owner, and terminal hangup retires the
+  same owner before awaited cleanup. No existing assertion was weakened.
+  [V2 evidence and replay limits](docs/development/kugou-two-stage-gate-2026-11-02.md)
+  distinguish that machine proof from the retained first Human failure.
+  State: **LIVE_HUMAN_GATE_READY_V2**, offline/synthetic acceptance only.
+  **KUGOU_HUMAN_PLAYBACK_GATE=NOT_RUN_AFTER_V2**. No real Search, account,
+  songinfo or Range is executed in this task; no commit/push/Actions is performed.
 
 - **2026-11-02 Human-directed Core / bounded KuGou Human harness:** clean
   baseline and `origin/main` match `c0dc0915171d40865275c393d5d68abb76b0e848`.

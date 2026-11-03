@@ -11,6 +11,8 @@ use std::{collections::BTreeMap, fmt, future::Future, sync::Arc, time::Duration}
 const MAX_WEB_BYTES: usize = 256 * 1024;
 const MAX_CAPTURE_AGE: u64 = 300; // Local experiment limit, NOT an upstream TTL.
 
+pub mod songinfo_stages;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WebPlaybackError {
     LoginRequired,
@@ -31,6 +33,16 @@ pub enum WebPlaybackError {
     AttemptConsumed,
     OfficialWebTrackIdentityUnproven,
     NewMediaHostRequiresApproval,
+    OfficialWebStage1IdentityUnproven,
+    Stage1ResponseIdentityMismatch,
+    Stage1EncodedIdMissing,
+    OfficialWebSecondStageNotObserved,
+    OfficialWebEncodedIdentityMismatch,
+    OfficialWebStage2ProvenanceUnproven,
+    Stage2ResponseIdentityMismatch,
+    Stage1ResponseReplayUnsupported,
+    Stage1ResponseEncodingUnsupported,
+    Stage1ResponseCookieMutationUnsupported,
 }
 
 impl fmt::Display for WebPlaybackError {
@@ -131,6 +143,8 @@ pub struct OfficialWebCapture {
     hash: String,
     album_id: String,
     mix_song_id: Option<String>,
+    encoded_id: Option<String>,
+    profile: songinfo_stages::CaptureProfile,
     captured_seconds: u64,
     source: CaptureSource,
     presence: CapturePresence,
@@ -147,6 +161,9 @@ impl Drop for OfficialWebCapture {
             wipe_string(value);
         }
         if let Some(id) = &mut self.mix_song_id {
+            wipe_string(id);
+        }
+        if let Some(id) = &mut self.encoded_id {
             wipe_string(id);
         }
         for (name, value) in &mut self.headers {
@@ -195,6 +212,26 @@ impl OfficialWebCapture {
         cookies: &[ProfileCookie],
         now_seconds: u64,
     ) -> Result<Self, WebPlaybackError> {
+        Self::from_profile(
+            source,
+            url,
+            method,
+            headers,
+            cookies,
+            now_seconds,
+            songinfo_stages::CaptureProfile::Direct,
+        )
+    }
+
+    fn from_profile(
+        source: CaptureSource,
+        url: &str,
+        method: &str,
+        headers: &[(String, String)],
+        cookies: &[ProfileCookie],
+        now_seconds: u64,
+        profile: songinfo_stages::CaptureProfile,
+    ) -> Result<Self, WebPlaybackError> {
         if source != CaptureSource::OfficialWebGenerated || method != "GET" || url.len() > 16_384 {
             return Err(WebPlaybackError::InvalidCapture);
         }
@@ -214,16 +251,7 @@ impl OfficialWebCapture {
             }
             params.0.insert(key.into_owned(), value.into_owned());
         }
-        let identity_error = WebPlaybackError::OfficialWebTrackIdentityUnproven;
-        let hash = params.0.get("hash").ok_or(identity_error)?;
-        let album_id = params.0.get("album_id").ok_or(identity_error)?;
-        if hash.len() != 32
-            || !hash.bytes().all(|b| b.is_ascii_hexdigit())
-            || positive_id(album_id).is_err()
-        {
-            return Err(identity_error);
-        }
-        let mix_song_id = captured_recording_id(&params.0, hash, album_id)?;
+        let identity = songinfo_stages::capture_identity(&params.0, profile)?;
         let mut captured_seconds = now_seconds;
         if let Some(time) = params.0.get("clienttime") {
             let time = time
@@ -241,9 +269,11 @@ impl OfficialWebCapture {
             url: url.into(),
             headers: Vec::new(),
             cookie: String::new(),
-            hash: hash.to_ascii_uppercase(),
-            album_id: album_id.clone(),
-            mix_song_id,
+            hash: identity.hash,
+            album_id: identity.album,
+            mix_song_id: identity.recording,
+            encoded_id: identity.encoded,
+            profile,
             captured_seconds,
             source,
             presence: CapturePresence {
@@ -278,7 +308,9 @@ impl OfficialWebCapture {
         now: u64,
     ) -> Result<CapturedWebRequest, WebPlaybackError> {
         validate_capture_time(self.captured_seconds, now)?;
-        if self.source != CaptureSource::OfficialWebGenerated {
+        if self.source != CaptureSource::OfficialWebGenerated
+            || self.profile != songinfo_stages::CaptureProfile::Direct
+        {
             return Err(WebPlaybackError::InvalidCapture);
         }
         if self.hash != track.hash
@@ -295,38 +327,6 @@ impl OfficialWebCapture {
             track,
         })
     }
-}
-
-fn captured_recording_id(
-    params: &BTreeMap<String, String>,
-    hash: &str,
-    album: &str,
-) -> Result<Option<String>, WebPlaybackError> {
-    let mut recording: Option<&str> = None;
-    for (key, value) in params {
-        let key: String = key
-            .bytes()
-            .filter(|b| !matches!(b, b'_' | b'-'))
-            .map(|b| char::from(b.to_ascii_lowercase()))
-            .collect();
-        let proven = match key.as_str() {
-            "hash" => value.eq_ignore_ascii_case(hash),
-            "albumid" => value == album,
-            "mixsongid" | "albumaudioid" => {
-                let matches = positive_id(value).is_ok() && recording.is_none_or(|id| id == value);
-                recording = Some(value);
-                matches
-            }
-            // These identify other wire profiles; this one-shot candidate cannot
-            // decode/repair them or prove their relationship to the TrackId.
-            "audioid" | "songid" | "encodealbumaudioid" => false,
-            _ => true, // Unrelated opaque profile fields remain byte-for-byte unchanged.
-        };
-        if !proven {
-            return Err(WebPlaybackError::OfficialWebTrackIdentityUnproven);
-        }
-    }
-    Ok(recording.map(str::to_owned))
 }
 
 fn profile_cookie_header(
@@ -621,6 +621,16 @@ pub trait WebPlaybackTransport: Send + Sync {
         &self,
         request: &CapturedWebRequest,
     ) -> impl Future<Output = Result<WebPlaybackResponse, WebPlaybackError>> + Send;
+
+    /// Stage 1 requires complete response headers, not a fabricated fulfillment.
+    /// Existing direct-only transports fail closed without sending anything.
+    fn send_stage1(
+        &self,
+        _request: &CapturedWebRequest,
+    ) -> impl Future<Output = Result<songinfo_stages::Stage1WireResponse, WebPlaybackError>> + Send
+    {
+        std::future::ready(Err(WebPlaybackError::ProtocolUnsupported))
+    }
 }
 
 /// Separate opt-in transport: the existing public route allowlist is unchanged.
@@ -719,6 +729,22 @@ impl WebPlaybackTransport for WebPlaybackHttpsTransport {
         &self,
         request: &CapturedWebRequest,
     ) -> Result<WebPlaybackResponse, WebPlaybackError> {
+        Ok(self.send_with_headers(request).await?.response)
+    }
+
+    async fn send_stage1(
+        &self,
+        request: &CapturedWebRequest,
+    ) -> Result<songinfo_stages::Stage1WireResponse, WebPlaybackError> {
+        self.send_with_headers(request).await
+    }
+}
+
+impl WebPlaybackHttpsTransport {
+    async fn send_with_headers(
+        &self,
+        request: &CapturedWebRequest,
+    ) -> Result<songinfo_stages::Stage1WireResponse, WebPlaybackError> {
         // CapturedWebRequest fields are private, built only through the exact validator.
         request.validate_time(unix_seconds()?)?;
         let mut builder = self
@@ -748,6 +774,7 @@ impl WebPlaybackTransport for WebPlaybackHttpsTransport {
             .get("Content-Type")
             .and_then(|h| h.to_str().ok())
             .map(str::to_owned);
+        let headers = songinfo_stages::bounded_response_headers(response.headers())?;
         let mut result = WebPlaybackResponse {
             response: Response {
                 status,
@@ -767,7 +794,7 @@ impl WebPlaybackTransport for WebPlaybackHttpsTransport {
             result.response.body.extend_from_slice(&chunk);
         }
         request.validate_time(unix_seconds()?)?;
-        Ok(result)
+        Ok(songinfo_stages::Stage1WireResponse::new(result, headers))
     }
 }
 
@@ -784,6 +811,9 @@ struct SuccessEnvelope {
 #[derive(Deserialize)]
 struct WebData {
     hash: Option<String>,
+    encode_album_audio_id: Option<String>,
+    #[serde(alias = "MixSongID")]
+    mix_song_id: Option<serde_json::Value>,
     album_audio_id: Option<serde_json::Value>,
     album_id: Option<serde_json::Value>,
     privilege: Option<i64>,
@@ -825,9 +855,14 @@ impl Drop for QualityMetadata {
 
 impl Drop for WebData {
     fn drop(&mut self) {
-        for value in [&mut self.play_url, &mut self.hash, &mut self.extname]
-            .into_iter()
-            .flatten()
+        for value in [
+            &mut self.play_url,
+            &mut self.hash,
+            &mut self.extname,
+            &mut self.encode_album_audio_id,
+        ]
+        .into_iter()
+        .flatten()
         {
             wipe_string(value);
         }
@@ -843,6 +878,52 @@ pub fn decode_standard_source(
     request: &CapturedWebRequest,
     captured_response: WebPlaybackResponse,
 ) -> Result<StandardWebSource, WebPlaybackError> {
+    let response = checked_web_response(&captured_response)?;
+    let data = serde_json::from_slice::<SuccessEnvelope>(&response.body)
+        .map_err(|_| WebPlaybackError::InvalidResponse)?
+        .data;
+    let result = decode_media_source(request, data, &response.body);
+    drop(captured_response);
+    result
+}
+
+fn validate_response_identity_aliases(
+    body: &[u8],
+    track: &WebTrackContext,
+    encoded: Option<&str>,
+    error: WebPlaybackError,
+) -> Result<(), WebPlaybackError> {
+    let value: serde_json::Value =
+        serde_json::from_slice(body).map_err(|_| WebPlaybackError::InvalidResponse)?;
+    let data = value
+        .get("data")
+        .and_then(serde_json::Value::as_object)
+        .ok_or(WebPlaybackError::InvalidResponse)?;
+    for (key, value) in data {
+        let key: String = key
+            .bytes()
+            .filter(|b| !matches!(b, b'_' | b'-'))
+            .map(|b| char::from(b.to_ascii_lowercase()))
+            .collect();
+        let valid = match key.as_str() {
+            "hash" => value
+                .as_str()
+                .is_some_and(|hash| hash.eq_ignore_ascii_case(&track.hash)),
+            "albumid" => identity_equals(value, &track.album_id),
+            "albumaudioid" | "mixsongid" => identity_equals(value, &track.mix_song_id),
+            "encodealbumaudioid" => encoded.is_none_or(|expected| value.as_str() == Some(expected)),
+            _ => true,
+        };
+        if !valid {
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
+fn checked_web_response(
+    captured_response: &WebPlaybackResponse,
+) -> Result<&Response, WebPlaybackError> {
     if captured_response.security_challenge {
         return Err(WebPlaybackError::RiskControl);
     }
@@ -865,19 +946,13 @@ pub fn decode_standard_source(
     let envelope: Envelope =
         serde_json::from_slice(&response.body).map_err(|_| WebPlaybackError::InvalidResponse)?;
     check_business_status(&envelope)?;
-    // Decode security/error metadata before the success data. A challenge
-    // accompanied by malformed data must still stop the experiment.
-    let data = serde_json::from_slice::<SuccessEnvelope>(&response.body)
-        .map_err(|_| WebPlaybackError::InvalidResponse)?
-        .data;
-    let result = decode_media_source(request, data);
-    drop(captured_response);
-    result
+    Ok(response)
 }
 
 fn decode_media_source(
     request: &CapturedWebRequest,
-    mut data: WebData,
+    data: WebData,
+    body: &[u8],
 ) -> Result<StandardWebSource, WebPlaybackError> {
     if data.is_free_part == Some(1) {
         return Err(WebPlaybackError::PreviewOnly);
@@ -896,12 +971,37 @@ fn decode_media_source(
     if data.is_free_part != Some(0) {
         return Err(WebPlaybackError::ProtocolUnsupported);
     }
-    if data
-        .hash
+    validate_response_identity_aliases(
+        body,
+        &request.track,
+        request.capture.encoded_id.as_deref(),
+        if request.capture.encoded_id.is_some() {
+            WebPlaybackError::Stage2ResponseIdentityMismatch
+        } else {
+            WebPlaybackError::InvalidResponse
+        },
+    )?;
+    validate_source_identity(request, &data)?;
+    decode_validated_media(request, data)
+}
+
+fn validate_source_identity(
+    request: &CapturedWebRequest,
+    data: &WebData,
+) -> Result<(), WebPlaybackError> {
+    let encoded = request.capture.encoded_id.as_deref();
+    if data.hash.as_deref().map_or(encoded.is_none(), |hash| {
+        !hash.eq_ignore_ascii_case(&request.track.hash)
+    }) || data
+        .encode_album_audio_id
         .as_deref()
-        .is_none_or(|hash| !hash.eq_ignore_ascii_case(&request.track.hash))
+        .is_some_and(|id| encoded.is_some_and(|expected| expected != id))
         || data
             .album_audio_id
+            .as_ref()
+            .is_some_and(|v| !identity_equals(v, &request.track.mix_song_id))
+        || data
+            .mix_song_id
             .as_ref()
             .is_some_and(|v| !identity_equals(v, &request.track.mix_song_id))
         || data
@@ -909,8 +1009,19 @@ fn decode_media_source(
             .as_ref()
             .is_some_and(|v| !identity_equals(v, &request.track.album_id))
     {
-        return Err(WebPlaybackError::InvalidResponse);
+        return Err(if encoded.is_some() {
+            WebPlaybackError::Stage2ResponseIdentityMismatch
+        } else {
+            WebPlaybackError::InvalidResponse
+        });
     }
+    Ok(())
+}
+
+fn decode_validated_media(
+    request: &CapturedWebRequest,
+    mut data: WebData,
+) -> Result<StandardWebSource, WebPlaybackError> {
     let duration = u64::from(request.track.duration_seconds) * 1000;
     let format = match data.extname.as_deref() {
         Some("mp3") => MediaFormat::Mp3,

@@ -93,7 +93,7 @@ void main() {
       await tester.pumpAndSettle();
       debugPrint('FURA_SETTINGS_REVIEW phase=$phase ready');
       expect(find.byType(BottomSheet), findsNothing);
-      expect(find.byType(MenuItemButton), findsNWidgets(3));
+      expect(find.byType(PopupMenuItem<AppThemePreference>), findsNWidgets(3));
       if (optionKey == 'escape') {
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       } else if (optionKey == 'outside') {

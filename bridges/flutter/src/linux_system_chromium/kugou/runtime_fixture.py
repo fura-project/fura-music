@@ -43,6 +43,25 @@ RESPONSE = json.dumps({"status": 1, "data": {
     "extname": "mp3", "quality": "standard",
 }}).encode()
 
+ENCODED = "synthetic/opaque+server=id"
+STAGE1_QUERY = {key: value for key, value in urllib.parse.parse_qsl(QUERY)
+                if key not in ("album_id", "album_audio_id")}
+STAGE1_PATH = "/play/songinfo?" + urllib.parse.urlencode(STAGE1_QUERY)
+STAGE1_RESPONSE = json.dumps({"status": 1, "data": {
+    "hash": HASH, "album_audio_id": 9, "encode_album_audio_id": ENCODED,
+}}).encode()
+STAGE2_PATH = "/play/songinfo?" + urllib.parse.urlencode({"encode_album_audio_id": ENCODED})
+STAGE2_DATA = json.loads(RESPONSE)
+del STAGE2_DATA["data"]["hash"]  # Exact identity is carried by the response/request chain.
+STAGE2_RESPONSE = json.dumps(STAGE2_DATA).encode()
+TWO_STAGE_PAGE = ("<!doctype html><meta charset=utf-8>"
+    "<title>Synthetic two-stage official site surrogate</title><link rel=icon href=data:,>"
+    "<script>(async () => {const r = await fetch(" + json.dumps("https://wwwapi.kugou.com" + STAGE1_PATH)
+    + ", {credentials:'include'}); const data = await r.json();"
+    "const second = new URL('https://wwwapi.kugou.com/play/songinfo');"
+    "second.searchParams.set('encode_album_audio_id', data.data.encode_album_audio_id);"
+    "await fetch(second, {credentials:'include'});})().catch(() => {});</script>").encode()
+
 
 def openssl(*args, data=None):
     return subprocess.run(
@@ -81,9 +100,12 @@ class Server(http.server.ThreadingHTTPServer):
     daemon_threads = True
     block_on_close = False
 
-    def __init__(self, context):
+    def __init__(self, context, two_stage=False):
         self.context = context
+        self.two_stage = two_stage
         self.counts = dict(page=0, api=0, rust=0, browser=0, range=0, rejected=0)
+        if two_stage:
+            self.counts.update(stage1=0, stage2=0)
         self.lock = threading.Lock()
         super().__init__(("127.0.0.1", 0), Handler)
 
@@ -110,19 +132,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 status, content, kind = 403, b"", "text/plain"
             elif host == "www.kugou.com" and self.path == "/":
                 self.server.counts["page"] += 1
-                status, content, kind = 200, PAGE, "text/html"
+                status, content, kind = 200, (TWO_STAGE_PAGE if self.server.two_stage else PAGE), "text/html"
             elif host == "wwwapi.kugou.com" and self.path.startswith("/play/songinfo"):
                 self.server.counts["api"] += 1
                 rust = self.headers.get("X-Synthetic-Owner") == "Rust"
                 self.server.counts["rust" if rust else "browser"] += 1
-                valid = (self.path == API_PATH
+                valid_path = self.path in (STAGE1_PATH, STAGE2_PATH) if self.server.two_stage else self.path == API_PATH
+                valid = (valid_path
                          and self.headers.get("Cookie") == "KugooID=42; t=synthetic-token"
                          and self.headers.get("Origin") == "https://www.kugou.com"
                          and self.headers.get("Referer") == "https://www.kugou.com/"
                          and bool(self.headers.get("User-Agent")))
                 if not valid:
                     self.server.counts["rejected"] += 1
-                status, content, kind = (200 if valid else 403), RESPONSE, "application/json"
+                content = RESPONSE
+                if self.server.two_stage:
+                    if self.path == STAGE1_PATH:
+                        self.server.counts["stage1"] += 1
+                        content = STAGE1_RESPONSE
+                    elif self.path == STAGE2_PATH:
+                        self.server.counts["stage2"] += 1
+                        content = STAGE2_RESPONSE
+                status, kind = (200 if valid else 403), "application/json"
             else:
                 self.server.counts["rejected"] += 1
                 status, content, kind = 404, b"", "text/plain"
@@ -131,6 +162,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Connection", "close")
         self.send_header("Cache-Control", "no-store")
+        if host == "wwwapi.kugou.com":
+            self.send_header("Access-Control-Allow-Origin", "https://www.kugou.com")
+            self.send_header("Access-Control-Allow-Credentials", "true")
         if host == "www.kugou.com" and status == 200:
             self.send_header("Set-Cookie", "KugooID=42; Domain=.kugou.com; Path=/; Secure; HttpOnly; SameSite=Lax")
             self.send_header("Set-Cookie", "t=synthetic-token; Domain=.kugou.com; Path=/; Secure; HttpOnly; SameSite=Lax")
@@ -150,7 +184,7 @@ def main():
     root, leaf, key, spki = certificate(Path(sys.argv[1]))
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(leaf, key)
-    server = Server(context)
+    server = Server(context, len(sys.argv) == 3 and sys.argv[2] == "two-stage")
     thread = threading.Thread(target=server.serve_forever,
                               kwargs={"poll_interval": 0.05}, daemon=True)
     thread.start()

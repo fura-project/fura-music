@@ -1,5 +1,12 @@
 # Maintainer gate: KuGou official-Web Standard candidate
 
+**Superseded workflow:** the first Human-operated V1 gate at `5add34e` stopped at
+local identity binding before Rust replay. The current protocol model and future
+maintainer workflow are in the [V2 two-stage guide](kugou-two-stage-gate-2026-11-02.md).
+The one-songinfo budget and readiness claims below are dated V1 evidence, not
+current authorization or V2 validation. Do not run either gate without fresh Human
+authorization. The V1 failure is retained, not overwritten by synthetic success.
+
 Date: 2026-11-02, bounded Rust-only Human harness follow-up to `c0dc091`.
 **HUMAN GATE NOT_RUN**. The harness adds a caller, not a different CDP protocol.
 See the [current contract and dated protocol evidence](../research/kugou-authenticated-standard-v1.md).

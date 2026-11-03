@@ -44,6 +44,12 @@ one-shot session-generation guards and a prepared maintainer gate. No live
 window, automatic signer, verified-account/vault, production resolver or third
 UI service is activated; HD-031's supplement is a draft, not production approval.
 
+**KuGou Human evidence follow-up (2026-11-02):** the first maintainer gate stopped
+at local single-stage identity binding before Rust replay; this is not a KuGou
+rejection. The [two-stage offline follow-up](docs/development/kugou-two-stage-gate-2026-11-02.md)
+keeps the server-issued encoded chain, two separate songinfo budgets and explicit
+Human boundary. It does not activate production or authorize another live run.
+
 The next bounded foundation is also implemented offline. QQ `loginType=2` has
 one explicit `LoginServer/Login` request shape, complete material checks,
 typed risk outcomes and the same Provider/vault lifecycle tests, but its

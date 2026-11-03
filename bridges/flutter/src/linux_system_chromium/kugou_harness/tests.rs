@@ -548,6 +548,34 @@ fn real_terminal_range_prompt_requires_its_own_current_approval() {
 }
 
 #[test]
+fn real_phase_b_prompt_discloses_two_independent_requests_before_approval() {
+    for (answer, expected) in [
+        (AUTHORIZE_PLAYBACK, true),
+        (AUTHORIZE_SEARCH, false),
+        (AUTHORIZE_RANGE, false),
+    ] {
+        let (input, mut input_writer) = std::os::unix::net::UnixStream::pair().unwrap();
+        input_writer
+            .write_all(format!("{answer}\n").as_bytes())
+            .unwrap();
+        drop(input_writer);
+        let (display, mut output) = std::os::unix::net::UnixStream::pair().unwrap();
+        let mut terminal = Terminal {
+            reader: File::from(std::os::fd::OwnedFd::from(input)),
+            display: File::from(std::os::fd::OwnedFd::from(display)),
+        };
+        assert_eq!(terminal.approve_playback(), expected);
+        drop(terminal);
+        let mut text = String::new();
+        output.read_to_string(&mut text).unwrap();
+        assert!(text.contains("MAX_SONGINFO_REQUESTS = 2"));
+        assert!(text.contains("Stage 1 Rust upstream: at most 1"));
+        assert!(text.contains("Stage 2 Rust upstream: at most 1"));
+        assert!(text.contains("Optional one 4096-byte Range remains separately approved"));
+    }
+}
+
+#[test]
 fn cargo_default_production_graph_excludes_harness_and_its_kugou_dependencies() {
     let metadata = std::process::Command::new(env!("CARGO"))
         .args([

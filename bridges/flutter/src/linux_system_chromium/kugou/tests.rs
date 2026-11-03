@@ -2,9 +2,7 @@ use super::*;
 use kugou_client::web_playback_candidate::{CaptureSource, MediaFormat, WebQuality};
 use provider_kugou::web_playback_candidate::CandidateSessionState;
 
-#[path = "test_support.rs"]
-mod support;
-use support::*;
+use super::test_support::*;
 
 #[tokio::test]
 async fn abort_before_profile_read_then_exactly_one_rust_owned_upstream_request() {

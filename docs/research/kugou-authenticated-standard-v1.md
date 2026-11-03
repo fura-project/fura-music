@@ -1,6 +1,23 @@
 # KuGou authenticated Standard playback V1 — offline candidate
 
-## Current caller addition: bounded Human Search harness
+## Current follow-up: server-issued two-stage identity
+
+Date: 2026-11-02, starting at `5add34ef8b435933625faca43bbc76c12b0b6468`.
+Human reports the first actual gate stopped at local
+`OFFICIAL_WEB_TRACK_IDENTITY_UNPROVEN` before Rust replay, with no reported risk,
+rate or session rejection. This disproves current single-stage compatibility for
+that attempt; it does not prove upstream songinfo rejected Fura, nor disclose
+whether the actual request omitted Album or used an encoded identity.
+
+The [V2 evidence/maintainer contract](../development/kugou-two-stage-gate-2026-11-02.md)
+separates this Human negative evidence, pinned independent two-hop behavior and
+offline Chromium proof. Rust sends captured Stage 1 once while paused, fulfills
+the verified original representation, observes website-generated Stage 2, checks
+the exact server-issued encoded chain, aborts and cleans up before the sole
+second replay. No opaque ID/signing algorithm is copied or generated. No new live
+test or production activation is authorized by this correction.
+
+## Dated caller addition: bounded Human Search harness, before V2
 
 Date: 2026-11-02, starting at `c0dc0915171d40865275c393d5d68abb76b0e848`.
 Human explicitly authorized a feature-gated Rust-only caller that obtains one

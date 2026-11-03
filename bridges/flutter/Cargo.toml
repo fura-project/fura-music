@@ -10,7 +10,7 @@ crate-type = ["cdylib", "staticlib"]
 
 [features]
 # Disconnected Rust-only Human gate. No API/Provider production activation.
-kugou-cdp-gate = ["dep:kugou-client", "dep:provider-kugou", "tokio/signal", "tokio/rt-multi-thread", "nix/poll"]
+kugou-cdp-gate = ["dep:kugou-client", "dep:provider-kugou", "dep:base64", "tokio/signal", "tokio/rt-multi-thread", "nix/poll"]
 
 [[bin]]
 name = "kugou-human-gate"
@@ -33,6 +33,7 @@ jni = "0.22.4"
 rustls-platform-verifier = "0.7.0"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+base64 = { version = "0.22.1", optional = true }
 kugou-client = { path = "../../crates/kugou-client", optional = true }
 provider-kugou = { path = "../../crates/provider-kugou", optional = true }
 futures-util = "0.3.31"
@@ -46,6 +47,7 @@ url = "2.5.7"
 zeroize = "1.8.2"
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
+base64 = "0.22.1"
 kugou-client = { path = "../../crates/kugou-client" }
 provider-kugou = { path = "../../crates/provider-kugou" }
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls"] }

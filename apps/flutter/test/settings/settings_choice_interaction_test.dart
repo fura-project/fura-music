@@ -95,10 +95,19 @@ void main() {
           final group = tester.getSize(
             find.byKey(const ValueKey('settings-group')),
           );
-          final anchor = tester.widget<MenuAnchor>(
-            find.ancestor(of: row, matching: find.byType(MenuAnchor)).first,
+          expect(tester.widget(row), isA<ListTile>());
+          expect(
+            find.descendant(
+              of: row,
+              matching: find.byWidgetPredicate((w) => w is PopupMenuButton),
+            ),
+            findsOneWidget,
           );
           expect(tester.getSemantics(row).label, contains(oldValue));
+          expect(
+            tester.getSemantics(row).flagsCollection.isExpanded,
+            Tristate.isFalse,
+          );
           expect(
             tester
                 .widget<AnimatedRotation>(
@@ -114,8 +123,28 @@ void main() {
             tester.getTopRight(row) +
                 Offset(-12, tester.getSize(row).height / 2),
           );
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 60));
+          final openingAlign = tester.widget<Align>(
+            find
+                .ancestor(
+                  of: find.byKey(ValueKey(optionKey)),
+                  matching: find.byWidgetPredicate(
+                    (w) =>
+                        w is Align &&
+                        w.widthFactor != null &&
+                        w.heightFactor != null,
+                  ),
+                )
+                .first,
+          );
+          expect(openingAlign.heightFactor, greaterThan(0));
+          expect(openingAlign.heightFactor, lessThan(1));
           await tester.pumpAndSettle();
-          expect(anchor.controller!.isOpen, isTrue);
+          expect(
+            tester.getSemantics(row).flagsCollection.isExpanded,
+            Tristate.isTrue,
+          );
           expect(
             tester
                 .widget<AnimatedRotation>(
@@ -142,7 +171,11 @@ void main() {
           expect(tester.getSize(option).height, greaterThanOrEqualTo(48));
           await tester.tap(option);
           await tester.pumpAndSettle();
-          expect(anchor.controller!.isOpen, isFalse);
+          expect(find.byKey(ValueKey(optionKey)), findsNothing);
+          expect(
+            tester.getSemantics(row).flagsCollection.isExpanded,
+            Tristate.isFalse,
+          );
           expect(
             tester
                 .widget<AnimatedRotation>(
@@ -181,7 +214,7 @@ void main() {
         final row = find.byKey(const ValueKey('settings-theme-selector'));
         await tester.tap(row);
         await tester.pumpAndSettle();
-        final current = tester.widget<MenuItemButton>(
+        final current = tester.widget<PopupMenuItem<AppThemePreference>>(
           find.byKey(const ValueKey('settings-theme-system')),
         );
         expect(
@@ -191,7 +224,7 @@ void main() {
           ),
           findsOneWidget,
         );
-        expect(current.onPressed, isNotNull);
+        expect(current.onTap, isNotNull);
         await tester.tap(find.byKey(const ValueKey('settings-theme-light')));
         // Pending storage intentionally keeps the saving indicator animating.
         await tester.pump();

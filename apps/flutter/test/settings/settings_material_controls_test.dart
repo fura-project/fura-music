@@ -35,10 +35,16 @@ void main() {
       expect(find.byType(RadioListTile), findsNothing);
       expect(find.byWidgetPredicate((w) => w is DropdownMenu), findsNothing);
       expect(find.byWidgetPredicate((w) => w is DropdownButton), findsNothing);
-      expect(find.byType(Card), findsNothing);
+      expect(
+        tester.widget(find.byKey(const ValueKey('settings-theme-selector'))),
+        isA<ListTile>(),
+      );
       await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
       await tester.pumpAndSettle();
-      expect(find.byType(MenuItemButton), findsNWidgets(3));
+      expect(
+        find.byWidgetPredicate((w) => w is PopupMenuItem),
+        findsNWidgets(3),
+      );
       expect(find.byType(BottomSheet), findsNothing);
       expect(
         contrast(

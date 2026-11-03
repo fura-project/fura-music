@@ -235,10 +235,10 @@ class _SettingsPageState extends State<SettingsPage> {
             constraints: const BoxConstraints(maxWidth: 880),
             child: ListView(
               key: const ValueKey('settings-content'),
-              padding: const EdgeInsets.fromLTRB(
-                MusicSpacing.page,
-                MusicSpacing.contentGap,
-                MusicSpacing.page,
+              padding: EdgeInsets.fromLTRB(
+                widget.compactHierarchy ? 16 : MusicSpacing.page,
+                widget.compactHierarchy ? 8 : MusicSpacing.contentGap,
+                widget.compactHierarchy ? 16 : MusicSpacing.page,
                 MusicSpacing.page,
               ),
               children: [
@@ -714,15 +714,14 @@ class _SettingsSectionHeading extends StatelessWidget {
     final l10n = context.l10n;
     if (compact) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+        padding: const EdgeInsets.fromLTRB(4, 2, 4, 12),
         child: Semantics(
           header: true,
           child: Text(
-            label,
+            section.description(l10n),
             key: headingKey,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: colors.primary,
-              fontWeight: FontWeight.w600,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colors.onSurfaceVariant,
             ),
           ),
         ),
@@ -793,7 +792,7 @@ class _SettingsGroup extends StatelessWidget {
   }
 }
 
-/// Compact SDK menu presentation; the existing Settings owner saves values.
+/// Native Material ListTile + PopupMenuButton; Settings owner saves values.
 class _SettingsChoiceTile<T> extends StatefulWidget {
   const _SettingsChoiceTile({
     required this.controlKey,
@@ -820,13 +819,12 @@ class _SettingsChoiceTile<T> extends StatefulWidget {
 class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
     with WidgetsBindingObserver {
   final _focusNode = FocusNode();
-  final _menu = MenuController();
-  final _anchorKey = GlobalKey();
-  final _valueKey = GlobalKey();
-  LocalHistoryEntry? _backEntry;
+  final _popupKey = GlobalKey<PopupMenuButtonState<T>>();
+  ModalRoute<dynamic>? _route;
   bool _disposing = false;
   bool _selecting = false;
   bool _menuOpen = false;
+  bool _initialFocusRequested = false;
   int _revision = 0;
   bool _focusReturnPending = false;
 
@@ -861,9 +859,12 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.current != widget.current || !widget.enabled) {
       _revision++;
-      if (_menu.isOpen) {
+      final route = _route;
+      if (route != null && route.isActive) {
+        _route = null;
+        _menuOpen = false;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _menu.isOpen) _menu.close();
+          if (route.isActive) route.navigator?.removeRoute(route);
         });
       }
     }
@@ -871,41 +872,40 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
 
   void _choose() {
     if (!widget.enabled || _selecting) return;
-    if (_menu.isOpen) {
-      _menu.close();
+    final route = _route;
+    if (route != null) {
+      if (route.isCurrent) {
+        route.navigator?.pop();
+      }
       return;
     }
-    final anchor = _anchorKey.currentContext!.findRenderObject()! as RenderBox;
-    final value = _valueKey.currentContext!.findRenderObject()! as RenderBox;
-    // Anchor to the real current-value label, not the group's full width.
-    // The SDK fits the naturally sized panel inside the available safe area.
-    final origin = anchor.globalToLocal(value.localToGlobal(Offset.zero));
-    // A fresh popup retires callbacks captured by an earlier popup, even
-    // when the authoritative value has not changed (dismiss / reopen).
-    setState(() => _revision++);
-    _menu.open(position: origin + Offset(0, value.size.height + 4));
+    _popupKey.currentState?.showButtonMenu();
   }
 
   void _opened() {
     if (mounted && !_disposing && !_menuOpen) {
       setState(() => _menuOpen = true);
     }
-    final route = ModalRoute.of(context);
-    if (route == null) return;
-    final entry = LocalHistoryEntry(
-      onRemove: () {
-        _backEntry = null;
-        if (!_disposing && _menu.isOpen) _menu.close();
-      },
-    );
-    _backEntry = entry;
-    route.addLocalHistoryEntry(entry);
   }
 
-  void _closed() {
-    final entry = _backEntry;
-    _backEntry = null;
-    entry?.remove();
+  void _bindRoute(ModalRoute<dynamic>? route) {
+    if (route == null || identical(_route, route)) return;
+    _route = route;
+    route.completed.whenComplete(() {
+      if (!identical(_route, route)) return;
+      _route = null;
+      if (_disposing || !mounted) return;
+      if (_menuOpen) {
+        setState(() => _menuOpen = false);
+      }
+      if (!_selecting) {
+        _focusReturnPending = true;
+        _returnFocus();
+      }
+    });
+  }
+
+  void _canceled() {
     if (_disposing) return;
     if (mounted && _menuOpen) {
       setState(() => _menuOpen = false);
@@ -919,8 +919,15 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
         !widget.enabled ||
         _selecting ||
         revision != _revision ||
-        widget.current != snapshot ||
-        value == snapshot) {
+        widget.current != snapshot) {
+      return;
+    }
+    if (_menuOpen) {
+      setState(() => _menuOpen = false);
+    }
+    if (value == snapshot) {
+      _focusReturnPending = true;
+      _returnFocus();
       return;
     }
     _selecting = true;
@@ -938,7 +945,14 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _disposing = true;
-    _backEntry?.remove();
+    _revision++;
+    final route = _route;
+    _route = null;
+    if (route != null && route.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (route.isActive) route.navigator?.removeRoute(route);
+      });
+    }
     _focusNode.dispose();
     super.dispose();
   }
@@ -946,6 +960,7 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final reduced = MediaQuery.disableAnimationsOf(context);
     final duration = reduced
         ? Duration.zero
@@ -953,226 +968,159 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
     final selected = widget.choices.singleWhere(
       (choice) => choice.value == widget.current,
     );
-    final snapshot = widget.current;
-    final revision = _revision;
-    return MenuAnchor(
-      key: _anchorKey,
-      controller: _menu,
-      childFocusNode: _focusNode,
-      // Constrain the SDK's intrinsic panel rather than clipping an
-      // unconstrained natural-width menu at large text / compact widths.
-      crossAxisUnconstrained: false,
-      consumeOutsideTap: true,
-      onOpen: _opened,
-      onClose: _closed,
-      style: MenuStyle(
-        minimumSize: const WidgetStatePropertyAll(Size(160, 0)),
-        maximumSize: WidgetStatePropertyAll(
-          Size(
-            (MediaQuery.sizeOf(context).width - 32).clamp(0, 320),
-            double.infinity,
-          ),
-        ),
-      ),
-      menuChildren: [
-        for (final choice in widget.choices)
-          MenuItemButton(
-            key: choice.key,
-            autofocus: choice.value == snapshot,
-            requestFocusOnHover: false,
-            style: const ButtonStyle(
-              minimumSize: WidgetStatePropertyAll(Size(0, 48)),
-            ),
-            leadingIcon: SizedBox(
-              width: 24,
-              child: choice.value == snapshot ? const Icon(Icons.check) : null,
-            ),
-            onPressed: widget.enabled
-                ? () => unawaited(_select(choice.value, snapshot, revision))
-                : null,
-            // Put the selected flag inside the SDK's MergeSemantics owner.
-            // An outer flag becomes a separate, unlabelled semantic node.
-            child: Semantics(
-              selected: choice.value == snapshot,
-              child: Text(choice.label),
-            ),
-          ),
-      ],
-      child: _FuraSettingsRow(
-        key: widget.controlKey,
-        icon: widget.icon,
-        title: widget.title,
-        value: widget.currentLabel ?? selected.label,
-        valueKey: ValueKey('${(widget.controlKey as ValueKey).value}-current'),
-        valueAnchorKey: _valueKey,
-        enabled: widget.enabled,
-        active: _menuOpen,
-        focusNode: _focusNode,
-        onTap: _choose,
-        trailing: AnimatedRotation(
-          turns: _menuOpen ? .5 : 0,
-          duration: duration,
-          curve: Curves.easeInOutCubic,
-          child: Icon(
-            Icons.expand_more_rounded,
-            size: 20,
-            color: widget.enabled
-                ? (_menuOpen
-                      ? theme.colorScheme.onSecondaryContainer
-                      : theme.colorScheme.onSurfaceVariant)
-                : theme.disabledColor,
-          ),
-        ),
-      ),
+    final value = widget.currentLabel ?? selected.label;
+    final valueKey = ValueKey(
+      '${(widget.controlKey as ValueKey).value}-current',
     );
-  }
-}
-
-/// Settings-specific spacing/state grammar, not default ListTile composition.
-class _FuraSettingsRow extends StatelessWidget {
-  const _FuraSettingsRow({
-    required this.icon,
-    required this.title,
-    required this.value,
-    required this.valueKey,
-    required this.focusNode,
-    required this.onTap,
-    this.valueAnchorKey,
-    this.trailing,
-    this.expanded,
-    this.active = false,
-    this.enabled = true,
-    super.key,
-  });
-  final IconData icon;
-  final String title, value;
-  final Key valueKey;
-  final bool enabled;
-  final bool active;
-  final FocusNode focusNode;
-  final VoidCallback? onTap;
-  final Key? valueAnchorKey;
-  final Widget? trailing;
-  final bool? expanded;
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
     final titleStyle = theme.textTheme.bodyLarge!.copyWith(
-      color: enabled ? colors.onSurface : theme.disabledColor,
+      color: widget.enabled ? colors.onSurface : theme.disabledColor,
     );
     final valueStyle = theme.textTheme.bodyMedium!.copyWith(
-      color: enabled
-          ? (active ? colors.onSecondaryContainer : colors.onSurfaceVariant)
+      color: widget.enabled
+          ? (_menuOpen ? colors.primary : colors.onSurfaceVariant)
           : theme.disabledColor,
     );
-    final trailingIcon = ExcludeSemantics(
-      child:
-          trailing ??
-          Icon(
-            Icons.expand_more_rounded,
-            size: 20,
-            color: colors.onSurfaceVariant,
-          ),
-    );
     return Semantics(
-      button: true,
-      expanded: expanded,
-      enabled: enabled,
-      child: Focus(
-        canRequestFocus: false,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            focusNode: focusNode,
-            onTap: enabled ? onTap : null,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final inline = _fitsInline(
-                  context,
-                  constraints.maxWidth,
-                  title,
-                  titleStyle,
-                  value,
-                  valueStyle,
-                );
-                final valueText = KeyedSubtree(
-                  key: valueAnchorKey,
-                  child: Text(value, key: valueKey, style: valueStyle),
-                );
-                return ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 64),
-                  child: Padding(
-                    padding: const EdgeInsetsDirectional.fromSTEB(
-                      20,
-                      14,
-                      20,
-                      14,
-                    ),
-                    child: Row(
-                      children: [
-                        ExcludeSemantics(
-                          child: Icon(
-                            icon,
-                            size: 24,
-                            color: enabled
-                                ? colors.onSurfaceVariant
-                                : theme.disabledColor,
-                          ),
+      expanded: _menuOpen,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final inline = _fitsInline(
+            context,
+            constraints.maxWidth,
+            widget.title,
+            titleStyle,
+            value,
+            valueStyle,
+          );
+          final valueText = Text(value, key: valueKey, style: valueStyle);
+          return ListTile(
+            key: widget.controlKey,
+            focusNode: _focusNode,
+            enabled: widget.enabled,
+            contentPadding: const EdgeInsetsDirectional.fromSTEB(20, 4, 16, 4),
+            minVerticalPadding: 12,
+            leading: Icon(
+              widget.icon,
+              color: widget.enabled
+                  ? colors.onSurfaceVariant
+                  : theme.disabledColor,
+            ),
+            title: Text(widget.title, style: titleStyle),
+            subtitle: inline ? null : valueText,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (inline) ...[valueText, const SizedBox(width: 6)],
+                ExcludeSemantics(
+                  child: IgnorePointer(
+                    child: PopupMenuButton<T>(
+                      key: _popupKey,
+                      enabled: widget.enabled,
+                      position: PopupMenuPosition.under,
+                      offset: const Offset(0, 4),
+                      popUpAnimationStyle: reduced
+                          ? AnimationStyle.noAnimation
+                          : null,
+                      constraints: BoxConstraints(
+                        minWidth: 168,
+                        maxWidth: (MediaQuery.sizeOf(context).width - 32).clamp(
+                          168.0,
+                          320.0,
                         ),
-                        const SizedBox(width: 16),
-                        if (inline) ...[
-                          Expanded(child: Text(title, style: titleStyle)),
-                          const SizedBox(width: 16),
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: active
-                                  ? colors.secondaryContainer
-                                  : colors.surfaceContainerHigh,
-                              borderRadius: const BorderRadius.all(
-                                Radius.circular(999),
+                      ),
+                      onOpened: _opened,
+                      onCanceled: _canceled,
+                      itemBuilder: (context) {
+                        // A fresh popup retires callbacks captured by an earlier
+                        // popup, even when the authoritative value has not changed.
+                        final snapshot = widget.current;
+                        final revision = ++_revision;
+                        _initialFocusRequested = false;
+                        return [
+                          for (final choice in widget.choices)
+                            PopupMenuItem<T>(
+                              key: choice.key,
+                              value: choice.value,
+                              enabled: widget.enabled,
+                              onTap: widget.enabled
+                                  ? () => unawaited(
+                                      _select(choice.value, snapshot, revision),
+                                    )
+                                  : null,
+                              child: Builder(
+                                builder: (itemContext) {
+                                  _bindRoute(ModalRoute.of(itemContext));
+                                  final isSelected = choice.value == snapshot;
+                                  if (isSelected && !_initialFocusRequested) {
+                                    _initialFocusRequested = true;
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                          if (itemContext.mounted) {
+                                            Focus.maybeOf(itemContext)
+                                                ?.requestFocus();
+                                          }
+                                        });
+                                  }
+                                  return Semantics(
+                                    selected: isSelected,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          width: 22,
+                                          child: isSelected
+                                              ? Icon(
+                                                  Icons.check,
+                                                  size: 18,
+                                                  color: colors.primary,
+                                                )
+                                              : null,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Flexible(
+                                          child: Text(
+                                            choice.label,
+                                            style: theme.textTheme.labelLarge
+                                                ?.copyWith(
+                                                  color: isSelected
+                                                      ? colors.primary
+                                                      : colors.onSurface,
+                                                  fontWeight: isSelected
+                                                      ? FontWeight.w600
+                                                      : FontWeight.w500,
+                                                ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
                               ),
                             ),
-                            child: Padding(
-                              padding: const EdgeInsetsDirectional.fromSTEB(
-                                14,
-                                6,
-                                10,
-                                6,
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  valueText,
-                                  const SizedBox(width: 4),
-                                  trailingIcon,
-                                ],
-                              ),
-                            ),
-                          ),
-                        ] else ...[
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(title, style: titleStyle),
-                                const SizedBox(height: 2),
-                                valueText,
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          trailingIcon,
-                        ],
-                      ],
+                        ];
+                      },
+                      child: AnimatedRotation(
+                        turns: _menuOpen ? .5 : 0,
+                        duration: duration,
+                        curve: Curves.easeInOutCubic,
+                        child: Icon(
+                          Icons.expand_more_rounded,
+                          size: 20,
+                          color: widget.enabled
+                              ? (_menuOpen
+                                    ? colors.primary
+                                    : colors.onSurfaceVariant)
+                              : theme.disabledColor,
+                        ),
+                      ),
                     ),
                   ),
-                );
-              },
+                ),
+              ],
             ),
-          ),
-        ),
+            onTap: widget.enabled ? _choose : null,
+          );
+        },
       ),
     );
   }
@@ -1282,6 +1230,14 @@ class _SettingsColorDisclosureState extends State<_SettingsColorDisclosure> {
         : const Duration(milliseconds: 200);
     final snapshot = widget.current;
     final revision = _revision;
+    final titleStyle = theme.textTheme.bodyLarge!.copyWith(
+      color: widget.enabled ? colors.onSurface : theme.disabledColor,
+    );
+    final valueStyle = theme.textTheme.bodyMedium!.copyWith(
+      color: widget.enabled
+          ? (_expanded ? colors.primary : colors.onSurfaceVariant)
+          : theme.disabledColor,
+    );
     final details = _expanded
         ? Column(
             key: const ValueKey('settings-color-details'),
@@ -1388,30 +1344,67 @@ class _SettingsColorDisclosureState extends State<_SettingsColorDisclosure> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _FuraSettingsRow(
-          key: widget.controlKey,
-          icon: widget.icon,
-          title: widget.title,
-          value: widget.currentLabel,
-          valueKey: const ValueKey('settings-color-source-selector-current'),
-          focusNode: _focusNode,
-          enabled: widget.enabled,
+        Semantics(
           expanded: _expanded,
-          active: _expanded,
-          onTap: _toggle,
-          trailing: AnimatedRotation(
-            turns: _expanded ? .5 : 0,
-            duration: duration,
-            curve: Curves.easeInOutCubic,
-            child: Icon(
-              Icons.expand_more_rounded,
-              size: 20,
-              color: widget.enabled
-                  ? (_expanded
-                        ? colors.onSecondaryContainer
-                        : colors.onSurfaceVariant)
-                  : theme.disabledColor,
-            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final inline = _fitsInline(
+                context,
+                constraints.maxWidth,
+                widget.title,
+                titleStyle,
+                widget.currentLabel,
+                valueStyle,
+              );
+              final valueText = Text(
+                widget.currentLabel,
+                key: const ValueKey('settings-color-source-selector-current'),
+                style: valueStyle,
+              );
+              return ListTile(
+                key: widget.controlKey,
+                focusNode: _focusNode,
+                enabled: widget.enabled,
+                contentPadding: const EdgeInsetsDirectional.fromSTEB(
+                  20,
+                  4,
+                  16,
+                  4,
+                ),
+                minVerticalPadding: 12,
+                leading: Icon(
+                  widget.icon,
+                  color: widget.enabled
+                      ? colors.onSurfaceVariant
+                      : theme.disabledColor,
+                ),
+                title: Text(widget.title, style: titleStyle),
+                subtitle: inline ? null : valueText,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (inline) ...[valueText, const SizedBox(width: 6)],
+                    ExcludeSemantics(
+                      child: AnimatedRotation(
+                        turns: _expanded ? .5 : 0,
+                        duration: duration,
+                        curve: Curves.easeInOutCubic,
+                        child: Icon(
+                          Icons.expand_more_rounded,
+                          size: 20,
+                          color: widget.enabled
+                              ? (_expanded
+                                    ? colors.primary
+                                    : colors.onSurfaceVariant)
+                              : theme.disabledColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                onTap: widget.enabled ? _toggle : null,
+              );
+            },
           ),
         ),
         // A zero-duration AnimatedSize mutates during layout on the pinned SDK.
@@ -1452,8 +1445,8 @@ bool _fitsInline(
     return result;
   }
 
-  return width >= 560 &&
-      measure(title, titleStyle) + measure(value, valueStyle) + 160 <= width;
+  return width >= 280 &&
+      measure(title, titleStyle) + measure(value, valueStyle) + 156 <= width;
 }
 
 class _SettingsPalettePreview extends StatelessWidget {
@@ -1524,9 +1517,9 @@ class _CompactSettingsMenu extends StatelessWidget {
                   if (index > 0)
                     Divider(
                       height: 1,
-                      indent: 56,
+                      indent: 72,
                       endIndent: 16,
-                      color: colors.outlineVariant.withValues(alpha: 0.28),
+                      color: colors.outlineVariant.withValues(alpha: 0.24),
                     ),
                   _CompactSettingsMenuTile(
                     key: ValueKey(
@@ -1563,7 +1556,8 @@ class _CompactSettingsMenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final l10n = context.l10n;
     return Semantics(
       button: true,
@@ -1578,13 +1572,19 @@ class _CompactSettingsMenuTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: Icon(
-                  section.icon,
-                  size: 24,
-                  color: colors.onSurfaceVariant,
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.secondaryContainer.withValues(alpha: 0.55),
+                  borderRadius: const BorderRadius.all(Radius.circular(12)),
+                ),
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Icon(
+                    section.icon,
+                    size: 22,
+                    color: colors.onSecondaryContainer,
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -1594,13 +1594,16 @@ class _CompactSettingsMenuTile extends StatelessWidget {
                   children: [
                     Text(
                       section.label(l10n),
-                      style: Theme.of(context).textTheme.titleMedium,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       summary,
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: colors.onSurfaceVariant),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),

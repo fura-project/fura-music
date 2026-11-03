@@ -191,6 +191,11 @@ impl PlaybackGate for ExistingGate {
             println!("KUGOU_GATE result=NOT_RUN");
             return;
         };
+        let Ok(mut hangup) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
+        else {
+            println!("KUGOU_GATE result=NOT_RUN");
+            return;
+        };
         let signal_owner = Arc::clone(&owner);
         let signal_current = Arc::clone(&current);
         // A separate runtime worker must be able to retire authority even while
@@ -199,6 +204,7 @@ impl PlaybackGate for ExistingGate {
             tokio::select! {
                 _ = interrupt.recv() => {},
                 _ = terminate.recv() => {},
+                _ = hangup.recv() => {},
             }
             signal_current.store(false, Ordering::SeqCst);
             signal_owner.clear();
@@ -333,7 +339,7 @@ impl Interaction for Terminal {
 
     fn approve_playback(&mut self) -> bool {
         self.confirm(
-            "Phase B — Authenticated playback gate\nA fresh isolated official KuGou Chromium browser will open. Human performs login, account/entitlement confirmation and selects this exact track on the website. Do not enter credentials here.\nThe browser-generated songinfo will be intercepted and aborted before network. After browser cleanup, Rust will send at most one real songinfo request. No retry/fallback.\nOptional one 4096-byte Range remains separately approved for the returned hostname. CAPTCHA/SSA, secondary verification, 429 or access denial stops the gate. Close the isolated browser to cancel.",
+            &format!("Phase B — Authenticated playback gate\nBudget: MAX_SONGINFO_REQUESTS = {} (Stage 1 Rust upstream: at most 1; Stage 2 Rust upstream: at most 1). No failure refunds either budget.\nA fresh isolated official KuGou Chromium browser will open. Human performs login, account/entitlement confirmation and selects this exact track on the website. Do not enter credentials here.\nThe first browser songinfo stays paused. Rust sends that exact hash request once, validates the server-issued identity, and fulfills the original response to the page. Website JS generates Stage 2; Fura never constructs it. Stage 2 is intercepted and aborted before browser network delivery; Rust replays it once only after browser cleanup. A full direct response uses only Stage 1, without fallback. No retry, third songinfo, alternate endpoint or another track.\nOptional one 4096-byte Range remains separately approved for the returned hostname. CAPTCHA/SSA, secondary verification, 429 or access denial stops the gate. Close the isolated browser to cancel.",provider_kugou::web_playback_candidate::MAX_SONGINFO_REQUESTS),
             AUTHORIZE_PLAYBACK,
         )
     }

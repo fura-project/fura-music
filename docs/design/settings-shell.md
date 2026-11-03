@@ -62,42 +62,56 @@ At 390×844:
 
 The Human reported that the earlier opaque-transition fix left an unwanted pale panel behind Settings and playlist detail. The backing now uses the same `Theme.scaffoldBackgroundColor` as the normal content canvas and resting toolbar, while retaining full opacity, clipping and content-only fading for the entire entry/exit transition. Sidebar/player container roles and all accepted geometry remain unchanged. This is one consistent canvas role, not a hard-coded light color; dark mode follows its existing theme. The corrected candidate requires Human visual review.
 
-## Current Android Material You anchored choices and inline details, 2026-10-23
+## Current Android Material You anchored choices, compact hierarchy, and Shell return transition, 2026-11-02
 
-**Design source:** explicit Human task and subsequent visual correction (`没有android味道 ai味道太重了`).
+**Design source:** explicit Human feedback with three annotated screenshots (`现在问题是设置小弹窗像浮上去的一样 同时把手机版优化一下 还有设置返回主页时搜索框过渡没做好 会突然消失`).
 **Status:** implemented candidate; `HUMAN_REVIEW`, not visual acceptance.
 
 - **Section headings (`_SettingsSectionHeading`):** unboxed Android Material You
   typography directly on the page canvas (`titleLarge` title + `bodyMedium`
-  `onSurfaceVariant` description on wide layouts; `labelLarge` `primary`
-  `PreferenceCategory` label on compact layouts). Redundant boxed header cards,
-  icon squares, and multi-category overview chip strips are prohibited.
+  `onSurfaceVariant` description on wide layouts; `bodyMedium` `onSurfaceVariant`
+  section description on compact detail pages so the section title in the
+  compact `AppBar` is not repeated immediately below it).
+- **Compact category menu (`_CompactSettingsMenu` / `_CompactSettingsMenuTile`):**
+  uses `16` dp horizontal page padding, `40×40` dp tonal rounded icon badges
+  (`secondaryContainer` at `0.55` alpha, `12` dp radius, `onSecondaryContainer`
+  icon), `w600` category titles, and inset hairline dividers (`indent: 72`,
+  `endIndent: 16`) aligned with text.
 - **Grouped surface (`_SettingsGroup`):** one quiet, borderless
   `colorScheme.surfaceContainerLow` container (`16` dp radius) per section with
-  subtle inset hairline dividers (`indent: 56`, `endIndent: 20`), never
-  `Border.all` outlines or nested cards.
-- **Simple enum choices (`_SettingsChoiceTile` / `_FuraSettingsRow`):**
+  subtle inset hairline dividers (`indent: 56`, `endIndent: 20`).
+- **Simple enum choices (`_SettingsChoiceTile`):**
   `Theme`, `Music service`, `Language`, `Default playback quality` and
-  `Lyric auxiliary` use SDK M3 `MenuAnchor`, `MenuController` and
-  `MenuItemButton` with unboxed `24` dp leading icons (`onSurfaceVariant`).
-  On wide layouts (`_fitsInline`), the trailing trigger is a borderless tonal
-  stadium pill (`surfaceContainerHigh`, shifting to `secondaryContainer` while
-  the popup or disclosure is active) containing the current value and rotating
-  chevron (`AnimatedRotation`, `200` ms `Curves.easeInOutCubic`). On compact or
-  2x-text stacked layouts, rows use classic two-line Android `Preference`
-  composition (title above plain `onSurfaceVariant` value text, unboxed chevron
-  trailing).
-- **Detailed Color Source (`_SettingsColorDisclosure`):** expands inline inside
-  the existing `surfaceContainerLow` group via `AnimatedSize` (`200` ms
-  `Curves.easeInOutCubic`, or direct layout under reduced motion), separated by
-  an inset hairline divider (`indent: 56`, `endIndent: 20`), with unboxed
-  full-width Android M3 `Radio` rows (`MaterialType.transparency` + `InkWell`)
-  and an unboxed availability + 5-dot effective `ColorScheme` palette row
-  aligned at `56` dp start indent.
+  `Lyric auxiliary` use native Flutter Material `ListTile`, `PopupMenuButton<T>`
+  and `PopupMenuItem<T>` (eliminating the bespoke stitched `_FuraSettingsRow`
+  and un-animated `MenuAnchor`). Opening and closing a choice menu uses Flutter's
+  native `_PopupMenuRoute` (`PopupRoute`) with built-in Material 3 scale
+  (`Align.widthFactor` / `Align.heightFactor` curve intervals) and fade
+  pop-open / collapse-close transitions (`PopupMenuPosition.under`).
+  Whenever the row width (`>= 280` dp) fits the localized title and value
+  (`_fitsInline`), the `ListTile.trailing` slot shows a tonal stadium pill
+  (`surfaceContainerHigh`, shifting to `secondaryContainer` with a subtle
+  `outlineVariant` border while open) on both desktop and mobile `1x` widths;
+  2x-text or long-copy rows fall back to `ListTile.subtitle` for the active
+  value with a tonal circular chevron badge in `ListTile.trailing`.
+- **Detailed Color Source (`_SettingsColorDisclosure`):** uses a native
+  `ListTile` header row and expands inline inside the existing
+  `surfaceContainerLow` group via `AnimatedSize` (`200` ms
+  `Curves.easeInOutCubic`, or direct layout under reduced motion).
+- **Top search bar return transition (`UserLibraryPage` / `_ShellDetailTransition` / `_PrimaryShellTitle`):**
+  When returning from Settings over a destination whose collapsed header owns
+  the top bar (`LikedSongs` or `RecentPlays` with collapsed header),
+  `Scaffold.appBar` remains `null` and `mainAppBar` is retained at the top of
+  `_ShellDetailTransition`'s outgoing detail surface (`detailTopBar`), so the
+  top search bar does not vanish on frame 1 and `SettingsPage` does not jump up
+  by `56` dp during the `240` ms exit transition. `_PrimaryShellTitle` also
+  animates `showSearchShortcut` visibility via `TweenAnimationBuilder<double>`
+  and `_ShellSearchField` preserves a constant `LayoutBuilder -> MenuAnchor`
+  tree depth across Settings entry/exit.
 - **Validation:** `dart format --output=none --set-exit-if-changed`,
   `dart analyze`, `flutter test test/settings/` (104/104 pass across 40
   viewport/locale/brightness/text-scale variants and motion capture), and
-  `flutter test test/widget_test.dart --plain-name "settings"` (11/11 pass).
+  `flutter test test/widget_test.dart` Settings and LikedSongs suites pass.
 
 ## Historical anchored choices and inline details, 2026-10-08
 

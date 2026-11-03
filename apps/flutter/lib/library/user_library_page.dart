@@ -319,12 +319,16 @@ class _ShellDetailTransition extends StatefulWidget {
     required this.opaqueSurfaceKey,
     required this.base,
     required this.detail,
+    this.detailTopBar,
+    this.detailUsesOwnToolbar = false,
   });
 
   final bool open;
   final Key? opaqueSurfaceKey;
   final Widget base;
   final Widget detail;
+  final Widget? detailTopBar;
+  final bool detailUsesOwnToolbar;
 
   @override
   State<_ShellDetailTransition> createState() => _ShellDetailTransitionState();
@@ -335,12 +339,14 @@ class _ShellDetailTransitionState extends State<_ShellDetailTransition>
   late final AnimationController _controller;
   late Widget _retainedDetail;
   Key? _retainedOpaqueSurfaceKey;
+  bool _retainedDetailUsesOwnToolbar = false;
 
   @override
   void initState() {
     super.initState();
     _retainedDetail = widget.detail;
     _retainedOpaqueSurfaceKey = widget.opaqueSurfaceKey;
+    _retainedDetailUsesOwnToolbar = widget.detailUsesOwnToolbar;
     _controller = AnimationController(
       vsync: this,
       value: widget.open ? 1 : 0,
@@ -355,6 +361,7 @@ class _ShellDetailTransitionState extends State<_ShellDetailTransition>
     if (widget.open) {
       _retainedDetail = widget.detail;
       _retainedOpaqueSurfaceKey = widget.opaqueSurfaceKey;
+      _retainedDetailUsesOwnToolbar = widget.detailUsesOwnToolbar;
     }
     if (widget.open == oldWidget.open) return;
     if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
@@ -379,6 +386,23 @@ class _ShellDetailTransitionState extends State<_ShellDetailTransition>
     builder: (context, _) {
       final value = Easing.emphasizedDecelerate.transform(_controller.value);
       final detailVisible = !_controller.isDismissed;
+      final detailContent =
+          widget.detailTopBar != null && !_retainedDetailUsesOwnToolbar
+          ? Column(
+              children: [
+                SizedBox(height: kToolbarHeight, child: widget.detailTopBar!),
+                Expanded(child: _retainedDetail),
+              ],
+            )
+          : _retainedDetail;
+      final detailOpacity = (0.7 + value * 0.3).clamp(0.0, 1.0);
+      final detailSurface = _retainedOpaqueSurfaceKey != null
+          ? Material(
+              key: _retainedOpaqueSurfaceKey,
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: Opacity(opacity: detailOpacity, child: detailContent),
+            )
+          : Opacity(opacity: detailOpacity, child: detailContent);
       return Stack(
         fit: StackFit.expand,
         clipBehavior: Clip.hardEdge,
@@ -402,18 +426,11 @@ class _ShellDetailTransitionState extends State<_ShellDetailTransition>
                   ignoring: !widget.open,
                   child: Transform.translate(
                     offset: Offset((1 - value) * 40, 0),
-                    child: _retainedOpaqueSurfaceKey != null
-                        ? Material(
-                            key: _retainedOpaqueSurfaceKey,
-                            color: Theme.of(context).scaffoldBackgroundColor,
-                            child: Opacity(
-                              opacity: (0.7 + value * 0.3).clamp(0, 1),
-                              child: _retainedDetail,
-                            ),
-                          )
+                    child: widget.open
+                        ? detailSurface
                         : Opacity(
-                            opacity: (0.7 + value * 0.3).clamp(0, 1),
-                            child: _retainedDetail,
+                            opacity: value.clamp(0.0, 1.0),
+                            child: detailSurface,
                           ),
                   ),
                 ),
@@ -1995,16 +2012,16 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       final collectionIdentity = _collectionRouteIdentity(embeddedShellRoute);
       final collectionShellActions =
           _collectionShellActions[collectionIdentity];
-      final likedHeaderOwnsTopBar =
-          likedSongsOpen && embeddedShellRoute == null && _likedHeaderCollapsed;
-      final recentCollapsed =
+      final baseLikedOwnsTopBar = likedSongsOpen && _likedHeaderCollapsed;
+      final baseRecentCollapsed =
           destination == AuthenticatedPrimaryDestination.recentPlays &&
-          embeddedShellRoute == null &&
           _recentHeaderCollapsed &&
           constraints.maxHeight >= 480 &&
           !_topSearchFocused;
+      final recentCollapsed = baseRecentCollapsed && embeddedShellRoute == null;
       final compactRecentShellOwnsTopBar = recentCollapsed && compactActions;
-      final recentHeaderOwnsTopBar = recentCollapsed && !compactActions;
+      final baseRecentOwnsTopBar = baseRecentCollapsed && !compactActions;
+      final baseOwnsTopBar = baseLikedOwnsTopBar || baseRecentOwnsTopBar;
       final discoverRootOpen =
           destination == AuthenticatedPrimaryDestination.discover &&
           embeddedShellRoute == null;
@@ -2453,8 +2470,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 appBar:
                     settingsUsesOwnToolbar ||
                         compactCatalogUsesOwnToolbar ||
-                        likedHeaderOwnsTopBar ||
-                        recentHeaderOwnsTopBar
+                        baseOwnsTopBar
                     ? null
                     : mainAppBar,
                 body: _CompactPlayerOverlay(
@@ -2470,6 +2486,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                   ),
                   child: _ShellDetailTransition(
                     open: embeddedShellRoute != null,
+                    detailTopBar: baseOwnsTopBar ? mainAppBar : null,
+                    detailUsesOwnToolbar:
+                        settingsUsesOwnToolbar || compactCatalogUsesOwnToolbar,
                     opaqueSurfaceKey: switch (embeddedShellRoute) {
                       PlaylistLocalRoute() ||
                       AlbumLocalRoute() ||
@@ -3743,49 +3762,80 @@ class _PrimaryShellTitle extends StatelessWidget {
             clipBehavior: Clip.none,
             child: titleContent,
           );
-    if (!showSearchShortcut) return titleTransition;
-    final search = _ShellSearchField(
-      searchKey: searchKey,
-      controller: searchController,
-      hintText: searchHint,
-      onChanged: onSearchChanged,
-      onSubmitted: onSearchSubmitted,
-      onFocusChanged: onSearchFocusChanged,
-      suggestions: searchSuggestions,
-      onSuggestionSelected: onSearchSuggestionSelected,
-    );
-    return Row(
-      children: [
-        titleTransition,
-        TweenAnimationBuilder<double>(
-          tween: Tween<double>(
-            begin: showTitle ? MusicSpacing.pageWide : 0,
-            end: showTitle ? MusicSpacing.pageWide : 0,
-          ),
-          duration: transitionDuration,
-          curve: Curves.easeInOutCubic,
-          builder: (context, width, _) => SizedBox(width: width),
-        ),
-        Expanded(
-          child: AnimatedAlign(
-            alignment: !showTitle ? Alignment.center : Alignment.centerRight,
-            duration: transitionDuration,
-            curve: Curves.easeInOutCubic,
-            child: Transform.translate(
-              offset: Offset(
-                Directionality.of(context) == TextDirection.ltr
-                    ? searchEndInset / 2
-                    : -searchEndInset / 2,
-                0,
+    if (!showSearchShortcut && disableAnimations) return titleTransition;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(
+        begin: showSearchShortcut ? 1 : 0,
+        end: showSearchShortcut ? 1 : 0,
+      ),
+      duration: transitionDuration,
+      curve: Curves.easeInOutCubic,
+      builder: (context, searchVisibility, _) {
+        if (searchVisibility == 0) return titleTransition;
+        final search = _ShellSearchField(
+          searchKey: searchKey,
+          controller: searchController,
+          hintText: searchHint,
+          onChanged: onSearchChanged,
+          onSubmitted: onSearchSubmitted,
+          onFocusChanged: onSearchFocusChanged,
+          suggestions: searchSuggestions,
+          onSuggestionSelected: onSearchSuggestionSelected,
+        );
+        final animatedSearch = searchVisibility == 1
+            ? search
+            : ExcludeSemantics(
+                excluding: !showSearchShortcut,
+                child: ExcludeFocus(
+                  excluding: !showSearchShortcut,
+                  child: IgnorePointer(
+                    ignoring: !showSearchShortcut,
+                    child: Opacity(
+                      opacity: searchVisibility.clamp(0.0, 1.0),
+                      child: Transform.translate(
+                        offset: Offset((1 - searchVisibility) * 16, 0),
+                        child: search,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+        return Row(
+          children: [
+            titleTransition,
+            TweenAnimationBuilder<double>(
+              tween: Tween<double>(
+                begin: showTitle ? MusicSpacing.pageWide : 0,
+                end: showTitle ? MusicSpacing.pageWide : 0,
               ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 448),
-                child: search,
+              duration: transitionDuration,
+              curve: Curves.easeInOutCubic,
+              builder: (context, width, _) => SizedBox(width: width),
+            ),
+            Expanded(
+              child: AnimatedAlign(
+                alignment: !showTitle
+                    ? Alignment.center
+                    : Alignment.centerRight,
+                duration: transitionDuration,
+                curve: Curves.easeInOutCubic,
+                child: Transform.translate(
+                  offset: Offset(
+                    Directionality.of(context) == TextDirection.ltr
+                        ? searchEndInset / 2
+                        : -searchEndInset / 2,
+                    0,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 448),
+                    child: animatedSearch,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
@@ -3926,6 +3976,7 @@ class _ShellSearchFieldState extends State<_ShellSearchField> {
   @override
   Widget build(BuildContext context) {
     final suggestions = widget.suggestions;
+    final suggestionsEnabled = suggestions != null && suggestions.enabled;
     final search = SearchBar(
       key: widget.searchKey,
       controller: widget.controller,
@@ -3948,7 +3999,6 @@ class _ShellSearchFieldState extends State<_ShellSearchField> {
         EdgeInsets.symmetric(horizontal: 16),
       ),
     );
-    if (suggestions == null || !suggestions.enabled) return search;
     return LayoutBuilder(
       builder: (context, constraints) => MenuAnchor(
         controller: _menuController,
@@ -3970,13 +4020,15 @@ class _ShellSearchFieldState extends State<_ShellSearchField> {
         crossAxisUnconstrained: false,
         consumeOutsideTap: false,
         onClose: _handleMenuClosed,
-        menuChildren: [
-          TrackSearchSuggestionsPanel(
-            controller: suggestions,
-            popup: true,
-            onSelected: _selectSuggestion,
-          ),
-        ],
+        menuChildren: suggestionsEnabled
+            ? [
+                TrackSearchSuggestionsPanel(
+                  controller: suggestions,
+                  popup: true,
+                  onSelected: _selectSuggestion,
+                ),
+              ]
+            : const [],
         builder: (context, controller, _) => search,
       ),
     );

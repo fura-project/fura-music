@@ -48,6 +48,7 @@ import 'package:flutter/material.dart'
         Opacity,
         PageStorageKey,
         PinnedHeaderSliver,
+        PopupMenuItem,
         SafeArea,
         Scaffold,
         Scrollable,
@@ -9023,6 +9024,34 @@ void main() {
       desktopLikedRefreshRect.left - desktopLikedPlayRect.right,
       closeTo(8, 1),
     );
+    await tester.tap(find.byKey(const ValueKey('open-settings')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('settings-search')), findsOneWidget);
+    final openSettingsPageTop = tester
+        .getTopLeft(find.byKey(const ValueKey('embedded-settings-page')))
+        .dy;
+    expect(openSettingsPageTop, closeTo(desktopShellTop + kToolbarHeight, 1));
+    await tester.tap(find.byKey(const ValueKey('settings-sidebar-back')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(find.byKey(const ValueKey('primary-shell-top-bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('top-search-shortcut')), findsOneWidget);
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('embedded-settings-page')))
+          .dy,
+      closeTo(openSettingsPageTop, 1),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(AppBar), findsNothing);
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('liked-songs-collapsed-header')),
+          )
+          .dy,
+      closeTo(desktopShellTop, 1),
+    );
     if (captureReviewImages) {
       await expectLater(
         find.byType(MusicApp),
@@ -10000,10 +10029,11 @@ void main() {
       expect(playerAction.hitTestable(), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('settings-theme-selector')));
       await tester.pumpAndSettle();
-      expect(find.byType(MenuItemButton), findsNWidgets(3));
+      expect(find.byType(PopupMenuItem<AppThemePreference>), findsNWidgets(3));
       expect(find.byType(BottomSheet), findsNothing);
-      // A compact menu has no scrim and does not replace the Shell owner.
-      expect(playerAction.hitTestable(), findsOneWidget);
+      // Native PopupRoute barrier intercepts outside taps while open without
+      // replacing the Shell playback owner.
+      expect(playerAction.hitTestable(), findsNothing);
       expect(host.controller.playback.stage, TrackPlaybackStage.playing);
       expect(host.controller.playback.track, same(track));
       expect(media.requests, 1);
