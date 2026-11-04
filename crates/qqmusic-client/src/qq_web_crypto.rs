@@ -92,8 +92,8 @@ pub(crate) fn decode_ag1_response(data: &[u8]) -> String {
 #[cfg(test)]
 pub(crate) fn decode_ag1_request_for_test(data: &[u8]) -> Result<String, Ag1Error> {
     let wire = STANDARD.decode(data).map_err(|_| Ag1Error)?;
-    let nonce: [u8; 12] = wire.get(..12).ok_or(())?.try_into().map_err(|_| Ag1Error)?;
-    let mut encrypted = wire.get(12..).ok_or(())?.to_vec();
+    let nonce: [u8; 12] = wire.get(..12).ok_or(Ag1Error)?.try_into().map_err(|_| Ag1Error)?;
+    let mut encrypted = wire.get(12..).ok_or(Ag1Error)?.to_vec();
     let plain = request_key()?
         .open_in_place(
             Nonce::assume_unique_for_key(nonce),

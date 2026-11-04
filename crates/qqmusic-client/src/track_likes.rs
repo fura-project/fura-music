@@ -292,7 +292,7 @@ fn g_tk(key: &str) -> u32 {
             .wrapping_add(hash.wrapping_shl(5))
             .wrapping_add(i32::from(byte));
     }
-    (hash & 0x7fff_ffff) as u32
+    (hash & 0x7fff_ffff).unsigned_abs()
 }
 
 #[derive(Serialize)]
