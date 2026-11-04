@@ -173,7 +173,7 @@ async fn peer(state: Arc<State>) -> (CdpClient, TestTask, Arc<Mutex<Vec<Value>>>
             recorded.lock().unwrap().push(command.clone());
             let mut result=json!({});
             match command["method"].as_str().unwrap() {
-                "Target.setAutoAttach" if command.get("sessionId").is_none()=>send_json(&mut socket,json!({"method":"Target.attachedToTarget","params":{"sessionId":SESSION,"targetInfo":{"targetId":"synthetic-page","type":"page","url":"about:blank"}}})).await,
+                "Target.setAutoAttach" if command.get("sessionId").is_none()=>send_json(&mut socket,json!({"method":"Target.attachedToTarget","params":{"sessionId":SESSION,"waitingForDebugger":true,"targetInfo":{"targetId":"synthetic-page","type":"page","url":"about:blank"}}})).await,
                 "Page.navigate"=> {send_json(&mut socket,frame(if state.case==Case::WrongFirstProvenance {"https://nonofficial.invalid/"} else {OFFICIAL_PAGE})).await;send_json(&mut socket,stage_event(false,state.case)).await;},
                 "Storage.getCookies"=>result=json!({"cookies":cookies()}),
                 "Fetch.fulfillRequest"=> {

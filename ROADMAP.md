@@ -50,6 +50,15 @@ rejection. The [two-stage offline follow-up](docs/development/kugou-two-stage-ga
 keeps the server-issued encoded chain, two separate songinfo budgets and explicit
 Human boundary. It does not activate production or authorize another live run.
 
+**KuGou browser compatibility follow-up (2026-11-03):** the second maintainer
+gate stopped before any Stage 1 identity diagnostic under the old broad browser
+category. Installed Chrome reproduced service-worker resume and worker/OOPIF
+domain incompatibilities in that lifecycle region. The bounded target-aware fix,
+secret-safe phase diagnostics, exact API-host browser fence and multi-target /
+no-leak loopback runtimes are documented in the same
+[two-stage evidence record](docs/development/kugou-two-stage-gate-2026-11-02.md#second-human-gate-browser-compatibility-addendum-2026-11-03).
+Production remains disabled and no further live run is authorized here.
+
 The next bounded foundation is also implemented offline. QQ `loginType=2` has
 one explicit `LoginServer/Login` request shape, complete material checks,
 typed risk outcomes and the same Provider/vault lifecycle tests, but its

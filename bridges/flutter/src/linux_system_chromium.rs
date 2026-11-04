@@ -87,6 +87,7 @@ struct CdpClient {
     retain_events: bool,
     events: VecDeque<Value>,
     event_bytes: usize,
+    detached_sessions: BTreeSet<String>,
 }
 
 #[derive(Deserialize)]
@@ -437,6 +438,7 @@ impl CdpClient {
             retain_events: false,
             events: VecDeque::new(),
             event_bytes: 0,
+            detached_sessions: BTreeSet::new(),
         })
     }
 
@@ -481,6 +483,17 @@ impl CdpClient {
                 let mut value: Value = serde_json::from_str(text.as_ref())
                     .map_err(|_| CaptureFailure::DevtoolsInvalid)?;
                 if value.get("id").and_then(Value::as_u64) != Some(id) {
+                    if self.retain_events
+                        && session.is_some()
+                        && value.get("method").and_then(Value::as_str)
+                            == Some("Target.detachedFromTarget")
+                        && value["params"]["sessionId"].as_str() == session
+                    {
+                        if let Some(session) = session {
+                            self.detached_sessions.insert(session.to_owned());
+                        }
+                        return Err(CaptureFailure::DevtoolsUnavailable);
+                    }
                     if self.retain_events && value.get("method").is_some() {
                         self.queue_event(value, text.len())?;
                     }
@@ -525,6 +538,11 @@ impl CdpClient {
         self.event_bytes += size;
         self.events.push_back(value);
         Ok(())
+    }
+
+    #[cfg(any(test, feature = "kugou-cdp-gate"))]
+    fn take_detached_session(&mut self, session: &str) -> bool {
+        self.detached_sessions.remove(session)
     }
 
     #[cfg(any(test, feature = "kugou-cdp-gate"))]

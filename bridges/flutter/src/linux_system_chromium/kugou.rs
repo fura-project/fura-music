@@ -14,12 +14,88 @@ use provider_kugou::web_playback_candidate::{BoundCapture, CaptureAttempt, Stage
 use std::collections::BTreeMap;
 
 const OFFICIAL_PAGE: &str = "https://www.kugou.com/";
+const MAX_ATTACHED_TARGETS: usize = 32;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum GateFailure {
     HumanAuthorizationRequired,
     Browser(CaptureFailure),
+    Cdp(CaptureFailure, CdpPhase, CdpTargetKind),
+    TargetDetached(CdpPhase, CdpTargetKind),
+    ProfileCookieCaptureInvalid,
     Playback(WebPlaybackError),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CdpPhase {
+    AutoAttach,
+    FetchEnable,
+    PageEnable,
+    BypassServiceWorker,
+    ChildAutoAttach,
+    ResumeTarget,
+    Navigate,
+    ProfileCookies,
+    FetchAbort,
+    FetchFulfill,
+    FetchContinue,
+    Event,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) enum CdpTargetKind {
+    Browser,
+    Page,
+    Iframe,
+    Worker,
+    SharedWorker,
+    ServiceWorker,
+    #[default]
+    Other,
+}
+
+impl CdpTargetKind {
+    fn from_cdp(value: &str) -> Self {
+        match value {
+            "page" => Self::Page,
+            "iframe" => Self::Iframe,
+            "worker" => Self::Worker,
+            "shared_worker" => Self::SharedWorker,
+            "service_worker" => Self::ServiceWorker,
+            _ => Self::Other,
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Browser => "BROWSER",
+            Self::Page => "PAGE",
+            Self::Iframe => "IFRAME",
+            Self::Worker => "WORKER",
+            Self::SharedWorker => "SHARED_WORKER",
+            Self::ServiceWorker => "SERVICE_WORKER",
+            Self::Other => "OTHER",
+        }
+    }
+}
+
+impl CdpPhase {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::AutoAttach => "AUTO_ATTACH",
+            Self::FetchEnable => "FETCH_ENABLE",
+            Self::PageEnable => "PAGE_ENABLE",
+            Self::BypassServiceWorker => "BYPASS_SERVICE_WORKER",
+            Self::ChildAutoAttach => "CHILD_AUTO_ATTACH",
+            Self::ResumeTarget => "RESUME_TARGET",
+            Self::Navigate => "NAVIGATE",
+            Self::ProfileCookies => "PROFILE_COOKIES",
+            Self::FetchAbort => "FETCH_ABORT",
+            Self::FetchFulfill => "FETCH_FULFILL",
+            Self::FetchContinue => "FETCH_CONTINUE",
+            Self::Event => "EVENT",
+        }
+    }
 }
 
 impl From<CaptureFailure> for GateFailure {
@@ -61,76 +137,163 @@ fn result_diagnostic(result: Result<bool, GateFailure>) -> String {
             "KUGOU_GATE result=STANDARD_SOURCE_ONLY range_verified={range} account_summary_verified=false production_enabled=false"
         ),
         Err(error) => {
-            let category = match error {
-                GateFailure::HumanAuthorizationRequired => "EXPLICIT_HUMAN_AUTHORIZATION_REQUIRED",
+            let (category, phase): (&str, Option<CdpPhase>) = match error {
+                GateFailure::HumanAuthorizationRequired => {
+                    ("EXPLICIT_HUMAN_AUTHORIZATION_REQUIRED", None)
+                }
                 GateFailure::Playback(WebPlaybackError::OfficialWebTrackIdentityUnproven) => {
-                    "OFFICIAL_WEB_TRACK_IDENTITY_UNPROVEN"
+                    ("OFFICIAL_WEB_TRACK_IDENTITY_UNPROVEN", None)
                 }
-                GateFailure::Playback(WebPlaybackError::RiskControl) => "RISK_CONTROL",
-                GateFailure::Playback(WebPlaybackError::RateLimited) => "RATE_LIMITED",
-                GateFailure::Playback(WebPlaybackError::Replaced) => "REPLACED",
-                GateFailure::Playback(WebPlaybackError::AttemptConsumed) => "ATTEMPT_CONSUMED",
-                GateFailure::Playback(WebPlaybackError::PreviewOnly) => "PREVIEW_ONLY",
+                GateFailure::Playback(WebPlaybackError::RiskControl) => ("RISK_CONTROL", None),
+                GateFailure::Playback(WebPlaybackError::RateLimited) => ("RATE_LIMITED", None),
+                GateFailure::Playback(WebPlaybackError::Replaced) => ("REPLACED", None),
+                GateFailure::Playback(WebPlaybackError::AttemptConsumed) => {
+                    ("ATTEMPT_CONSUMED", None)
+                }
+                GateFailure::Playback(WebPlaybackError::PreviewOnly) => ("PREVIEW_ONLY", None),
                 GateFailure::Playback(WebPlaybackError::MembershipOrPurchaseRequired) => {
-                    "MEMBERSHIP_OR_PURCHASE_REQUIRED"
+                    ("MEMBERSHIP_OR_PURCHASE_REQUIRED", None)
                 }
-                GateFailure::Playback(WebPlaybackError::RightsUnavailable) => "RIGHTS_UNAVAILABLE",
-                GateFailure::Playback(WebPlaybackError::LoginRequired) => "LOGIN_REQUIRED",
+                GateFailure::Playback(WebPlaybackError::RightsUnavailable) => {
+                    ("RIGHTS_UNAVAILABLE", None)
+                }
+                GateFailure::Playback(WebPlaybackError::LoginRequired) => ("LOGIN_REQUIRED", None),
                 GateFailure::Playback(WebPlaybackError::SessionContextRejected) => {
-                    "SESSION_CONTEXT_REJECTED"
+                    ("SESSION_CONTEXT_REJECTED", None)
                 }
                 GateFailure::Playback(WebPlaybackError::NewMediaHostRequiresApproval) => {
-                    "NEW_MEDIA_HOST_REQUIRES_APPROVAL"
+                    ("NEW_MEDIA_HOST_REQUIRES_APPROVAL", None)
                 }
-                GateFailure::Playback(WebPlaybackError::Network) => "NETWORK",
+                GateFailure::Playback(WebPlaybackError::Network) => ("NETWORK", None),
                 GateFailure::Playback(WebPlaybackError::ServiceUnavailable) => {
-                    "SERVICE_UNAVAILABLE"
+                    ("SERVICE_UNAVAILABLE", None)
                 }
-                GateFailure::Playback(WebPlaybackError::UpstreamRejected) => "UPSTREAM_REJECTED",
+                GateFailure::Playback(WebPlaybackError::UpstreamRejected) => {
+                    ("UPSTREAM_REJECTED", None)
+                }
                 GateFailure::Playback(WebPlaybackError::ProtocolUnsupported) => {
-                    "PROTOCOL_UNSUPPORTED"
+                    ("PROTOCOL_UNSUPPORTED", None)
                 }
-                GateFailure::Playback(WebPlaybackError::InvalidCapture) => "INVALID_CAPTURE",
-                GateFailure::Playback(WebPlaybackError::InvalidResponse) => "INVALID_RESPONSE",
-                GateFailure::Playback(WebPlaybackError::ResponseBound) => "RESPONSE_BOUND",
+                GateFailure::Playback(WebPlaybackError::InvalidCapture) => {
+                    ("INVALID_CAPTURE", None)
+                }
+                GateFailure::Playback(WebPlaybackError::InvalidResponse) => {
+                    ("INVALID_RESPONSE", None)
+                }
+                GateFailure::Playback(WebPlaybackError::ResponseBound) => ("RESPONSE_BOUND", None),
                 GateFailure::Playback(WebPlaybackError::OfficialWebStage1IdentityUnproven) => {
-                    "OFFICIAL_WEB_STAGE1_IDENTITY_UNPROVEN"
+                    ("OFFICIAL_WEB_STAGE1_IDENTITY_UNPROVEN", None)
                 }
                 GateFailure::Playback(WebPlaybackError::Stage1ResponseIdentityMismatch) => {
-                    "STAGE1_RESPONSE_IDENTITY_MISMATCH"
+                    ("STAGE1_RESPONSE_IDENTITY_MISMATCH", None)
                 }
                 GateFailure::Playback(WebPlaybackError::Stage1EncodedIdMissing) => {
-                    "STAGE1_ENCODED_ID_MISSING"
+                    ("STAGE1_ENCODED_ID_MISSING", None)
                 }
                 GateFailure::Playback(WebPlaybackError::OfficialWebSecondStageNotObserved) => {
-                    "OFFICIAL_WEB_SECOND_STAGE_NOT_OBSERVED"
+                    ("OFFICIAL_WEB_SECOND_STAGE_NOT_OBSERVED", None)
                 }
                 GateFailure::Playback(WebPlaybackError::OfficialWebEncodedIdentityMismatch) => {
-                    "OFFICIAL_WEB_ENCODED_IDENTITY_MISMATCH"
+                    ("OFFICIAL_WEB_ENCODED_IDENTITY_MISMATCH", None)
                 }
                 GateFailure::Playback(WebPlaybackError::Stage2ResponseIdentityMismatch) => {
-                    "STAGE2_RESPONSE_IDENTITY_MISMATCH"
+                    ("STAGE2_RESPONSE_IDENTITY_MISMATCH", None)
                 }
                 GateFailure::Playback(WebPlaybackError::OfficialWebStage2ProvenanceUnproven) => {
-                    "OFFICIAL_WEB_STAGE2_PROVENANCE_UNPROVEN"
+                    ("OFFICIAL_WEB_STAGE2_PROVENANCE_UNPROVEN", None)
                 }
                 GateFailure::Playback(WebPlaybackError::Stage1ResponseReplayUnsupported) => {
-                    "STAGE1_RESPONSE_REPLAY_UNSUPPORTED"
+                    ("STAGE1_RESPONSE_REPLAY_UNSUPPORTED", None)
                 }
                 GateFailure::Playback(WebPlaybackError::Stage1ResponseEncodingUnsupported) => {
-                    "STAGE1_RESPONSE_ENCODING_UNSUPPORTED"
+                    ("STAGE1_RESPONSE_ENCODING_UNSUPPORTED", None)
                 }
                 GateFailure::Playback(
                     WebPlaybackError::Stage1ResponseCookieMutationUnsupported,
-                ) => "STAGE1_RESPONSE_COOKIE_MUTATION_UNSUPPORTED",
-                GateFailure::Browser(CaptureFailure::Cancelled) => "CANCELLED",
-                GateFailure::Browser(CaptureFailure::TimedOut) => "TIMED_OUT",
-                GateFailure::Browser(CaptureFailure::CleanupFailed) => "CLEANUP_FAILED",
-                GateFailure::Browser(_) => "BROWSER_CAPTURE_FAILED",
+                ) => ("STAGE1_RESPONSE_COOKIE_MUTATION_UNSUPPORTED", None),
+                GateFailure::Browser(CaptureFailure::BrowserUnavailable) => {
+                    ("BROWSER_UNAVAILABLE", None)
+                }
+                GateFailure::Browser(CaptureFailure::BrowserLaunchFailed) => {
+                    ("BROWSER_LAUNCH_FAILED", None)
+                }
+                GateFailure::Browser(CaptureFailure::ProfileSetupFailed) => {
+                    ("PROFILE_SETUP_FAILED", None)
+                }
+                GateFailure::Browser(CaptureFailure::DevtoolsUnavailable) => {
+                    ("CDP_UNAVAILABLE", None)
+                }
+                GateFailure::Browser(CaptureFailure::DevtoolsInvalid) => {
+                    return cdp_diagnostic(
+                        "CDP_PROTOCOL_INVALID",
+                        CdpPhase::Event,
+                        CdpTargetKind::Browser,
+                    );
+                }
+                GateFailure::Browser(CaptureFailure::OfficialTargetUnavailable) => {
+                    ("OFFICIAL_TARGET_UNAVAILABLE", None)
+                }
+                GateFailure::Browser(CaptureFailure::BrowserClosed) => ("BROWSER_CLOSED", None),
+                GateFailure::Browser(CaptureFailure::InvalidCredential)
+                | GateFailure::ProfileCookieCaptureInvalid => {
+                    ("PROFILE_COOKIE_CAPTURE_INVALID", None)
+                }
+                GateFailure::Browser(CaptureFailure::Cancelled) => ("CANCELLED", None),
+                GateFailure::Browser(CaptureFailure::TimedOut) => ("TIMED_OUT", None),
+                GateFailure::Browser(CaptureFailure::CleanupFailed) => ("CLEANUP_FAILED", None),
+                GateFailure::Cdp(CaptureFailure::DevtoolsInvalid, phase, target) => {
+                    return cdp_diagnostic("CDP_PROTOCOL_INVALID", phase, target);
+                }
+                GateFailure::Cdp(CaptureFailure::DevtoolsUnavailable, phase, target) => {
+                    return cdp_diagnostic("CDP_UNAVAILABLE", phase, target);
+                }
+                GateFailure::Cdp(CaptureFailure::BrowserClosed, phase, target) => {
+                    return cdp_diagnostic("BROWSER_CLOSED", phase, target);
+                }
+                GateFailure::Cdp(error, _, _) => return result_diagnostic(Err(error.into())),
+                GateFailure::TargetDetached(phase, target) => {
+                    return cdp_diagnostic("CDP_TARGET_DETACHED", phase, target);
+                }
             };
-            format!("KUGOU_GATE result=BLOCKED reason={category} production_enabled=false")
+            if let Some(phase) = phase {
+                format!(
+                    "KUGOU_GATE result=BLOCKED reason={category} cdp_phase={} production_enabled=false",
+                    phase.label()
+                )
+            } else {
+                format!("KUGOU_GATE result=BLOCKED reason={category} production_enabled=false")
+            }
         }
     }
+}
+
+fn cdp_diagnostic(category: &str, phase: CdpPhase, target: CdpTargetKind) -> String {
+    format!(
+        "KUGOU_GATE result=BLOCKED reason={category} cdp_phase={} cdp_target={} production_enabled=false",
+        phase.label(),
+        target.label()
+    )
+}
+
+fn cdp_failure(error: CaptureFailure, phase: CdpPhase, target: CdpTargetKind) -> GateFailure {
+    GateFailure::Cdp(error, phase, target)
+}
+
+async fn cdp_phase_command(
+    cdp: &mut CdpClient,
+    session: Option<&str>,
+    method: &str,
+    params: Value,
+    phase: CdpPhase,
+    target: CdpTargetKind,
+) -> Result<Value, GateFailure> {
+    let result = cdp.session_command(session, method, params).await;
+    if let Some(session) = session
+        && cdp.take_detached_session(session)
+    {
+        return Err(GateFailure::TargetDetached(phase, target));
+    }
+    result.map_err(|error| cdp_failure(error, phase, target))
 }
 
 async fn run_gate_attempt<T: WebPlaybackTransport>(
@@ -222,6 +385,15 @@ fn report_line(text: &str) {
     write_diagnostic(&mut std::io::stdout().lock(), text);
 }
 
+fn browser_network_fence_args() -> Vec<String> {
+    vec![
+        "--no-proxy-server".to_owned(),
+        "--disable-quic".to_owned(),
+        "--dns-over-https-mode=off".to_owned(),
+        "--host-resolver-rules=MAP wwwapi.kugou.com ~NOTFOUND".to_owned(),
+    ]
+}
+
 async fn capture_official_request(
     is_current: impl Fn() -> bool,
 ) -> Result<OfficialWebCapture, GateFailure> {
@@ -230,7 +402,13 @@ async fn capture_official_request(
     }
     let browser = discover_browser()?;
     // Start blank. No official page can issue songinfo before Fetch is armed.
-    let mut running = start_browser_at(&browser, &is_current, "about:blank", &[]).await?;
+    let mut running = start_browser_at(
+        &browser,
+        &is_current,
+        "about:blank",
+        &browser_network_fence_args(),
+    )
+    .await?;
     let mut cdp = None;
     let capture = async {
         let endpoint = discover_websocket_endpoint(running.port, &running.websocket_path).await?;
@@ -248,6 +426,7 @@ async fn capture_official_request(
 #[derive(Default)]
 struct AttachedTarget {
     page: bool,
+    kind: CdpTargetKind,
     official_root: bool,
     official_frames: BTreeSet<String>,
 }
@@ -255,6 +434,14 @@ struct AttachedTarget {
 struct Interceptor {
     targets: BTreeMap<String, AttachedTarget>,
     navigated: bool,
+    #[cfg(test)]
+    observed_target_kinds: BTreeSet<CdpTargetKind>,
+    #[cfg(test)]
+    attach_count: usize,
+    #[cfg(test)]
+    detach_count: usize,
+    #[cfg(test)]
+    peak_target_count: usize,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -268,13 +455,17 @@ struct PausedCapture {
     capture: OfficialWebCapture,
     session: String,
     request: String,
+    target: CdpTargetKind,
 }
 impl PausedCapture {
     async fn abort(&self, cdp: &mut CdpClient) -> Result<(), GateFailure> {
-        cdp.session_command(
+        cdp_phase_command(
+            cdp,
             Some(&self.session),
             "Fetch.failRequest",
             json!({"requestId":self.request,"errorReason":"Aborted"}),
+            CdpPhase::FetchAbort,
+            self.target,
         )
         .await?;
         Ok(())
@@ -282,13 +473,78 @@ impl PausedCapture {
 }
 
 impl Interceptor {
-    async fn arm(cdp: &mut CdpClient) -> Result<Self, CaptureFailure> {
+    async fn target_command(
+        cdp: &mut CdpClient,
+        session: &str,
+        target_id: &str,
+        method: &str,
+        params: Value,
+        phase: CdpPhase,
+        kind: CdpTargetKind,
+    ) -> Result<Option<Value>, GateFailure> {
+        let original =
+            match cdp_phase_command(cdp, Some(session), method, params, phase, kind).await {
+                Ok(value) => return Ok(Some(value)),
+                Err(error @ GateFailure::Cdp(CaptureFailure::DevtoolsInvalid, _, _)) => error,
+                Err(error) => return Err(error),
+            };
+
+        // Real pages create and remove OOPIF targets while their attach setup is
+        // still in flight. A protocol error is benign only when a browser-level,
+        // standard Target query proves that the exact target has already gone or
+        // is no longer attached. An unsupported command on a live target remains
+        // a fixed CDP_PROTOCOL_INVALID failure.
+        match cdp
+            .session_command(None, "Target.getTargetInfo", json!({"targetId": target_id}))
+            .await
+        {
+            Ok(info) => {
+                let actual = field(&info["targetInfo"], "targetId")
+                    .map_err(|error| cdp_failure(error, phase, kind))?;
+                let attached = info["targetInfo"]["attached"].as_bool();
+                if actual != target_id || attached.is_none() {
+                    return Err(GateFailure::Cdp(
+                        CaptureFailure::DevtoolsInvalid,
+                        phase,
+                        kind,
+                    ));
+                }
+                if attached == Some(false) {
+                    cdp.take_detached_session(session);
+                    return Ok(None);
+                }
+                Err(original)
+            }
+            Err(CaptureFailure::DevtoolsInvalid) => {
+                cdp.take_detached_session(session);
+                Ok(None)
+            }
+            Err(error) => Err(cdp_failure(error, phase, kind)),
+        }
+    }
+
+    async fn arm(cdp: &mut CdpClient) -> Result<Self, GateFailure> {
         cdp.retain_events = true;
-        cdp.command("Target.setAutoAttach", auto_attach_params())
-            .await?;
+        cdp_phase_command(
+            cdp,
+            None,
+            "Target.setAutoAttach",
+            auto_attach_params(),
+            CdpPhase::AutoAttach,
+            CdpTargetKind::Browser,
+        )
+        .await?;
         Ok(Self {
             targets: BTreeMap::new(),
             navigated: false,
+            #[cfg(test)]
+            observed_target_kinds: BTreeSet::new(),
+            #[cfg(test)]
+            attach_count: 0,
+            #[cfg(test)]
+            detach_count: 0,
+            #[cfg(test)]
+            peak_target_count: 0,
         })
     }
 
@@ -302,6 +558,53 @@ impl Interceptor {
             .observe(cdp, event, entry, CaptureMode::LegacyDirect)
             .await?
             .map(|paused| paused.capture))
+    }
+
+    #[cfg(test)]
+    fn report_runtime_target_evidence(&self) {
+        for (kind, label) in [
+            (CdpTargetKind::Page, "PAGE"),
+            (CdpTargetKind::Iframe, "IFRAME"),
+            (CdpTargetKind::Worker, "WORKER"),
+            (CdpTargetKind::SharedWorker, "SHARED_WORKER"),
+            (CdpTargetKind::ServiceWorker, "SERVICE_WORKER"),
+        ] {
+            eprintln!(
+                "KUGOU_RUNTIME_TARGET_{label}={}",
+                if self.observed_target_kinds.contains(&kind) {
+                    "OBSERVED"
+                } else {
+                    "NOT_OBSERVED"
+                }
+            );
+        }
+        eprintln!("KUGOU_RUNTIME_TARGET_ATTACH_COUNT={}", self.attach_count);
+        eprintln!("KUGOU_RUNTIME_TARGET_DETACH_COUNT={}", self.detach_count);
+        eprintln!("KUGOU_RUNTIME_TARGET_PEAK_COUNT={}", self.peak_target_count);
+    }
+
+    #[cfg(test)]
+    fn validate_multitarget_runtime_evidence(&self) -> Result<(), GateFailure> {
+        if ![
+            CdpTargetKind::Page,
+            CdpTargetKind::Iframe,
+            CdpTargetKind::Worker,
+            CdpTargetKind::SharedWorker,
+            CdpTargetKind::ServiceWorker,
+        ]
+        .iter()
+        .all(|kind| self.observed_target_kinds.contains(kind))
+            || self.attach_count <= 32
+            || self.detach_count == 0
+            || self.peak_target_count >= MAX_ATTACHED_TARGETS
+        {
+            return Err(GateFailure::Cdp(
+                CaptureFailure::DevtoolsInvalid,
+                CdpPhase::Event,
+                CdpTargetKind::Browser,
+            ));
+        }
+        Ok(())
     }
 
     async fn observe(
@@ -320,51 +623,176 @@ impl Interceptor {
             let params = &event["params"];
             let session = field(params, "sessionId")?.to_owned();
             let kind = field(&params["targetInfo"], "type")?;
-            if self.targets.len() >= 32 || self.targets.contains_key(&session) {
+            let target_kind = CdpTargetKind::from_cdp(kind);
+            let page = kind == "page";
+            // The owned browser is launched at about:blank before auto-attach.
+            // Chromium may report the pre-existing app target as not waiting,
+            // so the first page is armed in place before the only navigation.
+            let initial_blank_page = target_kind == CdpTargetKind::Page && !self.navigated;
+            let waiting_for_debugger =
+                params.get("waitingForDebugger").and_then(Value::as_bool) == Some(true);
+            if page && !initial_blank_page && !waiting_for_debugger {
+                return Err(GateFailure::Cdp(
+                    CaptureFailure::DevtoolsInvalid,
+                    CdpPhase::AutoAttach,
+                    target_kind,
+                ));
+            }
+            let target_id = field(&params["targetInfo"], "targetId")?.to_owned();
+            if self.targets.len() >= MAX_ATTACHED_TARGETS || self.targets.contains_key(&session) {
                 return Err(CaptureFailure::DevtoolsInvalid.into());
             }
-            let page = matches!(kind, "page" | "iframe");
             self.targets.insert(
                 session.clone(),
                 AttachedTarget {
                     page,
+                    kind: target_kind,
                     ..Default::default()
                 },
             );
+            #[cfg(test)]
+            {
+                self.observed_target_kinds.insert(target_kind);
+                self.attach_count += 1;
+                self.peak_target_count = self.peak_target_count.max(self.targets.len());
+            }
+            if !page {
+                // OOPIF targets do not consistently expose Fetch. The parent
+                // page is already armed for its own and in-process frame traffic;
+                // an OOPIF is never accepted capture provenance, and the exact
+                // API-host DNS fence blocks its songinfo traffic before network.
+                if target_kind == CdpTargetKind::Iframe && waiting_for_debugger {
+                    let _ = Self::target_command(
+                        cdp,
+                        &session,
+                        &target_id,
+                        "Runtime.runIfWaitingForDebugger",
+                        json!({}),
+                        CdpPhase::ResumeTarget,
+                        target_kind,
+                    )
+                    .await?;
+                    self.targets.remove(&session);
+                    return Ok(None);
+                }
+                // Worker targets are never accepted capture provenance. Current
+                // Chromium does not expose Fetch on dedicated workers and may
+                // attach service workers without a debugger pause. Keep every
+                // worker class paused for the lifetime of this gate. Resuming it
+                // could make a worker-originated Fetch appear on the official
+                // page session and falsely satisfy frame provenance.
+                self.targets.remove(&session);
+                return Ok(None);
+            }
             // All targets are paused on creation. Arm interception BEFORE resume,
-            // including workers/popups; only proved official page frames can replay.
-            cdp.session_command(
-                Some(&session),
+            // for page/frame targets; only proved official page frames can replay.
+            if Self::target_command(
+                cdp,
+                &session,
+                &target_id,
                 "Fetch.enable",
                 json!({
                     "patterns": [{"urlPattern": "*://*/play/songinfo*", "requestStage": "Request"}]
                 }),
+                CdpPhase::FetchEnable,
+                target_kind,
             )
-            .await?;
+            .await?
+            .is_none()
+            {
+                self.targets.remove(&session);
+                return Ok(None);
+            }
             if page {
-                cdp.session_command(Some(&session), "Page.enable", json!({}))
-                    .await?;
-                cdp.session_command(
-                    Some(&session),
+                if Self::target_command(
+                    cdp,
+                    &session,
+                    &target_id,
+                    "Page.enable",
+                    json!({}),
+                    CdpPhase::PageEnable,
+                    target_kind,
+                )
+                .await?
+                .is_none()
+                {
+                    self.targets.remove(&session);
+                    return Ok(None);
+                }
+                if Self::target_command(
+                    cdp,
+                    &session,
+                    &target_id,
                     "Network.setBypassServiceWorker",
                     json!({"bypass": true}),
+                    CdpPhase::BypassServiceWorker,
+                    target_kind,
                 )
-                .await?;
-                cdp.session_command(Some(&session), "Target.setAutoAttach", auto_attach_params())
-                    .await?;
+                .await?
+                .is_none()
+                {
+                    self.targets.remove(&session);
+                    return Ok(None);
+                }
+                if Self::target_command(
+                    cdp,
+                    &session,
+                    &target_id,
+                    "Target.setAutoAttach",
+                    auto_attach_params(),
+                    CdpPhase::ChildAutoAttach,
+                    target_kind,
+                )
+                .await?
+                .is_none()
+                {
+                    self.targets.remove(&session);
+                    return Ok(None);
+                }
             }
-            cdp.session_command(Some(&session), "Runtime.runIfWaitingForDebugger", json!({}))
-                .await?;
+            if waiting_for_debugger
+                && Self::target_command(
+                    cdp,
+                    &session,
+                    &target_id,
+                    "Runtime.runIfWaitingForDebugger",
+                    json!({}),
+                    CdpPhase::ResumeTarget,
+                    target_kind,
+                )
+                .await?
+                .is_none()
+            {
+                self.targets.remove(&session);
+                return Ok(None);
+            }
             if kind == "page" && !self.navigated {
                 self.navigated = true;
-                cdp.session_command(Some(&session), "Page.navigate", json!({"url": entry}))
-                    .await?;
+                if Self::target_command(
+                    cdp,
+                    &session,
+                    &target_id,
+                    "Page.navigate",
+                    json!({"url": entry}),
+                    CdpPhase::Navigate,
+                    target_kind,
+                )
+                .await?
+                .is_none()
+                {
+                    self.targets.remove(&session);
+                    return Ok(None);
+                }
             }
             return Ok(None);
         }
         if method == "Target.detachedFromTarget" {
             if let Some(session) = event["params"]["sessionId"].as_str() {
                 self.targets.remove(session);
+                #[cfg(test)]
+                {
+                    self.detach_count += 1;
+                }
             }
             return Ok(None);
         }
@@ -408,10 +836,13 @@ impl Interceptor {
                 let parsed = Url::parse(raw).map_err(|_| WebPlaybackError::InvalidCapture)?;
                 let candidate = parsed.path().starts_with("/play/songinfo");
                 if !candidate {
-                    cdp.session_command(
+                    cdp_phase_command(
+                        cdp,
                         Some(&session),
                         "Fetch.continueRequest",
                         json!({"requestId": request_id}),
+                        CdpPhase::FetchContinue,
+                        target.kind,
                     )
                     .await?;
                     return Ok(None);
@@ -419,12 +850,15 @@ impl Interceptor {
                 // The legacy direct-profile test path always aborts first. V2
                 // keeps a validated first request paused for Rust/fulfillment.
                 if mode == CaptureMode::LegacyDirect {
-                    cdp.session_command(
+                    cdp_phase_command(
+                        cdp,
                         Some(&session),
                         "Fetch.failRequest",
                         json!({
                             "requestId": request_id, "errorReason": "Aborted"
                         }),
+                        CdpPhase::FetchAbort,
+                        target.kind,
                     )
                     .await?;
                 }
@@ -479,8 +913,17 @@ impl Interceptor {
                             ))
                         })
                         .collect::<Result<Vec<_>, CaptureFailure>>()?;
-                    let mut result = cdp.command("Storage.getCookies", json!({})).await?;
-                    let cookies = profile_cookies(result["cookies"].take())?;
+                    let mut result = cdp_phase_command(
+                        cdp,
+                        None,
+                        "Storage.getCookies",
+                        json!({}),
+                        CdpPhase::ProfileCookies,
+                        CdpTargetKind::Browser,
+                    )
+                    .await?;
+                    let cookies = profile_cookies(result["cookies"].take())
+                        .map_err(|_| GateFailure::ProfileCookieCaptureInvalid)?;
                     let capture = match mode {
                         CaptureMode::LegacyDirect => OfficialWebCapture::from_cdp(
                             raw,
@@ -509,10 +952,13 @@ impl Interceptor {
                 }
                 .await;
                 if captured.is_err() && mode != CaptureMode::LegacyDirect {
-                    cdp.session_command(
+                    cdp_phase_command(
+                        cdp,
                         Some(&session),
                         "Fetch.failRequest",
                         json!({"requestId":request_id,"errorReason":"Aborted"}),
+                        CdpPhase::FetchAbort,
+                        target.kind,
                     )
                     .await?;
                 }
@@ -520,6 +966,7 @@ impl Interceptor {
                     capture: captured?,
                     session,
                     request: request_id,
+                    target: target.kind,
                 }));
             }
             _ => (),
@@ -568,7 +1015,13 @@ async fn capture_official_stages<T: WebPlaybackTransport>(
         return Err(CaptureFailure::Cancelled.into());
     }
     let browser = discover_browser()?;
-    let mut running = start_browser_at(&browser, is_current, "about:blank", &[]).await?;
+    let mut running = start_browser_at(
+        &browser,
+        is_current,
+        "about:blank",
+        &browser_network_fence_args(),
+    )
+    .await?;
     let mut cdp = None;
     let progress = async {
         let endpoint = discover_websocket_endpoint(running.port, &running.websocket_path).await?;
@@ -608,7 +1061,10 @@ async fn next_stage(
                 CaptureFailure::TimedOut.into()
             });
         }
-        if let Some(event) = cdp.next_event().await?
+        if let Some(event) = cdp
+            .next_event()
+            .await
+            .map_err(|error| cdp_failure(error, CdpPhase::Event, CdpTargetKind::Browser))?
             && let Some(paused) = interceptor.observe(cdp, event, entry, mode).await?
         {
             return Ok(paused);
@@ -625,6 +1081,13 @@ async fn capture_stages_in_browser<T: WebPlaybackTransport>(
     entry: &str,
     second_timeout: Duration,
 ) -> Result<BrowserProgress, GateFailure> {
+    #[cfg(test)]
+    let require_multitarget_evidence = [
+        "FURA_KUGOU_MULTITARGET_RUNTIME_WORKER",
+        "FURA_KUGOU_NO_LEAK_RUNTIME_WORKER",
+    ]
+    .iter()
+    .any(|name| env::var(name).as_deref() == Ok("1"));
     let mut interceptor = Interceptor::arm(cdp).await?;
     let deadline = Instant::now() + ATTEMPT_TIMEOUT;
     let first = next_stage(
@@ -640,10 +1103,13 @@ async fn capture_stages_in_browser<T: WebPlaybackTransport>(
     let bound = owner.bind_stage1(attempt, first.capture, unix_seconds()?);
     // Identity errors stop before any upstream IO. The browser never continues.
     if bound.is_err() {
-        cdp.session_command(
+        cdp_phase_command(
+            cdp,
             Some(&first.session),
             "Fetch.failRequest",
             json!({"requestId":first.request,"errorReason":"Aborted"}),
+            CdpPhase::FetchAbort,
+            first.target,
         )
         .await?;
     }
@@ -659,10 +1125,13 @@ async fn capture_stages_in_browser<T: WebPlaybackTransport>(
     require_active(child, is_current)?;
     match progress {
         Stage1Progress::Direct(source) => {
-            cdp.session_command(
+            cdp_phase_command(
+                cdp,
                 Some(&first.session),
                 "Fetch.failRequest",
                 json!({"requestId":first.request,"errorReason":"Aborted"}),
+                CdpPhase::FetchAbort,
+                first.target,
             )
             .await?;
             Ok(BrowserProgress::Direct(source))
@@ -674,9 +1143,17 @@ async fn capture_stages_in_browser<T: WebPlaybackTransport>(
                 .iter()
                 .map(|(name, value)| json!({"name":name,"value":value}))
                 .collect::<Vec<_>>();
-            cdp.session_command(Some(&first.session),"Fetch.fulfillRequest",json!({
-                "requestId":first.request,"responseCode":200,"responseHeaders":headers,"body":STANDARD.encode(fulfillment.body()),
-            })).await?;
+            cdp_phase_command(
+                cdp,
+                Some(&first.session),
+                "Fetch.fulfillRequest",
+                json!({
+                    "requestId":first.request,"responseCode":200,"responseHeaders":headers,"body":STANDARD.encode(fulfillment.body()),
+                }),
+                CdpPhase::FetchFulfill,
+                first.target,
+            )
+            .await?;
             require_active(child, is_current)?;
             let second = next_stage(
                 &mut interceptor,
@@ -691,13 +1168,23 @@ async fn capture_stages_in_browser<T: WebPlaybackTransport>(
             let bound = owner.bind_stage2(continuation, second.capture, unix_seconds()?);
             // Abort both matching and mismatched identities before cleanup. Never
             // detach Fetch, continue this request, or admit a third request.
-            cdp.session_command(
+            cdp_phase_command(
+                cdp,
                 Some(&second.session),
                 "Fetch.failRequest",
                 json!({"requestId":second.request,"errorReason":"Aborted"}),
+                CdpPhase::FetchAbort,
+                second.target,
             )
             .await?;
             reject_extra_songinfo(cdp).await?;
+            #[cfg(test)]
+            {
+                if require_multitarget_evidence {
+                    interceptor.validate_multitarget_runtime_evidence()?;
+                }
+                interceptor.report_runtime_target_evidence();
+            }
             Ok(BrowserProgress::Stage2(Box::new(bound?)))
         }
     }
@@ -708,15 +1195,21 @@ async fn reject_extra_songinfo(cdp: &mut CdpClient) -> Result<(), GateFailure> {
         if cdp.events.is_empty() {
             break;
         }
-        if let Some(event) = cdp.next_event().await?
+        if let Some(event) = cdp
+            .next_event()
+            .await
+            .map_err(|error| cdp_failure(error, CdpPhase::Event, CdpTargetKind::Browser))?
             && event["method"] == "Fetch.requestPaused"
         {
             let session = field(&event, "sessionId")?;
             let request = field(&event["params"], "requestId")?;
-            cdp.session_command(
+            cdp_phase_command(
+                cdp,
                 Some(session),
                 "Fetch.failRequest",
                 json!({"requestId":request,"errorReason":"Aborted"}),
+                CdpPhase::FetchAbort,
+                CdpTargetKind::Other,
             )
             .await?;
             return Err(WebPlaybackError::AttemptConsumed.into());
@@ -783,7 +1276,10 @@ async fn capture_in_browser(
         if Instant::now() >= deadline {
             return Err(CaptureFailure::TimedOut.into());
         }
-        if let Some(event) = cdp.next_event().await?
+        if let Some(event) = cdp
+            .next_event()
+            .await
+            .map_err(|error| cdp_failure(error, CdpPhase::Event, CdpTargetKind::Browser))?
             && let Some(capture) = interceptor.handle(cdp, event, entry).await?
         {
             require_active(child, is_current)?;

@@ -62,6 +62,35 @@ TWO_STAGE_PAGE = ("<!doctype html><meta charset=utf-8>"
     "second.searchParams.set('encode_album_audio_id', data.data.encode_album_audio_id);"
     "await fetch(second, {credentials:'include'});})().catch(() => {});</script>").encode()
 
+MULTI_TARGET_PAGE = ("<!doctype html><meta charset=utf-8>"
+    "<title>Synthetic multi-target official site surrogate</title><link rel=icon href=data:,><body></body>"
+    "<script>(async () => {"
+    "const same=document.createElement('iframe');same.src='/same-frame';document.body.append(same);"
+    "const cross=document.createElement('iframe');cross.src='https://cross.example.test/cross-frame';document.body.append(cross);"
+    "const dedicated=new Worker('/dedicated.js');"
+    "try{const shared=new SharedWorker('/shared.js');shared.port.start();}catch(_){}"
+    "if('serviceWorker' in navigator){navigator.serviceWorker.register('/service-worker.js').catch(()=>{});}"
+    "window.open('https://unrelated.example.test/popup','_blank');"
+    "for(let i=0;i<40;i++){const frame=document.createElement('iframe');frame.src='https://cross.example.test/transient?i='+i;document.body.append(frame);setTimeout(()=>frame.remove(),2000);}"
+    "setTimeout(()=>dedicated.terminate(),900);"
+    "await new Promise(ok=>setTimeout(ok,3500));"
+    "const r=await fetch(" + json.dumps("https://wwwapi.kugou.com" + STAGE1_PATH)
+    + ",{credentials:'include'});const data=await r.json();"
+    "const second=new URL('https://wwwapi.kugou.com/play/songinfo');"
+    "second.searchParams.set('encode_album_audio_id',data.data.encode_album_audio_id);"
+    "await fetch(second,{credentials:'include'});})().catch(()=>{});</script>").encode()
+
+FRAME_PAGE = b"<!doctype html><meta charset=utf-8><title>Synthetic frame</title>"
+LEAK_FRAME_PAGE = ("<!doctype html><meta charset=utf-8><title>Synthetic leak probe</title>"
+                   "<script>(async()=>{await fetch('/leak-probe-started');await fetch("
+                   + json.dumps("https://wwwapi.kugou.com" + STAGE1_PATH)
+                   + ");})().catch(()=>{});</script>").encode()
+WORKER_SCRIPT = b"postMessage('ready')"
+SHARED_WORKER_SCRIPT = b"onconnect=(event)=>{event.ports[0].postMessage('ready')}"
+SERVICE_WORKER_SCRIPT = b"self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',(event)=>event.waitUntil(self.clients.claim()))"
+POPUP_PAGE = (b"<!doctype html><meta charset=utf-8>"
+              b"<title>Synthetic unrelated popup</title><link rel=icon href=data:,>")
+
 
 def openssl(*args, data=None):
     return subprocess.run(
@@ -88,7 +117,8 @@ def certificate(directory):
         "basicConstraints=critical,CA:FALSE\n"
         "keyUsage=critical,digitalSignature\n"
         "extendedKeyUsage=serverAuth\n"
-        "subjectAltName=DNS:www.kugou.com,DNS:wwwapi.kugou.com\n", encoding="ascii")
+        "subjectAltName=DNS:www.kugou.com,DNS:wwwapi.kugou.com,DNS:cross.example.test,DNS:unrelated.example.test\n",
+        encoding="ascii")
     openssl("x509", "-req", "-in", csr, "-CA", root, "-CAkey", root_key,
             "-set_serial", "2", "-days", "1", "-extfile", extensions, "-out", leaf)
     public = openssl("x509", "-in", leaf, "-pubkey", "-noout")
@@ -100,12 +130,18 @@ class Server(http.server.ThreadingHTTPServer):
     daemon_threads = True
     block_on_close = False
 
-    def __init__(self, context, two_stage=False):
+    def __init__(self, context, mode="direct"):
         self.context = context
-        self.two_stage = two_stage
+        self.two_stage = mode in ("two-stage", "multi-target", "target-leak")
+        self.multi_target = mode in ("multi-target", "target-leak")
+        self.target_leak = mode == "target-leak"
         self.counts = dict(page=0, api=0, rust=0, browser=0, range=0, rejected=0)
-        if two_stage:
+        if self.two_stage:
             self.counts.update(stage1=0, stage2=0)
+        if self.multi_target:
+            self.counts.update(same_frame=0, cross_frame=0, transient=0,
+                               dedicated=0, shared=0, service=0, popup=0,
+                               leak_probe=0)
         self.lock = threading.Lock()
         super().__init__(("127.0.0.1", 0), Handler)
 
@@ -132,7 +168,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 status, content, kind = 403, b"", "text/plain"
             elif host == "www.kugou.com" and self.path == "/":
                 self.server.counts["page"] += 1
-                status, content, kind = 200, (TWO_STAGE_PAGE if self.server.two_stage else PAGE), "text/html"
+                content = (MULTI_TARGET_PAGE if self.server.multi_target else
+                           TWO_STAGE_PAGE if self.server.two_stage else PAGE)
+                status, kind = 200, "text/html"
+            elif self.server.multi_target and host == "www.kugou.com" and self.path == "/same-frame":
+                self.server.counts["same_frame"] += 1
+                status, content, kind = 200, FRAME_PAGE, "text/html"
+            elif self.server.multi_target and host == "www.kugou.com" and self.path == "/dedicated.js":
+                self.server.counts["dedicated"] += 1
+                status, content, kind = 200, WORKER_SCRIPT, "text/javascript"
+            elif self.server.multi_target and host == "www.kugou.com" and self.path == "/shared.js":
+                self.server.counts["shared"] += 1
+                status, content, kind = 200, SHARED_WORKER_SCRIPT, "text/javascript"
+            elif self.server.multi_target and host == "www.kugou.com" and self.path == "/service-worker.js":
+                self.server.counts["service"] += 1
+                status, content, kind = 200, SERVICE_WORKER_SCRIPT, "text/javascript"
+            elif self.server.multi_target and host == "cross.example.test" and self.path == "/cross-frame":
+                self.server.counts["cross_frame"] += 1
+                content = LEAK_FRAME_PAGE if self.server.target_leak else FRAME_PAGE
+                status, kind = 200, "text/html"
+            elif self.server.target_leak and host == "cross.example.test" and self.path == "/leak-probe-started":
+                self.server.counts["leak_probe"] += 1
+                status, content, kind = 204, b"", "text/plain"
+            elif self.server.multi_target and host == "cross.example.test" and self.path.startswith("/transient"):
+                self.server.counts["transient"] += 1
+                status, content, kind = 200, FRAME_PAGE, "text/html"
+            elif self.server.multi_target and host == "unrelated.example.test" and self.path == "/popup":
+                self.server.counts["popup"] += 1
+                status, content, kind = 200, POPUP_PAGE, "text/html"
             elif host == "wwwapi.kugou.com" and self.path.startswith("/play/songinfo"):
                 self.server.counts["api"] += 1
                 rust = self.headers.get("X-Synthetic-Owner") == "Rust"
@@ -184,7 +247,10 @@ def main():
     root, leaf, key, spki = certificate(Path(sys.argv[1]))
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(leaf, key)
-    server = Server(context, len(sys.argv) == 3 and sys.argv[2] == "two-stage")
+    mode = sys.argv[2] if len(sys.argv) == 3 else "direct"
+    if mode not in ("direct", "two-stage", "multi-target", "target-leak"):
+        raise ValueError("FIXTURE_MODE_INVALID")
+    server = Server(context, mode)
     thread = threading.Thread(target=server.serve_forever,
                               kwargs={"poll_interval": 0.05}, daemon=True)
     thread.start()

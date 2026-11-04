@@ -242,3 +242,123 @@ Git: `kugou-tests.log`, `bridge-tests.log`, `bridge-feature-tests.log`,
 the source snapshot, fixed negative-evidence notes and public-source references.
 These are synthetic/public-source materials only. Native macOS/Windows, real
 website/account compatibility and audible full-track playback are not claimed.
+
+## Second Human gate browser compatibility addendum (2026-11-03)
+
+Starting HEAD: `0fe7bcdfed2381f01f932769d22aa9c1e906bb0d`.
+Execution remains **HUMAN_DIRECTED / CORE** and production remains disabled.
+The maintainer reports this fixed second live result:
+
+```text
+KUGOU_GATE result=BLOCKED reason=BROWSER_CAPTURE_FAILED production_enabled=false
+```
+
+No `KUGOU_IDENTITY_STAGE=SONGINFO_STAGE1` preceded it. That proves only that the
+old capture lifecycle stopped before a valid Stage 1 request was admitted. The
+old catch-all category cannot retroactively identify the exact live command;
+this addendum therefore preserves the result and does not reinterpret it as a
+songinfo, identity, entitlement or server response failure.
+
+### Installed-Chromium root-cause evidence
+
+Chrome 155 and the loopback TLS fixture reproduced the directly adjacent target
+compatibility failures before Stage 1:
+
+- service-worker `Runtime.runIfWaitingForDebugger` ended as CDP unavailable;
+- dedicated-worker `Fetch.enable` was rejected as an invalid domain command;
+- OOPIF `Fetch.enable` was likewise not consistently available;
+- transient OOPIF detach can race any in-flight setup command.
+
+The fixed primary classification for the reproduced original-sequence failure is
+`CDP_UNAVAILABLE / RESUME_TARGET / SERVICE_WORKER`. The worker/OOPIF results are
+additional concrete compatibility defects in the same old unconditional command
+sequence. They are not protocol-V2 evidence and do not alter either songinfo
+stage.
+
+The interceptor now treats target types according to the domains the installed
+browser actually exposes:
+
+- `page`: arm Fetch, Page and Network bypass, establish child auto-attach, then
+  resume; only a proved official page/frame may supply accepted capture;
+- `iframe` (OOPIF): never accepted as capture provenance and never sent its
+  unsupported Fetch command; resume only after the parent page is armed;
+- dedicated/shared/service worker: never accepted, never sent unsupported
+  Fetch/Page commands, and kept debugger-paused for this bounded gate. A worker
+  cannot run and surface a request on the parent page session;
+- every browser launch adds an exact `wwwapi.kugou.com -> ~NOTFOUND` Chromium
+  resolver fence. Page Fetch pauses the intended official request before DNS;
+  an unsupported target has no network route to leak songinfo.
+
+OOPIF churn does not become a silent protocol bypass. If setup reports an invalid
+command, a browser-level `Target.getTargetInfo` query must prove that exact target
+is absent or detached before the race is treated as retired. A live target with
+an unsupported command remains `CDP_PROTOCOL_INVALID`. A detach observed while a
+session command is pending becomes `CDP_TARGET_DETACHED` with its fixed phase and
+target class. Raw target/session IDs and CDP error text are never logged.
+
+### Fixed diagnostics
+
+The former broad browser category is replaced by fixed, secret-safe outcomes:
+
+```text
+BROWSER_UNAVAILABLE
+BROWSER_LAUNCH_FAILED
+PROFILE_SETUP_FAILED
+CDP_UNAVAILABLE
+CDP_PROTOCOL_INVALID
+BROWSER_CLOSED
+PROFILE_COOKIE_CAPTURE_INVALID
+```
+
+CDP command failures add fixed `cdp_phase` and `cdp_target` values. Phases cover
+`AUTO_ATTACH`, `FETCH_ENABLE`, `PAGE_ENABLE`, `BYPASS_SERVICE_WORKER`,
+`CHILD_AUTO_ATTACH`, `RESUME_TARGET`, `NAVIGATE`, `PROFILE_COOKIES`,
+`FETCH_ABORT`, `FETCH_FULFILL`, `FETCH_CONTINUE` and `EVENT`. Target values are
+only `BROWSER`, `PAGE`, `IFRAME`, `WORKER`, `SHARED_WORKER`, `SERVICE_WORKER` or
+`OTHER`. CDP text, request/target/session URLs or IDs, Cookies, account data and
+response bodies are not formatted.
+
+### Real-browser fixture evidence
+
+The installed-browser fixture now creates the official main page, same-origin
+iframe, cross-origin/OOPIF iframe, dedicated worker, shared worker, service
+worker, unrelated popup and 40 transient cross-origin frames. One run observed
+all five relevant target classes, 48 attaches and 41 detaches. At most three
+eligible page targets were simultaneously tracked, so the existing
+32-active-target bound remains protective; total short-lived target churn no
+longer fills that map. The shared CDP event queue remains bounded to 128 events
+and 2 MiB and retains its
+fail-closed overflow tests.
+
+A separate cross-origin fixture first sends a loopback marker proving its OOPIF
+script ran, then attempts songinfo. The browser API-host fence keeps that attempt
+at browser upstream zero. The official main page subsequently completes Stage 1
+capture, exactly one Rust Stage 1 request, Fetch fulfillment, JS-derived Stage 2,
+browser abort, cleanup and exactly one Rust Stage 2 request. Total API requests
+are two Rust-owned requests; Range is zero. This distinguishes a real no-leak
+probe from a fixture script that never executed.
+
+The protocol contract above is unchanged: exact Track hash, server-issued
+`encode_album_audio_id`, same-session Stage 2, two-request budget, no retry,
+no alternate endpoint/provider, no production resolver and no account/Vault/UI
+integration. No live KuGou request was made during this correction.
+
+State: **LIVE_HUMAN_GATE_READY_V2_BROWSER_FIXED**.
+**KUGOU_HUMAN_PLAYBACK_GATE=NOT_RUN_AFTER_BROWSER_FIX**. A future live run still
+requires separate Human authority; it is not performed by this task.
+
+### Final machine verification
+
+- affected `kugou-client` / `provider-kugou` tests: 72 passed;
+- default Bridge tests: 157 passed, with four explicit runtime gates ignored;
+- feature-enabled Bridge tests: 179 passed, with four explicit Human/runtime
+  gates still ignored by default;
+- installed Chromium direct, two-stage, multi-target and unsupported-target
+  no-leak runtimes: all passed;
+- NetEase installed-Chromium regressions: 6 passed;
+- complete offline locked Rust workspace: passed;
+- affected strict Clippy, Rust formatting, KuGou research tests, privacy hygiene,
+  application identity and `git diff --check`: passed.
+
+These are machine-side, loopback/offline results. They do not replace another
+Human-authorized live gate and do not change the production-disabled status.

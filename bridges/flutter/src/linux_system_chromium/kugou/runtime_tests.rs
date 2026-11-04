@@ -11,7 +11,11 @@ use tokio::process::{ChildStdin, ChildStdout};
 
 const TEST_NAME: &str = "linux_system_chromium::kugou::runtime_tests::offline_installed_chrome_intercept_abort_then_single_rust_tls_replay";
 const TWO_STAGE_TEST_NAME: &str = "linux_system_chromium::kugou::runtime_tests::offline_installed_chrome_two_stage_js_fulfill_abort_and_two_rust_requests";
+const MULTI_TARGET_TEST_NAME: &str = "linux_system_chromium::kugou::runtime_tests::offline_installed_chrome_multitarget_capture_lifecycle";
+const NO_LEAK_TEST_NAME: &str = "linux_system_chromium::kugou::runtime_tests::offline_installed_chrome_unsupported_target_songinfo_is_fenced";
 const WORKER: &str = "FURA_KUGOU_OFFLINE_RUNTIME_WORKER";
+const MULTI_TARGET_WORKER: &str = "FURA_KUGOU_MULTITARGET_RUNTIME_WORKER";
+const NO_LEAK_WORKER: &str = "FURA_KUGOU_NO_LEAK_RUNTIME_WORKER";
 const HASH: &str = "11111111111111111111111111111111";
 const SYNTHETIC_COOKIE: &str = "KugooID=42; t=synthetic-token";
 const IO_BOUND: Duration = Duration::from_secs(5);
@@ -50,7 +54,42 @@ async fn offline_installed_chrome_two_stage_js_fulfill_abort_and_two_rust_reques
     }
 }
 
+#[tokio::test]
+#[ignore = "explicit offline installed Chrome multi-target CDP lifecycle runtime"]
+async fn offline_installed_chrome_multitarget_capture_lifecycle() {
+    let result = if env::var(MULTI_TARGET_WORKER).as_deref() == Ok("1") {
+        run_multitarget_worker().await
+    } else {
+        run_isolated_worker_with_env(MULTI_TARGET_TEST_NAME, MULTI_TARGET_WORKER).await
+    };
+    if let Err(category) = result {
+        eprintln!("KUGOU_RUNTIME_FAILURE={category}");
+        panic!("KUGOU_OFFLINE_MULTITARGET_RUNTIME_FAILED");
+    }
+}
+
+#[tokio::test]
+#[ignore = "explicit offline installed Chrome unsupported-target no-leak runtime"]
+async fn offline_installed_chrome_unsupported_target_songinfo_is_fenced() {
+    let result = if env::var(NO_LEAK_WORKER).as_deref() == Ok("1") {
+        run_no_leak_worker().await
+    } else {
+        run_isolated_worker_with_env(NO_LEAK_TEST_NAME, NO_LEAK_WORKER).await
+    };
+    if let Err(category) = result {
+        eprintln!("KUGOU_RUNTIME_FAILURE={category}");
+        panic!("KUGOU_OFFLINE_NO_LEAK_RUNTIME_FAILED");
+    }
+}
+
 async fn run_isolated_worker(test_name: &str) -> RuntimeResult<()> {
+    run_isolated_worker_with_env(test_name, WORKER).await
+}
+
+async fn run_isolated_worker_with_env(
+    test_name: &str,
+    worker_environment: &str,
+) -> RuntimeResult<()> {
     let home = tempfile::tempdir().map_err(|_| "ISOLATION_SETUP_FAILED")?;
     let runtime = tempfile::tempdir().map_err(|_| "ISOLATION_SETUP_FAILED")?;
     let sentinel = home.path().join(".config/google-chrome/Default/sentinel");
@@ -66,7 +105,7 @@ async fn run_isolated_worker(test_name: &str) -> RuntimeResult<()> {
             "--nocapture",
             "--test-threads=1",
         ])
-        .env(WORKER, "1")
+        .env(worker_environment, "1")
         .env("HOME", home.path())
         .env("XDG_CONFIG_HOME", home.path().join(".config"))
         .env("CHROME_CONFIG_HOME", home.path().join(".config"))
@@ -131,6 +170,10 @@ struct FixtureControl {
 
 impl Fixture {
     async fn start(two_stage: bool) -> RuntimeResult<Self> {
+        Self::start_mode(if two_stage { "two-stage" } else { "direct" }).await
+    }
+
+    async fn start_mode(mode: &str) -> RuntimeResult<Self> {
         let certificates = tempfile::tempdir().map_err(|_| "FIXTURE_SETUP_FAILED")?;
         let mut child = Command::new("python3")
             .arg(concat!(
@@ -138,7 +181,7 @@ impl Fixture {
                 "/src/linux_system_chromium/kugou/runtime_fixture.py"
             ))
             .arg(certificates.path())
-            .args(if two_stage { vec!["two-stage"] } else { vec![] })
+            .arg(mode)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -212,9 +255,89 @@ async fn fixture_counts(
         expected["stage1"] = json!(u8::from(step >= 1));
         expected["stage2"] = json!(u8::from(step >= 2));
     }
-    if counts != expected {
-        return Err("UPSTREAM_REQUEST_COUNT_INVALID");
+    let counts = counts.as_object().ok_or("UPSTREAM_REQUEST_COUNT_INVALID")?;
+    for (name, value) in expected
+        .as_object()
+        .ok_or("UPSTREAM_REQUEST_COUNT_INVALID")?
+    {
+        if counts.get(name) != Some(value) {
+            return Err("UPSTREAM_REQUEST_COUNT_INVALID");
+        }
     }
+    Ok(())
+}
+
+async fn fixture_multitarget_counts(
+    control: &std::sync::Arc<tokio::sync::Mutex<FixtureControl>>,
+) -> RuntimeResult<()> {
+    let mut control = control.lock().await;
+    timeout(IO_BOUND, control.input.write_all(b"COUNTS\n"))
+        .await
+        .map_err(|_| "FIXTURE_CONTROL_TIMEOUT")?
+        .map_err(|_| "FIXTURE_CONTROL_FAILED")?;
+    let counts = control.message(IO_BOUND).await?;
+    let exact = [
+        ("page", 1),
+        ("api", 2),
+        ("rust", 2),
+        ("browser", 0),
+        ("range", 0),
+        ("rejected", 0),
+        ("stage1", 1),
+        ("stage2", 1),
+        ("same_frame", 1),
+        ("cross_frame", 1),
+        ("transient", 40),
+        ("dedicated", 1),
+        ("shared", 1),
+        ("service", 1),
+        ("popup", 1),
+        ("leak_probe", 0),
+    ];
+    for (name, _) in exact {
+        eprintln!(
+            "KUGOU_RUNTIME_MULTITARGET_COUNT_{}={}",
+            name.to_ascii_uppercase(),
+            counts[name].as_u64().unwrap_or(u64::MAX)
+        );
+    }
+    if exact
+        .iter()
+        .any(|(name, value)| counts[*name].as_u64() != Some(*value))
+    {
+        return Err("MULTITARGET_FIXTURE_EVIDENCE_INVALID");
+    }
+    Ok(())
+}
+
+async fn fixture_no_leak_counts(
+    control: &std::sync::Arc<tokio::sync::Mutex<FixtureControl>>,
+) -> RuntimeResult<()> {
+    let mut control = control.lock().await;
+    timeout(IO_BOUND, control.input.write_all(b"COUNTS\n"))
+        .await
+        .map_err(|_| "FIXTURE_CONTROL_TIMEOUT")?
+        .map_err(|_| "FIXTURE_CONTROL_FAILED")?;
+    let counts = control.message(IO_BOUND).await?;
+    for (name, expected) in [
+        ("api", 2),
+        ("rust", 2),
+        ("browser", 0),
+        ("range", 0),
+        ("stage1", 1),
+        ("stage2", 1),
+        ("rejected", 0),
+        ("leak_probe", 1),
+    ] {
+        if counts[name].as_u64() != Some(expected) {
+            return Err("UNSUPPORTED_TARGET_SONGINFO_LEAKED");
+        }
+    }
+    if counts["cross_frame"].as_u64() != Some(1) {
+        return Err("UNSUPPORTED_TARGET_PROBE_NOT_EXECUTED");
+    }
+    eprintln!("KUGOU_RUNTIME_UNSUPPORTED_TARGET_BROWSER_UPSTREAM=ZERO");
+    eprintln!("KUGOU_RUNTIME_UNSUPPORTED_TARGET_RUST_UPSTREAM=ZERO");
     Ok(())
 }
 
@@ -381,7 +504,7 @@ async fn run_worker(two_stage: bool) -> RuntimeResult<()> {
         return Err("WRONG_INSTALLED_BROWSER");
     }
     let mut fixture = Fixture::start(two_stage).await?;
-    let result = run_capture(&mut fixture, &browser, two_stage).await;
+    let result = run_capture(&mut fixture, &browser, two_stage, false).await;
     let cleanup = fixture.stop().await;
     cleanup?;
     result?;
@@ -390,10 +513,49 @@ async fn run_worker(two_stage: bool) -> RuntimeResult<()> {
     Ok(())
 }
 
+async fn run_multitarget_worker() -> RuntimeResult<()> {
+    let installed =
+        find_in_path("google-chrome-stable").ok_or("GOOGLE_CHROME_STABLE_UNAVAILABLE")?;
+    let browser = discover_browser().map_err(|_| "BROWSER_DISCOVERY_FAILED")?;
+    if browser.binary != std::fs::canonicalize(installed).map_err(|_| "BROWSER_DISCOVERY_FAILED")? {
+        return Err("WRONG_INSTALLED_BROWSER");
+    }
+    let mut fixture = Fixture::start_mode("multi-target").await?;
+    let result = run_capture(&mut fixture, &browser, true, true).await;
+    let target_evidence = fixture_multitarget_counts(&fixture.control).await;
+    let cleanup = fixture.stop().await;
+    cleanup?;
+    result?;
+    target_evidence?;
+    eprintln!("KUGOU_RUNTIME_MULTITARGET=PASS");
+    eprintln!("KUGOU_RUNTIME_WORKER=FINISHED");
+    Ok(())
+}
+
+async fn run_no_leak_worker() -> RuntimeResult<()> {
+    let installed =
+        find_in_path("google-chrome-stable").ok_or("GOOGLE_CHROME_STABLE_UNAVAILABLE")?;
+    let browser = discover_browser().map_err(|_| "BROWSER_DISCOVERY_FAILED")?;
+    if browser.binary != std::fs::canonicalize(installed).map_err(|_| "BROWSER_DISCOVERY_FAILED")? {
+        return Err("WRONG_INSTALLED_BROWSER");
+    }
+    let mut fixture = Fixture::start_mode("target-leak").await?;
+    let result = run_capture(&mut fixture, &browser, true, true).await;
+    let no_leak = fixture_no_leak_counts(&fixture.control).await;
+    let cleanup = fixture.stop().await;
+    cleanup?;
+    result?;
+    no_leak?;
+    eprintln!("KUGOU_RUNTIME_UNSUPPORTED_TARGET=NETWORK_FENCED");
+    eprintln!("KUGOU_RUNTIME_WORKER=FINISHED");
+    Ok(())
+}
+
 async fn run_capture(
     fixture: &mut Fixture,
     browser: &BrowserCandidate,
     two_stage: bool,
+    fence_browser_api: bool,
 ) -> RuntimeResult<()> {
     let ready = fixture.message(Duration::from_secs(65)).await?;
     let port = ready["port"]
@@ -455,6 +617,7 @@ async fn run_capture(
         "--disable-component-update".into(),
         "--disable-sync".into(),
         "--disable-default-apps".into(),
+        "--disable-popup-blocking".into(),
         "--disable-extensions".into(),
         "--disable-quic".into(),
         "--disable-domain-reliability".into(),
@@ -468,7 +631,12 @@ async fn run_capture(
         "--disable-features=OptimizationHints,MediaRouter,DialMediaRouteProvider".into(),
         format!("--ignore-certificate-errors-spki-list={spki}"),
         format!(
-            "--host-resolver-rules=MAP www.kugou.com 127.0.0.1:{port}, MAP wwwapi.kugou.com 127.0.0.1:{port}, MAP * ~NOTFOUND"
+            "--host-resolver-rules=MAP www.kugou.com 127.0.0.1:{port}, MAP wwwapi.kugou.com {}, MAP cross.example.test 127.0.0.1:{port}, MAP unrelated.example.test 127.0.0.1:{port}, MAP * ~NOTFOUND",
+            if fence_browser_api {
+                "~NOTFOUND".to_owned()
+            } else {
+                format!("127.0.0.1:{port}")
+            }
         ),
     ];
     let is_current =
@@ -516,11 +684,14 @@ async fn run_capture(
                 ),
             )
             .await
-            .map_err(|_| "TWO_STAGE_CAPTURE_TIMEOUT")?
-            .map_err(|error| {
-                eprintln!("KUGOU_RUNTIME_TWO_STAGE_CATEGORY={error:?}");
-                "TWO_STAGE_CAPTURE_FAILED"
-            })?;
+            .map_err(|_| "TWO_STAGE_CAPTURE_TIMEOUT")?;
+            let progress = match progress {
+                Ok(progress) => progress,
+                Err(error) => {
+                    eprintln!("KUGOU_RUNTIME_TWO_STAGE_CATEGORY={error:?}");
+                    return Err("TWO_STAGE_CAPTURE_FAILED");
+                }
+            };
             fixture_counts(&fixture.control, true, 1).await?;
             return Ok(RuntimeCapture::Stages(progress));
         }
@@ -536,21 +707,12 @@ async fn run_capture(
         .await
         .map_err(|_| "BROWSER_CAPTURE_TIMEOUT")?
         .map(RuntimeCapture::Legacy)
-        .map_err(|failure| match failure {
-            GateFailure::Browser(CaptureFailure::DevtoolsInvalid) => "CDP_PROTOCOL_REJECTED",
-            GateFailure::Playback(WebPlaybackError::InvalidCapture) => "BROWSER_CAPTURE_INVALID",
-            GateFailure::Playback(WebPlaybackError::ProtocolUnsupported) => {
-                "BROWSER_HEADERS_UNSUPPORTED"
-            }
-            GateFailure::Playback(WebPlaybackError::LoginRequired) => {
-                "SYNTHETIC_PROFILE_COOKIE_MISSING"
-            }
-            GateFailure::Playback(WebPlaybackError::OfficialWebTrackIdentityUnproven) => {
-                "BROWSER_FRAME_PROVENANCE_UNPROVEN"
-            }
-            GateFailure::Browser(CaptureFailure::DevtoolsUnavailable) => "CDP_COMMAND_TIMED_OUT",
-            GateFailure::Browser(CaptureFailure::BrowserClosed) => "BROWSER_CLOSED_DURING_CAPTURE",
-            _ => "BROWSER_CAPTURE_FAILED",
+        .map_err(|failure| {
+            eprintln!(
+                "KUGOU_RUNTIME_GATE_DIAGNOSTIC={}",
+                result_diagnostic(Err(failure))
+            );
+            "BROWSER_CAPTURE_TEST_FAILED"
         })
     }
     .await;

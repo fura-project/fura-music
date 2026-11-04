@@ -1,15 +1,74 @@
 ---
 execution:
   mode: HUMAN_DIRECTED
-  work_domain: UI
+  work_domain: CORE
   state: HUMAN_REVIEW
-  acceptance_milestone: SETTINGS_SHELL_POPUP_MOBILE_SEARCH_TRANSITION_V1
-  active_workstream: SETTINGS_MATERIAL_YOU_AND_SHELL_TRANSITION
-  current_task: SETTINGS_POPUP_MOBILE_AND_SEARCH_RETURN_TRANSITION
-  next_action: AWAIT_HUMAN_VISUAL_REVIEW
+  acceptance_milestone: KUGOU_AUTHENTICATED_STANDARD_HUMAN_GATE
+  active_workstream: KUGOU_BROWSER_CAPTURE_COMPATIBILITY
+  current_task: LIVE_HUMAN_GATE_READY_V2_BROWSER_FIXED
+  next_action: AWAIT_SEPARATE_HUMAN_AUTHORITY_NO_LIVE_RUN
 ---
 
 # Current State
+
+- **2026-11-03 Human-directed Core / KuGou real-Chromium target compatibility:**
+  the second separately operated maintainer gate retained the fixed result
+  `KUGOU_GATE result=BLOCKED reason=BROWSER_CAPTURE_FAILED production_enabled=false`
+  and emitted no `KUGOU_IDENTITY_STAGE=SONGINFO_STAGE1`. This remains negative
+  evidence: the attempt stopped before a valid Stage 1 capture. The old broad
+  category cannot prove which target command failed, so no songinfo identity,
+  fulfillment, replay or response conclusion is inferred from that live run.
+
+  Installed Chrome 155 against loopback TLS reproduced the browser lifecycle
+  compatibility family before Stage 1: a service-worker target cannot safely
+  complete `Runtime.runIfWaitingForDebugger`, dedicated workers reject
+  `Fetch.enable`, and OOPIF targets do not consistently expose `Fetch`. The
+  fixed primary classification is `CDP_UNAVAILABLE / RESUME_TARGET /
+  SERVICE_WORKER`; the adjacent worker and OOPIF incompatibilities were also
+  reproduced and fixed instead of being ignored. Only page targets are armed
+  with Fetch/Page/Network/nested auto-attach. OOPIFs can resume but never become
+  accepted provenance; the browser's exact `wwwapi.kugou.com -> ~NOTFOUND`
+  fence blocks their songinfo before network. Dedicated/shared/service workers
+  remain debugger-paused for the bounded gate because resuming them can surface
+  worker fetches on the official page session. Page target detach races are
+  accepted only after a browser-level exact-target query proves the target is
+  gone; invalid commands on a live target still fail closed.
+
+  A real installed-Chromium fixture now creates the main page, same-origin
+  iframe, cross-origin OOPIF, dedicated/shared/service workers, unrelated popup,
+  40 transient OOPIFs and repeated attach/detach. It observed all target classes,
+  48 attaches and 41 detaches while at most three eligible page targets were
+  active, so the bounded 32-active-target guard remains; total target churn no longer
+  consumes that page-provenance map. A cross-origin OOPIF executes a distinct
+  songinfo probe, yet browser upstream stays zero under the DNS fence; the main
+  page then completes the existing Stage 1 fulfill / JS Stage 2 / abort / cleanup
+  / two Rust replay chain with Range zero. The 128-event / 2 MiB CDP queue remains
+  bounded and fail-closed. Browser/profile cleanup and synthetic default-profile
+  isolation remain required.
+
+  Gate diagnostics now distinguish browser unavailable/launch/profile setup,
+  CDP unavailable/protocol invalid/browser closed, and malformed profile-Cookie
+  capture. CDP failures include only fixed phase and target enums; raw CDP text,
+  URLs, IDs, Cookies, response bodies and account data are never formatted. The
+  V2 hash/encoded identity chain, two-request budget, no retry/fallback and
+  production fence are unchanged. Installed-Chromium direct, two-stage,
+  multi-target and unsupported-target no-leak runtimes pass; deterministic
+  feature-enabled Bridge tests pass. NetEase Chromium, affected strict Clippy,
+  privacy and final repository gates are recorded in the linked evidence after
+  completion. State: **LIVE_HUMAN_GATE_READY_V2_BROWSER_FIXED**.
+  **KUGOU_HUMAN_PLAYBACK_GATE=NOT_RUN_AFTER_BROWSER_FIX**; no real Search,
+  account, songinfo, media or Range request was made in this follow-up.
+  See [the browser compatibility addendum](docs/development/kugou-two-stage-gate-2026-11-02.md#second-human-gate-browser-compatibility-addendum-2026-11-03).
+
+  Final machine evidence: affected KuGou client/provider tests passed 72/72;
+  default Bridge tests passed 157/157 with four explicitly ignored runtime
+  gates; feature-enabled Bridge tests passed 179/179 with four explicitly
+  ignored Human/runtime gates; the four installed
+  Chromium direct, two-stage, multi-target and unsupported-target no-leak
+  runtimes passed; all six NetEase Chromium regressions passed; the full
+  offline locked Rust workspace passed. Both affected strict-Clippy commands,
+  Rust formatting, the KuGou research tests, privacy hygiene, application
+  identity and `git diff --check` passed.
 
 - **2026-11-02 Human-directed UI / Settings native `ListTile` + `PopupMenuButton` controls, mobile layout polish, and top search bar return transition:**
   Addressed three concrete Human review directives (`现在问题是设置小弹窗像浮上去的一样 同时把手机版优化一下 还有设置返回主页时搜索框过渡没做好 会突然消失` and `改动1不是好不好看的问题 是本来就没有用原生组件 是我们拼接的 而且没有弹出收入动画`):

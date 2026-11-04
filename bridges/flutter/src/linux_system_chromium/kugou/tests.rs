@@ -279,7 +279,7 @@ async fn capture_validator_rejections_still_abort_before_profile_read_and_never_
 }
 
 #[tokio::test]
-async fn workers_are_intercepted_before_resume_but_cannot_supply_page_provenance() {
+async fn unsupported_workers_remain_paused_and_cannot_supply_capture_provenance() {
     let upstream = Upstream::start().await;
     for kind in ["worker", "service_worker", "shared_worker"] {
         let mut browser = SyntheticBrowser::start(
@@ -291,20 +291,15 @@ async fn workers_are_intercepted_before_resume_but_cannot_supply_page_provenance
         )
         .await;
         assert!(browser.handle_next().await.unwrap().is_none());
-        assert_eq!(
-            browser.methods(),
-            [
-                "Target.setAutoAttach",
-                "Fetch.enable",
-                "Runtime.runIfWaitingForDebugger"
-            ]
+        assert_eq!(browser.methods(), ["Target.setAutoAttach"]);
+        assert!(browser.cdp.events.is_empty());
+        assert!(browser.commands("Fetch.enable").is_empty());
+        assert!(
+            browser
+                .commands("Runtime.runIfWaitingForDebugger")
+                .is_empty()
         );
-        assert!(browser.handle_next().await.unwrap().is_none());
-        assert_eq!(
-            browser.handle_next().await.unwrap_err(),
-            GateFailure::Playback(WebPlaybackError::OfficialWebTrackIdentityUnproven)
-        );
-        assert_eq!(browser.commands("Fetch.failRequest").len(), 1);
+        assert!(browser.commands("Fetch.failRequest").is_empty());
         assert!(browser.commands("Storage.getCookies").is_empty());
         assert!(browser.commands("Fetch.continueRequest").is_empty());
         browser.finish().await;
@@ -382,14 +377,18 @@ async fn foreign_or_detached_sessions_never_supply_capture_provenance() {
             upstream.address,
         )
         .await;
-        browser.attach_and_navigate().await;
         if detached {
-            assert!(browser.handle_next().await.unwrap().is_none());
+            assert_eq!(
+                browser.handle_next().await.unwrap_err(),
+                GateFailure::TargetDetached(CdpPhase::Navigate, CdpTargetKind::Page)
+            );
+        } else {
+            browser.attach_and_navigate().await;
+            assert_eq!(
+                browser.handle_next().await.unwrap_err(),
+                GateFailure::Browser(CaptureFailure::DevtoolsInvalid)
+            );
         }
-        assert_eq!(
-            browser.handle_next().await.unwrap_err(),
-            GateFailure::Browser(CaptureFailure::DevtoolsInvalid)
-        );
         assert!(
             browser.commands("Fetch.failRequest").is_empty(),
             "never address a foreign session"
@@ -1170,6 +1169,64 @@ fn final_gate_diagnostics_are_fixed_categories_not_debug_or_secret_material() {
     assert_eq!(
         result_diagnostic(Err(GateFailure::Browser(CaptureFailure::CleanupFailed))),
         "KUGOU_GATE result=BLOCKED reason=CLEANUP_FAILED production_enabled=false"
+    );
+    for (failure, category) in [
+        (CaptureFailure::BrowserUnavailable, "BROWSER_UNAVAILABLE"),
+        (CaptureFailure::BrowserLaunchFailed, "BROWSER_LAUNCH_FAILED"),
+        (CaptureFailure::ProfileSetupFailed, "PROFILE_SETUP_FAILED"),
+        (CaptureFailure::DevtoolsUnavailable, "CDP_UNAVAILABLE"),
+        (CaptureFailure::BrowserClosed, "BROWSER_CLOSED"),
+    ] {
+        assert_eq!(
+            result_diagnostic(Err(GateFailure::Browser(failure))),
+            format!("KUGOU_GATE result=BLOCKED reason={category} production_enabled=false")
+        );
+    }
+    assert_eq!(
+        result_diagnostic(Err(GateFailure::ProfileCookieCaptureInvalid)),
+        "KUGOU_GATE result=BLOCKED reason=PROFILE_COOKIE_CAPTURE_INVALID production_enabled=false"
+    );
+    let phases = [
+        CdpPhase::AutoAttach,
+        CdpPhase::FetchEnable,
+        CdpPhase::PageEnable,
+        CdpPhase::BypassServiceWorker,
+        CdpPhase::ChildAutoAttach,
+        CdpPhase::ResumeTarget,
+        CdpPhase::Navigate,
+        CdpPhase::ProfileCookies,
+        CdpPhase::FetchAbort,
+        CdpPhase::FetchFulfill,
+        CdpPhase::FetchContinue,
+        CdpPhase::Event,
+    ];
+    for phase in phases {
+        let diagnostic = result_diagnostic(Err(GateFailure::Cdp(
+            CaptureFailure::DevtoolsInvalid,
+            phase,
+            CdpTargetKind::ServiceWorker,
+        )));
+        assert_eq!(
+            diagnostic,
+            format!(
+                "KUGOU_GATE result=BLOCKED reason=CDP_PROTOCOL_INVALID cdp_phase={} cdp_target=SERVICE_WORKER production_enabled=false",
+                phase.label()
+            )
+        );
+        for forbidden in [
+            "synthetic-token",
+            "https://",
+            "targetId",
+            "sessionId",
+            "Cookie",
+            "/play/songinfo",
+        ] {
+            assert!(!diagnostic.contains(forbidden));
+        }
+    }
+    assert_eq!(
+        result_diagnostic(Err(GateFailure::Browser(CaptureFailure::DevtoolsInvalid))),
+        "KUGOU_GATE result=BLOCKED reason=CDP_PROTOCOL_INVALID cdp_phase=EVENT cdp_target=BROWSER production_enabled=false"
     );
     for range in [false, true] {
         assert_eq!(
