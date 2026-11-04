@@ -183,9 +183,8 @@ where
         if song_id == 0 {
             return Err(QqMusicTrackLikeError::InvalidSongId);
         }
-        let payload = serde_json::to_string(&PlaylistTrackRequest::new(
+        let payload = serde_json::to_string(&SignedPlaylistTrackRequest::new(
             credential,
-            LIKED_SONGS_DIRECTORY_ID,
             song_id,
             song_type,
             state.into(),
@@ -222,9 +221,12 @@ where
             return Err(QqMusicTrackLikeError::HttpStatus(response.status()));
         }
         let decoded = decode_ag1_response(response.body());
-        let envelope: PlaylistTrackResponse =
+        let envelope: SignedPlaylistTrackResponse =
             serde_json::from_str(&decoded).map_err(|_| QqMusicTrackLikeError::InvalidJson)?;
-        map_response(envelope)
+        map_response(PlaylistTrackResponse {
+            code: envelope.code,
+            result: envelope.playlist,
+        })
     }
 
     /// Requests one exact Track membership state in one playlist directory.
@@ -281,6 +283,86 @@ where
             .map_err(|_| QqMusicPlaylistTrackError::InvalidJson)?;
         map_response(envelope)
     }
+}
+
+fn g_tk(key: &str) -> u32 {
+    let mut hash = 5_381_i32;
+    for byte in key.bytes() {
+        hash = hash
+            .wrapping_add(hash.wrapping_shl(5))
+            .wrapping_add(i32::from(byte));
+    }
+    (hash & 0x7fff_ffff) as u32
+}
+
+#[derive(Serialize)]
+struct SignedPlaylistTrackRequest<'a> {
+    comm: SignedPlaylistTrackComm<'a>,
+    playlist: PlaylistTrackRpc,
+}
+
+impl<'a> SignedPlaylistTrackRequest<'a> {
+    fn new(
+        credential: &'a Credential,
+        song_id: u64,
+        song_type: u32,
+        state: QqMusicPlaylistTrackState,
+    ) -> Self {
+        let token = g_tk(credential.music_key());
+        Self {
+            comm: SignedPlaylistTrackComm {
+                client_version: crate::profile::WEB_LIBRARY_VERSION,
+                client_type: crate::profile::WEB_PUBLIC_TYPE,
+                format: "json",
+                platform: crate::profile::WEB_JSON_PLATFORM,
+                account_id: credential.music_id(),
+                auth_key: credential.music_key(),
+                g_tk: token,
+                g_tk_new: token,
+                in_charset: "utf-8",
+                out_charset: "utf-8",
+                notice: 0,
+                need_new_code: 1,
+            },
+            playlist: PlaylistTrackRpc {
+                module: "music.musicasset.PlaylistDetailWrite",
+                method: state.method(),
+                param: PlaylistTrackParam {
+                    directory_id: LIKED_SONGS_DIRECTORY_ID,
+                    songs: [PlaylistTrackSong { song_id, song_type }],
+                },
+            },
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct SignedPlaylistTrackComm<'a> {
+    #[serde(rename = "cv")]
+    client_version: u32,
+    #[serde(rename = "ct")]
+    client_type: u32,
+    format: &'static str,
+    platform: &'static str,
+    #[serde(rename = "uin")]
+    account_id: &'a str,
+    authst: &'a str,
+    g_tk: u32,
+    #[serde(rename = "g_tk_new_20200303")]
+    g_tk_new: u32,
+    #[serde(rename = "inCharset")]
+    in_charset: &'static str,
+    #[serde(rename = "outCharset")]
+    out_charset: &'static str,
+    notice: u8,
+    #[serde(rename = "needNewCode")]
+    need_new_code: u8,
+}
+
+#[derive(Deserialize)]
+struct SignedPlaylistTrackResponse {
+    code: Option<i64>,
+    playlist: Option<PlaylistTrackResult>,
 }
 
 #[derive(Serialize)]
@@ -421,7 +503,7 @@ mod tests {
 
     use super::{
         QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicTrackLikeError,
-        QqMusicTrackLikeState,
+        QqMusicTrackLikeState, g_tk,
     };
     use crate::qq_web_crypto::{
         decode_ag1_request_for_test, encode_ag1_response_for_test, zzc_sign,
@@ -482,13 +564,23 @@ mod tests {
         })
     }
 
+    fn signed_success() -> Value {
+        json!({
+            "code": 0,
+            "playlist": {
+                "code": 0,
+                "data": {"retCode": 0}
+            }
+        })
+    }
+
     #[tokio::test]
     async fn sends_exact_single_track_like_and_unlike_requests() {
         for (state, method) in [
             (QqMusicTrackLikeState::Liked, "AddSonglist"),
             (QqMusicTrackLikeState::NotLiked, "DelSonglist"),
         ] {
-            let client = QqMusicClient::new(FakeTransport::signed(&success()));
+            let client = QqMusicClient::new(FakeTransport::signed(&signed_success()));
 
             client
                 .set_track_liked(&credential(), 41_001, 7, state)
@@ -526,14 +618,22 @@ mod tests {
             assert!(!debug.contains("W_X_fixture-key"));
             assert!(!debug.contains("41001"));
             let body: Value = serde_json::from_str(&payload).expect("request JSON");
+            assert_eq!(body["comm"]["ct"], 24);
+            assert_eq!(body["comm"]["cv"], 4_747_474);
+            assert_eq!(body["comm"]["platform"], "yqq.json");
+            assert_eq!(body["comm"]["g_tk"], json!(g_tk("W_X_fixture-key")));
             assert_eq!(
-                body["req_0"]["module"],
+                body["comm"]["g_tk_new_20200303"],
+                json!(g_tk("W_X_fixture-key"))
+            );
+            assert_eq!(
+                body["playlist"]["module"],
                 "music.musicasset.PlaylistDetailWrite"
             );
-            assert_eq!(body["req_0"]["method"], method);
-            assert_eq!(body["req_0"]["param"]["dirId"], 201);
+            assert_eq!(body["playlist"]["method"], method);
+            assert_eq!(body["playlist"]["param"]["dirId"], 201);
             assert_eq!(
-                body["req_0"]["param"]["v_songInfo"],
+                body["playlist"]["param"]["v_songInfo"],
                 json!([{"songId": 41_001, "songType": 7}])
             );
         }
@@ -596,22 +696,22 @@ mod tests {
     async fn preserves_credential_service_and_response_failures() {
         let cases = [
             (
-                json!({"code": 104_401, "req_0": {"code": 0, "data": {"retCode": 0}}}),
+                json!({"code": 104_401, "playlist": {"code": 0, "data": {"retCode": 0}}}),
                 QqMusicTrackLikeError::Rejected { code: 104_401 },
             ),
             (
-                json!({"code": 0, "req_0": {"code": 50_006}}),
+                json!({"code": 0, "playlist": {"code": 50_006}}),
                 QqMusicTrackLikeError::Upstream {
                     global_code: 0,
                     result_code: Some(50_006),
                 },
             ),
             (
-                json!({"code": 0, "req_0": {"code": 0, "data": {"retCode": 80_092}}}),
+                json!({"code": 0, "playlist": {"code": 0, "data": {"retCode": 80_092}}}),
                 QqMusicTrackLikeError::MutationRejected { code: 80_092 },
             ),
             (
-                json!({"code": 0, "req_0": {"code": 0, "data": {}}}),
+                json!({"code": 0, "playlist": {"code": 0, "data": {}}}),
                 QqMusicTrackLikeError::MissingMutationCode,
             ),
         ];

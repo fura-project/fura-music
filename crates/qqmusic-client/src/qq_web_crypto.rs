@@ -21,6 +21,9 @@ const RESPONSE_KEY: [u8; 21] = [
     122, 63, 140, 29, 94, 155, 47, 10, 108, 77, 126, 139, 31, 58, 92, 157, 14, 43, 111, 74, 129,
 ];
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Ag1Error;
+
 pub(crate) fn zzc_sign(payload: &str) -> String {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let digest = Sha1::digest(payload.as_bytes());
@@ -50,19 +53,19 @@ pub(crate) fn zzc_sign(payload: &str) -> String {
     format!("zzc{part_1}{middle}{part_2}").to_ascii_lowercase()
 }
 
-fn request_key() -> Result<LessSafeKey, ()> {
+fn request_key() -> Result<LessSafeKey, Ag1Error> {
     UnboundKey::new(&AES_128_GCM, &REQUEST_KEY)
         .map(LessSafeKey::new)
-        .map_err(|_| ())
+        .map_err(|_| Ag1Error)
 }
 
-pub(crate) fn encode_ag1_request(payload: &str) -> Result<String, ()> {
+pub(crate) fn encode_ag1_request(payload: &str) -> Result<String, Ag1Error> {
     let mut nonce = [0_u8; 12];
-    getrandom::fill(&mut nonce).map_err(|_| ())?;
+    getrandom::fill(&mut nonce).map_err(|_| Ag1Error)?;
     encode_ag1_request_with_nonce(payload, nonce)
 }
 
-fn encode_ag1_request_with_nonce(payload: &str, nonce: [u8; 12]) -> Result<String, ()> {
+fn encode_ag1_request_with_nonce(payload: &str, nonce: [u8; 12]) -> Result<String, Ag1Error> {
     let mut encrypted = payload.as_bytes().to_vec();
     request_key()?
         .seal_in_place_append_tag(
@@ -70,7 +73,7 @@ fn encode_ag1_request_with_nonce(payload: &str, nonce: [u8; 12]) -> Result<Strin
             Aad::empty(),
             &mut encrypted,
         )
-        .map_err(|_| ())?;
+        .map_err(|_| Ag1Error)?;
     let mut wire = Vec::with_capacity(12 + encrypted.len());
     wire.extend_from_slice(&nonce);
     wire.extend_from_slice(&encrypted);
@@ -87,9 +90,9 @@ pub(crate) fn decode_ag1_response(data: &[u8]) -> String {
 }
 
 #[cfg(test)]
-pub(crate) fn decode_ag1_request_for_test(data: &[u8]) -> Result<String, ()> {
-    let wire = STANDARD.decode(data).map_err(|_| ())?;
-    let nonce: [u8; 12] = wire.get(..12).ok_or(())?.try_into().map_err(|_| ())?;
+pub(crate) fn decode_ag1_request_for_test(data: &[u8]) -> Result<String, Ag1Error> {
+    let wire = STANDARD.decode(data).map_err(|_| Ag1Error)?;
+    let nonce: [u8; 12] = wire.get(..12).ok_or(())?.try_into().map_err(|_| Ag1Error)?;
     let mut encrypted = wire.get(12..).ok_or(())?.to_vec();
     let plain = request_key()?
         .open_in_place(
@@ -97,8 +100,8 @@ pub(crate) fn decode_ag1_request_for_test(data: &[u8]) -> Result<String, ()> {
             Aad::empty(),
             &mut encrypted,
         )
-        .map_err(|_| ())?;
-    String::from_utf8(plain.to_vec()).map_err(|_| ())
+        .map_err(|_| Ag1Error)?;
+    String::from_utf8(plain.to_vec()).map_err(|_| Ag1Error)
 }
 
 #[cfg(test)]

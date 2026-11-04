@@ -318,6 +318,7 @@ impl ReqwestTransport {
     /// Returns the underlying TLS/client construction error.
     pub fn new() -> Result<Self, reqwest::Error> {
         let client = reqwest::Client::builder()
+            .retry(reqwest::retry::never())
             .timeout(Duration::from_secs(30))
             .resolve(
                 "localhost.ptlogin2.qq.com",
@@ -325,6 +326,7 @@ impl ReqwestTransport {
             )
             .build()?;
         let no_redirect_client = reqwest::Client::builder()
+            .retry(reqwest::retry::never())
             .timeout(Duration::from_secs(30))
             .resolve(
                 "localhost.ptlogin2.qq.com",
