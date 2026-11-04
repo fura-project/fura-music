@@ -1384,6 +1384,7 @@ dependencies = [
  "md-5",
  "quick-xml",
  "reqwest",
+ "ring",
  "serde",
  "serde_json",
  "sha1",

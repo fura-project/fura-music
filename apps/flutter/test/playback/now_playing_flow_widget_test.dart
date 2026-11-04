@@ -334,103 +334,115 @@ void main() {
       });
     }
   }
-  testWidgets('Now Playing Heart becomes actionable after shared preload', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(390, 844);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    const track = PlaylistTrackSummary(
-      providerId: 'qq-music',
-      opaqueId: 'track:41:0:fixtureMid:-',
-      title: 'Synthetic track',
-      artistNames: ['Synthetic artist'],
-      durationSeconds: 180,
-    );
-    const likedPlaylist = UserPlaylistSummary(
-      providerId: 'qq-music',
-      opaqueId: 'liked',
-      title: 'Liked Songs',
-      isLikedSongs: true,
-      ownership: UserPlaylistOwnership.owned,
-    );
-    final firstPage = Completer<PlaylistTrackPageResult>();
-    final reconciliation = Completer<PlaylistTrackPageResult>();
-    final membershipGateway = _LikeMembershipGateway([
-      _LikePendingPage(firstPage),
-      _LikePendingPage(reconciliation),
-    ]);
-    final writeGateway = _LikeMutationGateway();
-    final mutations = LibraryMutationCoordinator(
-      providerId: 'qq-music',
-      trackLikeGateway: writeGateway,
-    );
-    final likes = TrackLikePresentationController(
-      providerId: 'qq-music',
-      enabled: true,
-      playlistGateway: membershipGateway,
-      mutations: mutations,
-    )..bindLikedPlaylist(likedPlaylist);
-    final audio = _FakeAudioEngine([_FakeAudioSession()]);
-    final playback = TrackPlaybackController(
-      _FakeMediaGateway([_ImmediateMediaOperation(_success('like'))]),
-      ForegroundPlaybackController(audio),
-    );
-    final queue = QueuePlaybackController(_WidgetQueueGateway(), playback);
-    addTearDown(() {
-      likes.dispose();
-      mutations.dispose();
-      queue.dispose();
-    });
-    await queue.replaceAndPlay(const [track], 0);
+  testWidgets(
+    'phone outer bar hides Heart while expanded details keep it actionable',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41:0:fixtureMid:-',
+        title: 'Synthetic track',
+        artistNames: ['Synthetic artist'],
+        durationSeconds: 180,
+      );
+      const likedPlaylist = UserPlaylistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'liked',
+        title: 'Liked Songs',
+        isLikedSongs: true,
+        ownership: UserPlaylistOwnership.owned,
+      );
+      final firstPage = Completer<PlaylistTrackPageResult>();
+      final reconciliation = Completer<PlaylistTrackPageResult>();
+      final membershipGateway = _LikeMembershipGateway([
+        _LikePendingPage(firstPage),
+        _LikePendingPage(reconciliation),
+      ]);
+      final writeGateway = _LikeMutationGateway();
+      final mutations = LibraryMutationCoordinator(
+        providerId: 'qq-music',
+        trackLikeGateway: writeGateway,
+      );
+      final likes = TrackLikePresentationController(
+        providerId: 'qq-music',
+        enabled: true,
+        playlistGateway: membershipGateway,
+        mutations: mutations,
+      )..bindLikedPlaylist(likedPlaylist);
+      final audio = _FakeAudioEngine([_FakeAudioSession()]);
+      final playback = TrackPlaybackController(
+        _FakeMediaGateway([_ImmediateMediaOperation(_success('like'))]),
+        ForegroundPlaybackController(audio),
+      );
+      final queue = QueuePlaybackController(_WidgetQueueGateway(), playback);
+      addTearDown(() {
+        likes.dispose();
+        mutations.dispose();
+        queue.dispose();
+      });
+      await queue.replaceAndPlay(const [track], 0);
 
-    Widget buildNowPlaying() => TrackLikeActionScope(
-      controller: likes,
-      child: MaterialApp(
-        locale: const Locale('en'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        theme: MusicMaterialTheme.light(),
-        home: Scaffold(
-          body: NowPlayingBar(controller: queue, onSignInAgain: () {}),
+      Widget buildNowPlaying({required bool expanded}) => TrackLikeActionScope(
+        controller: likes,
+        child: MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: MusicMaterialTheme.light(),
+          home: Scaffold(
+            body: expanded
+                ? NowPlayingBar.expanded(
+                    controller: queue,
+                    onSignInAgain: () {},
+                  )
+                : NowPlayingBar(controller: queue, onSignInAgain: () {}),
+          ),
         ),
-      ),
-    );
+      );
 
-    await tester.pumpWidget(buildNowPlaying());
-    await tester.pump();
+      await tester.pumpWidget(buildNowPlaying(expanded: false));
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('now-playing-track-like')),
+        findsNothing,
+      );
 
-    final heart = find.byKey(const ValueKey('now-playing-track-like'));
-    expect(heart, findsOneWidget);
-    expect(tester.widget<IconButton>(heart).onPressed, isNull);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      await tester.pumpWidget(buildNowPlaying(expanded: true));
+      await tester.pump();
+      final heart = find.byKey(const ValueKey('now-playing-track-like'));
+      expect(heart, findsOneWidget);
+      expect(tester.widget<IconButton>(heart).onPressed, isNull);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    firstPage.complete(const PlaylistTrackPageResult());
-    await tester.pumpAndSettle();
+      firstPage.complete(const PlaylistTrackPageResult());
+      await tester.pumpAndSettle();
 
-    expect(tester.widget<IconButton>(heart).onPressed, isNotNull);
-    await tester.tap(heart);
-    await tester.pump();
-    expect(writeGateway.runCount, 1);
-    expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+      expect(tester.widget<IconButton>(heart).onPressed, isNotNull);
+      await tester.tap(heart);
+      await tester.pump();
+      expect(writeGateway.runCount, 1);
+      expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
 
-    reconciliation.complete(
-      const PlaylistTrackPageResult(
-        nextOffset: 1,
-        total: 1,
-        membershipTrackOpaqueIds: ['track:41:0:fixtureMid:-'],
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+      reconciliation.complete(
+        const PlaylistTrackPageResult(
+          nextOffset: 1,
+          total: 1,
+          membershipTrackOpaqueIds: ['track:41:0:fixtureMid:-'],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
 
-    final requestsBeforeRebuild = membershipGateway.requestCount;
-    await tester.pumpWidget(buildNowPlaying());
-    await tester.pump();
-    expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
-    expect(membershipGateway.requestCount, requestsBeforeRebuild);
-  });
+      final requestsBeforeRebuild = membershipGateway.requestCount;
+      await tester.pumpWidget(buildNowPlaying(expanded: true));
+      await tester.pump();
+      expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+      expect(membershipGateway.requestCount, requestsBeforeRebuild);
+    },
+  );
 
   test('playback SnackBar margins bound compact and desktop surfaces', () {
     for (final width in [320.0, 360.0, 390.0]) {

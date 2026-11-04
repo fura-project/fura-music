@@ -121,6 +121,7 @@ class MusicApp extends StatefulWidget {
         dailyRecommendationGateway == null ||
         personalizedPlaylistsGateway == null ||
         personalizedTracksGateway == null ||
+        trackLikeGateway == null ||
         favoriteAlbumGateway == null ||
         favoriteArtistGateway == null) {
       final fallbackCredentialVault = SerializedCredentialVault(
@@ -175,6 +176,7 @@ class MusicApp extends StatefulWidget {
         credentialVault: fallbackCredentialVault,
         sessionContinuation: qqSessionContinuation,
       );
+      trackLikeGateway ??= RustTrackLikeGateway();
       favoriteAlbumGateway ??= RustFavoriteAlbumGateway(
         credentialVault: fallbackCredentialVault,
         sessionContinuation: qqSessionContinuation,

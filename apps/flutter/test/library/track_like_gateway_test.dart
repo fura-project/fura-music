@@ -94,6 +94,40 @@ void main() {
     expect(result.confirmedState, TrackLikeState.notLiked);
   });
 
+  test('cleans rejected credentials only for the owning provider', () async {
+    final qq = _Vault();
+    final netease = _Vault();
+    final gateway = RustTrackLikeGateway(
+      credentialVault: qq,
+      netEaseCredentialVault: netease,
+      operationFactory: (_, _, _) => const _Operation(
+        TrackLikeMutationResult(
+          failure: TrackLikeMutationFailure.credentialRejected,
+        ),
+      ),
+    );
+
+    await gateway
+        .beginMutation(
+          providerId: 'qq-music',
+          opaqueTrackId: 'qq-track',
+          desiredState: TrackLikeState.liked,
+        )
+        .run();
+    expect(qq.deleteCount, 1);
+    expect(netease.deleteCount, 0);
+
+    await gateway
+        .beginMutation(
+          providerId: 'netease-cloud-music',
+          opaqueTrackId: 'netease-track',
+          desiredState: TrackLikeState.liked,
+        )
+        .run();
+    expect(qq.deleteCount, 1);
+    expect(netease.deleteCount, 1);
+  });
+
   test('cleans rejected credentials and exposes cleanup failure', () async {
     final deleted = _Vault();
     final rejected = RustTrackLikeGateway(

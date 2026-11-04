@@ -1,14 +1,17 @@
 use std::fmt;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
 use crate::credential::is_credential_rejection_code;
+use crate::qq_web_crypto::{decode_ag1_response, encode_ag1_request, zzc_sign};
 use crate::{Credential, HttpRequest, HttpTransport, QqMusicClient};
 
 const MUSICU_URL: &str = "https://u.y.qq.com/cgi-bin/musicu.fcg";
+const MUSICS_URL: &str = "https://u6.y.qq.com/cgi-bin/musics.fcg";
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const SIGNED_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const LIKED_SONGS_DIRECTORY_ID: u64 = 201;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -177,14 +180,51 @@ where
         song_type: u32,
         state: QqMusicTrackLikeState,
     ) -> Result<(), QqMusicTrackLikeError<T::Error>> {
-        self.set_playlist_track_membership(
+        if song_id == 0 {
+            return Err(QqMusicTrackLikeError::InvalidSongId);
+        }
+        let payload = serde_json::to_string(&PlaylistTrackRequest::new(
             credential,
             LIKED_SONGS_DIRECTORY_ID,
             song_id,
             song_type,
             state.into(),
-        )
-        .await
+        ))
+        .map_err(|_| QqMusicTrackLikeError::Serialize)?;
+        let sign = zzc_sign(&payload);
+        let encrypted =
+            encode_ag1_request(&payload).map_err(|_| QqMusicTrackLikeError::Serialize)?;
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| QqMusicTrackLikeError::Serialize)?
+            .as_millis()
+            .to_string();
+        let response = self
+            .transport()
+            .execute(
+                HttpRequest::post(MUSICS_URL)
+                    .query("_", timestamp)
+                    .query("encoding", "ag-1")
+                    .query("sign", sign)
+                    .header("Content-Type", "text/plain")
+                    .header("Accept", "application/octet-stream")
+                    .header("Origin", "https://y.qq.com")
+                    .header("Referer", crate::profile::QqProtocolProfile::Web.referer())
+                    .header("Cookie", credential.musicu_cookie_header())
+                    .body(encrypted.into_bytes())
+                    .response_body_limit(MAX_RESPONSE_BYTES)
+                    .timeout(SIGNED_REQUEST_TIMEOUT)
+                    .follow_redirects(false),
+            )
+            .await
+            .map_err(QqMusicTrackLikeError::Transport)?;
+        if !(200..300).contains(&response.status()) {
+            return Err(QqMusicTrackLikeError::HttpStatus(response.status()));
+        }
+        let decoded = decode_ag1_response(response.body());
+        let envelope: PlaylistTrackResponse =
+            serde_json::from_str(&decoded).map_err(|_| QqMusicTrackLikeError::InvalidJson)?;
+        map_response(envelope)
     }
 
     /// Requests one exact Track membership state in one playlist directory.
@@ -383,6 +423,9 @@ mod tests {
         QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicTrackLikeError,
         QqMusicTrackLikeState,
     };
+    use crate::qq_web_crypto::{
+        decode_ag1_request_for_test, encode_ag1_response_for_test, zzc_sign,
+    };
     use crate::{
         Credential, HttpMethod, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient,
     };
@@ -399,6 +442,14 @@ mod tests {
                     200,
                     serde_json::to_vec(response).expect("fixture JSON"),
                 ),
+                requests: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn signed(response: &Value) -> Self {
+            let json = serde_json::to_string(response).expect("fixture JSON");
+            Self {
+                response: HttpResponse::new(200, encode_ag1_response_for_test(&json)),
                 requests: Mutex::new(Vec::new()),
             }
         }
@@ -437,7 +488,7 @@ mod tests {
             (QqMusicTrackLikeState::Liked, "AddSonglist"),
             (QqMusicTrackLikeState::NotLiked, "DelSonglist"),
         ] {
-            let client = QqMusicClient::new(FakeTransport::new(&success()));
+            let client = QqMusicClient::new(FakeTransport::signed(&success()));
 
             client
                 .set_track_liked(&credential(), 41_001, 7, state)
@@ -448,17 +499,33 @@ mod tests {
             assert_eq!(requests.len(), 1);
             let request = &requests[0];
             assert_eq!(request.method(), HttpMethod::Post);
-            assert!(request.url().contains("musicu.fcg"));
+            assert_eq!(request.url(), "https://u6.y.qq.com/cgi-bin/musics.fcg");
+            assert!(!request.redirects_are_followed());
             assert_eq!(request.max_response_body_bytes(), 256 * 1024);
             assert_eq!(
                 request.request_timeout(),
-                Some(std::time::Duration::from_secs(30))
+                Some(std::time::Duration::from_secs(10))
             );
+            let query = request
+                .query_pairs()
+                .iter()
+                .cloned()
+                .collect::<std::collections::BTreeMap<_, _>>();
+            assert_eq!(query.get("encoding").map(String::as_str), Some("ag-1"));
+            assert!(query.get("_").is_some_and(|value| value.parse::<u128>().is_ok()));
+            let payload = decode_ag1_request_for_test(
+                request.body_bytes().expect("encrypted request body"),
+            )
+            .expect("ag-1 request decrypts");
+            assert_eq!(query.get("sign"), Some(&zzc_sign(&payload)));
+            assert!(request.headers().iter().any(|(name, value)|
+                name.eq_ignore_ascii_case("Content-Type") && value == "text/plain"));
+            assert!(request.headers().iter().any(|(name, value)|
+                name.eq_ignore_ascii_case("Accept") && value == "application/octet-stream"));
             let debug = format!("{request:?}");
             assert!(!debug.contains("W_X_fixture-key"));
             assert!(!debug.contains("41001"));
-            let body: Value = serde_json::from_slice(request.body_bytes().expect("request body"))
-                .expect("request JSON");
+            let body: Value = serde_json::from_str(&payload).expect("request JSON");
             assert_eq!(
                 body["req_0"]["module"],
                 "music.musicasset.PlaylistDetailWrite"
@@ -549,7 +616,7 @@ mod tests {
             ),
         ];
         for (fixture, expected) in cases {
-            let client = QqMusicClient::new(FakeTransport::new(&fixture));
+            let client = QqMusicClient::new(FakeTransport::signed(&fixture));
             assert_eq!(
                 client
                     .set_track_liked(&credential(), 41_001, 0, QqMusicTrackLikeState::Liked)

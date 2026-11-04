@@ -41,6 +41,7 @@ mod profile;
 mod protocol_strategy;
 mod qq_qr;
 mod qq_quick_login;
+mod qq_web_crypto;
 mod qrc_cipher;
 mod radar_recommendations;
 mod rankings;

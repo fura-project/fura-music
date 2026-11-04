@@ -48,13 +48,21 @@ typedef TrackLikeMutationOperationFactory = TrackLikeMutationOperation Function(
 class RustTrackLikeGateway implements TrackLikeGateway {
   RustTrackLikeGateway({
     CredentialVault? credentialVault,
+    CredentialVault? netEaseCredentialVault,
     TrackLikeMutationOperationFactory? operationFactory,
   }) : _operationFactory = operationFactory ?? _beginRustMutation,
-       _credentialVault = SerializedCredentialVault(
+       _qqCredentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
+       ),
+       _netEaseCredentialVault = SerializedCredentialVault(
+         netEaseCredentialVault ??
+             PlatformCredentialVault(
+               credentialKey: PlatformCredentialVault.netEaseCredentialKey,
+             ),
        );
 
-  final CredentialVault _credentialVault;
+  final CredentialVault _qqCredentialVault;
+  final CredentialVault _netEaseCredentialVault;
   final TrackLikeMutationOperationFactory _operationFactory;
 
   @override
@@ -62,10 +70,21 @@ class RustTrackLikeGateway implements TrackLikeGateway {
     required String providerId,
     required String opaqueTrackId,
     required TrackLikeState desiredState,
-  }) => _VaultCleaningTrackLikeMutationOperation(
-    _operationFactory(providerId, opaqueTrackId, desiredState),
-    _credentialVault,
-  );
+  }) {
+    final operation = _operationFactory(
+      providerId,
+      opaqueTrackId,
+      desiredState,
+    );
+    final vault = switch (providerId) {
+      'qq-music' => _qqCredentialVault,
+      'netease-cloud-music' => _netEaseCredentialVault,
+      _ => null,
+    };
+    return vault == null
+        ? operation
+        : _VaultCleaningTrackLikeMutationOperation(operation, vault);
+  }
 }
 
 TrackLikeMutationOperation _beginRustMutation(

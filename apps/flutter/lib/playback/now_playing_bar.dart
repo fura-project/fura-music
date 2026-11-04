@@ -265,7 +265,6 @@ class _CompactNowPlayingBar extends StatelessWidget {
                     },
                   ),
                 ),
-                _TrackLikeButton(track: track, dimension: controlExtent),
                 _CompactControlHitRegion(
                   child: IconButton(
                     key: const ValueKey('now-playing-previous'),
