@@ -1028,7 +1028,6 @@ pub struct UserPlaylistPage {
     pub omitted: u32,
 }
 const PRIVATE_RADAR_PLAYLIST_ID: u64 = 3_136_952_023;
-const PRIVATE_RADAR_DAILY_LIMIT: u32 = 30;
 
 pub struct DailyTracks {
     pub items: Vec<Song>,
@@ -1692,29 +1691,24 @@ impl<T: Transport> NeteaseClient<T> {
         }
     }
     /// # Errors
-    /// Fura's "Daily 30" product slot maps to NetEase Private Radar: take the
-    /// first 30 exact ordered identities from its daily-updated playlist and
-    /// resolve only that bounded window with the active account credential.
+    /// Bounded authenticated daily songs from NetEase's dedicated recommendation feed.
+    /// Private Radar remains a separate playlist surface and is never substituted here.
     pub async fn daily_tracks(&self, credential: &Credential) -> Result<DailyTracks, Error> {
-        let selection = self
-            .authenticated_playlist_selection(
-                credential,
-                PRIVATE_RADAR_PLAYLIST_ID,
-                0,
-                PRIVATE_RADAR_DAILY_LIMIT,
+        let (value, _) = self
+            .request(
+                "/api/v3/discovery/recommend/songs",
+                json!({}),
+                false,
+                Some(&credential.cookie()),
             )
             .await?;
-        let songs = if selection.ids().is_empty() {
-            Vec::new()
-        } else {
-            self.authenticated_collection_songs(credential, selection.ids())
-                .await?
-        };
-        let page = selection.with_songs(songs)?;
-        Ok(DailyTracks {
-            items: page.tracks,
-            omitted: page.omitted,
-        })
+        let (items, omitted) = decode_song_rows(
+            value
+                .pointer("/data/dailySongs")
+                .ok_or(Error::ResponseShapeMismatch)?,
+            100,
+        )?;
+        Ok(DailyTracks { items, omitted })
     }
     /// # Errors
     /// One Personal FM batch only; no autoplay/feedback or hidden continuation.
@@ -2120,7 +2114,7 @@ impl<T: Transport> NeteaseClient<T> {
         if rows.len() > 100 {
             return Err(Error::ResponseBound);
         }
-        let mut items = Vec::with_capacity(rows.len());
+        let mut items = Vec::with_capacity(rows.len().saturating_add(1));
         let mut omitted = 0_u32;
         for row in rows {
             match crate::catalog::collection_playlist(row) {
@@ -2130,6 +2124,18 @@ impl<T: Transport> NeteaseClient<T> {
                 }
                 Err(error) => return Err(error),
             }
+        }
+        if !items.iter().any(|item| item.id == PRIVATE_RADAR_PLAYLIST_ID) {
+            let radar = self
+                .authenticated_playlist_selection(
+                    credential,
+                    PRIVATE_RADAR_PLAYLIST_ID,
+                    0,
+                    1,
+                )
+                .await?
+                .into_playlist();
+            items.insert(0, radar);
         }
         Ok(PersonalizedPlaylists { items, omitted })
     }

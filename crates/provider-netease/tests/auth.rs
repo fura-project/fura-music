@@ -666,15 +666,16 @@ async fn account_library_liked_and_recommendations_remain_exact_and_bounded() {
             json!({"code":200,"playlist":{"id":4,"name":"Liked","trackCount":2,"trackIds":[{"id":5},{"id":1}]}}),
         ),
         Reply::Json(json!({"code":200,"songs":[song(),sized_song(5)]})),
+        Reply::Json(json!({"code":200,"data":{"dailySongs":[song()]}})),
+        Reply::Json(json!({"code":200,"data":[song()]})),
+        Reply::Json(json!({"code":200,"recommend":[]})),
         Reply::Json(json!({"code":200,"playlist":{
             "id":3_136_952_023_u64,
             "name":"Private Radar fixture",
             "trackCount":1,
-            "trackIds":[{"id":1}]
+            "trackIds":[{"id":1}],
+            "coverImgUrl":"https://music.126.net/private-radar-fixture"
         }})),
-        Reply::Json(json!({"code":200,"songs":[song()]})),
-        Reply::Json(json!({"code":200,"data":[song()]})),
-        Reply::Json(json!({"code":200,"recommend":[]})),
     ]);
     p.import_credential(&credential()).unwrap();
     p.verify_restored_credential().await.unwrap();
@@ -702,7 +703,10 @@ async fn account_library_liked_and_recommendations_remain_exact_and_bounded() {
     );
     assert_eq!(p.daily_tracks().await.unwrap()[0].id().opaque(), "1");
     assert_eq!(p.personalized_tracks().await.unwrap().len(), 1);
-    assert!(p.personalized_playlists().await.unwrap().is_empty());
+    let playlists = p.personalized_playlists().await.unwrap();
+    assert_eq!(playlists.len(), 1);
+    assert_eq!(playlists[0].id().opaque(), "3136952023");
+    assert_eq!(playlists[0].title(), "Private Radar fixture");
     assert_eq!(a.load(Ordering::SeqCst), 10);
 }
 

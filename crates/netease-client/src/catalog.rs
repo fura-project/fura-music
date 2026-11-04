@@ -580,6 +580,11 @@ impl PlaylistSelection {
     pub fn ids(&self) -> &[u64] {
         &self.selected
     }
+
+    #[must_use]
+    pub fn into_playlist(self) -> Playlist {
+        self.playlist
+    }
     /// # Errors
     /// Rejects duplicate, malformed or unrelated song details. Missing IDs remain omissions.
     pub fn with_songs(self, songs: Vec<Song>) -> Result<PlaylistPage, Error> {
