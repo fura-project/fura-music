@@ -454,6 +454,8 @@ struct PlaylistTrackResult {
 
 #[derive(Deserialize)]
 struct PlaylistTrackData {
+    code: Option<i64>,
+    subcode: Option<i64>,
     #[serde(rename = "retCode")]
     mutation_code: Option<i64>,
 }
@@ -483,6 +485,14 @@ fn map_response<E>(envelope: PlaylistTrackResponse) -> Result<(), QqMusicPlaylis
         .code
         .ok_or(QqMusicPlaylistTrackError::MissingResultCode)?;
     let data = result.data.ok_or(QqMusicPlaylistTrackError::MissingData)?;
+    for code in [data.code, data.subcode].into_iter().flatten() {
+        if code == 301 || is_credential_rejection_code(code) {
+            return Err(QqMusicPlaylistTrackError::Rejected { code });
+        }
+        if code != 0 {
+            return Err(QqMusicPlaylistTrackError::MutationRejected { code });
+        }
+    }
     let mutation_code = data
         .mutation_code
         .ok_or(QqMusicPlaylistTrackError::MissingMutationCode)?;
@@ -702,6 +712,14 @@ mod tests {
             (
                 json!({"code": 0, "playlist": {"code": 301, "data": {"retCode": 0}}}),
                 QqMusicTrackLikeError::Rejected { code: 301 },
+            ),
+            (
+                json!({"code": 0, "playlist": {"code": 0, "data": {"code": 301, "retCode": 0}}}),
+                QqMusicTrackLikeError::Rejected { code: 301 },
+            ),
+            (
+                json!({"code": 0, "playlist": {"code": 0, "data": {"subcode": 50_006, "retCode": 0}}}),
+                QqMusicTrackLikeError::MutationRejected { code: 50_006 },
             ),
             (
                 json!({"code": 0, "playlist": {"code": 50_006}}),
