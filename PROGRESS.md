@@ -3,13 +3,41 @@ execution:
   mode: HUMAN_DIRECTED
   work_domain: CORE
   state: HUMAN_REVIEW
-  acceptance_milestone: KUGOU_AUTHENTICATED_STANDARD_HUMAN_GATE
-  active_workstream: KUGOU_BROWSER_CAPTURE_COMPATIBILITY
-  current_task: LIVE_HUMAN_GATE_READY_V2_BROWSER_FIXED
-  next_action: AWAIT_SEPARATE_HUMAN_AUTHORITY_NO_LIVE_RUN
+  acceptance_milestone: KUGOU_RESEARCH_FROZEN
+  active_workstream: KUGOU_PAUSED_AFTER_LIVE_IDENTITY_BLOCKER
+  current_task: HD_036_COMPATIBILITY_BOUNDARY_ACCEPTED
+  next_action: HOLD_KUGOU_NO_LIVE_RUN_UNTIL_FUTURE_HUMAN_DIRECTION
 ---
 
 # Current State
+
+- **2026-11-04 Human decision / KuGou paused and compatibility boundary revised:**
+  the latest separately authorized live gate reached a real official-Web Stage 1
+  capture and stopped before any Rust upstream request with
+  `OFFICIAL_WEB_STAGE1_IDENTITY_UNPROVEN`. Its fixed presence diagnostics were
+  `HAS_HASH=0`, `HAS_ALBUM_ID=0`, `HAS_ALBUM_AUDIO_ID=0` and
+  `HAS_ENCODE_ALBUM_AUDIO_ID=1`. Browser Stage 1 upstream, Rust Stage 1,
+  fulfillment, Stage 2 and Range all remained zero/not reached as applicable;
+  cleanup completed with no isolated browser/profile residue. This is retained
+  as exact negative evidence and no further KuGou live retry is authorized.
+
+  Human then accepted **HD-036**, correcting the prior engineering boundary.
+  Future explicitly authorized Provider work may emulate official Web/App
+  client/package profiles, use client-distributed signing/profile material,
+  generate and persist Fura-owned installation/device identities, and
+  copy/translate/adapt permissively licensed third-party implementations while
+  preserving their license/attribution requirements. GPL/AGPL implementation
+  code remains evidence-only for the MIT-distributed tree unless a separate
+  licensing decision accepts and satisfies its obligations. Real-device or
+  stolen attestation identity, CAPTCHA/risk-control evasion, entitlement bypass,
+  protected-media cracking and cross-Provider source substitution remain
+  excluded.
+
+  This boundary change does **not** resume KuGou. Existing public Core,
+  CDP/two-stage experiments and live negative evidence are preserved; production
+  resolver, BuiltInProvider/Bridge/Flutter integration and further live gates
+  remain disabled until a future explicit Human direction.
+
 
 - **2026-11-03 Human-directed Core / KuGou real-Chromium target compatibility:**
   the second separately operated maintainer gate retained the fixed result

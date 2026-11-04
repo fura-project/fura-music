@@ -652,3 +652,54 @@ ARM64 Release pass. The APK is 45,525,730 bytes. No live Provider request,
 private collection/comment access, playback-history write, UI redesign, cache
 clean or push occurred. Long real-list interaction and any later approved Roam
 control remain Human review.
+
+## HD-036 — Third-party protocol compatibility and client-profile emulation
+
+**Status:** Accepted by explicit Human instruction on 2026-11-04.
+
+**Decision:** Fura may emulate an upstream Provider's official Web/App client
+identity and protocol profile when that is necessary for third-party client
+compatibility. This includes Provider-owned app/client identifiers and versions,
+package/profile selectors, User-Agent/header profiles, request-signing
+algorithms and client-distributed constants, and Fura-generated installation
+identities such as `mid`, `dfid`, `uuid` or equivalent synthetic
+device/profile fields. Such values may be persisted when the protocol requires
+stable installation identity. They need not be treated as forbidden merely
+because an official client uses them.
+
+Fura may also inspect and reuse third-party implementation code according to its
+actual license. Permissively licensed sources such as MIT, BSD and Apache may be
+copied, translated, adapted or structurally ported when useful, provided all
+required notices, attribution and license obligations are preserved and source
+provenance remains reviewable. Copyleft sources such as GPL/AGPL may be used as
+behavioral/protocol evidence, but their implementation must not be copied into
+the MIT-distributed Fura codebase unless a separate Human decision accepts the
+resulting licensing obligations and the repository is changed to comply with
+them. Unlicensed or unclear-license source remains evidence-only.
+
+**Safety and rights boundary:** Client/profile emulation does not authorize
+credential theft, reuse of another person's real device identifiers, stolen
+package-signing keys, private attestation keys/certificates, CAPTCHA or
+risk-control bypass, identity rotation intended to evade enforcement, VIP or
+purchase entitlement escalation, copyright/region bypass, protected-media
+cracking, or cross-Provider source substitution. Locally generated synthetic
+hardware-shaped fields are permitted when they represent only Fura's own
+installation/profile and do not claim a real third-party device or defeat an
+attestation mechanism. User credentials and entitlements remain Provider-scoped
+and may only exercise access the user normally possesses.
+
+**Consequences:** This supersedes HD-031 only where HD-031 prohibited
+official-package/client impersonation, persistent fabricated install/device
+identity, client-distributed signing/profile material, or copying/translating
+compatible third-party code. HD-031's Provider isolation, entitlement,
+risk-control, encrypted-media, cross-Provider and legal/public-distribution
+boundaries remain in force. A sidecar/proxy, production activation, new account
+automation or live compatibility window still requires its own applicable
+product/task authority.
+
+This decision changes the engineering boundary for future work; it does **not**
+resume the current KuGou workstream. KuGou is paused after the 2026-11-04 live
+official-Web Stage 1 capture showed an encoded-ID-only identity shape that the
+current canonical Track context cannot prove. No further KuGou live gate or
+production integration is authorized until the Human explicitly resumes that
+direction.

@@ -1,5 +1,26 @@
 # KuGou authenticated Standard playback V1 — offline candidate
 
+## Current disposition — paused; future client emulation permitted by HD-036
+
+Date: 2026-11-04. The latest separately authorized live gate reached a real
+official-Web Stage 1 request with only `encode_album_audio_id` among the tracked
+identity families: hash, Album ID and numeric Album/MixSong identity were absent.
+The request was aborted before browser network delivery and before any Rust
+Stage 1 upstream request. The current public catalog Track context therefore
+cannot prove this live Web identity shape. No further live retry is authorized
+and production media/Flutter integration remain disabled.
+
+The Human has separately accepted HD-036 for **future** work. Fura may emulate
+official Provider Web/App client/package profiles, use client-distributed
+signing/profile material, generate stable Fura-owned installation/device
+identities, and reuse or port permissively licensed third-party implementation
+code with its required notices. GPL/AGPL implementation remains evidence-only
+inside the MIT-distributed tree unless a later licensing decision accepts and
+satisfies the applicable obligations. This supersedes the earlier blanket
+client-impersonation and permissive-code-port prohibitions, but does not resume
+the paused KuGou workstream or authorize another live gate.
+
+
 ## Current follow-up: server-issued two-stage identity
 
 Date: 2026-11-02, starting at `5add34ef8b435933625faca43bbc76c12b0b6468`.

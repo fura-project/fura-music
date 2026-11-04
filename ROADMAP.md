@@ -74,11 +74,15 @@ field and ordinary restore is verified offline; NetEase therefore remains
 `CONDITIONAL` and disconnected from production continuation pending Human
 official-Web observation and a separately authorized refresh gate.
 
-**Boundaries:** no sidecar/proxy, raw JSON Bridge, profile/risk rotation,
-unclassified hardware identity, private app secret, package spoofing, protected
-media unlock, cross-Provider source or unsafe mutation replay. No real stored
-account automation, unrelated UI/platform changes or further live refresh
-probing. Mobile and long-duration real-session completion cannot be inferred
+**Boundaries:** no sidecar/proxy, raw JSON Bridge, risk-control evasion,
+stolen or real-device identifiers, private attestation material, protected-media
+unlock, cross-Provider source or unsafe mutation replay. HD-036 now permits
+Provider-specific official client/profile emulation, client-distributed signing
+material and locally generated installation/device identities when a future task
+explicitly needs them; that permission does not itself authorize a new live
+window, production activation or stored-account automation. Unrelated
+UI/platform changes and further live refresh probing remain outside this
+workstream. Mobile and long-duration real-session completion cannot be inferred
 from Linux synthetic playback plus one bounded disposable-session gate.
 
 **Next gate:** no machine-actionable QQ WeChat V1 implementation remains.
@@ -218,7 +222,23 @@ Human may accept naturally malformed real-account Liked/playlist/comment/lyric
 presentation when that provider state occurs. Commits are local and no push is
 authorized.
 
-## Active Core/Product Workstream — KuGou third built-in Provider (HD-031)
+## Paused Core/Product Workstream — KuGou third built-in Provider (HD-031, boundary updated by HD-036)
+
+**Current disposition (2026-11-04):** paused by Human instruction. The latest
+live gate reached an official-Web Stage 1 request whose identity presence was
+encoded-ID-only (`encode_album_audio_id` present; hash/Album/numeric recording
+identity absent), so the current public catalog Track context cannot prove that
+request without a new identity-acquisition strategy. Existing KuGou Core and
+the CDP/two-stage research foundation are retained; production media, Bridge and
+Flutter integration remain disabled and no further live gate is authorized.
+
+HD-036 changes the **future** compatibility boundary: Fura may emulate official
+KuGou Web/App client profiles, generate stable Fura-owned installation/device
+identities, use client-distributed signing/profile material, and directly
+reuse/port permissively licensed reference implementations with their required
+notices. That decision removes the old blanket prohibition on client/package
+impersonation and synthetic installation identity; it does not resume this
+paused workstream.
 
 **Goal:** add KuGou Music as a third static public/read-first Provider through
 an independent Rust direct-HTTPS implementation, exact provider-owned
@@ -251,23 +271,27 @@ Bridge and Flutter work is held rather than accumulating unrelated endpoints.
 The modern detail family remains Human-classification work because it combines
 signatures with device/install-shaped material.
 
-**Boundaries:** no authentication/private Library/mutation in the first phase;
-no Node sidecar, dynamic registry, `provider-tme`, shared identity/session,
-fuzzy mapping, cross-service fallback, official-secret or package
-impersonation, CAPTCHA/risk-control automation, VIP activity, entitlement or
-region/copyright bypass, or encrypted-media cracking. TME ownership is a
-layered research hypothesis, not an implementation assumption. Legal/public
-distribution clearance remains Human/legal review.
+**Boundaries:** no authentication/private Library/mutation is implied by the
+retained first-phase work; no Node sidecar, dynamic registry, `provider-tme`,
+shared identity/session, fuzzy mapping or cross-service fallback. Under HD-036,
+future authorized KuGou work may emulate official Web/App client/package
+profiles, use client-distributed signing constants/algorithms, generate stable
+Fura-owned installation/device identities and reuse permissively licensed code.
+It still may not steal real hardware/device identity or attestation secrets,
+automate CAPTCHA/risk-control bypass, evade enforcement through identity
+rotation, claim VIP/purchase entitlement the user lacks, bypass copyright/region
+controls, crack protected media or substitute another Provider's source. TME
+ownership is a layered research hypothesis, not an implementation assumption.
+Legal/public-distribution clearance remains Human/legal review.
 
-**Exit:** the current iteration is blocked at the identity evidence gate, with
-no `REMAINING_AUTONOMOUS_WORK` item that can safely bypass it. Resume only with
-a scrubbed structural fixture explaining the legacy detail variance, a newly
-authorized bounded evidence window, or a Human classification of the modern
-public signing/device boundary. Risk-control/access/secret/encrypted-media
-findings stop only that capability and are recorded honestly. UI integration
-ends at machine evidence plus canonical candidates; visual and any future
-real-account acceptance remain Human gates. Local logical commits only; no
-push.
+**Exit / resume:** the workstream is intentionally paused, not blocked by the
+old client-impersonation rule. Resume only on explicit Human direction. A future
+resumption may choose a coherent KuGou Web/App protocol family under HD-036
+instead of forcing the current unsigned-public-catalog identity into official
+Web playback. Risk-control, entitlement, attestation-secret and protected-media
+findings still stop only the affected capability and must be recorded honestly.
+UI/production integration remains gated on a working exact Provider-owned media
+path and separate Human acceptance.
 
 ## Human Review Workstream — M4 interaction polish
 
