@@ -176,7 +176,9 @@ class MusicApp extends StatefulWidget {
         credentialVault: fallbackCredentialVault,
         sessionContinuation: qqSessionContinuation,
       );
-      trackLikeGateway ??= RustTrackLikeGateway();
+      trackLikeGateway ??= RustTrackLikeGateway(
+        credentialVault: fallbackCredentialVault,
+      );
       favoriteAlbumGateway ??= RustFavoriteAlbumGateway(
         credentialVault: fallbackCredentialVault,
         sessionContinuation: qqSessionContinuation,
