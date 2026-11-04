@@ -466,7 +466,7 @@ fn map_response<E>(envelope: PlaylistTrackResponse) -> Result<(), QqMusicPlaylis
     if let Some(code) = [Some(global_code), result_code]
         .into_iter()
         .flatten()
-        .find(|code| is_credential_rejection_code(*code))
+        .find(|code| *code == 301 || is_credential_rejection_code(*code))
     {
         return Err(QqMusicPlaylistTrackError::Rejected { code });
     }
@@ -698,6 +698,10 @@ mod tests {
             (
                 json!({"code": 104_401, "playlist": {"code": 0, "data": {"retCode": 0}}}),
                 QqMusicTrackLikeError::Rejected { code: 104_401 },
+            ),
+            (
+                json!({"code": 0, "playlist": {"code": 301, "data": {"retCode": 0}}}),
+                QqMusicTrackLikeError::Rejected { code: 301 },
             ),
             (
                 json!({"code": 0, "playlist": {"code": 50_006}}),
