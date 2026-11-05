@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/album/album_page.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
@@ -946,15 +947,18 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               _returnFromLocalPage();
             }
           },
-          child: LibraryMutationFeedbackScope(
-            onStatus: _showLibraryMutationOutcome,
-            child: AlbumFavoriteActionScope(
-              controller: _albumFavorites,
-              child: PlaylistTrackActionScope(
-                controller: _playlistTracks,
-                child: TrackLikeActionScope(
-                  controller: _trackLikes,
-                  child: shortcutPage,
+          child: FuraToastScope(
+            resolveMargin: _resolveToastMargin,
+            child: LibraryMutationFeedbackScope(
+              onStatus: _showLibraryMutationOutcome,
+              child: AlbumFavoriteActionScope(
+                controller: _albumFavorites,
+                child: PlaylistTrackActionScope(
+                  controller: _playlistTracks,
+                  child: TrackLikeActionScope(
+                    controller: _trackLikes,
+                    child: shortcutPage,
+                  ),
                 ),
               ),
             ),
@@ -1398,10 +1402,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _presentPendingPlaybackNotice();
   }
 
-  void _presentPendingPlaybackNotice() {
-    final message = _pendingPlaybackNotice;
-    if (!mounted || message == null) return;
-    _pendingPlaybackNotice = null;
+  EdgeInsets _resolveToastMargin(BuildContext toastContext) {
     final routes = _navigation.routes;
     final expandedNowPlayingOpen =
         routes.isNotEmpty && routes.last is ExpandedNowPlayingLocalRoute;
@@ -1410,28 +1411,30 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         : routes;
     final settingsOpen =
         retainedRoutes.isNotEmpty && retainedRoutes.last is SettingsLocalRoute;
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    return playbackSnackBarMargin(
+      viewportWidth: MediaQuery.sizeOf(toastContext).width,
+      bottomSafeArea: MediaQuery.paddingOf(toastContext).bottom,
+      playerPresent: _queuePlaybackController.current != null,
+      settingsOpen: settingsOpen,
+      expandedNowPlayingOpen: expandedNowPlayingOpen,
+    );
+  }
+
+  void _presentPendingPlaybackNotice() {
+    final message = _pendingPlaybackNotice;
+    if (!mounted || message == null) return;
+    _pendingPlaybackNotice = null;
     final messenger = ScaffoldMessenger.of(context);
     late final ScaffoldFeatureController<SnackBar, SnackBarClosedReason>
     controller;
     controller = messenger.showSnackBar(
-      SnackBar(
-        key: const ValueKey('playback-quality-snackbar'),
-        behavior: SnackBarBehavior.floating,
-        clipBehavior: Clip.none,
-        duration: const Duration(milliseconds: 1800),
-        margin: playbackSnackBarMargin(
-          viewportWidth: MediaQuery.sizeOf(context).width,
-          bottomSafeArea: MediaQuery.paddingOf(context).bottom,
-          playerPresent: _queuePlaybackController.current != null,
-          settingsOpen: settingsOpen,
-          expandedNowPlayingOpen: expandedNowPlayingOpen,
-        ),
-        padding: EdgeInsets.zero,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        shape: const StadiumBorder(),
+      buildFuraToastSnackBar(
+        context,
+        message: message,
+        snackBarKey: const ValueKey('playback-quality-snackbar'),
+        surfaceKey: const ValueKey('playback-quality-toast-surface'),
+        semanticsKey: const ValueKey('playback-transient-notice'),
+        margin: _resolveToastMargin(context),
         onVisible: () {
           if (!mounted || !identical(_playbackNoticeController, controller)) {
             return;
@@ -1441,44 +1444,6 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             messenger.hideCurrentSnackBar();
           }
         },
-        content: Center(
-          heightFactor: 1,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: _PlaybackToastTransition(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
-                child: Material(
-                  key: const ValueKey('playback-quality-toast-surface'),
-                  color: colors.surfaceContainerHighest,
-                  surfaceTintColor: Colors.transparent,
-                  elevation: 3,
-                  shadowColor: colors.shadow.withValues(alpha: 0.20),
-                  shape: const StadiumBorder(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    child: Semantics(
-                      key: const ValueKey('playback-transient-notice'),
-                      liveRegion: true,
-                      label: message,
-                      child: Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colors.onSurface,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
       ),
     );
     _playbackNoticeController = controller;
@@ -1503,9 +1468,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
     if (!mounted) return result == AppSettingsWriteResult.saved;
     if (result != AppSettingsWriteResult.saved) {
-      ScaffoldMessenger.of(
+      showFuraToast(
         context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.settingsSaveFailure)));
+        context.l10n.settingsSaveFailure,
+        margin: _resolveToastMargin(context),
+      );
       return false;
     }
     return true;
@@ -2802,72 +2769,77 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         await showDialog<LibraryMutationOutcome<UserPlaylistSummary>>(
           context: context,
           barrierDismissible: false,
+          animationStyle: furaDialogAnimationStyle(context),
           builder: (dialogContext) {
             var pending = false;
-            return StatefulBuilder(
-              builder: (context, setDialogState) {
-                Future<void> submit() async {
-                  if (pending || formKey.currentState?.validate() != true) {
-                    return;
+            return FuraDialogTransition(
+              child: StatefulBuilder(
+                builder: (context, setDialogState) {
+                  Future<void> submit() async {
+                    if (pending || formKey.currentState?.validate() != true) {
+                      return;
+                    }
+                    setDialogState(() => pending = true);
+                    final result = await _libraryMutations.createPlaylist(
+                      name: playlistName.trim(),
+                      refreshAuthoritativeState: _controller.refresh,
+                    );
+                    if (dialogContext.mounted) {
+                      Navigator.of(dialogContext).pop(result);
+                    }
                   }
-                  setDialogState(() => pending = true);
-                  final result = await _libraryMutations.createPlaylist(
-                    name: playlistName.trim(),
-                    refreshAuthoritativeState: _controller.refresh,
-                  );
-                  if (dialogContext.mounted) {
-                    Navigator.of(dialogContext).pop(result);
-                  }
-                }
 
-                return AlertDialog(
-                  key: const ValueKey('create-playlist-dialog'),
-                  title: Text(context.l10n.libraryCreatePlaylistTitle),
-                  content: Form(
-                    key: formKey,
-                    child: TextFormField(
-                      key: const ValueKey('create-playlist-name'),
-                      autofocus: true,
-                      enabled: !pending,
-                      maxLength: 256,
-                      textInputAction: TextInputAction.done,
-                      onChanged: (value) => playlistName = value,
-                      decoration: InputDecoration(
-                        labelText: context.l10n.libraryPlaylistNameLabel,
+                  return AlertDialog(
+                    key: const ValueKey('create-playlist-dialog'),
+                    title: Text(context.l10n.libraryCreatePlaylistTitle),
+                    content: Form(
+                      key: formKey,
+                      child: TextFormField(
+                        key: const ValueKey('create-playlist-name'),
+                        autofocus: true,
+                        enabled: !pending,
+                        maxLength: 256,
+                        textInputAction: TextInputAction.done,
+                        onChanged: (value) => playlistName = value,
+                        decoration: InputDecoration(
+                          labelText: context.l10n.libraryPlaylistNameLabel,
+                        ),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? context.l10n.libraryPlaylistNameLabel
+                            : null,
+                        onFieldSubmitted: pending
+                            ? null
+                            : (_) => unawaited(submit()),
                       ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? context.l10n.libraryPlaylistNameLabel
-                          : null,
-                      onFieldSubmitted: pending
-                          ? null
-                          : (_) => unawaited(submit()),
                     ),
-                  ),
-                  actions: [
-                    TextButton(
-                      key: const ValueKey('create-playlist-cancel'),
-                      onPressed: pending
-                          ? null
-                          : () => Navigator.of(dialogContext).pop(),
-                      child: Text(context.l10n.commonCancel),
-                    ),
-                    FilledButton(
-                      key: const ValueKey('create-playlist-confirm'),
-                      onPressed: pending ? null : submit,
-                      child: pending
-                          ? SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Theme.of(context).colorScheme.onPrimary,
-                              ),
-                            )
-                          : Text(context.l10n.libraryCreatePlaylist),
-                    ),
-                  ],
-                );
-              },
+                    actions: [
+                      TextButton(
+                        key: const ValueKey('create-playlist-cancel'),
+                        onPressed: pending
+                            ? null
+                            : () => Navigator.of(dialogContext).pop(),
+                        child: Text(context.l10n.commonCancel),
+                      ),
+                      FilledButton(
+                        key: const ValueKey('create-playlist-confirm'),
+                        onPressed: pending ? null : submit,
+                        child: pending
+                            ? SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onPrimary,
+                                ),
+                              )
+                            : Text(context.l10n.libraryCreatePlaylist),
+                      ),
+                    ],
+                  );
+                },
+              ),
             );
           },
         );
@@ -2879,52 +2851,55 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     final outcome = await showDialog<LibraryMutationOutcome<bool>>(
       context: context,
       barrierDismissible: false,
+      animationStyle: furaDialogAnimationStyle(context),
       builder: (dialogContext) {
         var pending = false;
-        return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            key: const ValueKey('delete-playlist-dialog'),
-            title: Text(context.l10n.libraryDeletePlaylistTitle),
-            content: Text(
-              context.l10n.libraryDeletePlaylistDetail(playlist.title),
-            ),
-            actions: [
-              TextButton(
-                key: const ValueKey('delete-playlist-cancel'),
-                onPressed: pending
-                    ? null
-                    : () => Navigator.of(dialogContext).pop(),
-                child: Text(context.l10n.commonCancel),
+        return FuraDialogTransition(
+          child: StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              key: const ValueKey('delete-playlist-dialog'),
+              title: Text(context.l10n.libraryDeletePlaylistTitle),
+              content: Text(
+                context.l10n.libraryDeletePlaylistDetail(playlist.title),
               ),
-              FilledButton(
-                key: const ValueKey('delete-playlist-confirm'),
-                onPressed: pending
-                    ? null
-                    : () async {
-                        setDialogState(() => pending = true);
-                        final result = await _libraryMutations.deletePlaylist(
-                          playlist: playlist,
-                          refreshAuthoritativeState: _controller.refresh,
-                        );
-                        if (dialogContext.mounted) {
-                          Navigator.of(dialogContext).pop(result);
-                        }
-                      },
-                style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                  foregroundColor: Theme.of(context).colorScheme.onError,
+              actions: [
+                TextButton(
+                  key: const ValueKey('delete-playlist-cancel'),
+                  onPressed: pending
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: Text(context.l10n.commonCancel),
                 ),
-                child: pending
-                    ? SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Theme.of(context).colorScheme.onError,
-                        ),
-                      )
-                    : Text(context.l10n.libraryDeletePlaylist),
-              ),
-            ],
+                FilledButton(
+                  key: const ValueKey('delete-playlist-confirm'),
+                  onPressed: pending
+                      ? null
+                      : () async {
+                          setDialogState(() => pending = true);
+                          final result = await _libraryMutations.deletePlaylist(
+                            playlist: playlist,
+                            refreshAuthoritativeState: _controller.refresh,
+                          );
+                          if (dialogContext.mounted) {
+                            Navigator.of(dialogContext).pop(result);
+                          }
+                        },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                    foregroundColor: Theme.of(context).colorScheme.onError,
+                  ),
+                  child: pending
+                      ? SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.onError,
+                          ),
+                        )
+                      : Text(context.l10n.libraryDeletePlaylist),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -2955,29 +2930,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       LibraryMutationStatus.definitiveFailure ||
       LibraryMutationStatus.unavailable => context.l10n.libraryMutationFailure,
     };
-    final routes = _navigation.routes;
-    final expandedNowPlayingOpen =
-        routes.isNotEmpty && routes.last is ExpandedNowPlayingLocalRoute;
-    final retainedRoutes = expandedNowPlayingOpen
-        ? routes.sublist(0, routes.length - 1)
-        : routes;
-    final settingsOpen =
-        retainedRoutes.isNotEmpty && retainedRoutes.last is SettingsLocalRoute;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          margin: playbackSnackBarMargin(
-            viewportWidth: MediaQuery.sizeOf(context).width,
-            bottomSafeArea: MediaQuery.paddingOf(context).bottom,
-            playerPresent: _queuePlaybackController.current != null,
-            settingsOpen: settingsOpen,
-            expandedNowPlayingOpen: expandedNowPlayingOpen,
-          ),
-          content: Text(message),
-        ),
-      );
+    showFuraToast(context, message, margin: _resolveToastMargin(context));
   }
 
   Future<void> _confirmSignOut() async {
@@ -3003,8 +2956,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     if (!mounted) return;
     setState(() => _signingOut = false);
     if (result == CredentialSignOutResult.coreUnavailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.l10n.librarySignOutFailure)),
+      showFuraToast(
+        context,
+        context.l10n.librarySignOutFailure,
+        margin: _resolveToastMargin(context),
       );
     }
   }
@@ -4072,22 +4027,13 @@ EdgeInsets playbackSnackBarMargin({
   required bool playerPresent,
   required bool settingsOpen,
   required bool expandedNowPlayingOpen,
-}) {
-  const gap = 12.0;
-  var bottom = bottomSafeArea + gap;
-  if (expandedNowPlayingOpen) {
-    final expandedControls = viewportWidth < 600 ? 132.0 : 124.0;
-    bottom += expandedControls;
-  } else if (playerPresent) {
-    final player = viewportWidth < 640 ? 68.0 : 88.0;
-    final navigation = viewportWidth < 840 && !settingsOpen ? 72.0 : 0.0;
-    bottom += player + navigation;
-  }
-  final horizontal = viewportWidth > 392
-      ? ((viewportWidth - 360) / 2).clamp(16.0, double.infinity).toDouble()
-      : 16.0;
-  return EdgeInsets.fromLTRB(horizontal, 0, horizontal, bottom);
-}
+}) => furaPlaybackSnackBarMargin(
+  viewportWidth: viewportWidth,
+  bottomSafeArea: bottomSafeArea,
+  playerPresent: playerPresent,
+  settingsOpen: settingsOpen,
+  expandedNowPlayingOpen: expandedNowPlayingOpen,
+);
 
 class _PlaylistCollection extends StatelessWidget {
   const _PlaylistCollection({
@@ -4673,42 +4619,4 @@ String _semanticLabel(AppLocalizations l10n, UserPlaylistSummary playlist) {
   return count == null
       ? playlist.title
       : '${playlist.title}, ${l10n.libraryPlaylistCount(count)}';
-}
-
-class _PlaybackToastTransition extends StatelessWidget {
-  const _PlaybackToastTransition({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final animation = context
-        .findAncestorWidgetOfExactType<SnackBar>()
-        ?.animation;
-    if (animation == null ||
-        MediaQuery.accessibleNavigationOf(context) ||
-        MediaQuery.disableAnimationsOf(context)) {
-      return child;
-    }
-    return AnimatedBuilder(
-      animation: animation,
-      child: child,
-      builder: (context, child) {
-        final raw = animation.value.clamp(0.0, 1.0);
-        final isReversing =
-            animation.status == AnimationStatus.reverse ||
-            animation.status == AnimationStatus.dismissed;
-        final curved = isReversing
-            ? Curves.easeInCubic.transform(raw)
-            : Curves.easeOutCubic.transform(raw);
-        return Opacity(
-          opacity: curved.clamp(0.0, 1.0),
-          child: Transform.translate(
-            offset: Offset(0, (1.0 - curved) * 6.0),
-            child: Transform.scale(scale: 0.92 + (0.08 * curved), child: child),
-          ),
-        );
-      },
-    );
-  }
 }

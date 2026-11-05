@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
@@ -380,10 +381,9 @@ class _CompactControlHitRegion extends StatelessWidget {
 }
 
 class _TrackLikeButton extends StatefulWidget {
-  const _TrackLikeButton({required this.track, this.dimension = 40});
+  const _TrackLikeButton({required this.track});
 
   final PlaylistTrackSummary track;
-  final double dimension;
 
   @override
   State<_TrackLikeButton> createState() => _TrackLikeButtonState();
@@ -464,10 +464,7 @@ class _TrackLikeButtonState extends State<_TrackLikeButton> {
                 liked: !liked,
               ),
             ),
-      constraints: BoxConstraints.tightFor(
-        width: widget.dimension,
-        height: widget.dimension,
-      ),
+      constraints: BoxConstraints.tightFor(width: 40, height: 40),
       padding: EdgeInsets.zero,
       icon: pending
           ? SizedBox.square(
@@ -1511,20 +1508,23 @@ Future<void> openNowPlayingCatalogContext({
         )
       : await showDialog<_NowPlayingCatalogAction>(
           context: context,
-          builder: (context) => PlaybackShortcuts(
-            controller: controller,
-            child: AlertDialog(
-              title: Text(context.l10n.playbackBrowseCurrentTrack),
-              content: _NowPlayingCatalogSelection(
-                actions: actions,
-                compact: false,
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(context.l10n.commonCancel),
+          animationStyle: furaDialogAnimationStyle(context),
+          builder: (context) => FuraDialogTransition(
+            child: PlaybackShortcuts(
+              controller: controller,
+              child: AlertDialog(
+                title: Text(context.l10n.playbackBrowseCurrentTrack),
+                content: _NowPlayingCatalogSelection(
+                  actions: actions,
+                  compact: false,
                 ),
-              ],
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(context.l10n.commonCancel),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -1900,13 +1900,16 @@ Future<void> _showVolumeControl(
   }
   await showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: Text(context.l10n.playbackVolume),
-      content: PlaybackShortcuts(
-        controller: controller,
-        child: SizedBox(
-          width: 320,
-          child: _VolumePanel(controller: controller.playback),
+    animationStyle: furaDialogAnimationStyle(context),
+    builder: (context) => FuraDialogTransition(
+      child: AlertDialog(
+        title: Text(context.l10n.playbackVolume),
+        content: PlaybackShortcuts(
+          controller: controller,
+          child: SizedBox(
+            width: 320,
+            child: _VolumePanel(controller: controller.playback),
+          ),
         ),
       ),
     ),

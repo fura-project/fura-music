@@ -1,15 +1,23 @@
 ---
 execution:
   mode: HUMAN_DIRECTED
-  work_domain: CORE
+  work_domain: UI
   state: HUMAN_REVIEW
-  acceptance_milestone: KUGOU_RESEARCH_FROZEN
-  active_workstream: KUGOU_PAUSED_AFTER_LIVE_IDENTITY_BLOCKER
-  current_task: HD_036_COMPATIBILITY_BOUNDARY_ACCEPTED
-  next_action: HOLD_KUGOU_NO_LIVE_RUN_UNTIL_FUTURE_HUMAN_DIRECTION
+  acceptance_milestone: GLOBAL_TOAST_AND_DIALOG_TRANSITION_V1
+  active_workstream: GLOBAL_TOAST_AND_DIALOG_MOTION
+  current_task: UNIFY_CAPSULE_TOASTS_AND_ENHANCE_ENTRANCE_MOTION
+  next_action: AWAIT_HUMAN_VISUAL_REVIEW
 ---
 
 # Current State
+
+- **2026-11-04 Human-directed UI / Global floating capsule toast unification and toast/dialog entrance motion refinement:**
+  Addressed two concrete Human visual review directives (`继续优化 1.有些提示dialog还不是我们新版的弹窗 全局检查 2.dialog入场动画有些不明显 再调整一下` with screenshot showing `音乐库已更新。` in the legacy rectangular `SnackBar`):
+  1. **Global floating capsule toast unification (`apps/flutter/lib/fura_toast.dart` and all 15 `showSnackBar` sites across `apps/flutter/lib/`):**
+     Extracted the Android 12+ / Material You floating capsule toast (`StadiumBorder()`, `ConstrainedBox(maxWidth: 360)`, `surfaceContainerHighest`, `elevation: 3`, centered `TextAlign.center` copy, `FuraToastTransition`) into `buildFuraToastSnackBar` / `showFuraToast` with a shell-level `FuraToastScope` in `UserLibraryPage` so every page in the app (`UserLibraryPage` library mutations / lyric save failure / sign-out failure, `library_mutation_feedback.dart`, `SettingsPage`, `HomePage`, `LikedSongsPage`, `PlaylistDetailPage`, `AlbumPage`, `ArtistPage`, `RecommendedPlaylistsPage`, `RankingPage`, `TrackSearchPage`) renders the unified capsule toast with player/navigation-safe margins instead of the legacy wide rectangular `SnackBar`. Also aligned `SnackBarThemeData` in `apps/flutter/lib/theme/material_theme.dart` (`StadiumBorder`, `elevation: 3`).
+  2. **Toast & modal Dialog entrance/exit animation refinement (`apps/flutter/lib/fura_toast.dart` and all `showDialog` sites):**
+     Diagnosed why the previous toast entrance motion (`_PlaybackToastTransition`) was barely perceptible: Flutter's Material 3 floating `SnackBar` wraps its subtree in `_fadeInM3Animation = Interval(0.4, 0.6, curve: Curves.easeInCirc)`, keeping outer opacity at `0.0` for the first 40% (`0.0..0.4`) of `SnackBar.animation`, during which `Curves.easeOutCubic.transform(raw)` over `[0.0, 1.0]` had already completed 78.4%–93.6% of its `6px` slide and `0.92..1.0` scale before a single pixel became visible. `FuraToastTransition` now maps its entrance over the visible `[0.38, 1.0]` M3 fade window (`22px -> 0px` upward slide via `Curves.easeOutCubic` + `0.80 -> 1.0` scale pop via `Curves.easeOutBack`) and its exit over the visible `[1.0, 0.40]` reverse window (`0px -> 14px` downward slide + `1.0 -> 0.86` scale-down). In addition, all modal `showDialog` calls across the app now use `FuraDialogTransition` + `furaDialogAnimationStyle` (`220ms` entrance / `160ms` exit with `0.88 -> 1.0` `Curves.easeOutBack` scale and `18px -> 0px` upward lift instead of Flutter's default flat 150ms fade-only `DialogRoute`).
+  - **Verification:** `dart format --output=none --set-exit-if-changed`, `dart analyze`, `flutter test test/fura_toast_test.dart`, `flutter test test/playback/now_playing_flow_widget_test.dart --plain-name "quality"`, `flutter test test/album/album_page_test.dart test/artist/artist_page_test.dart test/library/music_track_row_test.dart`, and `flutter test test/widget_test.dart` playlist dialog & library mutation suites pass. State: **HUMAN_REVIEW**.
 
 - **2026-11-04 Human decision / KuGou paused and compatibility boundary revised:**
   the latest separately authorized live gate reached a real official-Web Stage 1
@@ -37,7 +45,6 @@ execution:
   CDP/two-stage experiments and live negative evidence are preserved; production
   resolver, BuiltInProvider/Bridge/Flutter integration and further live gates
   remain disabled until a future explicit Human direction.
-
 
 - **2026-11-03 Human-directed Core / KuGou real-Chromium target compatibility:**
   the second separately operated maintainer gate retained the fixed result

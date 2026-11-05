@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
@@ -49,13 +50,16 @@ Future<void> showTrackMusicVideoSurface({
   }
   await showDialog<void>(
     context: context,
-    builder: (modalContext) => Dialog(
-      key: const ValueKey('track-music-video-wide-surface'),
-      clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: math.min(960, MediaQuery.sizeOf(modalContext).width - 64),
-        height: math.min(760, MediaQuery.sizeOf(modalContext).height - 64),
-        child: content(modalContext),
+    animationStyle: furaDialogAnimationStyle(context),
+    builder: (modalContext) => FuraDialogTransition(
+      child: Dialog(
+        key: const ValueKey('track-music-video-wide-surface'),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: math.min(960, MediaQuery.sizeOf(modalContext).width - 64),
+          height: math.min(760, MediaQuery.sizeOf(modalContext).height - 64),
+          child: content(modalContext),
+        ),
       ),
     ),
   );

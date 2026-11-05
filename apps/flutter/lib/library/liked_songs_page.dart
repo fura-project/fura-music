@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
@@ -578,9 +579,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
     final message = widget.queuePlaybackController.failure == null
         ? context.l10n.likedQueueAdded
         : context.l10n.queueUpdateFailureMessage;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showFuraToast(context, message);
     unawaited(playbackStart);
   }
 

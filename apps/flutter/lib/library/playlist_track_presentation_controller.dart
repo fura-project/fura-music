@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_mutation_coordinator.dart';
@@ -139,28 +140,31 @@ Future<void> showAddTrackToPlaylist({
         )
       : await showDialog<UserPlaylistSummary>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: Text(context.l10n.libraryChoosePlaylist),
-            content: SizedBox(
-              width: 400,
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  for (final playlist in playlists)
-                    ListTile(
-                      leading: const Icon(Icons.queue_music_rounded),
-                      title: Text(playlist.title),
-                      onTap: () => Navigator.pop(context, playlist),
-                    ),
-                ],
+          animationStyle: furaDialogAnimationStyle(context),
+          builder: (context) => FuraDialogTransition(
+            child: AlertDialog(
+              title: Text(context.l10n.libraryChoosePlaylist),
+              content: SizedBox(
+                width: 400,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final playlist in playlists)
+                      ListTile(
+                        leading: const Icon(Icons.queue_music_rounded),
+                        title: Text(playlist.title),
+                        onTap: () => Navigator.pop(context, playlist),
+                      ),
+                  ],
+                ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(context.l10n.commonCancel),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(context.l10n.commonCancel),
-              ),
-            ],
           ),
         );
   if (selected == null || !context.mounted) return;

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/artist_artwork.dart';
@@ -654,9 +655,7 @@ class TrackSearchPageState extends State<TrackSearchPage> {
     final message = widget.queuePlaybackController.failure == null
         ? context.l10n.queueAddedMessage
         : context.l10n.queueUpdateFailureMessage;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showFuraToast(context, message);
     unawaited(playbackStart);
   }
 }

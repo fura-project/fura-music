@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/adaptive_side_sheet.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
@@ -66,12 +67,15 @@ Future<void> showTrackCommentsSurface({
   }
   await showDialog<void>(
     context: context,
-    builder: (modalContext) => Dialog(
-      key: const ValueKey('track-comments-wide-surface'),
-      child: SizedBox(
-        width: 720,
-        height: math.min(760, MediaQuery.sizeOf(modalContext).height - 64),
-        child: content(modalContext),
+    animationStyle: furaDialogAnimationStyle(context),
+    builder: (modalContext) => FuraDialogTransition(
+      child: Dialog(
+        key: const ValueKey('track-comments-wide-surface'),
+        child: SizedBox(
+          width: 720,
+          height: math.min(760, MediaQuery.sizeOf(modalContext).height - 64),
+          child: content(modalContext),
+        ),
       ),
     ),
   );

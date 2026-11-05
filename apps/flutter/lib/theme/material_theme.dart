@@ -253,14 +253,11 @@ abstract final class MusicMaterialTheme {
         backgroundColor: colors.surfaceContainerHighest,
         contentTextStyle: textTheme.bodyMedium?.copyWith(
           color: colors.onSurface,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w500,
         ),
         actionTextColor: colors.primary,
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: MusicRadii.control,
-          side: BorderSide(color: colors.outlineVariant),
-        ),
+        elevation: 3,
+        shape: const StadiumBorder(),
       ),
     );
   }

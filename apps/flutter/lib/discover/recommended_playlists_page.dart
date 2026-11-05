@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
@@ -669,9 +670,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
     final message = widget.queuePlaybackController.failure == null
         ? context.l10n.queueAddedMessage
         : context.l10n.queueUpdateFailureMessage;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showFuraToast(context, message);
     unawaited(playbackStart);
   }
 

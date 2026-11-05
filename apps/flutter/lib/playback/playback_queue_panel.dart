@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/adaptive_side_sheet.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
@@ -52,14 +53,17 @@ Future<void> showPlaybackQueue(
   }
   await showDialog<void>(
     context: context,
-    builder: (context) => Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
-        child: PlaybackShortcuts(
-          controller: controller,
-          child: PlaybackQueuePanel(
+    animationStyle: furaDialogAnimationStyle(context),
+    builder: (context) => FuraDialogTransition(
+      child: Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
+          child: PlaybackShortcuts(
             controller: controller,
-            onClose: () => Navigator.of(context).pop(),
+            child: PlaybackQueuePanel(
+              controller: controller,
+              onClose: () => Navigator.of(context).pop(),
+            ),
           ),
         ),
       ),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/l10n/app_locale.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
@@ -517,14 +518,17 @@ class _LoginPageState extends State<LoginPage> {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _AuthenticationDialog(
-        controller: dialogController,
-        onClose: () {
-          if (dialogController.stage != LoginStage.authenticated) {
-            dialogController.cancel();
-          }
-          Navigator.of(context).pop();
-        },
+      animationStyle: furaDialogAnimationStyle(context),
+      builder: (context) => FuraDialogTransition(
+        child: _AuthenticationDialog(
+          controller: dialogController,
+          onClose: () {
+            if (dialogController.stage != LoginStage.authenticated) {
+              dialogController.cancel();
+            }
+            Navigator.of(context).pop();
+          },
+        ),
       ),
     );
     _authenticationDialogOpen = false;

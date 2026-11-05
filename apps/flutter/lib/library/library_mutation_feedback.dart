@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/library/library_mutation_coordinator.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 
@@ -9,7 +10,7 @@ typedef LibraryMutationFeedbackHandler = void Function(
 /// Lets the authenticated shell place mutation feedback around persistent UI.
 ///
 /// Standalone component tests and pages without a shell owner retain the
-/// standard Material [SnackBar] fallback.
+/// floating capsule [SnackBar] fallback.
 class LibraryMutationFeedbackScope extends InheritedWidget {
   const LibraryMutationFeedbackScope({
     required this.onStatus,
@@ -46,7 +47,5 @@ void showLibraryMutationFeedback(
     LibraryMutationStatus.definitiveFailure ||
     LibraryMutationStatus.unavailable => context.l10n.libraryMutationFailure,
   };
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
+  showFuraToast(context, message);
 }

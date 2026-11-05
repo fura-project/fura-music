@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 
 typedef ConfirmationWrapper = Widget Function(Widget child);
@@ -65,23 +66,26 @@ Future<bool> showAdaptiveConfirmation(
 
   return await showDialog<bool>(
         context: context,
-        builder: (routeContext) => wrap(
-          AlertDialog(
-            key: dialogKey,
-            title: Text(title),
-            content: Text(message),
-            actions: [
-              TextButton(
-                key: cancelKey,
-                onPressed: () => Navigator.of(routeContext).pop(false),
-                child: Text(routeContext.l10n.commonCancel),
-              ),
-              FilledButton(
-                key: confirmKey,
-                onPressed: () => Navigator.of(routeContext).pop(true),
-                child: Text(confirmLabel),
-              ),
-            ],
+        animationStyle: furaDialogAnimationStyle(context),
+        builder: (routeContext) => FuraDialogTransition(
+          child: wrap(
+            AlertDialog(
+              key: dialogKey,
+              title: Text(title),
+              content: Text(message),
+              actions: [
+                TextButton(
+                  key: cancelKey,
+                  onPressed: () => Navigator.of(routeContext).pop(false),
+                  child: Text(routeContext.l10n.commonCancel),
+                ),
+                FilledButton(
+                  key: confirmKey,
+                  onPressed: () => Navigator.of(routeContext).pop(true),
+                  child: Text(confirmLabel),
+                ),
+              ],
+            ),
           ),
         ),
       ) ??

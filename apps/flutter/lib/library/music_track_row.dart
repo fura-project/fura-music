@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -100,21 +101,24 @@ Future<void> openMusicTrackArtists({
         )
       : await showDialog<ArtistSummary>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: Text(resolvedTitle),
-            content: _MusicTrackArtistSelection(
-              artists: artists,
-              compact: false,
-              title: resolvedTitle,
-              detail: resolvedDetail,
-              itemKeyPrefix: itemKeyPrefix,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(resolvedCancelLabel),
+          animationStyle: furaDialogAnimationStyle(context),
+          builder: (context) => FuraDialogTransition(
+            child: AlertDialog(
+              title: Text(resolvedTitle),
+              content: _MusicTrackArtistSelection(
+                artists: artists,
+                compact: false,
+                title: resolvedTitle,
+                detail: resolvedDetail,
+                itemKeyPrefix: itemKeyPrefix,
               ),
-            ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(resolvedCancelLabel),
+                ),
+              ],
+            ),
           ),
         );
   if (selected != null) onSelected(selected);

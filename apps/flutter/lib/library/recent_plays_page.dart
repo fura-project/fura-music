@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/paged_tracks_controller.dart';
@@ -1019,8 +1020,10 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     if (MediaQuery.sizeOf(context).width >= 840) {
       await showDialog<void>(
         context: context,
-        builder: (context) =>
-            Dialog(child: SizedBox(width: 420, child: actions(context))),
+        animationStyle: furaDialogAnimationStyle(context),
+        builder: (context) => FuraDialogTransition(
+          child: Dialog(child: SizedBox(width: 420, child: actions(context))),
+        ),
       );
     } else {
       await showModalBottomSheet<void>(

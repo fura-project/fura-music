@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
@@ -42,19 +43,22 @@ Future<void> showLyrics(
   }
   return showDialog<void>(
     context: context,
-    builder: (context) => Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 720),
-        child: _wrapModalContent(
-          LyricPanel(
-            controller: controller,
-            onClose: () => Navigator.of(context).pop(),
-            onSignInAgain: onSignInAgain,
-            playbackState: playbackState,
-            canSeek: canSeek,
-            onSeek: onSeek,
+    animationStyle: furaDialogAnimationStyle(context),
+    builder: (context) => FuraDialogTransition(
+      child: Dialog(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720, maxHeight: 720),
+          child: _wrapModalContent(
+            LyricPanel(
+              controller: controller,
+              onClose: () => Navigator.of(context).pop(),
+              onSignInAgain: onSignInAgain,
+              playbackState: playbackState,
+              canSeek: canSeek,
+              onSeek: onSeek,
+            ),
+            modalContentWrapper,
           ),
-          modalContentWrapper,
         ),
       ),
     ),

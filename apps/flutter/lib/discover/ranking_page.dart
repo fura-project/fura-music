@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
@@ -231,9 +232,7 @@ class _RankingPageState extends State<RankingPage> {
     final message = widget.queuePlaybackController.failure == null
         ? context.l10n.queueAddedMessage
         : context.l10n.queueUpdateFailureMessage;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showFuraToast(context, message);
     unawaited(playbackStart);
   }
 }

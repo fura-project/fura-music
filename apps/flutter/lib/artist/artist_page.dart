@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_controller.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
@@ -349,9 +350,7 @@ class _ArtistPageState extends State<ArtistPage> {
     final message = widget.queuePlaybackController.failure == null
         ? context.l10n.queueAddedMessage
         : context.l10n.queueUpdateFailureMessage;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showFuraToast(context, message);
     unawaited(playbackStart);
   }
 }

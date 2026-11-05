@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/album/album_controller.dart';
 import 'package:flutterustmusic/album/album_details_controller.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
@@ -248,9 +249,7 @@ class _AlbumPageState extends State<AlbumPage> {
     final message = widget.queuePlaybackController.failure == null
         ? context.l10n.queueAddedMessage
         : context.l10n.queueUpdateFailureMessage;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showFuraToast(context, message);
     unawaited(playbackStart);
   }
 
@@ -298,18 +297,21 @@ class _AlbumPageState extends State<AlbumPage> {
     unawaited(
       showDialog<void>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: Text(context.l10n.albumAboutTitle(title)),
-          content: SizedBox(
-            width: 520,
-            child: SingleChildScrollView(child: SelectableText(description)),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(context.l10n.commonClose),
+        animationStyle: furaDialogAnimationStyle(context),
+        builder: (context) => FuraDialogTransition(
+          child: AlertDialog(
+            title: Text(context.l10n.albumAboutTitle(title)),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(child: SelectableText(description)),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(context.l10n.commonClose),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -332,15 +334,21 @@ class _AlbumPageState extends State<AlbumPage> {
           )
         : await showDialog<ArtistSummary>(
             context: context,
-            builder: (context) => AlertDialog(
-              title: Text(context.l10n.albumChooseArtistTitle),
-              content: _AlbumArtistSelection(artists: artists, compact: false),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(context.l10n.commonCancel),
+            animationStyle: furaDialogAnimationStyle(context),
+            builder: (context) => FuraDialogTransition(
+              child: AlertDialog(
+                title: Text(context.l10n.albumChooseArtistTitle),
+                content: _AlbumArtistSelection(
+                  artists: artists,
+                  compact: false,
                 ),
-              ],
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(context.l10n.commonCancel),
+                  ),
+                ],
+              ),
             ),
           );
     if (!mounted || selected == null) return;

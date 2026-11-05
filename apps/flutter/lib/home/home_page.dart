@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
@@ -274,17 +275,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 (widget.homeController.refreshHasErrors ||
                     (widget.radarEnabled &&
                         widget.radarController.stage == RadarStage.error)));
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(
-            content: Text(
-              failed
-                  ? context.l10n.homeRefreshPartialFailure
-                  : context.l10n.homeRefreshSuccess(
-                      widget.providerDisplayName ??
-                          context.l10n.providerQqMusic,
-                    ),
-            ),
-          ),
+        showFuraToast(
+          context,
+          failed
+              ? context.l10n.homeRefreshPartialFailure
+              : context.l10n.homeRefreshSuccess(
+                  widget.providerDisplayName ?? context.l10n.providerQqMusic,
+                ),
         );
       }
     } finally {
@@ -3043,9 +3040,7 @@ Future<void> _queueHomeTrack(
   final message = controller.failure == null
       ? context.l10n.queueAddedMessage
       : context.l10n.queueUpdateFailureMessage;
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
+  showFuraToast(context, message);
 }
 
 Future<void> _showHomeTrackActions({

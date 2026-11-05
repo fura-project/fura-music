@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
@@ -155,11 +156,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (!mounted) return;
     setState(() => _saving = false);
     if (result == AppSettingsWriteResult.storageUnavailable) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(content: Text(context.l10n.settingsSaveFailure)),
-        );
+      showFuraToast(context, context.l10n.settingsSaveFailure);
     }
   }
 
