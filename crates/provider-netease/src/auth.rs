@@ -124,6 +124,16 @@ impl AuthOwner {
         let result = tokio::select! { biased; _=changed.changed()=>return Err(Failure::Replaced), result=future=>result };
         self.current(generation)?;
         if matches!(result, Err(Error::CredentialRejected)) {
+            if cfg!(debug_assertions)
+                || matches!(
+                    std::env::var("FURA_SESSION_DIAGNOSTIC").as_deref(),
+                    Ok("1" | "true")
+                )
+            {
+                eprintln!(
+                    "FURA_SESSION_DIAGNOSTIC provider=netease-cloud-music phase=session_owner action=clear_in_memory reason=credential_rejected"
+                );
+            }
             // only this exact generation may clear its rejected credential
             let mut s = self.lock();
             if s.generation != generation {

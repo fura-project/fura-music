@@ -1409,10 +1409,19 @@ class _NeteaseVaultVerificationOperation
     }
     try {
       final deleted = await _vault.deleteTransactionIfCurrent(_vaultEpoch);
+      debugPrint(
+        'FURA_SESSION_DIAGNOSTIC provider=netease-cloud-music '
+        'phase=restore_verification action=vault_cleanup '
+        'outcome=${deleted ? 'deleted' : 'stale'}',
+      );
       return deleted && !_cancelled && isCurrent()
           ? result
           : CredentialVerificationResult.replaced;
     } on Object {
+      debugPrint(
+        'FURA_SESSION_DIAGNOSTIC provider=netease-cloud-music '
+        'phase=restore_verification action=vault_cleanup outcome=failed',
+      );
       return CredentialVerificationResult.rejectedStorageCleanupFailed;
     }
   }
@@ -1437,8 +1446,16 @@ class _VaultCleaningCredentialVerificationOperation
     if (result != CredentialVerificationResult.rejected) return result;
     try {
       await _credentialVault.delete();
+      debugPrint(
+        'FURA_SESSION_DIAGNOSTIC provider=qq-music '
+        'phase=restore_verification action=vault_cleanup outcome=deleted',
+      );
       return result;
     } catch (_) {
+      debugPrint(
+        'FURA_SESSION_DIAGNOSTIC provider=qq-music '
+        'phase=restore_verification action=vault_cleanup outcome=failed',
+      );
       return CredentialVerificationResult.rejectedStorageCleanupFailed;
     }
   }

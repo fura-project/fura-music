@@ -319,6 +319,34 @@ fn provider_diagnostic(message: std::fmt::Arguments<'_>) {
     }
 }
 
+fn session_diagnostic(message: std::fmt::Arguments<'_>) {
+    if cfg!(debug_assertions)
+        || matches!(
+            std::env::var("FURA_SESSION_DIAGNOSTIC").as_deref(),
+            Ok("1" | "true")
+        )
+    {
+        eprintln!("FURA_SESSION_DIAGNOSTIC provider=qq-music {message}");
+    }
+}
+
+fn qq_login_type_label(login_type: LoginType) -> &'static str {
+    if login_type == LoginType::WECHAT {
+        "wechat"
+    } else if login_type == LoginType::QQ {
+        "qq"
+    } else {
+        "other"
+    }
+}
+
+const fn refresh_trigger_label(trigger: QqMusicRefreshTrigger) -> &'static str {
+    match trigger {
+        QqMusicRefreshTrigger::AuthenticatedReadRejection => "read_rejection",
+        QqMusicRefreshTrigger::Checkpoint { .. } => "checkpoint",
+    }
+}
+
 impl QqMusicCredentialState {
     fn authenticated(credential: Credential) -> Self {
         Self::Authenticated(credential, RecentPlaysCache::default())
@@ -461,6 +489,10 @@ impl<T> QqMusicProvider<T> {
             return Err(AccountSummaryError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=account action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(AccountSummaryError::CredentialRejected);
         }
@@ -487,6 +519,10 @@ impl<T> QqMusicProvider<T> {
             return Err(UserLibraryError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=library action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(UserLibraryError::CredentialRejected);
         }
@@ -590,6 +626,10 @@ impl<T> QqMusicProvider<T> {
             return Err(MediaResolutionError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=media action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(MediaResolutionError::CredentialRejected);
         }
@@ -621,6 +661,10 @@ impl<T> QqMusicProvider<T> {
             return Err(LyricsError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=lyrics action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(LyricsError::CredentialRejected);
         }
@@ -649,6 +693,10 @@ impl<T> QqMusicProvider<T> {
             return Err(RadarRecommendationError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=radar action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(RadarRecommendationError::CredentialRejected);
         }
@@ -677,6 +725,10 @@ impl<T> QqMusicProvider<T> {
             return Err(DailyRecommendationError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=daily action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(DailyRecommendationError::CredentialRejected);
         }
@@ -705,6 +757,10 @@ impl<T> QqMusicProvider<T> {
             return Err(PersonalizedPlaylistsError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=personalized_playlists action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(PersonalizedPlaylistsError::CredentialRejected);
         }
@@ -733,6 +789,10 @@ impl<T> QqMusicProvider<T> {
             return Err(PersonalizedTracksError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=personalized_tracks action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(PersonalizedTracksError::CredentialRejected);
         }
@@ -1029,10 +1089,18 @@ where
                 }
             };
 
-            if !self
-                .refresh_activation
-                .allows(source.credential.login_type())
-            {
+            let login_type = source.credential.login_type();
+            let refresh_allowed = self.refresh_activation.allows(login_type);
+            session_diagnostic(format_args!(
+                "phase=refresh_prepare trigger={} login_type={} allowed={} refresh_token_present={} refresh_key_present={} expiry_present={}",
+                refresh_trigger_label(trigger),
+                qq_login_type_label(login_type),
+                refresh_allowed,
+                source.credential.session_secrets().refresh_token().is_some(),
+                source.credential.session_secrets().refresh_key().is_some(),
+                source.credential.expires_at_unix_seconds().is_some()
+            ));
+            if !refresh_allowed {
                 if matches!(trigger, QqMusicRefreshTrigger::AuthenticatedReadRejection) {
                     let mut credential = credential_guard(&self.credential);
                     if credential.generation() == source.generation
@@ -1044,6 +1112,15 @@ where
                         credential.replace(QqMusicCredentialState::SignedOut);
                     }
                 }
+                session_diagnostic(format_args!(
+                    "phase=refresh_prepare trigger={} outcome=production_gate_disabled action={}",
+                    refresh_trigger_label(trigger),
+                    if matches!(trigger, QqMusicRefreshTrigger::AuthenticatedReadRejection) {
+                        "signed_out"
+                    } else {
+                        "retained"
+                    }
+                ));
                 return Err(QqMusicRefreshFailure::ProductionGateDisabled);
             }
 
@@ -1098,6 +1175,10 @@ where
                 Ok(candidate) => candidate,
                 Err(error) => {
                     let failure = map_refresh_error(error);
+                    session_diagnostic(format_args!(
+                        "phase=refresh_request trigger={} outcome=failure failure={failure:?}",
+                        refresh_trigger_label(trigger)
+                    ));
                     self.finish_refresh_failure(source.generation, failure);
                     return Err(failure);
                 }
@@ -1134,6 +1215,10 @@ where
                 return Err(QqMusicRefreshFailure::Replaced);
             }
             active.candidate = candidate;
+            session_diagnostic(format_args!(
+                "phase=refresh_request trigger={} outcome=candidate_ready",
+                refresh_trigger_label(trigger)
+            ));
             return Ok(QqMusicRefreshPrepareResult {
                 state: QqMusicRefreshPrepareState::Candidate,
                 preparation: Some(QqMusicRefreshPreparation {
@@ -1214,6 +1299,9 @@ where
             return Err(QqMusicRefreshFailure::Replaced);
         }
         if let Some(failure) = failure {
+            session_diagnostic(format_args!(
+                "phase=refresh_verify outcome=failure failure={failure:?}"
+            ));
             let completed = Arc::clone(&active.completed);
             if failure == QqMusicRefreshFailure::ReauthenticationRequired {
                 credential.replace(QqMusicCredentialState::SignedOut);
