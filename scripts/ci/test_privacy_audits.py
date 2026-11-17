@@ -471,9 +471,18 @@ class PrivacyAuditTests(unittest.TestCase):
                     "CFBundleName": executable, "CFBundlePackageType": kind, "CFBundleVersion": "1"}))
             source = root / "probe.c"
             source.write_text("#include <unistd.h>\nint fura_probe(void) { return getpid() > 0 ? 7 : 9; }\nint main(void) { return fura_probe() == 7 ? 0 : 1; }\n")
-            for output, extra in ((runner, []), (library, ["-dynamiclib", "-Wl,-install_name,@rpath/Probe.framework/Versions/A/Probe"])):
+            compile_outputs = (root / "probe-runner-unstripped",
+                               root / "probe-library-unstripped")
+            for output, compile_output, extra in (
+                    (runner, compile_outputs[0], []),
+                    (library, compile_outputs[1],
+                     ["-dynamiclib", "-Wl,-install_name,@rpath/Probe.framework/Versions/A/Probe"])):
+                # Xcode places dSYMs next to the product, not inside the .app.
+                # Compile in the product root so any clang-created companion
+                # metadata cannot be mistaken for loadable application code.
                 mac_strip.command(["xcrun", "clang", "-g", "-O0", "-arch", "x86_64", "-arch", "arm64",
-                                   *extra, str(source), "-o", str(output)])
+                                   *extra, str(source), "-o", str(compile_output)])
+                shutil.copy2(compile_output, output)
             for seal in (framework, app):
                 mac_strip.command(["codesign", "--force", "--sign", "-", str(seal)])
             before = [mac_strip.native_snapshot(path) for path in (runner, library)]
