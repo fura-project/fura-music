@@ -503,25 +503,47 @@ class PrivacyAuditTests(unittest.TestCase):
                 mac_strip.native_snapshot(binary)
 
     def test_windows_native_build_script_fingerprint_must_record_selected_compiler_and_maps(self) -> None:
+        layouts = (
+            "x86_64-pc-windows-msvc/release/.fingerprint/aws-lc-sys-hash/run-build-script-build-script-main.json",
+            "x86_64-pc-windows-msvc/release/build/aws-lc-sys/hash/fingerprint/run-build-script-build-script-main.json",
+        )
+        for layout in layouts:
+            with self.subTest(layout=layout), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                env = {}
+                with patch.object(privacy_build.shutil, "which", return_value="clang-cl"):
+                    privacy_build.windows_aws_lc_environment(
+                        env, Path("/source"), Path("/builder")
+                    )
+                with self.assertRaisesRegex(RuntimeError, "NOT_APPLIED"):
+                    privacy_build.verify_windows_aws_lc_flags(root, env)
+                record = root / layout
+                record.parent.mkdir(parents=True)
+                values = [
+                    {"RerunIfEnvChanged": {"var": key, "val": value}}
+                    for key, value in env.items()
+                ]
+                record.write_text(json.dumps({"local": []}))
+                with self.assertRaisesRegex(RuntimeError, "NOT_APPLIED"):
+                    privacy_build.verify_windows_aws_lc_flags(root, env)
+                record.write_text(json.dumps({"local": values}))
+                with contextlib.redirect_stdout(io.StringIO()) as output:
+                    privacy_build.verify_windows_aws_lc_flags(root, env)
+                self.assertNotIn("/builder", output.getvalue())
+
+    def test_windows_fingerprint_layouts_remain_target_and_profile_scoped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            env = {}
-            with patch.object(privacy_build.shutil, "which", return_value="clang-cl"):
-                privacy_build.windows_aws_lc_environment(env, Path("/source"), Path("/builder"))
-            with self.assertRaisesRegex(RuntimeError, "NOT_APPLIED"):
-                privacy_build.verify_windows_aws_lc_flags(root, env)
-            record = root / "x86_64-pc-windows-msvc/release/.fingerprint/aws-lc-sys-hash/run-build-script-build-script-main.json"
-            record.parent.mkdir(parents=True)
-            values = [{"RerunIfEnvChanged": {"var": key, "val": value}} for key, value in env.items()]
-            for local in ([], values):
-                record.write_text(json.dumps({"local": local}))
-                if not local:
-                    with self.assertRaisesRegex(RuntimeError, "NOT_APPLIED"):
-                        privacy_build.verify_windows_aws_lc_flags(root, env)
-                else:
-                    with contextlib.redirect_stdout(io.StringIO()) as output:
-                        privacy_build.verify_windows_aws_lc_flags(root, env)
-                    self.assertNotIn("/builder", output.getvalue())
+            expected = "--remap-path-prefix=C:/Users/Builder=/fura-build"
+            for layout in (
+                "x86_64-unknown-linux-gnu/release/build/rust_lib_flutterustmusic/hash/fingerprint/lib-rust_lib_flutterustmusic.json",
+                "x86_64-pc-windows-msvc/debug/build/rust_lib_flutterustmusic/hash/fingerprint/lib-rust_lib_flutterustmusic.json",
+            ):
+                record = root / layout
+                record.parent.mkdir(parents=True)
+                record.write_text(json.dumps({"rustflags": [expected]}))
+            with self.assertRaisesRegex(RuntimeError, "EVIDENCE_MISSING"):
+                privacy_build.verify_windows_cargo_flags(root, expected)
 
     def test_windows_native_maps_are_scoped_to_aws_lc_and_preserve_caller_flags(self) -> None:
         environment = {"CC": "unchanged-default-compiler", "CFLAGS": "/DKEEP=1"}
@@ -640,22 +662,27 @@ class PrivacyAuditTests(unittest.TestCase):
         self.assertEqual(len(mac_strip.contract_failures(before, dict.fromkeys(before, "changed"))), 7)
 
     def test_cargo_fingerprint_checks_actual_target_flags_and_fails_closed(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            expected = "--remap-path-prefix=C:/Users/Builder=/fura-build\x1f-C\x1flink-arg=/PDBALTPATH:%_PDB%"
-            with self.assertRaisesRegex(RuntimeError, "EVIDENCE_MISSING"):
-                privacy_build.verify_windows_cargo_flags(root, expected)
-            fingerprint = root / "plugins/rust/cargokit_build/x86_64-pc-windows-msvc/release/.fingerprint/rust_lib_flutterustmusic-hash/lib-rust_lib_flutterustmusic.json"
-            fingerprint.parent.mkdir(parents=True)
-            for value in ("invalid-json", '{}', '[]', 'null', '{"rustflags": []}'):
-                fingerprint.write_text(value)
-                with self.assertRaises(RuntimeError):
+        layouts = (
+            "plugins/rust/cargokit_build/x86_64-pc-windows-msvc/release/.fingerprint/rust_lib_flutterustmusic-hash/lib-rust_lib_flutterustmusic.json",
+            "plugins/rust/cargokit_build/x86_64-pc-windows-msvc/release/build/rust_lib_flutterustmusic/hash/fingerprint/lib-rust_lib_flutterustmusic.json",
+        )
+        for layout in layouts:
+            with self.subTest(layout=layout), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                expected = "--remap-path-prefix=C:/Users/Builder=/fura-build\x1f-C\x1flink-arg=/PDBALTPATH:%_PDB%"
+                with self.assertRaisesRegex(RuntimeError, "EVIDENCE_MISSING"):
                     privacy_build.verify_windows_cargo_flags(root, expected)
-            fingerprint.write_text(json.dumps({"rustflags": expected.split("\x1f")}))
-            with contextlib.redirect_stdout(io.StringIO()) as output:
-                privacy_build.verify_windows_cargo_flags(root, expected)
-            self.assertIn("PRIVATE_RUST_FLAGS_VERIFIED", output.getvalue())
-            self.assertNotIn("C:/Users", output.getvalue())
+                fingerprint = root / layout
+                fingerprint.parent.mkdir(parents=True)
+                for value in ("invalid-json", '{}', '[]', 'null', '{"rustflags": []}'):
+                    fingerprint.write_text(value)
+                    with self.assertRaises(RuntimeError):
+                        privacy_build.verify_windows_cargo_flags(root, expected)
+                fingerprint.write_text(json.dumps({"rustflags": expected.split("\x1f")}))
+                with contextlib.redirect_stdout(io.StringIO()) as output:
+                    privacy_build.verify_windows_cargo_flags(root, expected)
+                self.assertIn("PRIVATE_RUST_FLAGS_VERIFIED", output.getvalue())
+                self.assertNotIn("C:/Users", output.getvalue())
 
     def test_path_origin_diagnostics_are_fixed_hints_not_audit_exemptions(self) -> None:
         patterns = artifact_audit.forbidden_patterns(["C:/Users/Builder"])

@@ -114,16 +114,38 @@ def run(command: list[str], environment: dict[str, str]) -> None:
     subprocess.run(command, cwd=FLUTTER_PROJECT, env=environment, check=True)
 
 
+def is_windows_release_fingerprint(path: Path, package: str) -> bool:
+    """Accept Cargo's legacy and 1.100 target fingerprint layouts."""
+    parents = [parent.name for parent in path.parents]
+    legacy = (
+        len(parents) > 3
+        and parents[0].startswith(f"{package}-")
+        and parents[1] == ".fingerprint"
+        and parents[2] == "release"
+        and parents[3] == "x86_64-pc-windows-msvc"
+    )
+    cargo_1_100 = (
+        len(parents) > 5
+        and parents[0] == "fingerprint"
+        and parents[2] == package
+        and parents[3] == "build"
+        and parents[4] == "release"
+        and parents[5] == "x86_64-pc-windows-msvc"
+    )
+    return legacy or cargo_1_100
+
+
 def verify_windows_cargo_flags(build_root: Path, expected: str) -> None:
     """Read Cargo's actual target compile fingerprint, not just wrapper env.
 
     No paths, compiler args or fingerprint contents are printed. Host build
     scripts have separate fingerprints and do not produce the shipped DLL.
     """
-    records = [p for p in build_root.rglob("lib-rust_lib_flutterustmusic.json")
-               if p.parent.parent.name == ".fingerprint"
-               and p.parent.parent.parent.name == "release"
-               and p.parent.parent.parent.parent.name == "x86_64-pc-windows-msvc"]
+    records = [
+        path
+        for path in build_root.rglob("lib-rust_lib_flutterustmusic.json")
+        if is_windows_release_fingerprint(path, "rust_lib_flutterustmusic")
+    ]
     if not records:
         raise RuntimeError("PRIVATE_RUST_FLAGS_EVIDENCE_MISSING")
     try:
@@ -145,11 +167,11 @@ def verify_windows_aws_lc_flags(build_root: Path, environment: dict[str, str]) -
         "AWS_LC_SYS_HOST_CFLAGS_x86_64_pc_windows_msvc",
         "AWS_LC_SYS_CMAKE_BUILDER",
     )}
-    records = [p for p in build_root.rglob("run-build-script-*.json")
-               if p.parent.name.startswith("aws-lc-sys-")
-               and p.parent.parent.name == ".fingerprint"
-               and p.parent.parent.parent.name == "release"
-               and p.parent.parent.parent.parent.name == "x86_64-pc-windows-msvc"]
+    records = [
+        path
+        for path in build_root.rglob("run-build-script-*.json")
+        if is_windows_release_fingerprint(path, "aws-lc-sys")
+    ]
     try:
         observed = []
         for path in records:
