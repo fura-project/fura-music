@@ -14,6 +14,9 @@ kugou-cdp-gate = ["dep:kugou-client", "dep:provider-kugou", "dep:base64", "tokio
 # Disconnected NetEase official-Web refresh evidence gate. It captures a new
 # disposable browser session and never reads or writes the production vault.
 netease-refresh-gate = ["tokio/signal", "tokio/rt-multi-thread"]
+# Disconnected NetEase Desktop-EAPI QR/session evidence gate. It generates a
+# fresh installation identity and never reads or writes the production vault.
+netease-eapi-session-gate = ["tokio/signal", "tokio/rt-multi-thread"]
 
 [[bin]]
 name = "kugou-human-gate"
@@ -24,6 +27,11 @@ required-features = ["kugou-cdp-gate"]
 name = "netease-refresh-gate"
 path = "src/netease_refresh_gate.rs"
 required-features = ["netease-refresh-gate"]
+
+[[bin]]
+name = "netease-eapi-session-gate"
+path = "src/netease_eapi_session_gate.rs"
+required-features = ["netease-eapi-session-gate"]
 
 [dependencies]
 flutter_rust_bridge = "=2.13.0"

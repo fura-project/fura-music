@@ -933,6 +933,12 @@ abstract class AppLocalizations {
   /// **'Continue on NetEase website'**
   String get authUseOfficialWebsite;
 
+  /// No description provided for @authOfficialWebContinuationLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Website sign-in is kept for compatibility and may require signing in again when that session expires.'**
+  String get authOfficialWebContinuationLimited;
+
   /// No description provided for @authOfficialWebTitle.
   ///
   /// In en, this message translates to:

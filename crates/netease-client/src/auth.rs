@@ -1,6 +1,6 @@
 use crate::catalog::{MAX_COLLECTION_IDENTITIES, bounds, decode, id, text};
 use crate::{Error, MAX_RESPONSE_BYTES, NeteaseClient, Playlist, Request, Song, Transport};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -263,11 +263,22 @@ fn set_cookies_have(cookies: &[String], expected_name: &str) -> bool {
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct Credential {
-    version: u8,
-    provider: String,
-    music_u: String,
-    music_r_u: Option<String>,
-    csrf: String,
+    pub(crate) version: u8,
+    pub(crate) provider: String,
+    pub(crate) session_family: NeteaseSessionFamily,
+    pub(crate) music_u: String,
+    pub(crate) music_r_u: Option<String>,
+    pub(crate) csrf: String,
+    pub(crate) nmtid: Option<String>,
+}
+
+/// Credential wire family. This is explicit so an Official-Web credential is
+/// never silently sent through the independently verified Desktop-EAPI route.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NeteaseSessionFamily {
+    OfficialWeb,
+    DesktopEapi,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -285,6 +296,17 @@ struct StoredCredentialV2 {
     music_u: String,
     music_r_u: Option<String>,
     csrf: String,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StoredCredentialV3 {
+    version: u8,
+    provider: String,
+    session_family: NeteaseSessionFamily,
+    music_u: String,
+    music_r_u: Option<String>,
+    csrf: String,
+    nmtid: Option<String>,
 }
 #[derive(Deserialize)]
 struct StoredCredentialHeader {
@@ -451,7 +473,7 @@ impl Credential {
     }
 
     fn validate(&self) -> Result<(), Error> {
-        if self.version != 2
+        if self.version != 3
             || self.provider != "netease-cloud-music"
             || self.music_u.is_empty()
             || self.music_u.len() > 4096
@@ -460,24 +482,29 @@ impl Credential {
                 .as_ref()
                 .is_some_and(|value| value.is_empty() || value.len() > 4096)
             || self.csrf.len() > 256
+            || self
+                .nmtid
+                .as_ref()
+                .is_some_and(|value| value.is_empty() || value.len() > 4096)
             || !self
                 .music_u
                 .bytes()
                 .chain(self.music_r_u.as_deref().unwrap_or_default().bytes())
                 .chain(self.csrf.bytes())
+                .chain(self.nmtid.as_deref().unwrap_or_default().bytes())
                 .all(|b| b.is_ascii_graphic() && !matches!(b, b';' | b',' | b'"' | b'\\'))
         {
             return Err(Error::ResponseShapeMismatch);
         }
-        // Every accepted credential must be restorable through the existing
-        // bounded V1/V2 document boundary, including JSON framing overhead.
+        // Every accepted credential must remain inside the bounded persisted
+        // document boundary, including V3 family metadata and JSON framing.
         if self.encoded_document()?.len() > 8192 {
             return Err(Error::ResponseBound);
         }
         Ok(())
     }
     fn encoded_document(&self) -> Result<Vec<u8>, Error> {
-        serde_json::to_vec(&json!({"version":self.version,"provider":self.provider,"music_u":self.music_u,"music_r_u":self.music_r_u,"csrf":self.csrf})).map_err(|_|Error::ResponseShapeMismatch)
+        serde_json::to_vec(&json!({"version":self.version,"provider":self.provider,"session_family":self.session_family,"music_u":self.music_u,"music_r_u":self.music_r_u,"csrf":self.csrf,"nmtid":self.nmtid})).map_err(|_|Error::ResponseShapeMismatch)
     }
     /// Opaque secure-storage bytes, never a presentation or logging value.
     /// # Errors
@@ -503,22 +530,42 @@ impl Credential {
                     return Err(Error::ResponseShapeMismatch);
                 }
                 Self {
-                    version: 2,
+                    version: 3,
                     provider: stored.provider,
+                    session_family: NeteaseSessionFamily::OfficialWeb,
                     music_u: stored.music_u,
                     music_r_u: None,
                     csrf: stored.csrf,
+                    nmtid: None,
                 }
             }
             2 => {
                 let stored: StoredCredentialV2 =
                     serde_json::from_slice(bytes).map_err(|_| Error::ResponseShapeMismatch)?;
+                if stored.version != 2 {
+                    return Err(Error::ResponseShapeMismatch);
+                }
                 Self {
-                    version: stored.version,
+                    version: 3,
                     provider: stored.provider,
+                    session_family: NeteaseSessionFamily::OfficialWeb,
                     music_u: stored.music_u,
                     music_r_u: stored.music_r_u,
                     csrf: stored.csrf,
+                    nmtid: None,
+                }
+            }
+            3 => {
+                let stored: StoredCredentialV3 =
+                    serde_json::from_slice(bytes).map_err(|_| Error::ResponseShapeMismatch)?;
+                Self {
+                    version: stored.version,
+                    provider: stored.provider,
+                    session_family: stored.session_family,
+                    music_u: stored.music_u,
+                    music_r_u: stored.music_r_u,
+                    csrf: stored.csrf,
+                    nmtid: stored.nmtid,
                 }
             }
             _ => return Err(Error::ResponseShapeMismatch),
@@ -542,6 +589,9 @@ impl Credential {
         format!("MUSIC_U={}; __csrf={}", self.music_u, self.csrf)
     }
     fn refresh_cookie(&self) -> Result<String, CredentialRefreshError> {
+        if self.session_family != NeteaseSessionFamily::OfficialWeb {
+            return Err(CredentialRefreshError::NotRefreshable);
+        }
         let music_r_u = self
             .music_r_u
             .as_deref()
@@ -556,6 +606,31 @@ impl Credential {
     #[must_use]
     pub const fn has_refresh_material(&self) -> bool {
         self.music_r_u.is_some()
+    }
+
+    /// Secret-free family used for exact production refresh routing.
+    #[must_use]
+    pub const fn session_family(&self) -> NeteaseSessionFamily {
+        self.session_family
+    }
+
+    pub(crate) fn from_desktop_eapi_material(
+        music_u: String,
+        music_r_u: Option<String>,
+        csrf: String,
+        nmtid: Option<String>,
+    ) -> Result<Self, Error> {
+        let value = Self {
+            version: 3,
+            provider: "netease-cloud-music".into(),
+            session_family: NeteaseSessionFamily::DesktopEapi,
+            music_u,
+            music_r_u,
+            csrf,
+            nmtid,
+        };
+        value.validate()?;
+        Ok(value)
     }
     pub(crate) fn media_context(&self) -> Result<(String, Value), Error> {
         self.validate()?;
@@ -573,6 +648,7 @@ impl Credential {
         let mut music_u: Option<String> = None;
         let mut music_r_u: Option<String> = None;
         let mut csrf: Option<String> = None;
+        let mut nmtid: Option<String> = None;
         let mut pairs = cookie
             .split(';')
             .chain(body_cookie.into_iter().flat_map(|value| value.split(';')));
@@ -582,6 +658,7 @@ impl Credential {
                     "MUSIC_U" => &mut music_u,
                     "MUSIC_R_U" => &mut music_r_u,
                     "__csrf" => &mut csrf,
+                    "NMTID" => &mut nmtid,
                     _ => continue,
                 };
                 let value = value.trim().to_owned();
@@ -600,11 +677,13 @@ impl Credential {
             return Err(Error::ResponseBound);
         }
         let value = Self {
-            version: 2,
+            version: 3,
             provider: "netease-cloud-music".into(),
+            session_family: NeteaseSessionFamily::OfficialWeb,
             music_u: music_u.ok_or(Error::ResponseShapeMismatch)?,
             music_r_u,
             csrf: csrf.unwrap_or_default(),
+            nmtid,
         };
         value.validate()?;
         Ok(value)
@@ -674,7 +753,7 @@ impl<T: Transport> NeteaseClient<T> {
     }
 }
 
-const fn map_credential_refresh_transport_error(error: Error) -> CredentialRefreshError {
+pub(crate) const fn map_credential_refresh_transport_error(error: Error) -> CredentialRefreshError {
     match error {
         Error::RateLimited => CredentialRefreshError::RateLimited,
         Error::SecurityVerificationRequired | Error::AccountRestricted => {
@@ -1006,7 +1085,12 @@ mod refresh_tests {
             Err(CredentialRefreshError::NotRefreshable)
         );
         assert!(client.transport.requests.lock().unwrap().is_empty());
-        let migrated = Credential::import(&legacy.export().expect("v2 export")).unwrap();
+        assert_eq!(legacy.session_family(), NeteaseSessionFamily::OfficialWeb);
+        let exported = legacy.export().expect("v3 export");
+        let document: Value = serde_json::from_slice(&exported).unwrap();
+        assert_eq!(document["version"], 3);
+        assert_eq!(document["session_family"], "official_web");
+        let migrated = Credential::import(&exported).unwrap();
         assert_eq!(migrated, legacy);
         assert_eq!(
             Credential::import(
@@ -1018,7 +1102,7 @@ mod refresh_tests {
 
     #[test]
     fn accepted_browser_candidate_always_fits_the_existing_storage_import_bound() {
-        // A Cookie header may fit 8 KiB while its V2 JSON document does not.
+        // A Cookie header may fit 8 KiB while its V3 JSON document does not.
         let oversized_document = format!(
             "MUSIC_U={}; MUSIC_R_U={}",
             "u".repeat(4096),

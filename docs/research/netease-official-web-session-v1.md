@@ -3,6 +3,14 @@
 Date: 2026-10-24. Human-directed Core task. Implementation baseline:
 `7435c5178cb33d8b5114fddf5f7a5d8189435bd0`.
 
+> **2026-11-17 family-routing update:** this document remains the historical
+> record for the `official_web` credential family. A later bounded investigation
+> established a separate type-3 Desktop/EAPI family and promoted only that
+> family to production continuation. Official-Web credentials remain ordinary
+> login-compatible but do not enter EAPI refresh and are never implicitly
+> converted. See
+> [NetEase Desktop EAPI session V1](netease-desktop-eapi-session-v1.md).
+
 ## Accepted product boundary
 
 Official Web login remains the product entry point: Linux uses the existing

@@ -11,6 +11,37 @@ execution:
 
 # Current State
 
+- **2026-11-17 Human-directed CORE / NetEase Desktop EAPI session V1:**
+  The previous Official-Web/WEAPI production path had no proven refreshable
+  credential family, so a definitive authenticated rejection eventually
+  required reauthentication. Fura now models Credential V3 with explicit
+  `official_web` and `desktop_eapi` families; V1/V2 migrate only to
+  `official_web`, and no family is guessed or implicitly converted. Native
+  NetEase login now uses the independently evidenced type-3 Desktop/EAPI QR
+  contract with one separately persisted Fura-owned installation identity.
+  Official Web remains an explicitly labelled compatibility fallback and never
+  enters EAPI continuation.
+
+  One disposable Human-operated gate completed with exactly one QR login, one
+  EAPI refresh and one same-account verification. Login issued independent
+  `MUSIC_U`, `MUSIC_R_U`, `__csrf` and `NMTID`; refresh deliberately omitted R
+  from the request, was accepted, rotated U/R/CSRF and produced a locally
+  next-refreshable candidate; same-account verification accepted it. There was
+  no retry, alternate route, Vault access, profile rotation or secret-bearing
+  diagnostic. Production construction now enables the existing continuation
+  owner only for `desktop_eapi`. Current/staged durable rotation,
+  publish-before-commit, generation dominance, startup/resume recovery,
+  safe-read retry-once and mutation no-replay remain unchanged. This proves one
+  current disposable session, not months-long soak or universal account/client
+  compatibility. Locked all-target NetEase Client, Provider and Bridge suites,
+  the feature-gated Bridge binary test, 135 Flutter authentication tests, the
+  124-test Shell/Widget suite, Rust/Dart formatting, Dart analysis, production
+  NetEase strict Clippy, privacy hygiene and whitespace checks pass. Bridge
+  strict Clippy is clean when the already-recorded unrelated QQ
+  `doc_markdown` warning is excluded; the unmodified QQ warning remains the
+  only strict invocation blocker. See
+  [the bounded protocol and production record](docs/research/netease-desktop-eapi-session-v1.md).
+
 - **2026-11-17 Human-directed UI / Settings page MD3 card separation, 3-zone row hierarchy, tonal selector pills, and inner selectable color-source cards (`apps/flutter/lib/settings/settings_page.dart`, `apps/flutter/lib/library/user_library_page.dart`, `apps/flutter/test/settings/settings_material_controls_test.dart`):**
   Addressed the Human visual review directive (`你不觉得现在设置页依然没有md味道吗 像自己拼出来的 也不像常规设置` -> `我觉得这个架构没问题吧 毕竟以后设置多起来就是这样 但是你不觉得各个选项在一起像一大坨吗`):
   1. **Independent Setting Cards with Breathing Room (`_SettingsGroup`, `_SettingsCard`, `_CompactSettingsMenu` in `apps/flutter/lib/settings/settings_page.dart`):**

@@ -350,9 +350,10 @@ impl<T: Transport> NeteaseProvider<T> {
             };
 
             session_diagnostic(format_args!(
-                "phase=refresh_prepare trigger={} allowed={} refresh_material_present={}",
+                "phase=refresh_prepare trigger={} allowed={} session_family={:?} refresh_material_present={}",
                 refresh_trigger_label(trigger),
                 self.refresh_enabled,
+                source.session_family(),
                 source.has_refresh_material()
             ));
 
@@ -441,19 +442,23 @@ impl<T: Transport> NeteaseProvider<T> {
                 continue;
             }
 
-            let (candidate, observation) =
-                match self.client.refresh_credential_observed(&source).await {
-                    Ok(candidate) => candidate,
-                    Err(error) => {
-                        let failure = map_refresh_error(error);
-                        session_diagnostic(format_args!(
-                            "phase=refresh_request trigger={} outcome=failure failure={failure:?}",
-                            refresh_trigger_label(trigger)
-                        ));
-                        self.finish_refresh_failure(source_generation, failure);
-                        return Err(failure);
-                    }
-                };
+            let identity = self.current_desktop_eapi_installation_identity();
+            let (candidate, observation) = match self
+                .client
+                .refresh_production_credential_observed(&source, identity.as_ref())
+                .await
+            {
+                Ok(candidate) => candidate,
+                Err(error) => {
+                    let failure = map_refresh_error(error);
+                    session_diagnostic(format_args!(
+                        "phase=refresh_request trigger={} outcome=failure failure={failure:?}",
+                        refresh_trigger_label(trigger)
+                    ));
+                    self.finish_refresh_failure(source_generation, failure);
+                    return Err(failure);
+                }
+            };
             session_diagnostic(format_args!(
                 "phase=refresh_response music_u_rotation={} music_r_u_rotation={} csrf_rotation={} candidate_next_refreshable={}",
                 observation.music_u.label(),

@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 pub(crate) type NativeNeteaseProvider = NeteaseProvider<HttpsTransport>;
 
 const fn netease_refresh_activation_enabled() -> bool {
-    false
+    true
 }
 
 fn build_native_netease_provider(client: NeteaseClient<HttpsTransport>) -> NativeNeteaseProvider {
@@ -41,7 +41,7 @@ mod tests {
     }
 
     #[test]
-    fn production_refresh_gate_remains_disabled_pending_human_evidence() {
-        assert!(!netease_refresh_activation_enabled());
+    fn release_enables_family_routed_refresh_after_desktop_eapi_live_pass() {
+        assert!(netease_refresh_activation_enabled());
     }
 }

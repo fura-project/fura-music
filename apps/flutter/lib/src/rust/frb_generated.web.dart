@@ -981,6 +981,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseInstallationIdentityFailure
+  dco_decode_box_autoadd_netease_installation_identity_failure(dynamic raw);
+
+  @protected
   NeteaseRefreshFailure dco_decode_box_autoadd_netease_refresh_failure(
     dynamic raw,
   );
@@ -1347,6 +1351,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MediaResolutionFailure dco_decode_media_resolution_failure(dynamic raw);
 
   @protected
+  NeteaseInstallationIdentityExport
+  dco_decode_netease_installation_identity_export(dynamic raw);
+
+  @protected
+  NeteaseInstallationIdentityFailure
+  dco_decode_netease_installation_identity_failure(dynamic raw);
+
+  @protected
+  NeteaseInstallationIdentityRestore
+  dco_decode_netease_installation_identity_restore(dynamic raw);
+
+  @protected
   NeteaseQrLoginStart dco_decode_netease_qr_login_start(dynamic raw);
 
   @protected
@@ -1454,6 +1470,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MediaResolutionFailure? dco_decode_opt_box_autoadd_media_resolution_failure(
     dynamic raw,
   );
+
+  @protected
+  NeteaseInstallationIdentityFailure?
+  dco_decode_opt_box_autoadd_netease_installation_identity_failure(dynamic raw);
 
   @protected
   NeteaseRefreshFailure? dco_decode_opt_box_autoadd_netease_refresh_failure(
@@ -2968,6 +2988,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseInstallationIdentityFailure
+  sse_decode_box_autoadd_netease_installation_identity_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   NeteaseRefreshFailure sse_decode_box_autoadd_netease_refresh_failure(
     SseDeserializer deserializer,
   );
@@ -3440,6 +3466,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseInstallationIdentityExport
+  sse_decode_netease_installation_identity_export(SseDeserializer deserializer);
+
+  @protected
+  NeteaseInstallationIdentityFailure
+  sse_decode_netease_installation_identity_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseInstallationIdentityRestore
+  sse_decode_netease_installation_identity_restore(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   NeteaseQrLoginStart sse_decode_netease_qr_login_start(
     SseDeserializer deserializer,
   );
@@ -3561,6 +3603,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MediaResolutionFailure? sse_decode_opt_box_autoadd_media_resolution_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseInstallationIdentityFailure?
+  sse_decode_opt_box_autoadd_netease_installation_identity_failure(
     SseDeserializer deserializer,
   );
 
@@ -5379,6 +5427,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_netease_installation_identity_failure(
+    NeteaseInstallationIdentityFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_netease_refresh_failure(
     NeteaseRefreshFailure self,
     SseSerializer serializer,
@@ -5898,6 +5952,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_netease_installation_identity_export(
+    NeteaseInstallationIdentityExport self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_netease_installation_identity_failure(
+    NeteaseInstallationIdentityFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_netease_installation_identity_restore(
+    NeteaseInstallationIdentityRestore self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_netease_qr_login_start(
     NeteaseQrLoginStart self,
     SseSerializer serializer,
@@ -6038,6 +6110,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_media_resolution_failure(
     MediaResolutionFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_netease_installation_identity_failure(
+    NeteaseInstallationIdentityFailure? self,
     SseSerializer serializer,
   );
 

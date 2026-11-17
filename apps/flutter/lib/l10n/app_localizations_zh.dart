@@ -483,6 +483,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authUseOfficialWebsite => '前往网易云音乐官网继续';
 
   @override
+  String get authOfficialWebContinuationLimited => '网页登录仅作兼容入口，会话过期后可能需要重新登录。';
+
+  @override
   String get authOfficialWebTitle => '在网易云音乐官网完成登录';
 
   @override

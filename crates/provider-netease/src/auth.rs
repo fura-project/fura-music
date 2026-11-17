@@ -6,7 +6,8 @@ use music_domain::{
     UserPlaylistsCollection,
 };
 use netease_client::{
-    Credential, Error, MediaQuality, NeteaseClient, QrKey, QrPoll, SmsLoginChallenge, Transport,
+    Credential, DesktopEapiQrKey, DesktopEapiQrPoll, DesktopEapiSessionCandidate, Error,
+    MediaQuality, NeteaseClient, SmsLoginChallenge, Transport,
 };
 use provider_api::{
     AccountSummaryError, AccountSummaryProvider, AuthenticationError, DailyRecommendationError,
@@ -594,7 +595,7 @@ pub struct NeteaseQrSession<T> {
     client: Arc<NeteaseClient<T>>,
     auth: Arc<AuthOwner>,
     generation: u64,
-    key: QrKey,
+    key: DesktopEapiQrKey,
     image: Vec<u8>,
     external_confirmation_url: String,
     deadline: tokio::time::Instant,
@@ -625,11 +626,17 @@ impl<T: Transport> QrAuthenticationProvider for NeteaseProvider<T> {
             s.sms = None;
             s.generation
         };
-        let key =
-            tokio::time::timeout_at(deadline, self.auth.run(generation, self.client.qr_key()))
-                .await
-                .map_err(|_| AuthenticationError::TimedOut)?
-                .map_err(auth_error)?;
+        let identity = self
+            .desktop_eapi_installation_identity()
+            .map_err(|error| auth_error(error.into()))?;
+        let key = tokio::time::timeout_at(
+            deadline,
+            self.auth
+                .run(generation, self.client.desktop_eapi_qr_key(&identity)),
+        )
+        .await
+        .map_err(|_| AuthenticationError::TimedOut)?
+        .map_err(auth_error)?;
         let image = key.image_png().map_err(|e| auth_error(e.into()))?;
         let external_confirmation_url = key
             .external_confirmation_url()
@@ -703,6 +710,71 @@ impl<T> NeteaseQrSession<T> {
     }
 }
 
+impl<T: Transport> NeteaseQrSession<T> {
+    async fn complete_confirmed(
+        &mut self,
+        candidate: DesktopEapiSessionCandidate,
+    ) -> Result<QrAuthenticationProgress, AuthenticationError> {
+        if !candidate.has_music_u() {
+            self.finish();
+            return Err(AuthenticationError::InvalidResponse);
+        }
+        let credential = match candidate.into_credential() {
+            Ok(credential) => credential,
+            Err(error) => {
+                self.finish();
+                return Err(auth_error(error.into()));
+            }
+        };
+        if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
+            eprintln!(
+                "FURA_DIAGNOSTIC netease_qr_core phase=confirmation outcome=credential_candidate"
+            );
+        }
+        self.finish();
+        self.auth
+            .retain_pending(self.generation, credential.clone())
+            .map_err(auth_error)?;
+        let account = tokio::time::timeout_at(
+            self.deadline,
+            self.auth
+                .run(self.generation, self.client.account(&credential)),
+        )
+        .await;
+        let account = match account {
+            Err(_) => {
+                if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
+                    eprintln!(
+                        "FURA_DIAGNOSTIC netease_qr_core phase=account_verification outcome=failure failure=TimedOut"
+                    );
+                }
+                return Err(AuthenticationError::TimedOut);
+            }
+            Ok(Err(failure)) => {
+                let failure = auth_error(failure);
+                if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
+                    eprintln!(
+                        "FURA_DIAGNOSTIC netease_qr_core phase=account_verification outcome=failure failure={failure:?}"
+                    );
+                }
+                return Err(failure);
+            }
+            Ok(Ok(account)) => {
+                if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
+                    eprintln!(
+                        "FURA_DIAGNOSTIC netease_qr_core phase=account_verification outcome=success"
+                    );
+                }
+                account
+            }
+        };
+        self.auth
+            .install(self.generation, credential, account.id)
+            .map_err(auth_error)?;
+        Ok(QrAuthenticationProgress::Authenticated)
+    }
+}
+
 impl<T> Drop for NeteaseQrSession<T> {
     fn drop(&mut self) {
         self.active.store(false, Ordering::SeqCst);
@@ -739,8 +811,10 @@ impl<T: Transport> QrAuthenticationSession for NeteaseQrSession<T> {
         self.auth.current(self.generation).map_err(auth_error)?;
         let result = tokio::time::timeout_at(
             self.deadline,
-            self.auth
-                .run(self.generation, self.client.qr_poll(&mut self.key)),
+            self.auth.run(
+                self.generation,
+                self.client.desktop_eapi_qr_poll(&mut self.key),
+            ),
         )
         .await;
         let poll = match result {
@@ -764,59 +838,13 @@ impl<T: Transport> QrAuthenticationSession for NeteaseQrSession<T> {
         };
         self.network_failures = 0;
         match poll {
-            QrPoll::Waiting => Ok(QrAuthenticationProgress::WaitingForScan),
-            QrPoll::Scanned => Ok(QrAuthenticationProgress::ScannedAwaitingConfirmation),
-            QrPoll::Expired => {
+            DesktopEapiQrPoll::Waiting => Ok(QrAuthenticationProgress::WaitingForScan),
+            DesktopEapiQrPoll::Scanned => Ok(QrAuthenticationProgress::ScannedAwaitingConfirmation),
+            DesktopEapiQrPoll::Expired => {
                 self.finish();
                 Ok(QrAuthenticationProgress::Expired)
             }
-            QrPoll::Confirmed(c) => {
-                if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
-                    eprintln!(
-                        "FURA_DIAGNOSTIC netease_qr_core phase=confirmation outcome=credential_candidate"
-                    );
-                }
-                self.auth
-                    .retain_pending(self.generation, c.clone())
-                    .map_err(auth_error)?;
-                self.finish();
-                let account = tokio::time::timeout_at(
-                    self.deadline,
-                    self.auth.run(self.generation, self.client.account(&c)),
-                )
-                .await;
-                let a = match account {
-                    Err(_) => {
-                        if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
-                            eprintln!(
-                                "FURA_DIAGNOSTIC netease_qr_core phase=account_verification outcome=failure failure=TimedOut"
-                            );
-                        }
-                        return Err(AuthenticationError::TimedOut);
-                    }
-                    Ok(Err(failure)) => {
-                        let failure = auth_error(failure);
-                        if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
-                            eprintln!(
-                                "FURA_DIAGNOSTIC netease_qr_core phase=account_verification outcome=failure failure={failure:?}"
-                            );
-                        }
-                        return Err(failure);
-                    }
-                    Ok(Ok(account)) => {
-                        if std::env::var_os("FURA_NETEASE_QR_DEBUG").is_some() {
-                            eprintln!(
-                                "FURA_DIAGNOSTIC netease_qr_core phase=account_verification outcome=success"
-                            );
-                        }
-                        account
-                    }
-                };
-                self.auth
-                    .install(self.generation, c, a.id)
-                    .map_err(auth_error)?;
-                Ok(QrAuthenticationProgress::Authenticated)
-            }
+            DesktopEapiQrPoll::Confirmed(candidate) => self.complete_confirmed(candidate).await,
         }
     }
 }

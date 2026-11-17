@@ -159,6 +159,7 @@
   "authUsePhoneCode": "Use phone code",
   "authUseQrCode": "Use QR code",
   "authUseOfficialWebsite": "Continue on NetEase website",
+  "authOfficialWebContinuationLimited": "Website sign-in is kept for compatibility and may require signing in again when that session expires.",
   "authOfficialWebTitle": "Complete sign-in with NetEase",
   "authOfficialWebDetail": "Use the official login window. Fura will import only the resulting session and verify it before saving.",
   "authOfficialWebErrorTitle": "Official NetEase sign-in did not finish",

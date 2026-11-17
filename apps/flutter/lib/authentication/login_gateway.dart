@@ -173,6 +173,14 @@ typedef NeteaseRefreshCommitter =
 typedef CredentialPersistenceExporter =
     bridge.QqMusicCredentialExport Function();
 
+typedef NeteaseInstallationIdentityExporter =
+    netease_bridge.NeteaseInstallationIdentityExport Function();
+
+typedef NeteaseInstallationIdentityImporter =
+    netease_bridge.NeteaseInstallationIdentityRestore Function({
+      required Uint8List opaqueBytes,
+    });
+
 class LoginChallenge {
   const LoginChallenge({
     required this.imageFormat,
@@ -647,11 +655,11 @@ class RustNeteaseAuthenticationGateway
         QqMusicAuthenticationGateway,
         ProviderAuthenticationPresentation,
         OfficialWebAuthenticationGateway,
-        OfficialWebOnlyAuthenticationGateway,
         OfficialWebAuthenticationPresentation,
         CancellableCredentialRestoreGateway {
   RustNeteaseAuthenticationGateway({
     CredentialVault? credentialVault,
+    CredentialVault? installationIdentityVault,
     OfficialWebLoginBroker? officialWebLoginBroker,
     CredentialSignOutCore? credentialSignOutCore,
     CredentialRestoreImporter? credentialImporter,
@@ -662,6 +670,8 @@ class RustNeteaseAuthenticationGateway
     NeteaseCredentialRotationRestorer? credentialRotationRestorer,
     NeteaseRefreshVerifier? refreshVerifier,
     NeteaseRefreshCommitter? refreshCommitter,
+    NeteaseInstallationIdentityExporter? installationIdentityExporter,
+    NeteaseInstallationIdentityImporter? installationIdentityImporter,
     this.diagnostics = const NeteaseWebRefreshDiagnostics(),
   }) : _credentialVault = credentialVault is CredentialRotationVault
            ? credentialVault
@@ -708,7 +718,17 @@ class RustNeteaseAuthenticationGateway
            netease_bridge.verifyNeteaseStagedRefreshCandidate,
        _refreshCommitter =
            refreshCommitter ??
-           netease_bridge.commitNeteaseStagedRefreshCandidate;
+           netease_bridge.commitNeteaseStagedRefreshCandidate,
+       _installationIdentity = _buildNeteaseInstallationIdentityOwner(
+         credentialVault: credentialVault,
+         installationIdentityVault: installationIdentityVault,
+         exporter:
+             installationIdentityExporter ??
+             netease_bridge.exportOrCreateNeteaseInstallationIdentity,
+         importer:
+             installationIdentityImporter ??
+             netease_bridge.restoreNeteaseInstallationIdentity,
+       );
 
   final CredentialRotationVault _credentialVault;
   final OfficialWebLoginBroker _officialWebLoginBroker;
@@ -724,6 +744,7 @@ class RustNeteaseAuthenticationGateway
   final NeteaseCredentialRotationRestorer _credentialRotationRestorer;
   final NeteaseRefreshVerifier _refreshVerifier;
   final NeteaseRefreshCommitter _refreshCommitter;
+  final _NeteaseInstallationIdentityOwner? _installationIdentity;
   final NeteaseWebRefreshDiagnostics diagnostics;
   int _sessionEpoch = 0;
   Future<CredentialRestoreResult>? _pendingRestore;
@@ -755,8 +776,12 @@ class RustNeteaseAuthenticationGateway
   bool get hasAuthenticatedCredential => _authenticatedCredentialReader();
 
   @override
-  LoginStartOperation beginStart() =>
-      const _OfficialWebOnlyLegacyStartOperation();
+  LoginStartOperation beginStart() => _RustNeteaseLoginStartOperation(
+    ensureInstallationIdentity: _ensureInstallationIdentity,
+  );
+
+  Future<bool> _ensureInstallationIdentity() =>
+      _installationIdentity?.ensure() ?? Future<bool>.value(true);
 
   @override
   bool get supportsOfficialWebLogin => _usesLinuxSystemBrowser
@@ -874,6 +899,12 @@ class RustNeteaseAuthenticationGateway
   }
 
   Future<CredentialRestoreResult> _restoreCredential(int epoch) async {
+    if (!await _ensureInstallationIdentity()) {
+      return CredentialRestoreResult.storageUnavailable;
+    }
+    if (epoch != _sessionEpoch) {
+      return CredentialRestoreResult.coreUnavailable;
+    }
     if (_credentialVault.supportsStaging) {
       final recovered = await _restoreCredentialTransaction(epoch);
       if (recovered != null) return recovered;
@@ -986,6 +1017,9 @@ class RustNeteaseAuthenticationGateway
 
   Future<StagedCredentialRecoveryResult>
   recoverStagedCredentialIfPresent() async {
+    if (!await _ensureInstallationIdentity()) {
+      return StagedCredentialRecoveryResult.temporarilyUnavailable;
+    }
     if (!_credentialVault.supportsStaging) {
       return StagedCredentialRecoveryResult.notNeeded;
     }
@@ -1064,6 +1098,76 @@ class RustNeteaseAuthenticationGateway
   Future<bool> _clearEmbeddedOfficialWebSession() async {
     _officialWebLoginBroker.cancel();
     return _officialWebLoginBroker.clearWebsiteData();
+  }
+}
+
+_NeteaseInstallationIdentityOwner? _buildNeteaseInstallationIdentityOwner({
+  required CredentialVault? credentialVault,
+  required CredentialVault? installationIdentityVault,
+  required NeteaseInstallationIdentityExporter exporter,
+  required NeteaseInstallationIdentityImporter importer,
+}) {
+  final vault =
+      installationIdentityVault ??
+      (credentialVault == null
+          ? PlatformCredentialVault(
+              credentialKey:
+                  PlatformCredentialVault.netEaseInstallationIdentityKey,
+            )
+          : null);
+  return vault == null
+      ? null
+      : _NeteaseInstallationIdentityOwner(
+          vault: vault,
+          exporter: exporter,
+          importer: importer,
+        );
+}
+
+class _NeteaseInstallationIdentityOwner {
+  _NeteaseInstallationIdentityOwner({
+    required this.vault,
+    required this.exporter,
+    required this.importer,
+  });
+
+  final CredentialVault vault;
+  final NeteaseInstallationIdentityExporter exporter;
+  final NeteaseInstallationIdentityImporter importer;
+  Future<bool>? _pending;
+
+  Future<bool> ensure() {
+    final pending = _pending;
+    if (pending != null) return pending;
+    late final Future<bool> operation;
+    operation = _ensure().whenComplete(() {
+      if (identical(_pending, operation)) _pending = null;
+    });
+    _pending = operation;
+    return operation;
+  }
+
+  Future<bool> _ensure() async {
+    Uint8List? stored;
+    try {
+      stored = await vault.read();
+      if (stored != null) {
+        return importer(opaqueBytes: stored).restored;
+      }
+      final export = exporter();
+      final opaqueBytes = export.opaqueBytes;
+      if (opaqueBytes == null || export.failure != null) return false;
+      try {
+        await vault.write(opaqueBytes);
+        return true;
+      } finally {
+        opaqueBytes.fillRange(0, opaqueBytes.length, 0);
+      }
+    } on Object {
+      return false;
+    } finally {
+      stored?.fillRange(0, stored.length, 0);
+    }
   }
 }
 
@@ -1991,15 +2095,96 @@ DesktopQuickLoginFailure _mapDesktopQuickFailure(
     DesktopQuickLoginFailure.alreadyRunning,
 };
 
-class _OfficialWebOnlyLegacyStartOperation implements LoginStartOperation {
-  const _OfficialWebOnlyLegacyStartOperation();
+class _RustNeteaseLoginStartOperation implements LoginStartOperation {
+  _RustNeteaseLoginStartOperation({required this.ensureInstallationIdentity});
+
+  final Future<bool> Function() ensureInstallationIdentity;
+  int? _attemptId;
+  bool _cancelled = false;
 
   @override
-  bool cancel() => false;
+  bool cancel() {
+    if (_cancelled) return false;
+    _cancelled = true;
+    final attemptId = _attemptId;
+    return attemptId == null ||
+        netease_bridge.cancelNeteaseQrLoginStart(attemptId: attemptId);
+  }
 
   @override
-  Future<LoginStart> run() async =>
-      const LoginStart(failure: LoginFailure.rejected);
+  Future<LoginStart> run() async {
+    if (!await ensureInstallationIdentity()) {
+      return const LoginStart(failure: LoginFailure.coreUnavailable);
+    }
+    if (_cancelled) {
+      return const LoginStart(failure: LoginFailure.cancelled);
+    }
+    final attemptId = netease_bridge.reserveNeteaseQrLoginStart();
+    _attemptId = attemptId;
+    if (_cancelled) {
+      netease_bridge.cancelNeteaseQrLoginStart(attemptId: attemptId);
+      return const LoginStart(failure: LoginFailure.cancelled);
+    }
+    try {
+      final outcome = await netease_bridge.startNeteaseQrLogin(
+        attemptId: attemptId,
+      );
+      final session = outcome.session;
+      final challenge = outcome.challenge;
+      final failure = outcome.failure;
+      if (session == null || challenge == null) {
+        return LoginStart(
+          failure: failure == null
+              ? LoginFailure.invalidResponse
+              : _mapFailure(failure),
+        );
+      }
+      return LoginStart(
+        session: _RustNeteaseLoginSession(session),
+        challenge: LoginChallenge(
+          imageFormat: switch (challenge.imageFormat) {
+            bridge.QqMusicQrImageFormat.png => LoginImageFormat.png,
+            bridge.QqMusicQrImageFormat.jpeg => LoginImageFormat.jpeg,
+          },
+          imageBytes: challenge.imageBytes,
+          externalConfirmationUri: outcome.externalConfirmationUrl == null
+              ? null
+              : Uri.tryParse(outcome.externalConfirmationUrl!),
+        ),
+      );
+    } on Object {
+      return const LoginStart(failure: LoginFailure.coreUnavailable);
+    }
+  }
+}
+
+class _RustNeteaseLoginSession implements LoginSession {
+  const _RustNeteaseLoginSession(this._inner);
+
+  final netease_bridge.NeteaseQrLoginSessionHandle _inner;
+
+  @override
+  bool cancel() => _inner.cancel();
+
+  @override
+  bool get isActive => _inner.isActive;
+
+  @override
+  Future<LoginUpdate> advance() async {
+    try {
+      final update = await _inner.advance();
+      return LoginUpdate(
+        progress: update.state == null ? null : _mapProgress(update.state!),
+        failure: update.failure == null ? null : _mapFailure(update.failure!),
+        sessionActive: update.sessionActive,
+      );
+    } on Object {
+      return LoginUpdate(
+        failure: LoginFailure.coreUnavailable,
+        sessionActive: _inner.isActive,
+      );
+    }
+  }
 }
 
 class _RustLoginStartOperation implements LoginStartOperation {

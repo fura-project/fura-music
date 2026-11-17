@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
+import 'package:flutterustmusic/authentication/login_controller.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart' as bridge;
@@ -752,6 +753,136 @@ void main() {
     expect(broker.cancelCalls, 1);
     expect(broker.clearCalls, 1);
     expect(vault.deleteCalls, 1);
+  });
+
+  test('NetEase persists and restores one installation identity before account restore', () async {
+    final identityVault = _TrackingReadVault(null);
+    final credentialVault = _MemoryVault();
+    var exportCalls = 0;
+    var importCalls = 0;
+    Uint8List? importedIdentity;
+    final first = RustNeteaseAuthenticationGateway(
+      credentialVault: credentialVault,
+      installationIdentityVault: identityVault,
+      credentialImporter: (_) => CredentialRestoreResult.signedOut,
+      installationIdentityExporter: () {
+        exportCalls++;
+        return netease_bridge.NeteaseInstallationIdentityExport(
+          opaqueBytes: Uint8List.fromList(<int>[7, 8, 9]),
+        );
+      },
+      installationIdentityImporter: ({required opaqueBytes}) {
+        importCalls++;
+        importedIdentity = opaqueBytes;
+        return const netease_bridge.NeteaseInstallationIdentityRestore(
+          restored: true,
+        );
+      },
+    );
+
+    expect(await first.restoreCredential(), CredentialRestoreResult.signedOut);
+    expect(exportCalls, 1);
+    expect(importCalls, 0);
+    expect(await identityVault.read(), orderedEquals(<int>[7, 8, 9]));
+
+    final second = RustNeteaseAuthenticationGateway(
+      credentialVault: credentialVault,
+      installationIdentityVault: identityVault,
+      credentialImporter: (_) => CredentialRestoreResult.signedOut,
+      installationIdentityExporter: () {
+        exportCalls++;
+        return const netease_bridge.NeteaseInstallationIdentityExport(
+          failure: netease_bridge
+              .NeteaseInstallationIdentityFailure
+              .serializationFailed,
+        );
+      },
+      installationIdentityImporter: ({required opaqueBytes}) {
+        importCalls++;
+        importedIdentity = opaqueBytes;
+        expect(opaqueBytes, orderedEquals(<int>[7, 8, 9]));
+        return const netease_bridge.NeteaseInstallationIdentityRestore(
+          restored: true,
+        );
+      },
+    );
+
+    expect(await second.restoreCredential(), CredentialRestoreResult.signedOut);
+    expect(exportCalls, 1);
+    expect(importCalls, 1);
+    expect(importedIdentity, everyElement(0));
+    expect(identityVault.lastRead, everyElement(0));
+  });
+
+  test('NetEase sign out preserves the installation identity vault', () async {
+    final credentialVault = _MemoryVault(Uint8List.fromList(<int>[1]));
+    final identityVault = _MemoryVault(Uint8List.fromList(<int>[7, 8, 9]));
+    final gateway = RustNeteaseAuthenticationGateway(
+      credentialVault: credentialVault,
+      installationIdentityVault: identityVault,
+      officialWebLoginBroker: _FakeOfficialWebBroker(),
+      credentialSignOutCore: () => true,
+      credentialImporter: (_) => CredentialRestoreResult.verificationRequired,
+      installationIdentityImporter: ({required opaqueBytes}) =>
+          const netease_bridge.NeteaseInstallationIdentityRestore(
+            restored: true,
+          ),
+    );
+
+    expect(
+      await gateway.restoreCredential(),
+      CredentialRestoreResult.verificationRequired,
+    );
+    expect(await gateway.signOut(), CredentialSignOutResult.signedOut);
+    expect(await credentialVault.read(), isNull);
+    expect(await identityVault.read(), orderedEquals(<int>[7, 8, 9]));
+  });
+
+  test(
+    'invalid NetEase installation identity blocks account restoration',
+    () async {
+      var credentialImports = 0;
+      var identityExports = 0;
+      final gateway = RustNeteaseAuthenticationGateway(
+        credentialVault: _MemoryVault(Uint8List.fromList(<int>[1])),
+        installationIdentityVault: _MemoryVault(Uint8List.fromList(<int>[99])),
+        credentialImporter: (_) {
+          credentialImports++;
+          return CredentialRestoreResult.verificationRequired;
+        },
+        installationIdentityExporter: () {
+          identityExports++;
+          return const netease_bridge.NeteaseInstallationIdentityExport();
+        },
+        installationIdentityImporter: ({required opaqueBytes}) =>
+            const netease_bridge.NeteaseInstallationIdentityRestore(
+              restored: false,
+              failure: netease_bridge
+                  .NeteaseInstallationIdentityFailure
+                  .invalidDocument,
+            ),
+      );
+
+      expect(
+        await gateway.restoreCredential(),
+        CredentialRestoreResult.storageUnavailable,
+      );
+      expect(credentialImports, 0);
+      expect(identityExports, 0);
+    },
+  );
+
+  test('NetEase native QR is primary while official Web stays available', () {
+    final gateway = RustNeteaseAuthenticationGateway(
+      credentialVault: _MemoryVault(),
+      officialWebLoginBroker: _FakeOfficialWebBroker(),
+      authenticatedCredentialReader: () => false,
+    );
+    final controller = LoginController(gateway);
+
+    expect(controller.usesOfficialWebOnly, isFalse);
+    expect(controller.supportsOfficialWebLogin, isTrue);
+    controller.dispose();
   });
 
   test(

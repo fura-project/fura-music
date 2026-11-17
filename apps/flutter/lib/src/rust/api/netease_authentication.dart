@@ -9,7 +9,7 @@ import 'authentication.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `classify_system_browser_cancellation`, `clear_attempt`, `failed_export`, `failed_refresh_preparation`, `failed_refresh_verification`, `failed_restore`, `failed_sms`, `failed_staged_recovery`, `failed_start`, `failed_system_browser`, `failed_verification`, `lock_attempt`, `map_auth_error`, `map_progress`, `map_refresh_failure`, `map_refresh_preparation`, `map_sms_error`, `map_system_browser_capture_failure`, `next_attempt`, `successful_sms`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 int reserveNeteaseQrLoginStart() => RustLib.instance.api
     .crateApiNeteaseAuthenticationReserveNeteaseQrLoginStart();
@@ -26,6 +26,24 @@ bool cancelNeteaseQrLoginStart({required int attemptId}) =>
 
 bool neteaseHasAuthenticatedCredential() => RustLib.instance.api
     .crateApiNeteaseAuthenticationNeteaseHasAuthenticatedCredential();
+
+/// Returns the one opaque Fura-owned installation identity, generating it
+/// once if Core has not restored one yet. Dart must persist these bytes in a
+/// key that is independent from the account credential and preserve it across
+/// logout.
+NeteaseInstallationIdentityExport
+exportOrCreateNeteaseInstallationIdentity() => RustLib.instance.api
+    .crateApiNeteaseAuthenticationExportOrCreateNeteaseInstallationIdentity();
+
+/// Restores only the independently stored installation document. It never
+/// installs an account credential and never interprets raw identity fields in
+/// Dart. Secret-safe callers should zero the opaque buffer after this call.
+NeteaseInstallationIdentityRestore restoreNeteaseInstallationIdentity({
+  required List<int> opaqueBytes,
+}) => RustLib.instance.api
+    .crateApiNeteaseAuthenticationRestoreNeteaseInstallationIdentity(
+      opaqueBytes: opaqueBytes,
+    );
 
 /// Whether a supported, root-owned Chromium-family binary is available on
 /// Linux. This never starts the browser or inspects any browser profile.
@@ -191,6 +209,51 @@ abstract class NeteaseQrLoginSessionHandle implements RustOpaqueInterface {
   bool cancel();
 
   bool get isActive;
+}
+
+class NeteaseInstallationIdentityExport {
+  final Uint8List? opaqueBytes;
+  final NeteaseInstallationIdentityFailure? failure;
+
+  const NeteaseInstallationIdentityExport({this.opaqueBytes, this.failure});
+
+  @override
+  int get hashCode => opaqueBytes.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NeteaseInstallationIdentityExport &&
+          runtimeType == other.runtimeType &&
+          opaqueBytes == other.opaqueBytes &&
+          failure == other.failure;
+}
+
+enum NeteaseInstallationIdentityFailure {
+  coreUnavailable,
+  invalidDocument,
+  serializationFailed,
+}
+
+class NeteaseInstallationIdentityRestore {
+  final bool restored;
+  final NeteaseInstallationIdentityFailure? failure;
+
+  const NeteaseInstallationIdentityRestore({
+    required this.restored,
+    this.failure,
+  });
+
+  @override
+  int get hashCode => restored.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NeteaseInstallationIdentityRestore &&
+          runtimeType == other.runtimeType &&
+          restored == other.restored &&
+          failure == other.failure;
 }
 
 class NeteaseQrLoginStart {

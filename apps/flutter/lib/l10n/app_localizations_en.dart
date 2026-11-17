@@ -525,6 +525,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authUseOfficialWebsite => 'Continue on NetEase website';
 
   @override
+  String get authOfficialWebContinuationLimited =>
+      'Website sign-in is kept for compatibility and may require signing in again when that session expires.';
+
+  @override
   String get authOfficialWebTitle => 'Complete sign-in with NetEase';
 
   @override

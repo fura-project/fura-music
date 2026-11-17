@@ -62,6 +62,35 @@ pub struct NeteaseQrLoginStart {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NeteaseInstallationIdentityFailure {
+    CoreUnavailable,
+    InvalidDocument,
+    SerializationFailed,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct NeteaseInstallationIdentityExport {
+    pub opaque_bytes: Option<Vec<u8>>,
+    pub failure: Option<NeteaseInstallationIdentityFailure>,
+}
+
+impl fmt::Debug for NeteaseInstallationIdentityExport {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("NeteaseInstallationIdentityExport")
+            .field("has_opaque_bytes", &self.opaque_bytes.is_some())
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NeteaseInstallationIdentityRestore {
+    pub restored: bool,
+    pub failure: Option<NeteaseInstallationIdentityFailure>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NeteaseSystemBrowserAuthenticationFailure {
     UnsupportedPlatform,
     BrowserUnavailable,
@@ -293,6 +322,57 @@ pub fn cancel_netease_qr_login_start(attempt_id: u32) -> bool {
 pub fn netease_has_authenticated_credential() -> bool {
     crate::native_netease::native_netease_provider()
         .is_ok_and(QrAuthenticationProvider::has_authenticated_credential)
+}
+
+/// Returns the one opaque Fura-owned installation identity, generating it
+/// once if Core has not restored one yet. Dart must persist these bytes in a
+/// key that is independent from the account credential and preserve it across
+/// logout.
+#[flutter_rust_bridge::frb(sync)]
+pub fn export_or_create_netease_installation_identity() -> NeteaseInstallationIdentityExport {
+    let Ok(provider) = crate::native_netease::native_netease_provider() else {
+        return NeteaseInstallationIdentityExport {
+            opaque_bytes: None,
+            failure: Some(NeteaseInstallationIdentityFailure::CoreUnavailable),
+        };
+    };
+    match provider.export_or_create_installation_identity() {
+        Ok(opaque_bytes) => NeteaseInstallationIdentityExport {
+            opaque_bytes: Some(opaque_bytes),
+            failure: None,
+        },
+        Err(_) => NeteaseInstallationIdentityExport {
+            opaque_bytes: None,
+            failure: Some(NeteaseInstallationIdentityFailure::SerializationFailed),
+        },
+    }
+}
+
+/// Restores only the independently stored installation document. It never
+/// installs an account credential and never interprets raw identity fields in
+/// Dart. Secret-safe callers should zero the opaque buffer after this call.
+#[flutter_rust_bridge::frb(sync)]
+pub fn restore_netease_installation_identity(
+    mut opaque_bytes: Vec<u8>,
+) -> NeteaseInstallationIdentityRestore {
+    let outcome = match crate::native_netease::native_netease_provider() {
+        Ok(provider) => match provider.import_installation_identity(&opaque_bytes) {
+            Ok(()) => NeteaseInstallationIdentityRestore {
+                restored: true,
+                failure: None,
+            },
+            Err(_) => NeteaseInstallationIdentityRestore {
+                restored: false,
+                failure: Some(NeteaseInstallationIdentityFailure::InvalidDocument),
+            },
+        },
+        Err(_) => NeteaseInstallationIdentityRestore {
+            restored: false,
+            failure: Some(NeteaseInstallationIdentityFailure::CoreUnavailable),
+        },
+    };
+    opaque_bytes.fill(0);
+    outcome
 }
 
 /// Whether a supported, root-owned Chromium-family binary is available on
@@ -1047,6 +1127,17 @@ mod tests {
         assert!(debug.contains("has_external_confirmation_url: true"));
         assert!(!debug.contains("synthetic-secret"));
         assert!(!debug.contains("codekey"));
+    }
+
+    #[test]
+    fn installation_identity_export_debug_never_exposes_opaque_bytes() {
+        let export = NeteaseInstallationIdentityExport {
+            opaque_bytes: Some(b"synthetic-installation-identity".to_vec()),
+            failure: None,
+        };
+        let debug = format!("{export:?}");
+        assert!(debug.contains("has_opaque_bytes: true"));
+        assert!(!debug.contains("synthetic-installation-identity"));
     }
 
     #[test]

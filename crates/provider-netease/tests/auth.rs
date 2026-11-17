@@ -32,7 +32,9 @@ impl Transport for Fake {
         if let Some(cookie) = r.cookie() {
             if cookie.contains("MUSIC_U=") {
                 self.auth_calls.fetch_add(1, Ordering::SeqCst);
-            } else if r.url().contains("interface3.music.163.com/eapi/") {
+            } else if r.url().contains("/eapi/login/qrcode/")
+                || r.url().contains("interface3.music.163.com/eapi/")
+            {
                 assert!(cookie.contains("deviceId="));
                 assert!(cookie.contains("requestId="));
             } else {
@@ -51,13 +53,15 @@ impl Transport for Fake {
             Reply::Json(v) => v,
             Reply::Refresh(set_cookies) => {
                 cookies = set_cookies;
-                json!({"code":200,"bizCode":201})
+                json!({"code":200,"bizCode":200})
             }
             Reply::Failure(e) => return Err(e),
             Reply::Confirmed => {
                 cookies = vec![
                     "MUSIC_U=synthetic-session; Secure; HttpOnly".into(),
+                    "MUSIC_R_U=synthetic-refresh; Secure; HttpOnly".into(),
                     "__csrf=synthetic-csrf; Secure".into(),
+                    "NMTID=synthetic-nmtid; Secure; HttpOnly".into(),
                 ];
                 json!({"code":803})
             }
@@ -74,7 +78,7 @@ impl Transport for Fake {
                 start.notify_one();
                 release.notified().await;
                 cookies = set_cookies;
-                json!({"code":200,"bizCode":201})
+                json!({"code":200,"bizCode":200})
             }
         };
         Ok(Response {
@@ -112,18 +116,18 @@ fn provider_with_refresh(
 ) {
     let calls = Arc::new(AtomicUsize::new(0));
     let authenticated_calls = Arc::new(AtomicUsize::new(0));
-    (
-        Arc::new(NeteaseProvider::new_with_refresh_activation(
-            NeteaseClient::new(Fake {
-                replies: Mutex::new(replies.into()),
-                calls: calls.clone(),
-                auth_calls: authenticated_calls.clone(),
-            }),
-            true,
-        )),
-        calls,
-        authenticated_calls,
-    )
+    let provider = Arc::new(NeteaseProvider::new_with_refresh_activation(
+        NeteaseClient::new(Fake {
+            replies: Mutex::new(replies.into()),
+            calls: calls.clone(),
+            auth_calls: authenticated_calls.clone(),
+        }),
+        true,
+    ));
+    provider
+        .export_or_create_installation_identity()
+        .expect("synthetic installation identity");
+    (provider, calls, authenticated_calls)
 }
 fn account() -> Value {
     json!({"code":200,"account":{"id":42},"profile":{"userId":42,"nickname":"Synthetic user","avatarUrl":"https://fixture.invalid/avatar"}})
@@ -135,6 +139,18 @@ fn credential() -> Vec<u8> {
     serde_json::to_vec(&json!({"version":1,"provider":"netease-cloud-music","music_u":"synthetic-session","csrf":"synthetic-csrf"})).unwrap()
 }
 fn refreshable_credential(music_u: &str, music_r_u: &str) -> Vec<u8> {
+    serde_json::to_vec(&json!({
+        "version":3,
+        "provider":"netease-cloud-music",
+        "session_family":"desktop_eapi",
+        "music_u":music_u,
+        "music_r_u":music_r_u,
+        "csrf":"synthetic-csrf",
+        "nmtid":"synthetic-nmtid",
+    }))
+    .unwrap()
+}
+fn official_web_refreshable_credential(music_u: &str, music_r_u: &str) -> Vec<u8> {
     serde_json::to_vec(&json!({
         "version":2,
         "provider":"netease-cloud-music",
@@ -204,6 +220,94 @@ async fn production_default_rejection_does_not_send_an_unverified_refresh() {
     assert_eq!(calls.load(Ordering::SeqCst), 2);
     assert!(!provider.has_authenticated_credential());
     assert!(provider.export_credential().unwrap().is_none());
+}
+
+#[test]
+fn installation_identity_round_trips_survives_logout_and_cannot_rotate_in_place() {
+    let (owner, _, _) = provider(vec![]);
+    let document = owner
+        .export_or_create_installation_identity()
+        .expect("generated identity");
+    owner.sign_out();
+    assert_eq!(
+        owner.export_or_create_installation_identity().unwrap(),
+        document
+    );
+
+    let (restored, _, _) = provider(vec![]);
+    restored.import_installation_identity(&document).unwrap();
+    assert_eq!(
+        restored.export_or_create_installation_identity().unwrap(),
+        document
+    );
+
+    let (conflicting, _, _) = provider(vec![]);
+    let other = conflicting
+        .export_or_create_installation_identity()
+        .expect("different installation identity");
+    assert_ne!(other, document);
+    assert!(conflicting.import_installation_identity(&document).is_err());
+    assert_eq!(
+        conflicting
+            .export_or_create_installation_identity()
+            .unwrap(),
+        other
+    );
+}
+
+#[tokio::test]
+async fn official_web_family_never_uses_eapi_even_when_release_refresh_is_enabled() {
+    let (provider, calls, _) = provider_with_refresh(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":301})),
+    ]);
+    provider
+        .import_credential(&official_web_refreshable_credential("web-u", "web-r"))
+        .unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::CredentialRejected)
+    );
+    assert_eq!(
+        provider
+            .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+            .await,
+        Err(NeteaseRefreshFailure::NotRefreshable)
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert!(!provider.has_authenticated_credential());
+}
+
+#[tokio::test]
+async fn desktop_eapi_refresh_without_restored_installation_identity_sends_no_request() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let authenticated_calls = Arc::new(AtomicUsize::new(0));
+    let provider = NeteaseProvider::new_with_refresh_activation(
+        NeteaseClient::new(Fake {
+            replies: Mutex::new(
+                vec![Reply::Json(account()), Reply::Json(json!({"code":301}))].into(),
+            ),
+            calls: calls.clone(),
+            auth_calls: authenticated_calls,
+        }),
+        true,
+    );
+    provider
+        .import_credential(&refreshable_credential("source-u", "source-r"))
+        .unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::CredentialRejected)
+    );
+    assert_eq!(
+        provider
+            .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+            .await,
+        Err(NeteaseRefreshFailure::NotRefreshable)
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test]
@@ -609,9 +713,9 @@ fn credential_documents_reject_foreign_versions_injections_and_oversize() {
     let bytes = credential();
     let c = Credential::import(&bytes).unwrap();
     assert_eq!(format!("{c:?}"), "NetEaseCredential([REDACTED])");
-    let current = c.export().expect("legacy credential migrates to v2");
+    let current = c.export().expect("legacy credential migrates to v3");
     for (key, value) in [
-        ("version", json!(3)),
+        ("version", json!(4)),
         ("provider", json!("qq-music")),
         ("music_u", json!("bad\r\nCookie: injected")),
         ("music_r_u", json!("bad\r\nCookie: injected")),
@@ -666,7 +770,8 @@ async fn official_web_v2_refresh_material_is_verified_and_survives_restart() {
         p.verify_pending_credential().await.unwrap();
         let document = p.export_credential().unwrap().unwrap();
         let stored: Value = serde_json::from_slice(&document).unwrap();
-        assert_eq!(stored["version"], 2);
+        assert_eq!(stored["version"], 3);
+        assert_eq!(stored["session_family"], "official_web");
         assert_eq!(
             stored["music_r_u"],
             if with_refresh {
@@ -824,7 +929,7 @@ async fn qr_wait_scan_confirm_and_account_validation_are_one_generation() {
     );
     assert!(!format!("{:?}", qr.challenge()).contains("synthetic"));
     let confirmation_url = qr.external_confirmation_url();
-    assert!(confirmation_url.starts_with("https://music.163.com/st/platform/scanlogin?"));
+    assert!(confirmation_url.starts_with("https://music.163.com/login?"));
     assert!(confirmation_url.contains("codekey=synthetic-qr-key"));
     assert_eq!(
         qr.advance().await.unwrap(),

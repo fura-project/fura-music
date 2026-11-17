@@ -92,7 +92,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -87095340;
+  int get rustContentHash => 532392532;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -954,6 +954,9 @@ abstract class RustLibApi extends BaseApi {
   QqMusicCredentialExport
   crateApiNeteaseAuthenticationExportNeteaseCredentialForSecureStorage();
 
+  NeteaseInstallationIdentityExport
+  crateApiNeteaseAuthenticationExportOrCreateNeteaseInstallationIdentity();
+
   QqMusicCredentialExport
   crateApiAuthenticationExportQqMusicCredentialForSecureStorage();
 
@@ -1009,6 +1012,11 @@ abstract class RustLibApi extends BaseApi {
   QqMusicCredentialRestore
   crateApiNeteaseAuthenticationRestoreNeteaseCredentialFromSecureStorage({
     Uint8List? secretBytes,
+  });
+
+  NeteaseInstallationIdentityRestore
+  crateApiNeteaseAuthenticationRestoreNeteaseInstallationIdentity({
+    required List<int> opaqueBytes,
   });
 
   NeteaseStagedRecovery
@@ -7876,6 +7884,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  NeteaseInstallationIdentityExport
+  crateApiNeteaseAuthenticationExportOrCreateNeteaseInstallationIdentity() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 184,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_netease_installation_identity_export,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiNeteaseAuthenticationExportOrCreateNeteaseInstallationIdentityConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiNeteaseAuthenticationExportOrCreateNeteaseInstallationIdentityConstMeta =>
+      const TaskConstMeta(
+        debugName: "export_or_create_netease_installation_identity",
+        argNames: [],
+      );
+
+  @override
   QqMusicCredentialExport
   crateApiAuthenticationExportQqMusicCredentialForSecureStorage() {
     return handler.executeSync(
@@ -7885,7 +7925,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 184,
+            funcId: 185,
           )!;
         },
         codec: SseCodec(
@@ -7916,7 +7956,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 185,
+            funcId: 186,
             port: port_,
           );
         },
@@ -7943,7 +7983,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 186,
+            funcId: 187,
           )!;
         },
         codec: SseCodec(
@@ -7974,7 +8014,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 187,
+            funcId: 188,
           )!;
         },
         codec: SseCodec(
@@ -8006,7 +8046,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 188,
+            funcId: 189,
             port: port_,
           );
         },
@@ -8039,7 +8079,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 189,
+            funcId: 190,
             port: port_,
           );
         },
@@ -8072,7 +8112,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 190,
+            funcId: 191,
             port: port_,
           );
         },
@@ -8105,7 +8145,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 191,
+            funcId: 192,
             port: port_,
           );
         },
@@ -8137,7 +8177,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 192,
+            funcId: 193,
           )!;
         },
         codec: SseCodec(
@@ -8176,7 +8216,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 193,
+            funcId: 194,
             port: port_,
           );
         },
@@ -8210,7 +8250,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 194,
+            funcId: 195,
           )!;
         },
         codec: SseCodec(
@@ -8239,7 +8279,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 195,
+            funcId: 196,
           )!;
         },
         codec: SseCodec(
@@ -8270,7 +8310,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 196,
+            funcId: 197,
           )!;
         },
         codec: SseCodec(
@@ -8301,7 +8341,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 197,
+            funcId: 198,
           )!;
         },
         codec: SseCodec(
@@ -8332,7 +8372,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 198,
+            funcId: 199,
           )!;
         },
         codec: SseCodec(
@@ -8360,7 +8400,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 199,
+            funcId: 200,
           )!;
         },
         codec: SseCodec(
@@ -8391,7 +8431,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 200,
+            funcId: 201,
           )!;
         },
         codec: SseCodec(
@@ -8422,7 +8462,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 201,
+            funcId: 202,
           )!;
         },
         codec: SseCodec(
@@ -8453,7 +8493,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 202,
+            funcId: 203,
           )!;
         },
         codec: SseCodec(
@@ -8483,7 +8523,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 203,
+            funcId: 204,
           )!;
         },
         codec: SseCodec(
@@ -8518,7 +8558,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 204,
+            funcId: 205,
           )!;
         },
         codec: SseCodec(
@@ -8541,6 +8581,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  NeteaseInstallationIdentityRestore
+  crateApiNeteaseAuthenticationRestoreNeteaseInstallationIdentity({
+    required List<int> opaqueBytes,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_8_loose(opaqueBytes, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 206,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_netease_installation_identity_restore,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiNeteaseAuthenticationRestoreNeteaseInstallationIdentityConstMeta,
+        argValues: [opaqueBytes],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiNeteaseAuthenticationRestoreNeteaseInstallationIdentityConstMeta =>
+      const TaskConstMeta(
+        debugName: "restore_netease_installation_identity",
+        argNames: ["opaqueBytes"],
+      );
+
+  @override
   NeteaseStagedRecovery
   crateApiNeteaseAuthenticationRestoreNeteaseStagedCredentialRotation({
     Uint8List? currentSecretBytes,
@@ -8555,7 +8630,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 205,
+            funcId: 207,
           )!;
         },
         codec: SseCodec(
@@ -8590,7 +8665,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 206,
+            funcId: 208,
           )!;
         },
         codec: SseCodec(
@@ -8627,7 +8702,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 207,
+            funcId: 209,
           )!;
         },
         codec: SseCodec(
@@ -8658,7 +8733,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 208,
+            funcId: 210,
           )!;
         },
         codec: SseCodec(
@@ -8684,7 +8759,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 209,
+            funcId: 211,
           )!;
         },
         codec: SseCodec(
@@ -8714,7 +8789,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 210,
+            funcId: 212,
           )!;
         },
         codec: SseCodec(
@@ -8748,7 +8823,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 211,
+            funcId: 213,
             port: port_,
           );
         },
@@ -8783,7 +8858,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 212,
+            funcId: 214,
             port: port_,
           );
         },
@@ -8820,7 +8895,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 213,
+            funcId: 215,
             port: port_,
           );
         },
@@ -8853,7 +8928,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 214,
+            funcId: 216,
             port: port_,
           );
         },
@@ -8887,7 +8962,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 215,
+            funcId: 217,
             port: port_,
           );
         },
@@ -8923,7 +8998,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 216,
+            funcId: 218,
             port: port_,
           );
         },
@@ -8959,7 +9034,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 217,
+            funcId: 219,
             port: port_,
           );
         },
@@ -8995,7 +9070,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 218,
+            funcId: 220,
             port: port_,
           );
         },
@@ -10757,6 +10832,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NeteaseInstallationIdentityFailure
+  dco_decode_box_autoadd_netease_installation_identity_failure(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_netease_installation_identity_failure(raw);
+  }
+
+  @protected
   NeteaseRefreshFailure dco_decode_box_autoadd_netease_refresh_failure(
     dynamic raw,
   ) {
@@ -11509,6 +11591,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NeteaseInstallationIdentityExport
+  dco_decode_netease_installation_identity_export(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return NeteaseInstallationIdentityExport(
+      opaqueBytes: dco_decode_opt_list_prim_u_8_strict(arr[0]),
+      failure: dco_decode_opt_box_autoadd_netease_installation_identity_failure(
+        arr[1],
+      ),
+    );
+  }
+
+  @protected
+  NeteaseInstallationIdentityFailure
+  dco_decode_netease_installation_identity_failure(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return NeteaseInstallationIdentityFailure.values[raw as int];
+  }
+
+  @protected
+  NeteaseInstallationIdentityRestore
+  dco_decode_netease_installation_identity_restore(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return NeteaseInstallationIdentityRestore(
+      restored: dco_decode_bool(arr[0]),
+      failure: dco_decode_opt_box_autoadd_netease_installation_identity_failure(
+        arr[1],
+      ),
+    );
+  }
+
+  @protected
   NeteaseQrLoginStart dco_decode_netease_qr_login_start(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -11770,6 +11889,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return raw == null
         ? null
         : dco_decode_box_autoadd_media_resolution_failure(raw);
+  }
+
+  @protected
+  NeteaseInstallationIdentityFailure?
+  dco_decode_opt_box_autoadd_netease_installation_identity_failure(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_netease_installation_identity_failure(raw);
   }
 
   @protected
@@ -15281,6 +15411,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NeteaseInstallationIdentityFailure
+  sse_decode_box_autoadd_netease_installation_identity_failure(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_netease_installation_identity_failure(deserializer));
+  }
+
+  @protected
   NeteaseRefreshFailure sse_decode_box_autoadd_netease_refresh_failure(
     SseDeserializer deserializer,
   ) {
@@ -16241,6 +16380,50 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NeteaseInstallationIdentityExport
+  sse_decode_netease_installation_identity_export(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_opaqueBytes = sse_decode_opt_list_prim_u_8_strict(deserializer);
+    var var_failure =
+        sse_decode_opt_box_autoadd_netease_installation_identity_failure(
+          deserializer,
+        );
+    return NeteaseInstallationIdentityExport(
+      opaqueBytes: var_opaqueBytes,
+      failure: var_failure,
+    );
+  }
+
+  @protected
+  NeteaseInstallationIdentityFailure
+  sse_decode_netease_installation_identity_failure(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return NeteaseInstallationIdentityFailure.values[inner];
+  }
+
+  @protected
+  NeteaseInstallationIdentityRestore
+  sse_decode_netease_installation_identity_restore(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_restored = sse_decode_bool(deserializer);
+    var var_failure =
+        sse_decode_opt_box_autoadd_netease_installation_identity_failure(
+          deserializer,
+        );
+    return NeteaseInstallationIdentityRestore(
+      restored: var_restored,
+      failure: var_failure,
+    );
+  }
+
+  @protected
   NeteaseQrLoginStart sse_decode_netease_qr_login_start(
     SseDeserializer deserializer,
   ) {
@@ -16576,6 +16759,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_media_resolution_failure(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  NeteaseInstallationIdentityFailure?
+  sse_decode_opt_box_autoadd_netease_installation_identity_failure(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_netease_installation_identity_failure(
+        deserializer,
+      ));
     } else {
       return null;
     }
@@ -20990,6 +21189,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_netease_installation_identity_failure(
+    NeteaseInstallationIdentityFailure self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_netease_installation_identity_failure(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_netease_refresh_failure(
     NeteaseRefreshFailure self,
     SseSerializer serializer,
@@ -21879,6 +22087,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_netease_installation_identity_export(
+    NeteaseInstallationIdentityExport self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_list_prim_u_8_strict(self.opaqueBytes, serializer);
+    sse_encode_opt_box_autoadd_netease_installation_identity_failure(
+      self.failure,
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_netease_installation_identity_failure(
+    NeteaseInstallationIdentityFailure self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_netease_installation_identity_restore(
+    NeteaseInstallationIdentityRestore self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.restored, serializer);
+    sse_encode_opt_box_autoadd_netease_installation_identity_failure(
+      self.failure,
+      serializer,
+    );
+  }
+
+  @protected
   void sse_encode_netease_qr_login_start(
     NeteaseQrLoginStart self,
     SseSerializer serializer,
@@ -22190,6 +22433,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_media_resolution_failure(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_netease_installation_identity_failure(
+    NeteaseInstallationIdentityFailure? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_netease_installation_identity_failure(
+        self,
+        serializer,
+      );
     }
   }
 

@@ -1199,7 +1199,7 @@ mod tests {
     }
 
     #[test]
-    fn optional_refresh_material_survives_into_a_v2_candidate_without_invention() {
+    fn optional_refresh_material_survives_into_an_official_web_v3_candidate_without_invention() {
         for include_r in [false, true] {
             for include_csrf in [false, true] {
                 let mut cookies = vec![cookie("MUSIC_U", "synthetic-u", "music.163.com")];
@@ -1218,7 +1218,8 @@ mod tests {
                 assert_eq!(credential.has_refresh_material(), include_r);
                 let document: Value =
                     serde_json::from_slice(&credential.export().unwrap()).unwrap();
-                assert_eq!(document["version"], 2);
+                assert_eq!(document["version"], 3);
+                assert_eq!(document["session_family"], "official_web");
                 assert_eq!(document["music_u"], "synthetic-u");
                 assert_eq!(
                     document["music_r_u"],

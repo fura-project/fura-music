@@ -994,6 +994,16 @@ class _AuthenticationContent extends StatelessWidget {
           icon: const Icon(Icons.open_in_browser_rounded),
           label: Text(context.l10n.authUseOfficialWebsite),
         ),
+        if (controller.providerId == 'netease-cloud-music') ...[
+          const SizedBox(height: 6),
+          Text(
+            context.l10n.authOfficialWebContinuationLimited,
+            key: const ValueKey('official-web-continuation-limited'),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ],
     ],
   );

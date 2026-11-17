@@ -10,7 +10,9 @@ use music_domain::{
     PlaylistSearchPage, PlaylistSummary, ProviderId, TrackId, TrackSearchItem, TrackSearchPage,
     TrackSummary,
 };
-use netease_client::{Album, Artist, Error, NeteaseClient, Playlist, Song, Transport};
+use netease_client::{
+    Album, Artist, DesktopEapiInstallationIdentity, Error, NeteaseClient, Playlist, Song, Transport,
+};
 use provider_api::{
     AlbumSearchProvider, ArtistSearchProvider, MusicProvider, PlaylistSearchProvider,
     ProviderCapability, ProviderDescriptor, SearchError, TrackSearchProvider,
@@ -28,6 +30,7 @@ pub struct NeteaseProvider<T> {
     auth: Arc<auth::AuthOwner>,
     media_cache: tokio::sync::Mutex<provider_api::MediaResolutionCache>,
     refresh_enabled: bool,
+    installation_identity: std::sync::Mutex<Option<DesktopEapiInstallationIdentity>>,
     next_refresh_reservation: AtomicU32,
     refresh: std::sync::Mutex<refresh::RefreshCoordinatorState>,
 }
@@ -37,10 +40,10 @@ impl<T> NeteaseProvider<T> {
         Self::new_with_refresh_activation(client, false)
     }
 
-    /// Constructs a provider with the evidence-gated refresh candidate.
+    /// Constructs a provider with family-routed session continuation.
     ///
-    /// Production callers must keep this disabled until the bounded Human
-    /// protocol gate has verified independent `MUSIC_R_U` rotation.
+    /// Enabling this owner only permits the live-verified Desktop-EAPI family;
+    /// legacy Official-Web credentials still fail closed as not refreshable.
     #[must_use]
     pub fn new_with_refresh_activation(client: NeteaseClient<T>, refresh_enabled: bool) -> Self {
         Self {
@@ -48,9 +51,62 @@ impl<T> NeteaseProvider<T> {
             auth: Arc::new(auth::AuthOwner::new()),
             media_cache: tokio::sync::Mutex::new(provider_api::MediaResolutionCache::default()),
             refresh_enabled,
+            installation_identity: std::sync::Mutex::new(None),
             next_refresh_reservation: AtomicU32::new(1),
             refresh: std::sync::Mutex::new(refresh::RefreshCoordinatorState::Idle),
         }
+    }
+
+    fn desktop_eapi_installation_identity(&self) -> Result<DesktopEapiInstallationIdentity, Error> {
+        let mut identity = self
+            .installation_identity
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if identity.is_none() {
+            *identity = Some(DesktopEapiInstallationIdentity::generate()?);
+        }
+        identity.clone().ok_or(Error::ProtocolUnavailable)
+    }
+
+    pub(crate) fn current_desktop_eapi_installation_identity(
+        &self,
+    ) -> Option<DesktopEapiInstallationIdentity> {
+        self.installation_identity
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Restores one installation-scoped identity. A conflicting replacement
+    /// is rejected so an active account session cannot silently rotate device
+    /// context.
+    ///
+    /// # Errors
+    /// Rejects malformed, foreign or conflicting opaque documents.
+    pub fn import_installation_identity(&self, bytes: &[u8]) -> Result<(), Error> {
+        let candidate = DesktopEapiInstallationIdentity::import(bytes)?;
+        let mut identity = self
+            .installation_identity
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if identity
+            .as_ref()
+            .is_some_and(|current| current != &candidate)
+        {
+            return Err(Error::ResponseShapeMismatch);
+        }
+        *identity = Some(candidate);
+        Ok(())
+    }
+
+    /// Returns one opaque installation document, generating it once when this
+    /// installation has no restored identity.
+    ///
+    /// # Errors
+    /// Returns local entropy or serialization failures without exposing the
+    /// identity.
+    pub fn export_or_create_installation_identity(&self) -> Result<Vec<u8>, Error> {
+        self.desktop_eapi_installation_identity()?.export()
     }
 }
 #[must_use]

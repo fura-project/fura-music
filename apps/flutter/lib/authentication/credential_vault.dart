@@ -219,7 +219,8 @@ class PlatformCredentialVault implements CredentialVault {
              platformLabel:
                  platformLabel ??
                  (credentialKey == netEaseCredentialKey ||
-                         credentialKey == netEaseStagedCredentialKey
+                         credentialKey == netEaseStagedCredentialKey ||
+                         credentialKey == netEaseInstallationIdentityKey
                      ? 'NetEase Cloud Music session'
                      : 'QQ Music session'),
            );
@@ -230,6 +231,8 @@ class PlatformCredentialVault implements CredentialVault {
   static const netEaseCredentialKey = 'netease_cloud_music_credential_v1';
   static const netEaseStagedCredentialKey =
       'netease_cloud_music_credential_refresh_staged_v1';
+  static const netEaseInstallationIdentityKey =
+      'netease_cloud_music_installation_identity_v1';
 
   final SecureStringStore _store;
   final String credentialKey;

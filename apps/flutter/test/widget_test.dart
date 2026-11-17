@@ -11077,6 +11077,69 @@ void main() {
   );
 
   testWidgets(
+    'NetEase native QR is primary and official web is a disclosed fallback',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MusicApp(
+          bootstrap: _dualProviderBootstrap,
+          initialSettings: const AppSettings(
+            theme: AppThemePreference.light,
+            musicProvider: AppMusicProvider.netEaseCloudMusic,
+          ),
+          providerDependencies: BuiltInProviderDependencies(
+            qqMusic: _providerFixture(
+              authenticationGateway: _ProviderWidgetGateway(
+                providerId: 'qq-music',
+              ),
+              capabilities: MusicProviderCapabilities.qqMusic,
+              providerId: 'qq-music',
+              accountName: 'QQ Account',
+              searchGateway: _WidgetSearchGateway(
+                const TrackSearchPageResult(),
+              ),
+            ),
+            netEase: _providerFixture(
+              authenticationGateway: _HybridOfficialWebProviderWidgetGateway(
+                providerId: 'netease-cloud-music',
+              ),
+              capabilities: MusicProviderCapabilities.netEaseCloudMusic,
+              providerId: 'netease-cloud-music',
+              accountName: 'NetEase Account',
+              searchGateway: _WidgetSearchGateway(
+                const TrackSearchPageResult(),
+              ),
+            ),
+          ),
+          mediaResolutionGateway: const _UnavailableMediaGateway(),
+          lyricGateway: const _WidgetLyricGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _openSignInDialog(tester);
+
+      expect(
+        find.byKey(const ValueKey('start-qq-login-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('start-official-web-login-button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('official-web-continuation-limited')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('show-sms-login-button')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'NetEase official website login uses a visible full-size owned surface',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
@@ -12213,12 +12276,20 @@ class _ProviderWidgetGateway
 }
 
 class _OfficialWebProviderWidgetGateway extends _ProviderWidgetGateway
+    with _OfficialWebProviderBehavior
+    implements OfficialWebOnlyAuthenticationGateway {
+  _OfficialWebProviderWidgetGateway({required super.providerId});
+}
+
+class _HybridOfficialWebProviderWidgetGateway extends _ProviderWidgetGateway
+    with _OfficialWebProviderBehavior {
+  _HybridOfficialWebProviderWidgetGateway({required super.providerId});
+}
+
+mixin _OfficialWebProviderBehavior on _ProviderWidgetGateway
     implements
         OfficialWebAuthenticationGateway,
-        OfficialWebOnlyAuthenticationGateway,
         OfficialWebAuthenticationPresentation {
-  _OfficialWebProviderWidgetGateway({required super.providerId});
-
   final ChangeNotifier _presentation = ChangeNotifier();
   OfficialWebLoginPresentationStage _stage =
       OfficialWebLoginPresentationStage.idle;
@@ -12256,7 +12327,7 @@ class _PendingWidgetOfficialWebOperation
     implements OfficialWebAuthenticationOperation {
   _PendingWidgetOfficialWebOperation(this.gateway);
 
-  final _OfficialWebProviderWidgetGateway gateway;
+  final _OfficialWebProviderBehavior gateway;
   final Completer<OfficialWebAuthenticationOutcome> _result =
       Completer<OfficialWebAuthenticationOutcome>();
   int cancelCalls = 0;

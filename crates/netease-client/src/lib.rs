@@ -1,10 +1,16 @@
 //! Bounded, direct `NetEase` HTTPS protocol. No account discovery or retry policy.
 mod auth;
 mod catalog;
+mod desktop_eapi_session;
 pub use auth::{
     Account, CreatedPlaylist, Credential, CredentialCookieRotation, CredentialRefreshError,
-    CredentialRefreshObservation, QrKey, QrPoll, RecentSongsSnapshot, SmsLoginChallenge,
-    UserPlaylist, UserPlaylistPage,
+    CredentialRefreshObservation, NeteaseSessionFamily, QrKey, QrPoll, RecentSongsSnapshot,
+    SmsLoginChallenge, UserPlaylist, UserPlaylistPage,
+};
+pub use desktop_eapi_session::{
+    DesktopEapiCookieObservation, DesktopEapiCookieRotation, DesktopEapiInstallationIdentity,
+    DesktopEapiQrKey, DesktopEapiQrPoll, DesktopEapiRefreshObservation,
+    DesktopEapiSessionCandidate, DesktopEapiSessionObservation,
 };
 mod crypto;
 mod lyrics;

@@ -107,6 +107,9 @@ Future<void> main(List<String> arguments) async {
   );
   final netEaseAuthenticationGateway = RustNeteaseAuthenticationGateway(
     credentialVault: netEaseCredentialVault,
+    installationIdentityVault: PlatformCredentialVault(
+      credentialKey: PlatformCredentialVault.netEaseInstallationIdentityKey,
+    ),
   );
   final netEaseSessionContinuation = NeteaseSessionContinuationCoordinator(
     netEaseCredentialVault,

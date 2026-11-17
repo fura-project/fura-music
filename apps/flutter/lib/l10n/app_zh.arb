@@ -139,6 +139,7 @@
   "authUsePhoneCode": "使用手机验证码",
   "authUseQrCode": "使用二维码",
   "authUseOfficialWebsite": "前往网易云音乐官网继续",
+  "authOfficialWebContinuationLimited": "网页登录仅作兼容入口，会话过期后可能需要重新登录。",
   "authOfficialWebTitle": "在网易云音乐官网完成登录",
   "authOfficialWebDetail": "请使用官方登录窗口。Fura 仅导入登录结果，验证账号后才会保存。",
   "authOfficialWebErrorTitle": "网易云音乐官方登录未完成",
