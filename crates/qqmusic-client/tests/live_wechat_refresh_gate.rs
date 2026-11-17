@@ -24,13 +24,30 @@ enum GateClassification {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum FieldPresence {
+    #[default]
+    Absent,
+    Present,
+}
+
+impl FieldPresence {
+    const fn from_bool(value: bool) -> Self {
+        if value { Self::Present } else { Self::Absent }
+    }
+
+    const fn is_present(self) -> bool {
+        matches!(self, Self::Present)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 struct RefreshResponsePresence {
-    music_key: bool,
-    open_id: bool,
-    refresh_token: bool,
-    union_id: bool,
-    refresh_key: bool,
-    expiry: bool,
+    music_key: FieldPresence,
+    open_id: FieldPresence,
+    refresh_token: FieldPresence,
+    union_id: FieldPresence,
+    refresh_key: FieldPresence,
+    expiry: FieldPresence,
 }
 
 impl RefreshResponsePresence {
@@ -60,12 +77,24 @@ impl RefreshResponsePresence {
             })
         };
         Self {
-            music_key: nonempty(&["musickey"]),
-            open_id: nonempty(&["openid", "psrf_wxopenid", "wxopenid"]),
-            refresh_token: nonempty(&["refresh_token", "psrf_wxrefresh_token", "wxrefresh_token"]),
-            union_id: nonempty(&["unionid", "psrf_wxunionid", "wxunionid"]),
-            refresh_key: nonempty(&["refresh_key"]),
-            expiry: positive(&["musickeyCreateTime", "keyExpiresIn", "expired_at"]),
+            music_key: FieldPresence::from_bool(nonempty(&["musickey"])),
+            open_id: FieldPresence::from_bool(nonempty(&["openid", "psrf_wxopenid", "wxopenid"])),
+            refresh_token: FieldPresence::from_bool(nonempty(&[
+                "refresh_token",
+                "psrf_wxrefresh_token",
+                "wxrefresh_token",
+            ])),
+            union_id: FieldPresence::from_bool(nonempty(&[
+                "unionid",
+                "psrf_wxunionid",
+                "wxunionid",
+            ])),
+            refresh_key: FieldPresence::from_bool(nonempty(&["refresh_key"])),
+            expiry: FieldPresence::from_bool(positive(&[
+                "musickeyCreateTime",
+                "keyExpiresIn",
+                "expired_at",
+            ])),
         }
     }
 }
@@ -326,12 +355,12 @@ async fn refresh_once_and_verify_once(
         .unwrap_or_default();
     eprintln!(
         "FURA_QQ_REFRESH_GATE phase=refresh_response returned_musickey_present={} returned_openid_present={} returned_refresh_token_present={} returned_unionid_present={} returned_refresh_key_present={} returned_expiry_present={}",
-        returned.music_key,
-        returned.open_id,
-        returned.refresh_token,
-        returned.union_id,
-        returned.refresh_key,
-        returned.expiry,
+        returned.music_key.is_present(),
+        returned.open_id.is_present(),
+        returned.refresh_token.is_present(),
+        returned.union_id.is_present(),
+        returned.refresh_key.is_present(),
+        returned.expiry.is_present(),
     );
     let refreshed = match refresh_result {
         Ok(credential) => credential,
@@ -456,12 +485,12 @@ fn refresh_presence_diagnostic_recognizes_aliases_without_values() {
     assert_eq!(
         observed,
         RefreshResponsePresence {
-            music_key: true,
-            open_id: true,
-            refresh_token: true,
-            union_id: true,
-            refresh_key: true,
-            expiry: true,
+            music_key: FieldPresence::Present,
+            open_id: FieldPresence::Present,
+            refresh_token: FieldPresence::Present,
+            union_id: FieldPresence::Present,
+            refresh_key: FieldPresence::Present,
+            expiry: FieldPresence::Present,
         }
     );
     assert!(!format!("{observed:?}").contains("do-not-echo"));

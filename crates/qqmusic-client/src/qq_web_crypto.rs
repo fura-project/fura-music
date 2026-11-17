@@ -2,7 +2,7 @@
 //!
 //! The zzc/ag-1 compatibility algorithm is adapted from
 //! jixunmoe/qmweb-sign at 15305a3cc39f80eb1646ab2bae46468231765736
-//! under the MIT License. See /THIRD_PARTY_NOTICES.md.
+//! under the MIT License. See `/THIRD_PARTY_NOTICES.md`.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use ring::aead::{AES_128_GCM, Aad, LessSafeKey, Nonce, UnboundKey};

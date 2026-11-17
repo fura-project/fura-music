@@ -259,7 +259,7 @@ async fn refresh_and_verify_once(
             report(
                 GateClassification::BlockedByRiskControl,
                 "refresh",
-                refresh_failure_detail(&error),
+                refresh_failure_detail(error),
             );
             return;
         }
@@ -267,7 +267,7 @@ async fn refresh_and_verify_once(
             report(
                 GateClassification::BlockedByProtocol,
                 "refresh",
-                refresh_failure_detail(&error),
+                refresh_failure_detail(error),
             );
             return;
         }
@@ -283,7 +283,7 @@ async fn refresh_and_verify_once(
     }
 }
 
-const fn refresh_failure_detail(error: &CredentialRefreshError) -> &'static str {
+const fn refresh_failure_detail(error: CredentialRefreshError) -> &'static str {
     match error {
         CredentialRefreshError::NotRefreshable => "not_refreshable",
         CredentialRefreshError::UnsupportedLoginType => "unsupported_login_type",
@@ -374,23 +374,23 @@ fn classification_labels_are_stable_and_diagnostics_safe() {
         "IMPLEMENTATION_DEFECT"
     );
     assert_eq!(
-        refresh_failure_detail(&CredentialRefreshError::NotRefreshable),
+        refresh_failure_detail(CredentialRefreshError::NotRefreshable),
         "not_refreshable"
     );
     assert_eq!(
-        refresh_failure_detail(&CredentialRefreshError::InvalidResponse),
+        refresh_failure_detail(CredentialRefreshError::InvalidResponse),
         "invalid_response"
     );
     assert_eq!(
-        refresh_failure_detail(&CredentialRefreshError::UpstreamRejected),
+        refresh_failure_detail(CredentialRefreshError::UpstreamRejected),
         "upstream_rejected"
     );
     assert_eq!(
-        refresh_failure_detail(&CredentialRefreshError::IncompleteRotation),
+        refresh_failure_detail(CredentialRefreshError::IncompleteRotation),
         "incomplete_rotation"
     );
     assert_eq!(
-        refresh_failure_detail(&CredentialRefreshError::RiskControl),
+        refresh_failure_detail(CredentialRefreshError::RiskControl),
         "risk_control"
     );
     assert_eq!(

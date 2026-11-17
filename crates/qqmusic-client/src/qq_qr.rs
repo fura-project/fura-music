@@ -682,7 +682,7 @@ mod tests {
     use serde_json::Value;
 
     use super::{QqQrPollResult, hash33};
-    use crate::{HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient};
+    use crate::{Credential, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicClient};
 
     struct FakeTransport {
         responses: Mutex<VecDeque<HttpResponse>>,
@@ -718,6 +718,25 @@ mod tests {
 
     fn png() -> Vec<u8> {
         b"\x89PNG\r\n\x1a\nfixture".to_vec()
+    }
+
+    fn assert_qq_type_two_credential(credential: &Credential) {
+        assert_eq!(credential.login_type(), LoginType::QQ);
+        assert_eq!(credential.music_id(), "456");
+        assert_eq!(credential.expires_at_unix_seconds(), Some(2_000_000_000));
+        assert_eq!(credential.session_secrets().open_id(), Some("secret-open"));
+        assert_eq!(
+            credential.session_secrets().access_token(),
+            Some("secret-access")
+        );
+        assert_eq!(
+            credential.session_secrets().refresh_token(),
+            Some("secret-refresh")
+        );
+        assert_eq!(
+            credential.session_secrets().refresh_key(),
+            Some("secret-refresh-key")
+        );
     }
 
     #[test]
@@ -833,22 +852,7 @@ mod tests {
             .await
             .expect("QQ credential");
 
-        assert_eq!(credential.login_type(), LoginType::QQ);
-        assert_eq!(credential.music_id(), "456");
-        assert_eq!(credential.expires_at_unix_seconds(), Some(2_000_000_000));
-        assert_eq!(credential.session_secrets().open_id(), Some("secret-open"));
-        assert_eq!(
-            credential.session_secrets().access_token(),
-            Some("secret-access")
-        );
-        assert_eq!(
-            credential.session_secrets().refresh_token(),
-            Some("secret-refresh")
-        );
-        assert_eq!(
-            credential.session_secrets().refresh_key(),
-            Some("secret-refresh-key")
-        );
+        assert_qq_type_two_credential(&credential);
         let requests = client.transport().requests();
         assert!(!requests[2].redirects_are_followed());
         assert!(!requests[3].redirects_are_followed());
