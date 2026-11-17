@@ -375,7 +375,7 @@ class PrivacyAuditTests(unittest.TestCase):
             calls = []
             def command(args):
                 calls.append(args)
-                if args[0] == "codesign" and "--architecture" in args and "arm64" in args:
+                if args[0] == "codesign" and "--arch" in args and "arm64" in args:
                     return b"Authority=Developer ID\n"
                 return fake_native_metadata(args)
             with (patch.object(mac_strip.sys, "platform", "darwin"),
@@ -385,6 +385,11 @@ class PrivacyAuditTests(unittest.TestCase):
                     mac_strip.prepare(app)
             self.assertEqual(binary.read_bytes(), original)
             self.assertTrue(any("arm64" in args for args in calls))
+            architecture_calls = [args for args in calls if args[0] == "codesign"
+                                  and "--arch" in args]
+            self.assertEqual([args[args.index("--arch") + 1] for args in architecture_calls],
+                             ["x86_64", "arm64"])
+            self.assertFalse(any("--architecture" in args for args in calls))
             self.assertFalse(any("strip" in args or "--force" in args for args in calls))
 
     def test_signing_bundle_executable_cannot_escape_checked_bundle(self) -> None:

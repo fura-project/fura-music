@@ -194,7 +194,11 @@ def require_adhoc_seal(path: Path) -> None:
             or any(re.fullmatch(rb"[a-zA-Z0-9_]+", arch) is None for arch in architectures)):
         raise RuntimeError("MACHO_ARCHITECTURE_METADATA_INVALID")
     for architecture in architectures:
-        signature = command(["codesign", "-dv", "--architecture", architecture.decode("ascii"), str(path)])
+        # Use the architecture selector documented by Apple's code-signing
+        # technote.  The hosted Xcode toolchain rejects the longer spelling
+        # while displaying an architecture-specific ad-hoc signature.
+        signature = command(["codesign", "--display", "--verbose=2", "--arch",
+                             architecture.decode("ascii"), str(path)])
         if b"Signature=adhoc" not in signature.splitlines():
             raise ValueError("refusing non-ad-hoc signed binary")
 
