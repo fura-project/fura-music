@@ -54,14 +54,14 @@ class RustPersonalizedTracksGateway implements PersonalizedTracksGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final PersonalizedTracksLoadOperationFactory? operationFactory;
-  final QqSessionContinuationCoordinator? sessionContinuation;
+  final SessionContinuationCoordinator? sessionContinuation;
 
   @override
   PersonalizedTracksLoadOperation beginLoad() =>
       _VaultCleaningPersonalizedTracksLoadOperation(
         () => operationFactory?.call() ?? _beginRustLoad(providerId),
         _credentialVault,
-        providerId == 'qq-music' ? sessionContinuation : null,
+        sessionContinuation,
       );
 }
 
@@ -102,7 +102,7 @@ class _VaultCleaningPersonalizedTracksLoadOperation
   final PersonalizedTracksLoadOperationFactory _factory;
   PersonalizedTracksLoadOperation _inner;
   final CredentialVault _vault;
-  final QqSessionContinuationCoordinator? _continuation;
+  final SessionContinuationCoordinator? _continuation;
   bool _cancelled = false;
 
   @override

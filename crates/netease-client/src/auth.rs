@@ -305,6 +305,43 @@ pub enum CredentialRefreshError {
     NoRotation,
 }
 
+/// Secret-free classification of one allowlisted response Cookie transition.
+///
+/// `Absent` means the response did not mention the Cookie and therefore the
+/// existing value is retained. It is deliberately distinct from `Deleted`,
+/// which requires an explicit empty value or non-positive `Max-Age`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CredentialCookieRotation {
+    Absent,
+    Inserted,
+    Updated,
+    Deleted,
+    Unchanged,
+}
+
+impl CredentialCookieRotation {
+    /// Fixed diagnostic label containing no credential material.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Absent => "absent",
+            Self::Inserted => "inserted",
+            Self::Updated => "updated",
+            Self::Deleted => "deleted",
+            Self::Unchanged => "unchanged",
+        }
+    }
+}
+
+/// Secret-free evidence produced by one accepted refresh response.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CredentialRefreshObservation {
+    pub music_u: CredentialCookieRotation,
+    pub music_r_u: CredentialCookieRotation,
+    pub csrf: CredentialCookieRotation,
+    pub candidate_next_refreshable: bool,
+}
+
 impl std::fmt::Display for CredentialRefreshError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(formatter, "NetEase credential refresh: {self:?}")
@@ -318,12 +355,15 @@ impl std::fmt::Debug for Credential {
     }
 }
 impl Credential {
-    fn refreshed_from_cookies(&self, cookies: &[String]) -> Result<Self, CredentialRefreshError> {
+    fn refreshed_from_cookies(
+        &self,
+        cookies: &[String],
+    ) -> Result<(Self, CredentialRefreshObservation), CredentialRefreshError> {
         if cookies.len() > 32 || cookies.iter().any(|c| c.len() > 8192) {
             return Err(CredentialRefreshError::InvalidResponse);
         }
         let mut replacement = self.clone();
-        let mut known = BTreeMap::new();
+        let mut known = BTreeMap::<&str, Option<&str>>::new();
         for cookie in cookies {
             let mut parts = cookie.split(';');
             let (name, value) = parts
@@ -335,9 +375,7 @@ impl Credential {
                 continue;
             }
             let value = value.trim();
-            if known.insert(name, value).is_some_and(|old| old != value) {
-                return Err(CredentialRefreshError::InvalidResponse);
-            }
+            let mut deleted = value.is_empty();
             for attribute in parts {
                 if let Some((attribute, value)) = attribute.trim().split_once('=') {
                     if attribute.eq_ignore_ascii_case("domain")
@@ -353,39 +391,63 @@ impl Credential {
                             .trim()
                             .parse::<i64>()
                             .map_err(|_| CredentialRefreshError::InvalidResponse)?;
-                        if seconds <= 0 {
-                            return Err(CredentialRefreshError::CredentialRejected);
-                        }
+                        deleted |= seconds <= 0;
                     }
                 }
             }
-            match name {
-                "MUSIC_U" => {
-                    if value.is_empty() {
-                        return Err(CredentialRefreshError::CredentialRejected);
-                    }
-                    replacement.music_u = value.into();
-                }
-                "MUSIC_R_U" => {
-                    if value.is_empty() {
-                        return Err(CredentialRefreshError::CredentialRejected);
-                    }
-                    replacement.music_r_u = Some(value.into());
-                }
-                "__csrf" => replacement.csrf = value.into(),
-                _ => unreachable!(),
+            let mutation = if deleted { None } else { Some(value) };
+            if known
+                .insert(name, mutation)
+                .is_some_and(|old| old != mutation)
+            {
+                return Err(CredentialRefreshError::InvalidResponse);
             }
         }
-        if !known.contains_key("MUSIC_U") || !known.contains_key("MUSIC_R_U") {
-            return Err(CredentialRefreshError::IncompleteRotation);
+
+        let rotation = |name: &str, old: Option<&str>| match known.get(name) {
+            None => CredentialCookieRotation::Absent,
+            Some(None) => CredentialCookieRotation::Deleted,
+            Some(Some(new)) if old.is_none() => CredentialCookieRotation::Inserted,
+            Some(Some(new)) if old == Some(*new) => CredentialCookieRotation::Unchanged,
+            Some(Some(_)) => CredentialCookieRotation::Updated,
+        };
+        let music_u_rotation = rotation("MUSIC_U", Some(self.music_u.as_str()));
+        let music_r_u_rotation = rotation("MUSIC_R_U", self.music_r_u.as_deref());
+        let csrf_rotation = rotation("__csrf", Some(self.csrf.as_str()));
+
+        for (name, mutation) in &known {
+            match *name {
+                "MUSIC_U" => {
+                    let Some(value) = mutation else {
+                        return Err(CredentialRefreshError::CredentialRejected);
+                    };
+                    replacement.music_u = (*value).into();
+                }
+                "MUSIC_R_U" => {
+                    let Some(value) = mutation else {
+                        return Err(CredentialRefreshError::CredentialRejected);
+                    };
+                    replacement.music_r_u = Some((*value).into());
+                }
+                "__csrf" => {
+                    replacement.csrf = mutation.unwrap_or_default().to_string();
+                }
+                _ => unreachable!(),
+            }
         }
         replacement
             .validate()
             .map_err(|_| CredentialRefreshError::InvalidResponse)?;
-        if replacement == *self {
-            return Err(CredentialRefreshError::NoRotation);
-        }
-        Ok(replacement)
+        let candidate_next_refreshable = replacement.refresh_cookie().is_ok();
+        Ok((
+            replacement,
+            CredentialRefreshObservation {
+                music_u: music_u_rotation,
+                music_r_u: music_r_u_rotation,
+                csrf: csrf_rotation,
+                candidate_next_refreshable,
+            },
+        ))
     }
 
     fn validate(&self) -> Result<(), Error> {
@@ -562,6 +624,20 @@ impl<T: Transport> NeteaseClient<T> {
         &self,
         credential: &Credential,
     ) -> Result<Credential, CredentialRefreshError> {
+        self.refresh_credential_observed(credential)
+            .await
+            .map(|(candidate, _)| candidate)
+    }
+
+    /// Performs the same bounded one-shot refresh while returning only
+    /// secret-free Cookie transition evidence for a Human-operated gate.
+    ///
+    /// # Errors
+    /// Uses the same fail-closed classification as [`Self::refresh_credential`].
+    pub async fn refresh_credential_observed(
+        &self,
+        credential: &Credential,
+    ) -> Result<(Credential, CredentialRefreshObservation), CredentialRefreshError> {
         credential
             .validate()
             .map_err(|_| CredentialRefreshError::InvalidResponse)?;
@@ -699,6 +775,109 @@ mod refresh_tests {
             )
         );
     }
+
+    #[test]
+    fn refresh_cookie_delta_matrix_preserves_absent_and_rejects_explicit_auth_deletion() {
+        let old = credential();
+        for (cookies, expected, expected_u, expected_r, expected_csrf) in [
+            (
+                vec![
+                    "MUSIC_U=synthetic-new".into(),
+                    "MUSIC_R_U=synthetic-refresh-new".into(),
+                ],
+                CredentialRefreshObservation {
+                    music_u: CredentialCookieRotation::Updated,
+                    music_r_u: CredentialCookieRotation::Updated,
+                    csrf: CredentialCookieRotation::Absent,
+                    candidate_next_refreshable: true,
+                },
+                "synthetic-new",
+                "synthetic-refresh-new",
+                "synthetic-csrf",
+            ),
+            (
+                vec!["MUSIC_U=synthetic-new".into()],
+                CredentialRefreshObservation {
+                    music_u: CredentialCookieRotation::Updated,
+                    music_r_u: CredentialCookieRotation::Absent,
+                    csrf: CredentialCookieRotation::Absent,
+                    candidate_next_refreshable: true,
+                },
+                "synthetic-new",
+                "synthetic-refresh-old",
+                "synthetic-csrf",
+            ),
+            (
+                vec!["MUSIC_R_U=synthetic-refresh-new".into()],
+                CredentialRefreshObservation {
+                    music_u: CredentialCookieRotation::Absent,
+                    music_r_u: CredentialCookieRotation::Updated,
+                    csrf: CredentialCookieRotation::Absent,
+                    candidate_next_refreshable: true,
+                },
+                "synthetic-old",
+                "synthetic-refresh-new",
+                "synthetic-csrf",
+            ),
+            (
+                Vec::new(),
+                CredentialRefreshObservation {
+                    music_u: CredentialCookieRotation::Absent,
+                    music_r_u: CredentialCookieRotation::Absent,
+                    csrf: CredentialCookieRotation::Absent,
+                    candidate_next_refreshable: true,
+                },
+                "synthetic-old",
+                "synthetic-refresh-old",
+                "synthetic-csrf",
+            ),
+            (
+                vec!["__csrf=; Max-Age=0; Path=/".into()],
+                CredentialRefreshObservation {
+                    music_u: CredentialCookieRotation::Absent,
+                    music_r_u: CredentialCookieRotation::Absent,
+                    csrf: CredentialCookieRotation::Deleted,
+                    candidate_next_refreshable: true,
+                },
+                "synthetic-old",
+                "synthetic-refresh-old",
+                "",
+            ),
+        ] {
+            let (candidate, observation) = old
+                .refreshed_from_cookies(&cookies)
+                .expect("accepted Cookie delta");
+            assert_eq!(observation, expected);
+            assert_eq!(candidate.music_u, expected_u);
+            assert_eq!(candidate.music_r_u.as_deref(), Some(expected_r));
+            assert_eq!(candidate.csrf, expected_csrf);
+            assert!(candidate.refresh_cookie().is_ok());
+        }
+
+        for cookies in [
+            vec!["MUSIC_U=; Max-Age=0".into()],
+            vec!["MUSIC_R_U=; Max-Age=0".into()],
+        ] {
+            assert_eq!(
+                old.refreshed_from_cookies(&cookies),
+                Err(CredentialRefreshError::CredentialRejected)
+            );
+        }
+    }
+
+    #[test]
+    fn newly_inserted_refresh_material_is_classified_without_exposing_it() {
+        let old =
+            Credential::from_browser_cookie_header(b"MUSIC_U=synthetic-old; __csrf=synthetic-csrf")
+                .unwrap();
+        let (candidate, observation) = old
+            .refreshed_from_cookies(&["MUSIC_R_U=synthetic-refresh-new".into()])
+            .unwrap();
+        assert_eq!(observation.music_r_u, CredentialCookieRotation::Inserted);
+        assert!(observation.candidate_next_refreshable);
+        assert!(candidate.has_refresh_material());
+        assert!(!format!("{observation:?}").contains("synthetic"));
+    }
     #[test]
     fn conflicting_cross_domain_deleted_oversized_and_unknown_cookies_fail_closed() {
         let old = credential();
@@ -730,17 +909,21 @@ mod refresh_tests {
         ] {
             assert_eq!(old.refreshed_from_cookies(&cookies), Err(expected));
         }
-        assert_eq!(
-            old.refreshed_from_cookies(&["unrelated=ignored".into()]),
-            Err(CredentialRefreshError::IncompleteRotation)
-        );
-        assert_eq!(
-            old.refreshed_from_cookies(&[
+        let (unchanged, observation) = old
+            .refreshed_from_cookies(&["unrelated=ignored".into()])
+            .expect("unrelated response Cookie is not deletion");
+        assert_eq!(unchanged, old);
+        assert_eq!(observation.music_u, CredentialCookieRotation::Absent);
+        assert_eq!(observation.music_r_u, CredentialCookieRotation::Absent);
+        let (unchanged, observation) = old
+            .refreshed_from_cookies(&[
                 "MUSIC_U=synthetic-old".into(),
-                "MUSIC_R_U=synthetic-refresh-old".into()
-            ]),
-            Err(CredentialRefreshError::NoRotation)
-        );
+                "MUSIC_R_U=synthetic-refresh-old".into(),
+            ])
+            .expect("explicitly unchanged auth Cookies remain usable");
+        assert_eq!(unchanged, old);
+        assert_eq!(observation.music_u, CredentialCookieRotation::Unchanged);
+        assert_eq!(observation.music_r_u, CredentialCookieRotation::Unchanged);
     }
 
     #[tokio::test]
@@ -1691,7 +1874,7 @@ impl<T: Transport> NeteaseClient<T> {
         }
     }
     /// # Errors
-    /// Bounded authenticated daily songs from NetEase's dedicated recommendation feed.
+    /// Bounded authenticated daily songs from `NetEase`'s dedicated recommendation feed.
     /// Private Radar remains a separate playlist surface and is never substituted here.
     pub async fn daily_tracks(&self, credential: &Credential) -> Result<DailyTracks, Error> {
         let (value, _) = self
@@ -2125,14 +2308,12 @@ impl<T: Transport> NeteaseClient<T> {
                 Err(error) => return Err(error),
             }
         }
-        if !items.iter().any(|item| item.id == PRIVATE_RADAR_PLAYLIST_ID) {
+        if !items
+            .iter()
+            .any(|item| item.id == PRIVATE_RADAR_PLAYLIST_ID)
+        {
             let radar = self
-                .authenticated_playlist_selection(
-                    credential,
-                    PRIVATE_RADAR_PLAYLIST_ID,
-                    0,
-                    1,
-                )
+                .authenticated_playlist_selection(credential, PRIVATE_RADAR_PLAYLIST_ID, 0, 1)
                 .await?
                 .into_playlist();
             items.insert(0, radar);

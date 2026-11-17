@@ -139,6 +139,42 @@ void main() {
       AlbumFavoriteMutationFailure.credentialRejectedStorageCleanupFailed,
     );
   });
+
+  test(
+    'QQ rejection continues the session without replaying the write',
+    () async {
+      final vault = _Vault();
+      var continuationCount = 0;
+      var mutationCount = 0;
+      final gateway = RustAlbumFavoriteGateway(
+        credentialVault: vault,
+        qqSessionContinuation: () async {
+          continuationCount += 1;
+        },
+        operationFactory: (_, _, _) {
+          mutationCount += 1;
+          return const _Operation(
+            AlbumFavoriteMutationResult(
+              failure: AlbumFavoriteMutationFailure.credentialRejected,
+            ),
+          );
+        },
+      );
+
+      final result = await gateway
+          .beginMutation(
+            providerId: 'qq-music',
+            opaqueAlbumId: 'album:43001:fixtureAlbumMid',
+            desiredState: AlbumFavoriteState.favorite,
+          )
+          .run();
+
+      expect(result.failure, AlbumFavoriteMutationFailure.credentialRejected);
+      expect(mutationCount, 1);
+      expect(continuationCount, 1);
+      expect(vault.deleteCount, 0);
+    },
+  );
 }
 
 class _Operation implements AlbumFavoriteMutationOperation {

@@ -43,6 +43,7 @@ class RustPlaylistCreationGateway implements PlaylistCreationGateway {
   RustPlaylistCreationGateway({
     this.providerId = 'qq-music',
     CredentialVault? credentialVault,
+    this.sessionContinuation,
     PlaylistCreationOperationFactory? operationFactory,
   }) : _operationFactory = operationFactory ?? _beginRustCreation,
        _credentialVault = SerializedCredentialVault(
@@ -52,12 +53,14 @@ class RustPlaylistCreationGateway implements PlaylistCreationGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final PlaylistCreationOperationFactory _operationFactory;
+  final CredentialRejectionContinuation? sessionContinuation;
 
   @override
   PlaylistCreationOperation beginCreation({required String name}) =>
       _VaultCleaningPlaylistCreationOperation(
         _operationFactory(providerId, name),
         _credentialVault,
+        continueSession: sessionContinuation,
       );
 }
 
@@ -90,11 +93,13 @@ class _VaultCleaningPlaylistCreationOperation
     implements PlaylistCreationOperation {
   const _VaultCleaningPlaylistCreationOperation(
     this._inner,
-    this._credentialVault,
-  );
+    this._credentialVault, {
+    this.continueSession,
+  });
 
   final PlaylistCreationOperation _inner;
   final CredentialVault _credentialVault;
+  final CredentialRejectionContinuation? continueSession;
 
   @override
   bool cancel() => _inner.cancel();
@@ -110,6 +115,7 @@ class _VaultCleaningPlaylistCreationOperation
       cleanupFailureResult: const PlaylistCreationResult(
         failure: PlaylistCreationFailure.credentialRejectedStorageCleanupFailed,
       ),
+      continueSession: continueSession,
     );
   }
 }

@@ -92,7 +92,7 @@ class ArtistController extends ChangeNotifier {
 
   Future<void> load() => _loadFirstPage();
 
-  Future<void> _loadFirstPage() async {
+  Future<void> _loadFirstPage() {
     final generation = ++_generation;
     _operation?.cancel();
     final operation = _gateway.beginLoad(
@@ -101,18 +101,34 @@ class ArtistController extends ChangeNotifier {
       size: pageSize,
     );
     _operation = operation;
-    _tracks = const [];
     _failure = null;
     _appendFailure = null;
+    _isLoadingMore = false;
+
+    var completedSynchronously = false;
+    final future = operation.run().then((result) {
+      completedSynchronously = true;
+      _completeFirstPage(generation, operation, result);
+    });
+    if (completedSynchronously) {
+      return future;
+    }
+
+    _tracks = const [];
     _total = 0;
     _nextOffset = 0;
     _hasMore = false;
     _omittedTrackCount = 0;
-    _isLoadingMore = false;
     _stage = ArtistTrackStage.loading;
     _notify();
+    return future;
+  }
 
-    final result = await operation.run();
+  void _completeFirstPage(
+    int generation,
+    ArtistTrackPageLoadOperation operation,
+    ArtistTrackPageResult result,
+  ) {
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
 
@@ -127,14 +143,19 @@ class ArtistController extends ChangeNotifier {
           ? ArtistTrackStage.empty
           : ArtistTrackStage.content;
     } else {
+      _tracks = const [];
+      _total = 0;
+      _nextOffset = 0;
+      _hasMore = false;
+      _omittedTrackCount = 0;
       _failure = result.failure ?? ArtistTrackFailure.invalidResponse;
       _stage = ArtistTrackStage.error;
     }
     _notify();
   }
 
-  Future<void> loadMore() async {
-    if (!canLoadMore && !canRetryMore) return;
+  Future<void> loadMore() {
+    if (!canLoadMore && !canRetryMore) return Future.value();
     final generation = _generation;
     final expectedOffset = _nextOffset;
     final operation = _gateway.beginLoad(
@@ -143,11 +164,28 @@ class ArtistController extends ChangeNotifier {
       size: pageSize,
     );
     _operation = operation;
-    _isLoadingMore = true;
     _appendFailure = null;
-    _notify();
 
-    final result = await operation.run();
+    var completedSynchronously = false;
+    final future = operation.run().then((result) {
+      completedSynchronously = true;
+      _completeMorePage(generation, expectedOffset, operation, result);
+    });
+    if (completedSynchronously) {
+      return future;
+    }
+
+    _isLoadingMore = true;
+    _notify();
+    return future;
+  }
+
+  void _completeMorePage(
+    int generation,
+    int expectedOffset,
+    ArtistTrackPageLoadOperation operation,
+    ArtistTrackPageResult result,
+  ) {
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
     _isLoadingMore = false;

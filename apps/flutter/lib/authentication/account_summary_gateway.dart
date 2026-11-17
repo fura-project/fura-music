@@ -60,13 +60,13 @@ class RustAccountSummaryGateway implements AccountSummaryGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final AccountSummaryLoadOperationFactory? operationFactory;
-  final QqSessionContinuationCoordinator? sessionContinuation;
+  final SessionContinuationCoordinator? sessionContinuation;
 
   @override
   AccountSummaryLoadOperation beginLoad() => _ContinuingAccountSummaryOperation(
     () => operationFactory?.call() ?? _beginRustLoad(providerId),
     _credentialVault,
-    providerId == 'qq-music' ? sessionContinuation : null,
+    sessionContinuation,
   );
 }
 
@@ -105,7 +105,7 @@ class _ContinuingAccountSummaryOperation
 
   final AccountSummaryLoadOperationFactory _factory;
   final CredentialVault _credentialVault;
-  final QqSessionContinuationCoordinator? _continuation;
+  final SessionContinuationCoordinator? _continuation;
   AccountSummaryLoadOperation _active;
   bool _cancelled = false;
 

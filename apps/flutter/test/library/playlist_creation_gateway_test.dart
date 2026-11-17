@@ -139,6 +139,37 @@ void main() {
       PlaylistCreationFailure.credentialRejectedStorageCleanupFailed,
     );
   });
+
+  test(
+    'NetEase rejection continues the session without replaying creation',
+    () async {
+      final vault = _Vault();
+      var continuationCount = 0;
+      var mutationCount = 0;
+      final gateway = RustPlaylistCreationGateway(
+        providerId: 'netease-cloud-music',
+        credentialVault: vault,
+        sessionContinuation: () async {
+          continuationCount += 1;
+        },
+        operationFactory: (_, _) {
+          mutationCount += 1;
+          return const _Operation(
+            PlaylistCreationResult(
+              failure: PlaylistCreationFailure.credentialRejected,
+            ),
+          );
+        },
+      );
+
+      final result = await gateway.beginCreation(name: 'New playlist').run();
+
+      expect(result.failure, PlaylistCreationFailure.credentialRejected);
+      expect(mutationCount, 1);
+      expect(continuationCount, 1);
+      expect(vault.deleteCount, 0);
+    },
+  );
 }
 
 class _Operation implements PlaylistCreationOperation {

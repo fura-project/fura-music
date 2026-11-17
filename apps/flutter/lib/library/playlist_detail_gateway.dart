@@ -104,7 +104,7 @@ class RustPlaylistDetailGateway
 
   final CredentialVault _credentialVault;
   final PlaylistTrackPageLoadOperationFactory _operationFactory;
-  final QqSessionContinuationCoordinator? sessionContinuation;
+  final SessionContinuationCoordinator? sessionContinuation;
 
   @override
   PlaylistTrackPageLoadOperation beginLoad({
@@ -114,7 +114,7 @@ class RustPlaylistDetailGateway
   }) => _VaultCleaningTrackPageLoadOperation(
     () => _operationFactory(playlist, offset, size),
     _credentialVault,
-    playlist.providerId == 'qq-music' ? sessionContinuation : null,
+    sessionContinuation,
   );
 
   @override
@@ -282,7 +282,7 @@ class _VaultCleaningTrackPageLoadOperation
   final PlaylistTrackPageLoadOperation Function() _factory;
   PlaylistTrackPageLoadOperation _inner;
   final CredentialVault _vault;
-  final QqSessionContinuationCoordinator? _continuation;
+  final SessionContinuationCoordinator? _continuation;
   bool _cancelled = false;
 
   @override

@@ -2,6 +2,10 @@ use music_domain::{AudioQuality, PlaylistId, PlaylistPurpose, TrackId};
 use netease_client::{Credential, Error, NeteaseClient, Request, Response, Transport};
 use provider_api::*;
 use provider_netease::{NeteaseProvider, provider_id};
+use provider_netease::{
+    NeteaseRefreshFailure, NeteaseRefreshPrepareState, NeteaseRefreshTrigger,
+    NeteaseStagedRecoveryAction,
+};
 use serde_json::{Value, json};
 use std::sync::{
     Arc, Mutex,
@@ -10,10 +14,12 @@ use std::sync::{
 use tokio::sync::Notify;
 enum Reply {
     Json(Value),
+    Refresh(Vec<String>),
     Confirmed,
     SmsConfirmed,
     Failure(Error),
     Blocked(Arc<Notify>, Arc<Notify>, Value),
+    RefreshBlocked(Arc<Notify>, Arc<Notify>, Vec<String>),
 }
 struct Fake {
     replies: Mutex<std::collections::VecDeque<Reply>>,
@@ -24,7 +30,7 @@ impl Transport for Fake {
     async fn send(&self, r: Request) -> Result<Response, Error> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         if let Some(cookie) = r.cookie() {
-            if cookie.contains("synthetic") {
+            if cookie.contains("MUSIC_U=") {
                 self.auth_calls.fetch_add(1, Ordering::SeqCst);
             } else if r.url().contains("interface3.music.163.com/eapi/") {
                 assert!(cookie.contains("deviceId="));
@@ -43,6 +49,10 @@ impl Transport for Fake {
         let mut cookies = vec![];
         let value = match reply {
             Reply::Json(v) => v,
+            Reply::Refresh(set_cookies) => {
+                cookies = set_cookies;
+                json!({"code":200,"bizCode":201})
+            }
             Reply::Failure(e) => return Err(e),
             Reply::Confirmed => {
                 cookies = vec![
@@ -59,6 +69,12 @@ impl Transport for Fake {
                 start.notify_one();
                 release.notified().await;
                 v
+            }
+            Reply::RefreshBlocked(start, release, set_cookies) => {
+                start.notify_one();
+                release.notified().await;
+                cookies = set_cookies;
+                json!({"code":200,"bizCode":201})
             }
         };
         Ok(Response {
@@ -87,11 +103,46 @@ fn provider(
         a,
     )
 }
+fn provider_with_refresh(
+    replies: Vec<Reply>,
+) -> (
+    Arc<NeteaseProvider<Fake>>,
+    Arc<AtomicUsize>,
+    Arc<AtomicUsize>,
+) {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let authenticated_calls = Arc::new(AtomicUsize::new(0));
+    (
+        Arc::new(NeteaseProvider::new_with_refresh_activation(
+            NeteaseClient::new(Fake {
+                replies: Mutex::new(replies.into()),
+                calls: calls.clone(),
+                auth_calls: authenticated_calls.clone(),
+            }),
+            true,
+        )),
+        calls,
+        authenticated_calls,
+    )
+}
 fn account() -> Value {
     json!({"code":200,"account":{"id":42},"profile":{"userId":42,"nickname":"Synthetic user","avatarUrl":"https://fixture.invalid/avatar"}})
 }
+fn account_for(id: u64) -> Value {
+    json!({"code":200,"account":{"id":id},"profile":{"userId":id,"nickname":"Synthetic user","avatarUrl":"https://fixture.invalid/avatar"}})
+}
 fn credential() -> Vec<u8> {
     serde_json::to_vec(&json!({"version":1,"provider":"netease-cloud-music","music_u":"synthetic-session","csrf":"synthetic-csrf"})).unwrap()
+}
+fn refreshable_credential(music_u: &str, music_r_u: &str) -> Vec<u8> {
+    serde_json::to_vec(&json!({
+        "version":2,
+        "provider":"netease-cloud-music",
+        "music_u":music_u,
+        "music_r_u":music_r_u,
+        "csrf":"synthetic-csrf",
+    }))
+    .unwrap()
 }
 fn key() -> Reply {
     Reply::Json(json!({"code":200,"unikey":"synthetic-qr-key"}))
@@ -128,6 +179,394 @@ async fn restore_requires_verification_and_preserves_transient_candidate() {
     p.sign_out();
     assert!(!p.has_authenticated_credential());
     assert!(p.export_credential().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn production_default_rejection_does_not_send_an_unverified_refresh() {
+    let (provider, calls, _) = provider(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":301})),
+    ]);
+    provider
+        .import_credential(&refreshable_credential("source-u", "source-r"))
+        .unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::CredentialRejected)
+    );
+    assert_eq!(
+        provider
+            .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+            .await,
+        Err(NeteaseRefreshFailure::ProductionGateDisabled)
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert!(!provider.has_authenticated_credential());
+    assert!(provider.export_credential().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn rejection_refresh_stages_verifies_same_account_and_commits_atomically() {
+    let (provider, calls, _) = provider_with_refresh(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":301})),
+        Reply::Refresh(vec![
+            "MUSIC_U=candidate-u; Secure; HttpOnly".into(),
+            "MUSIC_R_U=candidate-r; Secure; HttpOnly".into(),
+            "__csrf=candidate-csrf; Secure".into(),
+        ]),
+        Reply::Json(account()),
+    ]);
+    let source = refreshable_credential("source-u", "source-r");
+    provider.import_credential(&source).unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::CredentialRejected)
+    );
+
+    let preparation = provider
+        .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+        .await
+        .unwrap();
+    assert_eq!(preparation.state, NeteaseRefreshPrepareState::Candidate);
+    let preparation = preparation.preparation.unwrap();
+    assert!(!provider.has_authenticated_credential());
+    assert!(provider.export_credential().unwrap().is_none());
+    let candidate = provider
+        .verify_staged_refresh_candidate(preparation.reservation_id)
+        .await
+        .unwrap();
+    assert!(!provider.has_authenticated_credential());
+    let candidate = Credential::import(&candidate).unwrap();
+    assert_ne!(candidate, Credential::import(&source).unwrap());
+    provider
+        .commit_staged_refresh_candidate(preparation.reservation_id)
+        .unwrap();
+    assert!(provider.has_authenticated_credential());
+    assert_eq!(
+        Credential::import(&provider.export_credential().unwrap().unwrap()).unwrap(),
+        candidate
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+}
+
+#[tokio::test]
+async fn accepted_no_delta_refresh_still_stages_verifies_and_advances_generation() {
+    let (provider, calls, _) = provider_with_refresh(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":301})),
+        Reply::Refresh(vec![]),
+        Reply::Json(account()),
+    ]);
+    let source = refreshable_credential("source-u", "source-r");
+    provider.import_credential(&source).unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::CredentialRejected)
+    );
+
+    let preparation = provider
+        .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+        .await
+        .unwrap()
+        .preparation
+        .unwrap();
+    let candidate = provider
+        .verify_staged_refresh_candidate(preparation.reservation_id)
+        .await
+        .unwrap();
+    assert_eq!(candidate, source);
+    provider
+        .commit_staged_refresh_candidate(preparation.reservation_id)
+        .unwrap();
+    assert!(provider.has_authenticated_credential());
+    assert_eq!(provider.export_credential().unwrap(), Some(source));
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+}
+
+#[tokio::test]
+async fn concurrent_rejections_share_one_complete_refresh_decision() {
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let (provider, calls, _) = provider_with_refresh(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":301})),
+        Reply::RefreshBlocked(
+            Arc::clone(&started),
+            Arc::clone(&release),
+            vec![
+                "MUSIC_U=candidate-u; Secure".into(),
+                "MUSIC_R_U=candidate-r; Secure".into(),
+            ],
+        ),
+        Reply::Json(account()),
+    ]);
+    provider
+        .import_credential(&refreshable_credential("source-u", "source-r"))
+        .unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::CredentialRejected)
+    );
+
+    let first_provider = Arc::clone(&provider);
+    let first = tokio::spawn(async move {
+        first_provider
+            .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+            .await
+    });
+    started.notified().await;
+    let second_provider = Arc::clone(&provider);
+    let second = tokio::spawn(async move {
+        second_provider
+            .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+            .await
+    });
+    for _ in 0..3 {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+
+    release.notify_one();
+    let preparation = first.await.unwrap().unwrap().preparation.unwrap();
+    provider
+        .verify_staged_refresh_candidate(preparation.reservation_id)
+        .await
+        .unwrap();
+    provider
+        .commit_staged_refresh_candidate(preparation.reservation_id)
+        .unwrap();
+    assert_eq!(
+        second.await.unwrap().unwrap().state,
+        NeteaseRefreshPrepareState::ReusedNewGeneration
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+}
+
+#[tokio::test]
+async fn sign_out_during_refresh_prevents_late_candidate_resurrection() {
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let (provider, calls, _) = provider_with_refresh(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":301})),
+        Reply::RefreshBlocked(
+            Arc::clone(&started),
+            Arc::clone(&release),
+            vec![
+                "MUSIC_U=candidate-u; Secure".into(),
+                "MUSIC_R_U=candidate-r; Secure".into(),
+            ],
+        ),
+    ]);
+    provider
+        .import_credential(&refreshable_credential("source-u", "source-r"))
+        .unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::CredentialRejected)
+    );
+    let refreshing = Arc::clone(&provider);
+    let task = tokio::spawn(async move {
+        refreshing
+            .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+            .await
+    });
+    started.notified().await;
+    provider.sign_out();
+    release.notify_one();
+
+    assert_eq!(task.await.unwrap(), Err(NeteaseRefreshFailure::Replaced));
+    assert!(!provider.has_authenticated_credential());
+    assert!(provider.export_credential().unwrap().is_none());
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test]
+async fn identical_relogin_during_refresh_dominates_the_stale_flight() {
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let (provider, calls, _) = provider_with_refresh(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":301})),
+        Reply::RefreshBlocked(
+            Arc::clone(&started),
+            Arc::clone(&release),
+            vec![
+                "MUSIC_U=stale-candidate-u; Secure".into(),
+                "MUSIC_R_U=stale-candidate-r; Secure".into(),
+            ],
+        ),
+        Reply::Json(account()),
+    ]);
+    let source = refreshable_credential("source-u", "source-r");
+    provider.import_credential(&source).unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::CredentialRejected)
+    );
+    let refreshing = Arc::clone(&provider);
+    let task = tokio::spawn(async move {
+        refreshing
+            .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+            .await
+    });
+    started.notified().await;
+
+    provider.import_credential(&source).unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    release.notify_one();
+
+    assert_eq!(task.await.unwrap(), Err(NeteaseRefreshFailure::Replaced));
+    assert!(provider.has_authenticated_credential());
+    assert_eq!(provider.export_credential().unwrap(), Some(source));
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+}
+
+#[tokio::test]
+async fn refresh_candidate_for_another_account_is_rejected_before_install() {
+    let (provider, calls, _) = provider_with_refresh(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":301})),
+        Reply::Refresh(vec![
+            "MUSIC_U=candidate-u; Secure".into(),
+            "MUSIC_R_U=candidate-r; Secure".into(),
+        ]),
+        Reply::Json(account_for(84)),
+    ]);
+    provider
+        .import_credential(&refreshable_credential("source-u", "source-r"))
+        .unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::CredentialRejected)
+    );
+    let preparation = provider
+        .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+        .await
+        .unwrap()
+        .preparation
+        .unwrap();
+
+    assert_eq!(
+        provider
+            .verify_staged_refresh_candidate(preparation.reservation_id)
+            .await,
+        Err(NeteaseRefreshFailure::ReauthenticationRequired)
+    );
+    assert!(!provider.has_authenticated_credential());
+    assert!(provider.export_credential().unwrap().is_none());
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+}
+
+#[tokio::test]
+async fn transient_refresh_is_not_retried_by_rejection_but_checkpoint_can_retry() {
+    let (provider, calls, _) = provider_with_refresh(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":301})),
+        Reply::Failure(Error::TemporaryNetworkFailure),
+        Reply::Refresh(vec![
+            "MUSIC_U=candidate-u; Secure".into(),
+            "MUSIC_R_U=candidate-r; Secure".into(),
+        ]),
+    ]);
+    provider
+        .import_credential(&refreshable_credential("source-u", "source-r"))
+        .unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::CredentialRejected)
+    );
+    assert_eq!(
+        provider
+            .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+            .await,
+        Err(NeteaseRefreshFailure::Network)
+    );
+    assert_eq!(
+        provider
+            .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+            .await,
+        Err(NeteaseRefreshFailure::Network)
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+    let retry = provider
+        .prepare_credential_refresh(NeteaseRefreshTrigger::Checkpoint)
+        .await
+        .unwrap();
+    assert_eq!(retry.state, NeteaseRefreshPrepareState::Candidate);
+    assert_eq!(calls.load(Ordering::SeqCst), 4);
+}
+
+#[tokio::test]
+async fn durable_stage_recovers_source_or_committed_candidate_without_refresh_request() {
+    let (provider, calls, _) = provider_with_refresh(vec![
+        Reply::Json(account()),
+        Reply::Json(json!({"code":301})),
+        Reply::Refresh(vec![
+            "MUSIC_U=candidate-u; Secure".into(),
+            "MUSIC_R_U=candidate-r; Secure".into(),
+        ]),
+    ]);
+    let source = refreshable_credential("source-u", "source-r");
+    provider.import_credential(&source).unwrap();
+    provider.verify_restored_credential().await.unwrap();
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::CredentialRejected)
+    );
+    let stage = provider
+        .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+        .await
+        .unwrap()
+        .preparation
+        .unwrap()
+        .staged_secret_bytes;
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
+
+    let (restored, restored_calls, _) = provider_with_refresh(vec![Reply::Json(account())]);
+    let recovery = restored
+        .restore_staged_credential_rotation(Some(&source), &stage)
+        .unwrap();
+    assert_eq!(
+        recovery.action,
+        NeteaseStagedRecoveryAction::VerifyCandidate
+    );
+    let reservation = recovery.reservation_id.unwrap();
+    let candidate = restored
+        .verify_staged_refresh_candidate(reservation)
+        .await
+        .unwrap();
+    restored
+        .commit_staged_refresh_candidate(reservation)
+        .unwrap();
+    assert_eq!(restored_calls.load(Ordering::SeqCst), 1);
+
+    let (committed, committed_calls, _) = provider_with_refresh(vec![Reply::Json(account())]);
+    let recovery = committed
+        .restore_staged_credential_rotation(Some(&candidate), &stage)
+        .unwrap();
+    assert_eq!(
+        recovery.action,
+        NeteaseStagedRecoveryAction::VerifyCommittedCurrent
+    );
+    let reservation = recovery.reservation_id.unwrap();
+    committed
+        .verify_staged_refresh_candidate(reservation)
+        .await
+        .unwrap();
+    committed
+        .commit_staged_refresh_candidate(reservation)
+        .unwrap();
+    assert_eq!(committed_calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
@@ -598,7 +1037,7 @@ async fn deadline_spans_creation_and_polling_and_does_not_send_after_expiry() {
 }
 #[tokio::test]
 async fn rejection_clears_only_the_exact_owner_and_unknown_codes_retain_it() {
-    let (p, _, _) = provider(vec![
+    let (p, calls, _) = provider(vec![
         Reply::Json(account()),
         Reply::Json(json!({"code":9999})),
         Reply::Json(json!({"code":301})),
@@ -615,6 +1054,33 @@ async fn rejection_clears_only_the_exact_owner_and_unknown_codes_retain_it() {
         Err(AccountSummaryError::CredentialRejected)
     ));
     assert!(!p.has_authenticated_credential());
+    assert_eq!(
+        calls.load(Ordering::SeqCst),
+        3,
+        "production sends no hidden refresh request before clearing exact 301"
+    );
+}
+
+#[tokio::test]
+async fn active_session_transient_network_failure_retains_the_credential() {
+    let (provider, calls, _) = provider(vec![
+        Reply::Json(account()),
+        Reply::Failure(Error::TemporaryNetworkFailure),
+        Reply::Json(account()),
+    ]);
+    provider.import_credential(&credential()).unwrap();
+    provider.verify_restored_credential().await.unwrap();
+
+    assert_eq!(
+        provider.account_summary().await,
+        Err(AccountSummaryError::Network)
+    );
+    assert!(provider.has_authenticated_credential());
+    assert_eq!(
+        provider.account_summary().await.unwrap().display_name(),
+        "Synthetic user"
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
 #[tokio::test]
 async fn late_restore_and_rejection_cannot_overwrite_replacement_credential() {

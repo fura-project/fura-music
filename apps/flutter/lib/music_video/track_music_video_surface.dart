@@ -151,10 +151,7 @@ class _TrackMusicVideoPanelState extends State<TrackMusicVideoPanel> {
       Expanded(
         child: AnimatedBuilder(
           animation: _controller,
-          builder: (context, _) => AnimatedSwitcher(
-            duration: MusicMotion.stateChange,
-            child: _body(context),
-          ),
+          builder: (context, _) => MusicStageTransition(child: _body(context)),
         ),
       ),
     ],
@@ -301,7 +298,8 @@ class _TrackMusicVideoControls extends StatelessWidget {
           Text(
             _formatDuration(controller.position),
             key: const ValueKey('track-music-video-position'),
-            style: Theme.of(context).textTheme.labelMedium,
+            style: Theme.of(context).textTheme.labelMedium
+                ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
           ),
           Expanded(
             child: Slider(
@@ -324,7 +322,8 @@ class _TrackMusicVideoControls extends StatelessWidget {
           Text(
             _formatDuration(duration),
             key: const ValueKey('track-music-video-duration'),
-            style: Theme.of(context).textTheme.labelMedium,
+            style: Theme.of(context).textTheme.labelMedium
+                ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
           ),
         ],
       ),

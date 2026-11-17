@@ -54,14 +54,14 @@ class RustPersonalizedPlaylistsGateway implements PersonalizedPlaylistsGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final PersonalizedPlaylistsLoadOperationFactory? operationFactory;
-  final QqSessionContinuationCoordinator? sessionContinuation;
+  final SessionContinuationCoordinator? sessionContinuation;
 
   @override
   PersonalizedPlaylistsLoadOperation beginLoad() =>
       _VaultCleaningPersonalizedPlaylistsLoadOperation(
         () => operationFactory?.call() ?? _beginRustLoad(providerId),
         _credentialVault,
-        providerId == 'qq-music' ? sessionContinuation : null,
+        sessionContinuation,
       );
 }
 
@@ -102,7 +102,7 @@ class _VaultCleaningPersonalizedPlaylistsLoadOperation
   final PersonalizedPlaylistsLoadOperationFactory _factory;
   PersonalizedPlaylistsLoadOperation _inner;
   final CredentialVault _vault;
-  final QqSessionContinuationCoordinator? _continuation;
+  final SessionContinuationCoordinator? _continuation;
   bool _cancelled = false;
 
   @override

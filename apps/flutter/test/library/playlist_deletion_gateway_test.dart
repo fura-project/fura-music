@@ -127,6 +127,36 @@ void main() {
       PlaylistDeletionFailure.credentialRejectedStorageCleanupFailed,
     );
   });
+
+  test('credential rejection repairs the future session without replaying deletion', () async {
+    final vault = _Vault();
+    var operationRuns = 0;
+    var continuationCalls = 0;
+    final gateway = RustPlaylistDeletionGateway(
+      credentialVault: vault,
+      sessionContinuation: () async {
+        continuationCalls += 1;
+      },
+      operationFactory: (_, _) => _CountingOperation(
+        () => operationRuns += 1,
+        const PlaylistDeletionResult(
+          failure: PlaylistDeletionFailure.credentialRejected,
+        ),
+      ),
+    );
+
+    final result = await gateway
+        .beginDeletion(
+          providerId: 'qq-music',
+          opaquePlaylistId: 'owned:7002:902',
+        )
+        .run();
+
+    expect(result.failure, PlaylistDeletionFailure.credentialRejected);
+    expect(operationRuns, 1);
+    expect(continuationCalls, 1);
+    expect(vault.deleteCount, 0);
+  });
 }
 
 class _Operation implements PlaylistDeletionOperation {
@@ -139,6 +169,22 @@ class _Operation implements PlaylistDeletionOperation {
 
   @override
   Future<PlaylistDeletionResult> run() async => result;
+}
+
+class _CountingOperation implements PlaylistDeletionOperation {
+  const _CountingOperation(this.onRun, this.result);
+
+  final void Function() onRun;
+  final PlaylistDeletionResult result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<PlaylistDeletionResult> run() async {
+    onRun();
+    return result;
+  }
 }
 
 class _Vault implements CredentialVault {

@@ -35,7 +35,7 @@ class CollectionDetailActions {
   final bool refreshing;
 
   List<Widget> compactButtons() => [
-    IconButton(
+    IconButton.filled(
       key: const ValueKey('collection-play-all-compact'),
       tooltip: playAllLabel,
       onPressed: playing ? null : onPlayAll,
@@ -65,7 +65,7 @@ class CollectionDetailActions {
     mainAxisSize: MainAxisSize.min,
     children: [
       if (desktop)
-        FilledButton.tonalIcon(
+        FilledButton.icon(
           key: const ValueKey('collection-play-all-expanded'),
           onPressed: playing ? null : onPlayAll,
           icon: playing

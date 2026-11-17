@@ -57,14 +57,14 @@ class RustDailyRecommendationGateway implements DailyRecommendationGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final DailyRecommendationLoadOperationFactory? operationFactory;
-  final QqSessionContinuationCoordinator? sessionContinuation;
+  final SessionContinuationCoordinator? sessionContinuation;
 
   @override
   DailyRecommendationLoadOperation beginLoad() =>
       _VaultCleaningDailyRecommendationLoadOperation(
         () => operationFactory?.call() ?? _beginRustLoad(providerId),
         _credentialVault,
-        providerId == 'qq-music' ? sessionContinuation : null,
+        sessionContinuation,
       );
 }
 
@@ -105,7 +105,7 @@ class _VaultCleaningDailyRecommendationLoadOperation
   final DailyRecommendationLoadOperationFactory _factory;
   DailyRecommendationLoadOperation _inner;
   final CredentialVault _vault;
-  final QqSessionContinuationCoordinator? _continuation;
+  final SessionContinuationCoordinator? _continuation;
   bool _cancelled = false;
 
   @override

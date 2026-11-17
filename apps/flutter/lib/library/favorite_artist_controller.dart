@@ -61,21 +61,40 @@ class FavoriteArtistController extends ChangeNotifier {
     _operation?.cancel();
     final operation = _gateway.beginLoad(offset: 0, size: pageSize);
     _operation = operation;
-    _artists = const [];
     _failure = null;
     _appendFailure = null;
+    _isLoadingMore = false;
+
+    FavoriteArtistPageResult? synchronousResult;
+    final future = operation.run().then((value) {
+      synchronousResult = value;
+      return value;
+    });
+    if (synchronousResult != null) {
+      if (identical(_operation, operation)) _operation = null;
+      if (!_isCurrent(generation)) return;
+      _applyFirstPageResult(synchronousResult!);
+      _notify();
+      return;
+    }
+
+    _artists = const [];
     _total = 0;
     _nextOffset = 0;
     _hasMore = false;
     _omittedArtistCount = 0;
-    _isLoadingMore = false;
     _stage = FavoriteArtistStage.loading;
     _notify();
 
-    final result = await operation.run();
+    final result = await future;
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
 
+    _applyFirstPageResult(result);
+    _notify();
+  }
+
+  void _applyFirstPageResult(FavoriteArtistPageResult result) {
     if (_validPage(result, expectedOffset: 0)) {
       _artists = List.unmodifiable(result.artists);
       _total = result.total;
@@ -87,11 +106,15 @@ class FavoriteArtistController extends ChangeNotifier {
           ? FavoriteArtistStage.empty
           : FavoriteArtistStage.content;
     } else {
+      _artists = const [];
+      _total = 0;
+      _nextOffset = 0;
+      _hasMore = false;
+      _omittedArtistCount = 0;
       _applyInitialFailure(
         result.failure ?? FavoriteArtistFailure.invalidResponse,
       );
     }
-    _notify();
   }
 
   Future<void> loadMore() async {
@@ -103,15 +126,38 @@ class FavoriteArtistController extends ChangeNotifier {
       size: pageSize,
     );
     _operation = operation;
-    _isLoadingMore = true;
     _appendFailure = null;
+
+    FavoriteArtistPageResult? synchronousResult;
+    final future = operation.run().then((value) {
+      synchronousResult = value;
+      return value;
+    });
+    if (synchronousResult != null) {
+      if (identical(_operation, operation)) _operation = null;
+      if (!_isCurrent(generation)) return;
+      _isLoadingMore = false;
+      _applyLoadMoreResult(synchronousResult!, expectedOffset: expectedOffset);
+      _notify();
+      return;
+    }
+
+    _isLoadingMore = true;
     _notify();
 
-    final result = await operation.run();
+    final result = await future;
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
     _isLoadingMore = false;
 
+    _applyLoadMoreResult(result, expectedOffset: expectedOffset);
+    _notify();
+  }
+
+  void _applyLoadMoreResult(
+    FavoriteArtistPageResult result, {
+    required int expectedOffset,
+  }) {
     if (_validPage(result, expectedOffset: expectedOffset)) {
       final seen = _artists
           .map((artist) => '${artist.providerId}\u0000${artist.opaqueId}')
@@ -137,7 +183,6 @@ class FavoriteArtistController extends ChangeNotifier {
     } else {
       _appendFailure = result.failure ?? FavoriteArtistFailure.invalidResponse;
     }
-    _notify();
   }
 
   void retry() {

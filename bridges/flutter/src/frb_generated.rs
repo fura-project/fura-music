@@ -62,7 +62,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1105350555;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -87095340;
 
 // Section: executor
 
@@ -6618,6 +6618,40 @@ fn wire__crate__api__library__UserPlaylistLoadHandle_run_impl(
         },
     )
 }
+fn wire__crate__api__netease_authentication__abort_netease_credential_refresh_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "abort_netease_credential_refresh",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_reservation_id = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(
+                    crate::api::netease_authentication::abort_netease_credential_refresh(
+                        api_reservation_id,
+                    ),
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__authentication__abort_qq_music_credential_refresh_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -8335,6 +8369,40 @@ fn wire__crate__api__authentication__cancel_qq_music_wechat_qr_login_start_impl(
         },
     )
 }
+fn wire__crate__api__netease_authentication__commit_netease_staged_refresh_candidate_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "commit_netease_staged_refresh_candidate",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_reservation_id = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(
+                    crate::api::netease_authentication::commit_netease_staged_refresh_candidate(
+                        api_reservation_id,
+                    ),
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__authentication__commit_qq_music_staged_refresh_candidate_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -8636,6 +8704,60 @@ fn wire__crate__api__netease_authentication__netease_system_browser_login_suppor
                 )?;
                 std::result::Result::Ok(output_ok)
             })())
+        },
+    )
+}
+fn wire__crate__api__netease_authentication__prepare_netease_refresh_after_read_rejection_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec,_,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "prepare_netease_refresh_after_read_rejection", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || {
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end(); move |context| async move {
+                    transform_result_sse::<_, ()>((move || async move {
+                         let output_ok = Ok::<_, ()>(crate::api::netease_authentication::prepare_netease_refresh_after_read_rejection().await)?;   std::result::Result::Ok(output_ok)
+                    })().await)
+                } })
+}
+fn wire__crate__api__netease_authentication__prepare_netease_refresh_checkpoint_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "prepare_netease_refresh_checkpoint",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Ok::<_, ()>(
+                            crate::api::netease_authentication::prepare_netease_refresh_checkpoint(
+                            )
+                            .await,
+                        )?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
         },
     )
 }
@@ -9089,6 +9211,42 @@ fn wire__crate__api__netease_authentication__restore_netease_credential_from_sec
                      let output_ok = Ok::<_, ()>(crate::api::netease_authentication::restore_netease_credential_from_secure_storage(api_secret_bytes))?;   std::result::Result::Ok(output_ok)
                 })()) })
 }
+fn wire__crate__api__netease_authentication__restore_netease_staged_credential_rotation_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "restore_netease_staged_credential_rotation",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_current_secret_bytes = <Option<Vec<u8>>>::sse_decode(&mut deserializer);
+            let api_staged_secret_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Ok::<_, ()>(
+                    crate::api::netease_authentication::restore_netease_staged_credential_rotation(
+                        api_current_secret_bytes,
+                        api_staged_secret_bytes,
+                    ),
+                )?;
+                std::result::Result::Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__authentication__restore_qq_music_credential_from_secure_storage_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -9418,6 +9576,21 @@ fn wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(
             }
         },
     )
+}
+fn wire__crate__api__netease_authentication__verify_netease_staged_refresh_candidate_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec,_,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "verify_netease_staged_refresh_candidate", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || {
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_reservation_id = <u32>::sse_decode(&mut deserializer);deserializer.end(); move |context| async move {
+                    transform_result_sse::<_, ()>((move || async move {
+                         let output_ok = Ok::<_, ()>(crate::api::netease_authentication::verify_netease_staged_refresh_candidate(api_reservation_id).await)?;   std::result::Result::Ok(output_ok)
+                    })().await)
+                } })
 }
 fn wire__crate__api__authentication__verify_qq_music_staged_refresh_candidate_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
@@ -11149,6 +11322,63 @@ impl SseDecode for crate::api::netease_authentication::NeteaseQrLoginStart {
     }
 }
 
+impl SseDecode for crate::api::netease_authentication::NeteaseRefreshFailure {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::netease_authentication::NeteaseRefreshFailure::ProductionGateDisabled,
+1 => crate::api::netease_authentication::NeteaseRefreshFailure::NoCredential,
+2 => crate::api::netease_authentication::NeteaseRefreshFailure::NotDue,
+3 => crate::api::netease_authentication::NeteaseRefreshFailure::NotRefreshable,
+4 => crate::api::netease_authentication::NeteaseRefreshFailure::Network,
+5 => crate::api::netease_authentication::NeteaseRefreshFailure::RateLimited,
+6 => crate::api::netease_authentication::NeteaseRefreshFailure::RiskControl,
+7 => crate::api::netease_authentication::NeteaseRefreshFailure::SecondaryVerificationRequired,
+8 => crate::api::netease_authentication::NeteaseRefreshFailure::ServiceUnavailable,
+9 => crate::api::netease_authentication::NeteaseRefreshFailure::InvalidResponse,
+10 => crate::api::netease_authentication::NeteaseRefreshFailure::ReauthenticationRequired,
+11 => crate::api::netease_authentication::NeteaseRefreshFailure::Replaced,
+12 => crate::api::netease_authentication::NeteaseRefreshFailure::StorageUnavailable,
+            _ => unreachable!("Invalid variant for NeteaseRefreshFailure: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::netease_authentication::NeteaseRefreshPreparation {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_reservationId = <Option<u32>>::sse_decode(deserializer);
+        let mut var_stagedSecretBytes = <Option<Vec<u8>>>::sse_decode(deserializer);
+        let mut var_reusedNewGeneration = <bool>::sse_decode(deserializer);
+        let mut var_failure =
+            <Option<crate::api::netease_authentication::NeteaseRefreshFailure>>::sse_decode(
+                deserializer,
+            );
+        return crate::api::netease_authentication::NeteaseRefreshPreparation {
+            reservation_id: var_reservationId,
+            staged_secret_bytes: var_stagedSecretBytes,
+            reused_new_generation: var_reusedNewGeneration,
+            failure: var_failure,
+        };
+    }
+}
+
+impl SseDecode for crate::api::netease_authentication::NeteaseRefreshVerification {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_currentSecretBytes = <Option<Vec<u8>>>::sse_decode(deserializer);
+        let mut var_failure =
+            <Option<crate::api::netease_authentication::NeteaseRefreshFailure>>::sse_decode(
+                deserializer,
+            );
+        return crate::api::netease_authentication::NeteaseRefreshVerification {
+            current_secret_bytes: var_currentSecretBytes,
+            failure: var_failure,
+        };
+    }
+}
+
 impl SseDecode for crate::api::netease_authentication::NeteaseSmsAuthenticationFailure {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11180,6 +11410,55 @@ impl SseDecode for crate::api::netease_authentication::NeteaseSmsAuthenticationO
         return crate::api::netease_authentication::NeteaseSmsAuthenticationOutcome {
             success: var_success,
             failure: var_failure,
+        };
+    }
+}
+
+impl SseDecode for crate::api::netease_authentication::NeteaseStagedRecovery {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_action = <Option<
+            crate::api::netease_authentication::NeteaseStagedRecoveryAction,
+        >>::sse_decode(deserializer);
+        let mut var_reservationId = <Option<u32>>::sse_decode(deserializer);
+        let mut var_failure = <Option<
+            crate::api::netease_authentication::NeteaseStagedRecoveryFailure,
+        >>::sse_decode(deserializer);
+        return crate::api::netease_authentication::NeteaseStagedRecovery {
+            action: var_action,
+            reservation_id: var_reservationId,
+            failure: var_failure,
+        };
+    }
+}
+
+impl SseDecode for crate::api::netease_authentication::NeteaseStagedRecoveryAction {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::netease_authentication::NeteaseStagedRecoveryAction::VerifyCandidate,
+1 => crate::api::netease_authentication::NeteaseStagedRecoveryAction::VerifyCommittedCurrent,
+2 => crate::api::netease_authentication::NeteaseStagedRecoveryAction::Stale,
+            _ => unreachable!("Invalid variant for NeteaseStagedRecoveryAction: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::netease_authentication::NeteaseStagedRecoveryFailure {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::netease_authentication::NeteaseStagedRecoveryFailure::CoreUnavailable,
+            1 => {
+                crate::api::netease_authentication::NeteaseStagedRecoveryFailure::UnsupportedVersion
+            }
+            2 => crate::api::netease_authentication::NeteaseStagedRecoveryFailure::InvalidDocument,
+            _ => unreachable!(
+                "Invalid variant for NeteaseStagedRecoveryFailure: {}",
+                inner
+            ),
         };
     }
 }
@@ -11391,12 +11670,57 @@ impl SseDecode for Option<crate::api::media::MediaResolutionFailure> {
     }
 }
 
+impl SseDecode for Option<crate::api::netease_authentication::NeteaseRefreshFailure> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::netease_authentication::NeteaseRefreshFailure>::sse_decode(
+                    deserializer,
+                ),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::netease_authentication::NeteaseSmsAuthenticationFailure> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(
                 <crate::api::netease_authentication::NeteaseSmsAuthenticationFailure>::sse_decode(
+                    deserializer,
+                ),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::netease_authentication::NeteaseStagedRecoveryAction> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::netease_authentication::NeteaseStagedRecoveryAction>::sse_decode(
+                    deserializer,
+                ),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::netease_authentication::NeteaseStagedRecoveryFailure> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::netease_authentication::NeteaseStagedRecoveryFailure>::sse_decode(
                     deserializer,
                 ),
             );
@@ -14244,20 +14568,23 @@ fn pde_ffi_dispatcher_primary_impl(
 120 => wire__crate__api__track_likes__TrackLikeMutationHandle_run_impl(port, ptr, rust_vec_len, data_len),
 123 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_run_impl(port, ptr, rust_vec_len, data_len),
 126 => wire__crate__api__library__UserPlaylistLoadHandle_run_impl(port, ptr, rust_vec_len, data_len),
-128 => wire__crate__api__netease_authentication__authenticate_netease_sms_code_impl(port, ptr, rust_vec_len, data_len),
-129 => wire__crate__api__netease_authentication__authenticate_netease_with_system_browser_impl(port, ptr, rust_vec_len, data_len),
-165 => wire__crate__api__netease_authentication__cancel_active_netease_system_browser_login_and_wait_impl(port, ptr, rust_vec_len, data_len),
-183 => wire__crate__api__bootstrap__init_app_impl(port, ptr, rust_vec_len, data_len),
-186 => wire__crate__api__authentication__prepare_qq_music_refresh_after_read_rejection_impl(port, ptr, rust_vec_len, data_len),
-187 => wire__crate__api__authentication__prepare_qq_music_refresh_checkpoint_impl(port, ptr, rust_vec_len, data_len),
-189 => wire__crate__api__netease_authentication__request_netease_sms_code_impl(port, ptr, rust_vec_len, data_len),
-206 => wire__crate__api__netease_authentication__start_netease_qr_login_impl(port, ptr, rust_vec_len, data_len),
-207 => wire__crate__api__authentication__start_qq_music_desktop_quick_login_impl(port, ptr, rust_vec_len, data_len),
-208 => wire__crate__api__authentication__start_qq_music_qr_login_impl(port, ptr, rust_vec_len, data_len),
-209 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(port, ptr, rust_vec_len, data_len),
-210 => wire__crate__api__authentication__verify_qq_music_staged_refresh_candidate_impl(port, ptr, rust_vec_len, data_len),
-211 => wire__crate__api__netease_authentication__verify_restored_netease_credential_impl(port, ptr, rust_vec_len, data_len),
-212 => wire__crate__api__authentication__verify_restored_qq_music_credential_impl(port, ptr, rust_vec_len, data_len),
+129 => wire__crate__api__netease_authentication__authenticate_netease_sms_code_impl(port, ptr, rust_vec_len, data_len),
+130 => wire__crate__api__netease_authentication__authenticate_netease_with_system_browser_impl(port, ptr, rust_vec_len, data_len),
+166 => wire__crate__api__netease_authentication__cancel_active_netease_system_browser_login_and_wait_impl(port, ptr, rust_vec_len, data_len),
+185 => wire__crate__api__bootstrap__init_app_impl(port, ptr, rust_vec_len, data_len),
+188 => wire__crate__api__netease_authentication__prepare_netease_refresh_after_read_rejection_impl(port, ptr, rust_vec_len, data_len),
+189 => wire__crate__api__netease_authentication__prepare_netease_refresh_checkpoint_impl(port, ptr, rust_vec_len, data_len),
+190 => wire__crate__api__authentication__prepare_qq_music_refresh_after_read_rejection_impl(port, ptr, rust_vec_len, data_len),
+191 => wire__crate__api__authentication__prepare_qq_music_refresh_checkpoint_impl(port, ptr, rust_vec_len, data_len),
+193 => wire__crate__api__netease_authentication__request_netease_sms_code_impl(port, ptr, rust_vec_len, data_len),
+211 => wire__crate__api__netease_authentication__start_netease_qr_login_impl(port, ptr, rust_vec_len, data_len),
+212 => wire__crate__api__authentication__start_qq_music_desktop_quick_login_impl(port, ptr, rust_vec_len, data_len),
+213 => wire__crate__api__authentication__start_qq_music_qr_login_impl(port, ptr, rust_vec_len, data_len),
+214 => wire__crate__api__authentication__start_qq_music_wechat_qr_login_impl(port, ptr, rust_vec_len, data_len),
+215 => wire__crate__api__netease_authentication__verify_netease_staged_refresh_candidate_impl(port, ptr, rust_vec_len, data_len),
+216 => wire__crate__api__authentication__verify_qq_music_staged_refresh_candidate_impl(port, ptr, rust_vec_len, data_len),
+217 => wire__crate__api__netease_authentication__verify_restored_netease_credential_impl(port, ptr, rust_vec_len, data_len),
+218 => wire__crate__api__authentication__verify_restored_qq_music_credential_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -14359,78 +14686,81 @@ fn pde_ffi_dispatcher_sync_impl(
 122 => wire__crate__api__music_video__TrackMusicVideoLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
 124 => wire__crate__api__library__UserPlaylistLoadHandle_cancel_impl(ptr, rust_vec_len, data_len),
 125 => wire__crate__api__library__UserPlaylistLoadHandle_is_active_impl(ptr, rust_vec_len, data_len),
-127 => wire__crate__api__authentication__abort_qq_music_credential_refresh_impl(ptr, rust_vec_len, data_len),
-130 => wire__crate__api__album_favorites__begin_album_favorite_mutation_impl(ptr, rust_vec_len, data_len),
-131 => wire__crate__api__media__begin_media_resolution_impl(ptr, rust_vec_len, data_len),
-132 => wire__crate__api__playlist_creation__begin_playlist_creation_impl(ptr, rust_vec_len, data_len),
-133 => wire__crate__api__playlist_deletion__begin_playlist_deletion_impl(ptr, rust_vec_len, data_len),
-134 => wire__crate__api__playlist_tracks__begin_playlist_track_mutation_impl(ptr, rust_vec_len, data_len),
-135 => wire__crate__api__library__begin_playlist_track_page_load_impl(ptr, rust_vec_len, data_len),
-136 => wire__crate__api__authentication__begin_qq_music_account_summary_load_impl(ptr, rust_vec_len, data_len),
-137 => wire__crate__api__album__begin_qq_music_album_details_load_impl(ptr, rust_vec_len, data_len),
-138 => wire__crate__api__search__begin_qq_music_album_search_page_load_impl(ptr, rust_vec_len, data_len),
-139 => wire__crate__api__album__begin_qq_music_album_track_page_load_impl(ptr, rust_vec_len, data_len),
-140 => wire__crate__api__artist__begin_qq_music_artist_album_page_load_impl(ptr, rust_vec_len, data_len),
-141 => wire__crate__api__search__begin_qq_music_artist_search_page_load_impl(ptr, rust_vec_len, data_len),
-142 => wire__crate__api__artist__begin_qq_music_artist_track_page_load_impl(ptr, rust_vec_len, data_len),
-143 => wire__crate__api__recommendations__begin_qq_music_daily_recommendation_load_impl(ptr, rust_vec_len, data_len),
-144 => wire__crate__api__favorite_albums__begin_qq_music_favorite_album_page_load_impl(ptr, rust_vec_len, data_len),
-145 => wire__crate__api__favorite_artists__begin_qq_music_favorite_artist_page_load_impl(ptr, rust_vec_len, data_len),
-146 => wire__crate__api__lyrics__begin_qq_music_lyric_load_impl(ptr, rust_vec_len, data_len),
-147 => wire__crate__api__new_albums__begin_qq_music_new_album_page_load_impl(ptr, rust_vec_len, data_len),
-148 => wire__crate__api__new_songs__begin_qq_music_new_songs_load_impl(ptr, rust_vec_len, data_len),
-149 => wire__crate__api__recommendations__begin_qq_music_official_playlist_page_load_impl(ptr, rust_vec_len, data_len),
-150 => wire__crate__api__recommendations__begin_qq_music_personalized_playlists_load_impl(ptr, rust_vec_len, data_len),
-151 => wire__crate__api__recommendations__begin_qq_music_personalized_tracks_load_impl(ptr, rust_vec_len, data_len),
-152 => wire__crate__api__search__begin_qq_music_playlist_search_page_load_impl(ptr, rust_vec_len, data_len),
-153 => wire__crate__api__recommendations__begin_qq_music_radar_track_page_load_impl(ptr, rust_vec_len, data_len),
-154 => wire__crate__api__rankings__begin_qq_music_ranking_group_load_impl(ptr, rust_vec_len, data_len),
-155 => wire__crate__api__rankings__begin_qq_music_ranking_track_page_load_impl(ptr, rust_vec_len, data_len),
-156 => wire__crate__api__recommendations__begin_qq_music_recommended_playlist_page_load_impl(ptr, rust_vec_len, data_len),
-157 => wire__crate__api__recommendations__begin_qq_music_related_tracks_load_impl(ptr, rust_vec_len, data_len),
-158 => wire__crate__api__comments__begin_qq_music_track_comment_page_load_impl(ptr, rust_vec_len, data_len),
-159 => wire__crate__api__search__begin_qq_music_track_search_page_load_impl(ptr, rust_vec_len, data_len),
-160 => wire__crate__api__library__begin_recent_track_page_load_impl(ptr, rust_vec_len, data_len),
-161 => wire__crate__api__track_likes__begin_track_like_mutation_impl(ptr, rust_vec_len, data_len),
-162 => wire__crate__api__music_video__begin_track_music_video_load_impl(ptr, rust_vec_len, data_len),
-163 => wire__crate__api__library__begin_user_playlist_load_impl(ptr, rust_vec_len, data_len),
-164 => wire__crate__api__bootstrap__bootstrap_status_impl(ptr, rust_vec_len, data_len),
-166 => wire__crate__api__netease_authentication__cancel_netease_credential_verification_impl(ptr, rust_vec_len, data_len),
-167 => wire__crate__api__netease_authentication__cancel_netease_qr_login_start_impl(ptr, rust_vec_len, data_len),
-168 => wire__crate__api__netease_authentication__cancel_netease_sms_authentication_impl(ptr, rust_vec_len, data_len),
-169 => wire__crate__api__netease_authentication__cancel_netease_sms_code_request_impl(ptr, rust_vec_len, data_len),
-170 => wire__crate__api__netease_authentication__cancel_netease_sms_login_impl(ptr, rust_vec_len, data_len),
-171 => wire__crate__api__netease_authentication__cancel_netease_system_browser_login_impl(ptr, rust_vec_len, data_len),
-172 => wire__crate__api__authentication__cancel_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
-173 => wire__crate__api__authentication__cancel_qq_music_desktop_quick_login_start_impl(ptr, rust_vec_len, data_len),
-174 => wire__crate__api__authentication__cancel_qq_music_qr_login_start_impl(ptr, rust_vec_len, data_len),
-175 => wire__crate__api__authentication__cancel_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
-176 => wire__crate__api__authentication__commit_qq_music_staged_refresh_candidate_impl(ptr, rust_vec_len, data_len),
-177 => wire__crate__api__queue__create_playback_queue_impl(ptr, rust_vec_len, data_len),
-178 => wire__crate__api__listening__create_recent_listening_impl(ptr, rust_vec_len, data_len),
-179 => wire__crate__api__authentication__debug_export_qq_music_credential_transfer_impl(ptr, rust_vec_len, data_len),
-180 => wire__crate__api__authentication__debug_import_qq_music_credential_transfer_impl(ptr, rust_vec_len, data_len),
-181 => wire__crate__api__netease_authentication__export_netease_credential_for_secure_storage_impl(ptr, rust_vec_len, data_len),
-182 => wire__crate__api__authentication__export_qq_music_credential_for_secure_storage_impl(ptr, rust_vec_len, data_len),
-184 => wire__crate__api__netease_authentication__netease_has_authenticated_credential_impl(ptr, rust_vec_len, data_len),
-185 => wire__crate__api__netease_authentication__netease_system_browser_login_supported_impl(ptr, rust_vec_len, data_len),
-188 => wire__crate__api__authentication__qq_music_has_authenticated_credential_impl(ptr, rust_vec_len, data_len),
-190 => wire__crate__api__library__request_track_membership_refresh_impl(ptr, rust_vec_len, data_len),
-191 => wire__crate__api__netease_authentication__reserve_netease_credential_verification_impl(ptr, rust_vec_len, data_len),
-192 => wire__crate__api__netease_authentication__reserve_netease_qr_login_start_impl(ptr, rust_vec_len, data_len),
-193 => wire__crate__api__netease_authentication__reserve_netease_sms_code_request_impl(ptr, rust_vec_len, data_len),
-194 => wire__crate__api__netease_authentication__reserve_netease_sms_login_impl(ptr, rust_vec_len, data_len),
-195 => wire__crate__api__netease_authentication__reserve_netease_system_browser_login_impl(ptr, rust_vec_len, data_len),
-196 => wire__crate__api__authentication__reserve_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
-197 => wire__crate__api__authentication__reserve_qq_music_desktop_quick_login_start_impl(ptr, rust_vec_len, data_len),
-198 => wire__crate__api__authentication__reserve_qq_music_qr_login_start_impl(ptr, rust_vec_len, data_len),
-199 => wire__crate__api__authentication__reserve_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
-200 => wire__crate__api__netease_authentication__restore_netease_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
-201 => wire__crate__api__authentication__restore_qq_music_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
-202 => wire__crate__api__authentication__restore_qq_music_staged_credential_rotation_impl(ptr, rust_vec_len, data_len),
-203 => wire__crate__api__netease_authentication__sign_out_netease_impl(ptr, rust_vec_len, data_len),
-204 => wire__crate__api__authentication__sign_out_qq_music_impl(ptr, rust_vec_len, data_len),
-205 => wire__crate__api__netease_authentication__stage_netease_official_web_credential_impl(ptr, rust_vec_len, data_len),
+127 => wire__crate__api__netease_authentication__abort_netease_credential_refresh_impl(ptr, rust_vec_len, data_len),
+128 => wire__crate__api__authentication__abort_qq_music_credential_refresh_impl(ptr, rust_vec_len, data_len),
+131 => wire__crate__api__album_favorites__begin_album_favorite_mutation_impl(ptr, rust_vec_len, data_len),
+132 => wire__crate__api__media__begin_media_resolution_impl(ptr, rust_vec_len, data_len),
+133 => wire__crate__api__playlist_creation__begin_playlist_creation_impl(ptr, rust_vec_len, data_len),
+134 => wire__crate__api__playlist_deletion__begin_playlist_deletion_impl(ptr, rust_vec_len, data_len),
+135 => wire__crate__api__playlist_tracks__begin_playlist_track_mutation_impl(ptr, rust_vec_len, data_len),
+136 => wire__crate__api__library__begin_playlist_track_page_load_impl(ptr, rust_vec_len, data_len),
+137 => wire__crate__api__authentication__begin_qq_music_account_summary_load_impl(ptr, rust_vec_len, data_len),
+138 => wire__crate__api__album__begin_qq_music_album_details_load_impl(ptr, rust_vec_len, data_len),
+139 => wire__crate__api__search__begin_qq_music_album_search_page_load_impl(ptr, rust_vec_len, data_len),
+140 => wire__crate__api__album__begin_qq_music_album_track_page_load_impl(ptr, rust_vec_len, data_len),
+141 => wire__crate__api__artist__begin_qq_music_artist_album_page_load_impl(ptr, rust_vec_len, data_len),
+142 => wire__crate__api__search__begin_qq_music_artist_search_page_load_impl(ptr, rust_vec_len, data_len),
+143 => wire__crate__api__artist__begin_qq_music_artist_track_page_load_impl(ptr, rust_vec_len, data_len),
+144 => wire__crate__api__recommendations__begin_qq_music_daily_recommendation_load_impl(ptr, rust_vec_len, data_len),
+145 => wire__crate__api__favorite_albums__begin_qq_music_favorite_album_page_load_impl(ptr, rust_vec_len, data_len),
+146 => wire__crate__api__favorite_artists__begin_qq_music_favorite_artist_page_load_impl(ptr, rust_vec_len, data_len),
+147 => wire__crate__api__lyrics__begin_qq_music_lyric_load_impl(ptr, rust_vec_len, data_len),
+148 => wire__crate__api__new_albums__begin_qq_music_new_album_page_load_impl(ptr, rust_vec_len, data_len),
+149 => wire__crate__api__new_songs__begin_qq_music_new_songs_load_impl(ptr, rust_vec_len, data_len),
+150 => wire__crate__api__recommendations__begin_qq_music_official_playlist_page_load_impl(ptr, rust_vec_len, data_len),
+151 => wire__crate__api__recommendations__begin_qq_music_personalized_playlists_load_impl(ptr, rust_vec_len, data_len),
+152 => wire__crate__api__recommendations__begin_qq_music_personalized_tracks_load_impl(ptr, rust_vec_len, data_len),
+153 => wire__crate__api__search__begin_qq_music_playlist_search_page_load_impl(ptr, rust_vec_len, data_len),
+154 => wire__crate__api__recommendations__begin_qq_music_radar_track_page_load_impl(ptr, rust_vec_len, data_len),
+155 => wire__crate__api__rankings__begin_qq_music_ranking_group_load_impl(ptr, rust_vec_len, data_len),
+156 => wire__crate__api__rankings__begin_qq_music_ranking_track_page_load_impl(ptr, rust_vec_len, data_len),
+157 => wire__crate__api__recommendations__begin_qq_music_recommended_playlist_page_load_impl(ptr, rust_vec_len, data_len),
+158 => wire__crate__api__recommendations__begin_qq_music_related_tracks_load_impl(ptr, rust_vec_len, data_len),
+159 => wire__crate__api__comments__begin_qq_music_track_comment_page_load_impl(ptr, rust_vec_len, data_len),
+160 => wire__crate__api__search__begin_qq_music_track_search_page_load_impl(ptr, rust_vec_len, data_len),
+161 => wire__crate__api__library__begin_recent_track_page_load_impl(ptr, rust_vec_len, data_len),
+162 => wire__crate__api__track_likes__begin_track_like_mutation_impl(ptr, rust_vec_len, data_len),
+163 => wire__crate__api__music_video__begin_track_music_video_load_impl(ptr, rust_vec_len, data_len),
+164 => wire__crate__api__library__begin_user_playlist_load_impl(ptr, rust_vec_len, data_len),
+165 => wire__crate__api__bootstrap__bootstrap_status_impl(ptr, rust_vec_len, data_len),
+167 => wire__crate__api__netease_authentication__cancel_netease_credential_verification_impl(ptr, rust_vec_len, data_len),
+168 => wire__crate__api__netease_authentication__cancel_netease_qr_login_start_impl(ptr, rust_vec_len, data_len),
+169 => wire__crate__api__netease_authentication__cancel_netease_sms_authentication_impl(ptr, rust_vec_len, data_len),
+170 => wire__crate__api__netease_authentication__cancel_netease_sms_code_request_impl(ptr, rust_vec_len, data_len),
+171 => wire__crate__api__netease_authentication__cancel_netease_sms_login_impl(ptr, rust_vec_len, data_len),
+172 => wire__crate__api__netease_authentication__cancel_netease_system_browser_login_impl(ptr, rust_vec_len, data_len),
+173 => wire__crate__api__authentication__cancel_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
+174 => wire__crate__api__authentication__cancel_qq_music_desktop_quick_login_start_impl(ptr, rust_vec_len, data_len),
+175 => wire__crate__api__authentication__cancel_qq_music_qr_login_start_impl(ptr, rust_vec_len, data_len),
+176 => wire__crate__api__authentication__cancel_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
+177 => wire__crate__api__netease_authentication__commit_netease_staged_refresh_candidate_impl(ptr, rust_vec_len, data_len),
+178 => wire__crate__api__authentication__commit_qq_music_staged_refresh_candidate_impl(ptr, rust_vec_len, data_len),
+179 => wire__crate__api__queue__create_playback_queue_impl(ptr, rust_vec_len, data_len),
+180 => wire__crate__api__listening__create_recent_listening_impl(ptr, rust_vec_len, data_len),
+181 => wire__crate__api__authentication__debug_export_qq_music_credential_transfer_impl(ptr, rust_vec_len, data_len),
+182 => wire__crate__api__authentication__debug_import_qq_music_credential_transfer_impl(ptr, rust_vec_len, data_len),
+183 => wire__crate__api__netease_authentication__export_netease_credential_for_secure_storage_impl(ptr, rust_vec_len, data_len),
+184 => wire__crate__api__authentication__export_qq_music_credential_for_secure_storage_impl(ptr, rust_vec_len, data_len),
+186 => wire__crate__api__netease_authentication__netease_has_authenticated_credential_impl(ptr, rust_vec_len, data_len),
+187 => wire__crate__api__netease_authentication__netease_system_browser_login_supported_impl(ptr, rust_vec_len, data_len),
+192 => wire__crate__api__authentication__qq_music_has_authenticated_credential_impl(ptr, rust_vec_len, data_len),
+194 => wire__crate__api__library__request_track_membership_refresh_impl(ptr, rust_vec_len, data_len),
+195 => wire__crate__api__netease_authentication__reserve_netease_credential_verification_impl(ptr, rust_vec_len, data_len),
+196 => wire__crate__api__netease_authentication__reserve_netease_qr_login_start_impl(ptr, rust_vec_len, data_len),
+197 => wire__crate__api__netease_authentication__reserve_netease_sms_code_request_impl(ptr, rust_vec_len, data_len),
+198 => wire__crate__api__netease_authentication__reserve_netease_sms_login_impl(ptr, rust_vec_len, data_len),
+199 => wire__crate__api__netease_authentication__reserve_netease_system_browser_login_impl(ptr, rust_vec_len, data_len),
+200 => wire__crate__api__authentication__reserve_qq_music_credential_verification_impl(ptr, rust_vec_len, data_len),
+201 => wire__crate__api__authentication__reserve_qq_music_desktop_quick_login_start_impl(ptr, rust_vec_len, data_len),
+202 => wire__crate__api__authentication__reserve_qq_music_qr_login_start_impl(ptr, rust_vec_len, data_len),
+203 => wire__crate__api__authentication__reserve_qq_music_wechat_qr_login_start_impl(ptr, rust_vec_len, data_len),
+204 => wire__crate__api__netease_authentication__restore_netease_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
+205 => wire__crate__api__netease_authentication__restore_netease_staged_credential_rotation_impl(ptr, rust_vec_len, data_len),
+206 => wire__crate__api__authentication__restore_qq_music_credential_from_secure_storage_impl(ptr, rust_vec_len, data_len),
+207 => wire__crate__api__authentication__restore_qq_music_staged_credential_rotation_impl(ptr, rust_vec_len, data_len),
+208 => wire__crate__api__netease_authentication__sign_out_netease_impl(ptr, rust_vec_len, data_len),
+209 => wire__crate__api__authentication__sign_out_qq_music_impl(ptr, rust_vec_len, data_len),
+210 => wire__crate__api__netease_authentication__stage_netease_official_web_credential_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -15669,6 +15999,89 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::netease_authentication::Netea
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::netease_authentication::NeteaseRefreshFailure {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::ProductionGateDisabled => 0.into_dart(),
+            Self::NoCredential => 1.into_dart(),
+            Self::NotDue => 2.into_dart(),
+            Self::NotRefreshable => 3.into_dart(),
+            Self::Network => 4.into_dart(),
+            Self::RateLimited => 5.into_dart(),
+            Self::RiskControl => 6.into_dart(),
+            Self::SecondaryVerificationRequired => 7.into_dart(),
+            Self::ServiceUnavailable => 8.into_dart(),
+            Self::InvalidResponse => 9.into_dart(),
+            Self::ReauthenticationRequired => 10.into_dart(),
+            Self::Replaced => 11.into_dart(),
+            Self::StorageUnavailable => 12.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::netease_authentication::NeteaseRefreshFailure
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::netease_authentication::NeteaseRefreshFailure>
+    for crate::api::netease_authentication::NeteaseRefreshFailure
+{
+    fn into_into_dart(self) -> crate::api::netease_authentication::NeteaseRefreshFailure {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::netease_authentication::NeteaseRefreshPreparation
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.reservation_id.into_into_dart().into_dart(),
+            self.staged_secret_bytes.into_into_dart().into_dart(),
+            self.reused_new_generation.into_into_dart().into_dart(),
+            self.failure.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::netease_authentication::NeteaseRefreshPreparation
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<crate::api::netease_authentication::NeteaseRefreshPreparation>
+    for crate::api::netease_authentication::NeteaseRefreshPreparation
+{
+    fn into_into_dart(self) -> crate::api::netease_authentication::NeteaseRefreshPreparation {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::netease_authentication::NeteaseRefreshVerification
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.current_secret_bytes.into_into_dart().into_dart(),
+            self.failure.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::netease_authentication::NeteaseRefreshVerification
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::netease_authentication::NeteaseRefreshVerification,
+    > for crate::api::netease_authentication::NeteaseRefreshVerification
+{
+    fn into_into_dart(self) -> crate::api::netease_authentication::NeteaseRefreshVerification {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
     for crate::api::netease_authentication::NeteaseSmsAuthenticationFailure
 {
@@ -15724,6 +16137,80 @@ impl
     > for crate::api::netease_authentication::NeteaseSmsAuthenticationOutcome
 {
     fn into_into_dart(self) -> crate::api::netease_authentication::NeteaseSmsAuthenticationOutcome {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::netease_authentication::NeteaseStagedRecovery {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.action.into_into_dart().into_dart(),
+            self.reservation_id.into_into_dart().into_dart(),
+            self.failure.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::netease_authentication::NeteaseStagedRecovery
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::netease_authentication::NeteaseStagedRecovery>
+    for crate::api::netease_authentication::NeteaseStagedRecovery
+{
+    fn into_into_dart(self) -> crate::api::netease_authentication::NeteaseStagedRecovery {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::netease_authentication::NeteaseStagedRecoveryAction
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::VerifyCandidate => 0.into_dart(),
+            Self::VerifyCommittedCurrent => 1.into_dart(),
+            Self::Stale => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::netease_authentication::NeteaseStagedRecoveryAction
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::netease_authentication::NeteaseStagedRecoveryAction,
+    > for crate::api::netease_authentication::NeteaseStagedRecoveryAction
+{
+    fn into_into_dart(self) -> crate::api::netease_authentication::NeteaseStagedRecoveryAction {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::netease_authentication::NeteaseStagedRecoveryFailure
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::CoreUnavailable => 0.into_dart(),
+            Self::UnsupportedVersion => 1.into_dart(),
+            Self::InvalidDocument => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::netease_authentication::NeteaseStagedRecoveryFailure
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::netease_authentication::NeteaseStagedRecoveryFailure,
+    > for crate::api::netease_authentication::NeteaseStagedRecoveryFailure
+{
+    fn into_into_dart(self) -> crate::api::netease_authentication::NeteaseStagedRecoveryFailure {
         self
     }
 }
@@ -19996,6 +20483,50 @@ impl SseEncode for crate::api::netease_authentication::NeteaseQrLoginStart {
     }
 }
 
+impl SseEncode for crate::api::netease_authentication::NeteaseRefreshFailure {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::netease_authentication::NeteaseRefreshFailure::ProductionGateDisabled => { 0 }
+crate::api::netease_authentication::NeteaseRefreshFailure::NoCredential => { 1 }
+crate::api::netease_authentication::NeteaseRefreshFailure::NotDue => { 2 }
+crate::api::netease_authentication::NeteaseRefreshFailure::NotRefreshable => { 3 }
+crate::api::netease_authentication::NeteaseRefreshFailure::Network => { 4 }
+crate::api::netease_authentication::NeteaseRefreshFailure::RateLimited => { 5 }
+crate::api::netease_authentication::NeteaseRefreshFailure::RiskControl => { 6 }
+crate::api::netease_authentication::NeteaseRefreshFailure::SecondaryVerificationRequired => { 7 }
+crate::api::netease_authentication::NeteaseRefreshFailure::ServiceUnavailable => { 8 }
+crate::api::netease_authentication::NeteaseRefreshFailure::InvalidResponse => { 9 }
+crate::api::netease_authentication::NeteaseRefreshFailure::ReauthenticationRequired => { 10 }
+crate::api::netease_authentication::NeteaseRefreshFailure::Replaced => { 11 }
+crate::api::netease_authentication::NeteaseRefreshFailure::StorageUnavailable => { 12 }
+ _ => { unimplemented!(""); }}, serializer);
+    }
+}
+
+impl SseEncode for crate::api::netease_authentication::NeteaseRefreshPreparation {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<u32>>::sse_encode(self.reservation_id, serializer);
+        <Option<Vec<u8>>>::sse_encode(self.staged_secret_bytes, serializer);
+        <bool>::sse_encode(self.reused_new_generation, serializer);
+        <Option<crate::api::netease_authentication::NeteaseRefreshFailure>>::sse_encode(
+            self.failure,
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::netease_authentication::NeteaseRefreshVerification {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<Vec<u8>>>::sse_encode(self.current_secret_bytes, serializer);
+        <Option<crate::api::netease_authentication::NeteaseRefreshFailure>>::sse_encode(
+            self.failure,
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for crate::api::netease_authentication::NeteaseSmsAuthenticationFailure {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -20022,6 +20553,41 @@ impl SseEncode for crate::api::netease_authentication::NeteaseSmsAuthenticationO
             self.failure,
             serializer,
         );
+    }
+}
+
+impl SseEncode for crate::api::netease_authentication::NeteaseStagedRecovery {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<crate::api::netease_authentication::NeteaseStagedRecoveryAction>>::sse_encode(
+            self.action,
+            serializer,
+        );
+        <Option<u32>>::sse_encode(self.reservation_id, serializer);
+        <Option<crate::api::netease_authentication::NeteaseStagedRecoveryFailure>>::sse_encode(
+            self.failure,
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::netease_authentication::NeteaseStagedRecoveryAction {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::netease_authentication::NeteaseStagedRecoveryAction::VerifyCandidate => { 0 }
+crate::api::netease_authentication::NeteaseStagedRecoveryAction::VerifyCommittedCurrent => { 1 }
+crate::api::netease_authentication::NeteaseStagedRecoveryAction::Stale => { 2 }
+ _ => { unimplemented!(""); }}, serializer);
+    }
+}
+
+impl SseEncode for crate::api::netease_authentication::NeteaseStagedRecoveryFailure {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::netease_authentication::NeteaseStagedRecoveryFailure::CoreUnavailable => { 0 }
+crate::api::netease_authentication::NeteaseStagedRecoveryFailure::UnsupportedVersion => { 1 }
+crate::api::netease_authentication::NeteaseStagedRecoveryFailure::InvalidDocument => { 2 }
+ _ => { unimplemented!(""); }}, serializer);
     }
 }
 
@@ -20190,12 +20756,48 @@ impl SseEncode for Option<crate::api::media::MediaResolutionFailure> {
     }
 }
 
+impl SseEncode for Option<crate::api::netease_authentication::NeteaseRefreshFailure> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::netease_authentication::NeteaseRefreshFailure>::sse_encode(
+                value, serializer,
+            );
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::netease_authentication::NeteaseSmsAuthenticationFailure> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::netease_authentication::NeteaseSmsAuthenticationFailure>::sse_encode(
+                value, serializer,
+            );
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::netease_authentication::NeteaseStagedRecoveryAction> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::netease_authentication::NeteaseStagedRecoveryAction>::sse_encode(
+                value, serializer,
+            );
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::netease_authentication::NeteaseStagedRecoveryFailure> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::netease_authentication::NeteaseStagedRecoveryFailure>::sse_encode(
                 value, serializer,
             );
         }

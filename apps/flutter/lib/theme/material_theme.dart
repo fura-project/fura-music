@@ -26,7 +26,38 @@ abstract final class MusicRadii {
 }
 
 abstract final class MusicMotion {
+  static const Duration artworkReveal = Duration(milliseconds: 120);
+  static const Duration stageReveal = Duration(milliseconds: 140);
   static const Duration stateChange = Duration(milliseconds: 240);
+}
+
+class MusicViewportClearance extends InheritedWidget {
+  const MusicViewportClearance({
+    required this.bottom,
+    required super.child,
+    super.key,
+  });
+
+  static const double compactPlayerHeight = 80.0;
+
+  final double bottom;
+
+  static double bottomOf(
+    BuildContext context, {
+    bool fallbackPlayerPresent = false,
+  }) {
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<MusicViewportClearance>();
+    if (scope != null) return scope.bottom;
+    if (fallbackPlayerPresent && MediaQuery.sizeOf(context).width < 640) {
+      return compactPlayerHeight;
+    }
+    return 0;
+  }
+
+  @override
+  bool updateShouldNotify(MusicViewportClearance oldWidget) =>
+      bottom != oldWidget.bottom;
 }
 
 abstract final class MusicMaterialTheme {
@@ -37,6 +68,44 @@ abstract final class MusicMaterialTheme {
     AppMusicProvider.qqMusic => seedColor,
     AppMusicProvider.netEaseCloudMusic => netEaseSeedColor,
   };
+
+  static const InputBorder _searchCapsuleBorder = OutlineInputBorder(
+    borderRadius: BorderRadius.all(Radius.circular(999)),
+    borderSide: BorderSide.none,
+  );
+
+  static InputDecoration searchDecoration(
+    BuildContext context, {
+    required String hintText,
+    Widget? suffixIcon,
+    bool dense = false,
+    EdgeInsetsGeometry? contentPadding,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return InputDecoration(
+      hintText: hintText,
+      prefixIcon: Icon(
+        Icons.search_rounded,
+        size: dense ? 20 : 24,
+        color: colors.onSurfaceVariant,
+      ),
+      suffixIcon: suffixIcon,
+      isDense: dense,
+      filled: true,
+      fillColor: colors.surfaceContainerHigh,
+      contentPadding:
+          contentPadding ??
+          (dense
+              ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
+              : const EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
+      border: _searchCapsuleBorder,
+      enabledBorder: _searchCapsuleBorder,
+      focusedBorder: _searchCapsuleBorder,
+      disabledBorder: _searchCapsuleBorder,
+      errorBorder: _searchCapsuleBorder,
+      focusedErrorBorder: _searchCapsuleBorder,
+    );
+  }
 
   static ThemeData light({Color? seed, ColorScheme? colorScheme}) =>
       _create(Brightness.light, seed: seed, colorScheme: colorScheme);
@@ -54,14 +123,18 @@ abstract final class MusicMaterialTheme {
       'The supplied ColorScheme must match the requested brightness.',
     );
     final suppliedSystemColors = colorScheme != null;
+    final effectiveSeed = seed ?? seedColor;
     final baseColors =
         colorScheme ??
         ColorScheme.fromSeed(
-          seedColor: seed ?? seedColor,
+          seedColor: effectiveSeed,
           brightness: brightness,
           dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
         );
-    final colors = brightness == Brightness.dark && !suppliedSystemColors
+    final colors =
+        brightness == Brightness.dark &&
+            !suppliedSystemColors &&
+            effectiveSeed == seedColor
         ? baseColors.copyWith(
             surface: const Color(0xFF121412),
             surfaceDim: const Color(0xFF121412),
@@ -165,13 +238,17 @@ abstract final class MusicMaterialTheme {
           fillColor: colors.secondaryContainer,
           contentPadding: const EdgeInsetsDirectional.fromSTEB(12, 0, 8, 0),
           constraints: const BoxConstraints(minHeight: 48),
-          border: OutlineInputBorder(
+          border: const OutlineInputBorder(
             borderRadius: MusicRadii.control,
             borderSide: BorderSide.none,
           ),
-          enabledBorder: OutlineInputBorder(
+          enabledBorder: const OutlineInputBorder(
             borderRadius: MusicRadii.control,
-            borderSide: BorderSide(color: colors.outlineVariant),
+            borderSide: BorderSide.none,
+          ),
+          disabledBorder: const OutlineInputBorder(
+            borderRadius: MusicRadii.control,
+            borderSide: BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: MusicRadii.control,
@@ -185,7 +262,7 @@ abstract final class MusicMaterialTheme {
       inputDecorationTheme: InputDecorationThemeData(
         filled: true,
         fillColor: colors.surfaceContainerHighest,
-        border: OutlineInputBorder(
+        border: const OutlineInputBorder(
           borderRadius: MusicRadii.content,
           borderSide: BorderSide.none,
         ),

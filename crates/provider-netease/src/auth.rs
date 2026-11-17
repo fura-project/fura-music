@@ -32,6 +32,7 @@ use tokio::sync::watch;
 struct State {
     generation: u64,
     active: Option<(Credential, u64)>,
+    continuation: Option<(Credential, u64)>,
     pending: Option<Credential>,
     sms: Option<SmsLoginChallenge>,
     liked_playlist: Option<u64>,
@@ -101,6 +102,87 @@ impl AuthOwner {
         let (c, u) = s.active.clone().ok_or(Error::AuthenticationRequired)?;
         Ok((s.generation, c, u))
     }
+    pub(super) fn refresh_snapshot(&self) -> Option<(u64, Credential, u64)> {
+        let state = self.lock();
+        state
+            .continuation
+            .as_ref()
+            .map(|(credential, user)| (state.generation, credential.clone(), *user))
+    }
+    pub(super) fn refresh_source_matches(
+        &self,
+        generation: u64,
+        credential: &Credential,
+        user: u64,
+    ) -> bool {
+        let state = self.lock();
+        state.generation == generation
+            && state
+                .continuation
+                .as_ref()
+                .is_some_and(|(current, current_user)| {
+                    current == credential && *current_user == user
+                })
+    }
+    pub(super) fn clear_refresh_source(
+        &self,
+        generation: u64,
+        credential: &Credential,
+        user: u64,
+    ) -> bool {
+        let mut state = self.lock();
+        if state.generation != generation
+            || !state
+                .continuation
+                .as_ref()
+                .is_some_and(|(current, current_user)| {
+                    current == credential && *current_user == user
+                })
+        {
+            return false;
+        }
+        state.active = None;
+        state.continuation = None;
+        state.pending = None;
+        state.sms = None;
+        state.liked_playlist = None;
+        self.bump(&mut state);
+        true
+    }
+    pub(super) fn install_refreshed(
+        &self,
+        generation: u64,
+        source: &Credential,
+        user: u64,
+        candidate: Credential,
+    ) -> Result<u64, Failure> {
+        let mut state = self.lock();
+        let current_matches = state.generation == generation
+            && state
+                .continuation
+                .as_ref()
+                .is_some_and(|(current, current_user)| current == source && *current_user == user);
+        if !current_matches {
+            return Err(Failure::Replaced);
+        }
+        state.active = Some((candidate, user));
+        state.continuation = None;
+        state.pending = None;
+        state.sms = None;
+        state.liked_playlist = None;
+        self.bump(&mut state);
+        Ok(state.generation)
+    }
+    pub(super) fn restore_refresh_source(&self, credential: Credential, user: u64) -> u64 {
+        let mut state = self.lock();
+        self.bump(&mut state);
+        state.active = None;
+        state.continuation = Some((credential, user));
+        state.pending = None;
+        state.sms = None;
+        state.liked_playlist = None;
+        state.generation
+    }
     fn retain_pending(&self, generation: u64, credential: Credential) -> Result<(), Failure> {
         let mut state = self.lock();
         if state.generation != generation {
@@ -124,12 +206,24 @@ impl AuthOwner {
         let result = tokio::select! { biased; _=changed.changed()=>return Err(Failure::Replaced), result=future=>result };
         self.current(generation)?;
         if matches!(result, Err(Error::CredentialRejected)) {
-            // only this exact generation may clear its rejected credential
+            if cfg!(debug_assertions)
+                || matches!(
+                    std::env::var("FURA_SESSION_DIAGNOSTIC").as_deref(),
+                    Ok("1" | "true")
+                )
+            {
+                eprintln!(
+                    "FURA_SESSION_DIAGNOSTIC provider=netease-cloud-music phase=read_rejection action=continuation_required"
+                );
+            }
+            // Only this exact generation may transition its rejected
+            // credential. The opaque source remains owned by Core for a
+            // bounded continuation decision; ordinary reads cannot use it.
             let mut s = self.lock();
             if s.generation != generation {
                 return Err(Failure::Replaced);
             }
-            s.active = None;
+            s.continuation = s.active.take();
             s.liked_playlist = None;
             s.pending = None;
             s.sms = None;
@@ -145,6 +239,7 @@ impl AuthOwner {
         s.pending = None;
         s.sms = None;
         s.active = Some((credential, user));
+        s.continuation = None;
         s.liked_playlist = None;
         s.liked_membership = None;
         s.liked_membership_needs_refresh = false;
@@ -295,6 +390,7 @@ impl<T: Transport> NeteaseProvider<T> {
         let mut s = self.auth.lock();
         self.auth.bump(&mut s);
         s.active = None;
+        s.continuation = None;
         s.liked_playlist = None;
         s.pending = Some(credential);
         s.sms = None;
@@ -312,6 +408,7 @@ impl<T: Transport> NeteaseProvider<T> {
         let mut state = self.auth.lock();
         self.auth.bump(&mut state);
         state.active = None;
+        state.continuation = None;
         state.liked_playlist = None;
         state.pending = Some(credential);
         state.sms = None;
@@ -400,6 +497,7 @@ impl<T: Transport> SmsAuthenticationProvider for NeteaseProvider<T> {
             let mut state = self.auth.lock();
             self.auth.bump(&mut state);
             state.active = None;
+            state.continuation = None;
             state.pending = None;
             state.sms = None;
             state.liked_playlist = None;
@@ -519,6 +617,7 @@ impl<T: Transport> QrAuthenticationProvider for NeteaseProvider<T> {
             let mut s = self.auth.lock();
             self.auth.bump(&mut s);
             s.active = None;
+            s.continuation = None;
             s.liked_playlist = None;
             s.liked_membership = None;
             s.liked_membership_needs_refresh = false;
@@ -554,6 +653,7 @@ impl<T: Transport> QrAuthenticationProvider for NeteaseProvider<T> {
     fn sign_out(&self) {
         let mut s = self.auth.lock();
         s.active = None;
+        s.continuation = None;
         s.liked_playlist = None;
         s.pending = None;
         s.sms = None;

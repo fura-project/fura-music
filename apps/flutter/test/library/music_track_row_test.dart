@@ -500,6 +500,41 @@ void main() {
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
+
+  testWidgets(
+    'desktop/tablet MusicTrackRowSurface supports touch long-press context menu without mouse hover',
+    (tester) async {
+      Offset? requestedOffset;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 800,
+                child: MusicTrackRowSurface(
+                  itemKey: const ValueKey('tablet-track-row'),
+                  desktop: true,
+                  current: false,
+                  semanticLabel: 'Tablet track',
+                  onTap: () {},
+                  onContextMenuRequested: (offset) => requestedOffset = offset,
+                  contentBuilder: (context, active, hovered) =>
+                      const Text('Tablet track'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.longPress(find.byKey(const ValueKey('tablet-track-row')));
+      await tester.pumpAndSettle();
+
+      expect(requestedOffset, isNotNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 Widget _locatorHarness({

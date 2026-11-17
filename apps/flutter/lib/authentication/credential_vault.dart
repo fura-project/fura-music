@@ -19,7 +19,8 @@ class CredentialTransactionSnapshot {
   final Uint8List? staged;
 }
 
-/// QQ-only crash-recovery operations. All bytes remain opaque to Flutter.
+/// Provider-scoped crash-recovery operations. All bytes remain opaque to
+/// Flutter and each provider receives distinct current/staged storage keys.
 abstract interface class CredentialRotationVault implements CredentialVault {
   bool get supportsStaging;
 
@@ -217,7 +218,8 @@ class PlatformCredentialVault implements CredentialVault {
            FlutterSecureStringStore(
              platformLabel:
                  platformLabel ??
-                 (credentialKey == netEaseCredentialKey
+                 (credentialKey == netEaseCredentialKey ||
+                         credentialKey == netEaseStagedCredentialKey
                      ? 'NetEase Cloud Music session'
                      : 'QQ Music session'),
            );
@@ -226,6 +228,8 @@ class PlatformCredentialVault implements CredentialVault {
   static const qqMusicStagedCredentialKey =
       'qq_music_credential_refresh_staged_v1';
   static const netEaseCredentialKey = 'netease_cloud_music_credential_v1';
+  static const netEaseStagedCredentialKey =
+      'netease_cloud_music_credential_refresh_staged_v1';
 
   final SecureStringStore _store;
   final String credentialKey;

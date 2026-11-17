@@ -15,7 +15,7 @@ class MusicSectionDestination<T> {
   final Key itemKey;
 }
 
-class MusicSectionSelector<T> extends StatelessWidget {
+class MusicSectionSelector<T> extends StatefulWidget {
   const MusicSectionSelector({
     required this.controlKey,
     required this.label,
@@ -34,50 +34,108 @@ class MusicSectionSelector<T> extends StatelessWidget {
   final ValueChanged<T> onSelected;
 
   @override
-  Widget build(BuildContext context) {
-    final current = destinations.singleWhere(
-      (destination) => destination.value == selected,
+  State<MusicSectionSelector<T>> createState() =>
+      _MusicSectionSelectorState<T>();
+}
+
+class _MusicSectionSelectorState<T> extends State<MusicSectionSelector<T>>
+    with TickerProviderStateMixin {
+  late TabController _tabController;
+
+  int get _selectedIndex {
+    final index = widget.destinations.indexWhere(
+      (destination) => destination.value == widget.selected,
     );
-    if (compact) {
+    return index >= 0 ? index : 0;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(
+      length: widget.destinations.length,
+      initialIndex: _selectedIndex,
+      vsync: this,
+    );
+  }
+
+  @override
+  void didUpdateWidget(MusicSectionSelector<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final selectedIndex = _selectedIndex;
+    if (widget.destinations.length != _tabController.length) {
+      _tabController.dispose();
+      _tabController = TabController(
+        length: widget.destinations.length,
+        initialIndex: selectedIndex,
+        vsync: this,
+      );
+      return;
+    }
+    if (_tabController.index != selectedIndex) {
+      _tabController.animateTo(selectedIndex);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.destinations.isEmpty) return const SizedBox.shrink();
+    final selectedIndex = _selectedIndex;
+    final current = widget.destinations[selectedIndex];
+    if (widget.compact) {
+      final theme = Theme.of(context);
+      final labelStyle = theme.textTheme.labelLarge?.copyWith(
+        fontWeight: FontWeight.w600,
+      );
       return Semantics(
-        label: context.l10n.commonSelectedValue(label, current.label),
-        child: DropdownMenu<T>(
-          key: controlKey,
-          width: 180,
-          initialSelection: selected,
-          selectOnly: true,
-          requestFocusOnTap: true,
-          enableSearch: false,
-          leadingIcon: Icon(current.icon),
-          dropdownMenuEntries: [
-            for (final destination in destinations)
-              DropdownMenuEntry<T>(
-                value: destination.value,
-                label: destination.label,
-                labelWidget: Text(destination.label, key: destination.itemKey),
-                leadingIcon: Icon(destination.icon),
-              ),
-          ],
-          onSelected: (value) {
-            if (value != null) onSelected(value);
+        container: true,
+        label: context.l10n.commonSelectedValue(widget.label, current.label),
+        child: TabBar.secondary(
+          key: widget.controlKey,
+          controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          dividerColor: theme.colorScheme.outlineVariant.withValues(
+            alpha: 0.45,
+          ),
+          labelStyle: labelStyle,
+          unselectedLabelStyle: labelStyle,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+          onTap: (index) {
+            final target = widget.destinations[index].value;
+            final currentSelectedIndex = _selectedIndex;
+            if (_tabController.index != currentSelectedIndex) {
+              _tabController.index = currentSelectedIndex;
+            }
+            widget.onSelected(target);
           },
+          tabs: [
+            for (final destination in widget.destinations)
+              Tab(key: destination.itemKey, text: destination.label),
+          ],
         ),
       );
     }
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: SegmentedButton<T>(
-        key: controlKey,
+        key: widget.controlKey,
         segments: [
-          for (final destination in destinations)
+          for (final destination in widget.destinations)
             ButtonSegment<T>(
               value: destination.value,
               icon: Icon(destination.icon),
               label: Text(destination.label, key: destination.itemKey),
             ),
         ],
-        selected: {selected},
-        onSelectionChanged: (selection) => onSelected(selection.single),
+        selected: {widget.selected},
+        onSelectionChanged: (selection) => widget.onSelected(selection.single),
       ),
     );
   }

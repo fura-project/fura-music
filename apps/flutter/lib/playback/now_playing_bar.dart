@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -381,9 +382,15 @@ class _CompactControlHitRegion extends StatelessWidget {
 }
 
 class _TrackLikeButton extends StatefulWidget {
-  const _TrackLikeButton({required this.track});
+  const _TrackLikeButton({
+    required this.track,
+    this.dimension = 40,
+    this.trailingSpacing = 0,
+  });
 
   final PlaylistTrackSummary track;
+  final double dimension;
+  final double trailingSpacing;
 
   @override
   State<_TrackLikeButton> createState() => _TrackLikeButtonState();
@@ -449,14 +456,20 @@ class _TrackLikeButtonState extends State<_TrackLikeButton> {
     final pending =
         state == AuthoritativeTrackLikeState.loading ||
         controller.mutations.isTrackPending(widget.track);
-    final actionable = !pending && state != AuthoritativeTrackLikeState.unknown;
-    return IconButton(
+    final membershipUnknown = state == AuthoritativeTrackLikeState.unknown;
+    final button = IconButton(
       key: const ValueKey('now-playing-track-like'),
-      tooltip: liked
+      tooltip: membershipUnknown
+          ? context.l10n.commonRetry
+          : liked
           ? context.l10n.libraryUnlikeTrack
           : context.l10n.libraryLikeTrack,
-      onPressed: !actionable
+      isSelected: liked,
+      style: _toggleControlButtonStyle(context, selected: liked),
+      onPressed: pending
           ? null
+          : membershipUnknown
+          ? () => unawaited(controller.resolve(widget.track))
           : () => unawaited(
               performTrackLikeAction(
                 context: context,
@@ -464,7 +477,10 @@ class _TrackLikeButtonState extends State<_TrackLikeButton> {
                 liked: !liked,
               ),
             ),
-      constraints: BoxConstraints.tightFor(width: 40, height: 40),
+      constraints: BoxConstraints.tightFor(
+        width: widget.dimension,
+        height: widget.dimension,
+      ),
       padding: EdgeInsets.zero,
       icon: pending
           ? SizedBox.square(
@@ -477,6 +493,11 @@ class _TrackLikeButtonState extends State<_TrackLikeButton> {
           : Icon(
               liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
             ),
+    );
+    if (widget.trailingSpacing <= 0) return button;
+    return Padding(
+      padding: EdgeInsetsDirectional.only(end: widget.trailingSpacing),
+      child: button,
     );
   }
 }
@@ -493,6 +514,10 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
     required this.onQualityPreferenceChanged,
   });
 
+  static const _secondaryControlExtent = 40.0;
+  static const _primaryControlExtent = 48.0;
+  static const _preferredControlGap = 8.0;
+
   final QueuePlaybackController controller;
   final PlaylistTrackSummary track;
   final bool authenticationFailure;
@@ -505,6 +530,8 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playback = controller.playback;
+    const innerBarHeight =
+        _desktopNowPlayingHeight - (2 * _desktopNowPlayingVerticalInset);
     final trackIdentity = Row(
       key: const ValueKey('now-playing-track-zone'),
       children: [
@@ -540,59 +567,146 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
               ),
             ),
           );
-    return SizedBox(
-      key: const ValueKey('now-playing-desktop-layout'),
-      height: _desktopNowPlayingHeight - (2 * _desktopNowPlayingVerticalInset),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(flex: 3, child: interactiveTrackIdentity),
-          Expanded(
-            flex: 5,
-            child: Column(
-              key: const ValueKey('now-playing-transport-zone'),
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: _transportControls(
+    final likeController = TrackLikeActionScope.maybeOf(context);
+    final hasQuality =
+        qualityPreference != null && onQualityPreferenceChanged != null;
+    final hasLike =
+        likeController != null &&
+        likeController.stateFor(track) !=
+            AuthoritativeTrackLikeState.unavailable;
+    final visibleUtilityCount = (hasQuality ? 1 : 0) + (hasLike ? 1 : 0) + 2;
+
+    return IconButtonTheme(
+      data: const IconButtonThemeData(
+        style: ButtonStyle(
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.standard,
+        ),
+      ),
+      child: SizedBox(
+        key: const ValueKey('now-playing-desktop-layout'),
+        height: innerBarHeight,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(flex: 3, child: interactiveTrackIdentity),
+            Expanded(
+              flex: 5,
+              child: LayoutBuilder(
+                builder: (context, transportConstraints) {
+                  final controls = _transportControls(
                     context,
                     controller,
                     authenticationFailure,
                     onSignInAgain,
                     prominentPrimary: true,
-                    prominentPrimarySize: 48,
-                  ),
-                ),
-                _PlaybackProgress(
-                  controller: playback,
-                  track: track,
-                  dense: true,
-                ),
-              ],
+                    prominentPrimarySize: _primaryControlExtent,
+                    buttonSize: _secondaryControlExtent,
+                  );
+                  final gapCount = math.max(1, controls.length - 1);
+                  final baseExtent =
+                      ((controls.length - 1) * _secondaryControlExtent) +
+                      _primaryControlExtent;
+                  final transportSpacing =
+                      ((transportConstraints.maxWidth - baseExtent) / gapCount)
+                          .clamp(0.0, _preferredControlGap)
+                          .toDouble();
+                  final spacedTransport = <Widget>[];
+                  for (final control in controls) {
+                    if (spacedTransport.isNotEmpty) {
+                      spacedTransport.add(SizedBox(width: transportSpacing));
+                    }
+                    spacedTransport.add(control);
+                  }
+                  final maxTransportHeight = playback.durationMs != null
+                      ? _primaryControlExtent
+                      : innerBarHeight;
+                  return Column(
+                    key: const ValueKey('now-playing-transport-zone'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: transportConstraints.maxWidth,
+                          maxHeight: maxTransportHeight,
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: spacedTransport,
+                          ),
+                        ),
+                      ),
+                      _PlaybackProgress(
+                        controller: playback,
+                        track: track,
+                        dense: true,
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Row(
-              key: const ValueKey('now-playing-utility-zone'),
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (qualityPreference case final preference?)
-                  if (onQualityPreferenceChanged case final onChanged?)
-                    _PlaybackQualityButton(
-                      preference: preference,
-                      actualQuality: playback.resolvedQuality,
-                      onChanged: onChanged,
+            Expanded(
+              flex: 3,
+              child: LayoutBuilder(
+                builder: (context, utilityConstraints) {
+                  final utilityGapCount = math.max(1, visibleUtilityCount - 1);
+                  final utilityBaseExtent =
+                      visibleUtilityCount * _secondaryControlExtent;
+                  final utilitySpacing =
+                      ((utilityConstraints.maxWidth - utilityBaseExtent) /
+                              utilityGapCount)
+                          .clamp(0.0, _preferredControlGap)
+                          .toDouble();
+                  return Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: Row(
+                        key: const ValueKey('now-playing-utility-zone'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (qualityPreference case final preference?)
+                            if (onQualityPreferenceChanged
+                                case final onChanged?)
+                              Padding(
+                                padding: EdgeInsetsDirectional.only(
+                                  end: utilitySpacing,
+                                ),
+                                child: _PlaybackQualityButton(
+                                  preference: preference,
+                                  actualQuality: playback.resolvedQuality,
+                                  onChanged: onChanged,
+                                  dimension: _secondaryControlExtent,
+                                ),
+                              ),
+                          _TrackLikeButton(
+                            track: track,
+                            dimension: _secondaryControlExtent,
+                            trailingSpacing: utilitySpacing,
+                          ),
+                          _VolumeButton(
+                            controller: controller,
+                            dimension: _secondaryControlExtent,
+                          ),
+                          SizedBox(width: utilitySpacing),
+                          _QueueButton(
+                            controller: controller,
+                            dimension: _secondaryControlExtent,
+                          ),
+                        ],
+                      ),
                     ),
-                _TrackLikeButton(track: track),
-                _VolumeButton(controller: controller),
-                _QueueButton(controller: controller),
-              ],
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -628,6 +742,23 @@ class _ExpandedPlaybackControls extends StatelessWidget {
         controller.failure != null ||
         playback.stage == TrackPlaybackStage.resolutionError ||
         playback.stage == TrackPlaybackStage.engineError;
+    final statusWidget = Semantics(
+      container: true,
+      liveRegion: true,
+      label: status,
+      excludeSemantics: true,
+      child: Text(
+        status,
+        key: const ValueKey('now-playing-status'),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: error
+              ? theme.colorScheme.error
+              : theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
     return SafeArea(
       top: false,
       child: Material(
@@ -641,57 +772,53 @@ class _ExpandedPlaybackControls extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsetsDirectional.only(start: 16, end: 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Semantics(
-                        container: true,
-                        liveRegion: true,
-                        label: status,
-                        excludeSemantics: true,
-                        child: Text(
-                          status,
-                          key: const ValueKey('now-playing-status'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: error
-                                ? theme.colorScheme.error
-                                : theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ),
-                    _TrackLikeButton(track: track),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsetsDirectional.only(start: 16, end: 12),
                 child: _PlaybackProgress(controller: playback, track: track),
               ),
               const SizedBox(height: 2),
               LayoutBuilder(
                 builder: (context, constraints) {
                   if (constraints.maxWidth < 600) {
-                    return _CompactExpandedPlaybackControls(
-                      controller: controller,
-                      track: track,
-                      authenticationFailure: authenticationFailure,
-                      onSignInAgain: onSignInAgain,
-                      qualityPreference: qualityPreference,
-                      onQualityPreferenceChanged: onQualityPreferenceChanged,
-                      lyricAuxiliaryMode: lyricAuxiliaryMode,
-                      onLyricAuxiliaryModeChanged: onLyricAuxiliaryModeChanged,
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(
+                            start: 16,
+                            end: 12,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(child: statusWidget),
+                              _TrackLikeButton(track: track),
+                            ],
+                          ),
+                        ),
+                        _CompactExpandedPlaybackControls(
+                          controller: controller,
+                          track: track,
+                          authenticationFailure: authenticationFailure,
+                          onSignInAgain: onSignInAgain,
+                          qualityPreference: qualityPreference,
+                          onQualityPreferenceChanged:
+                              onQualityPreferenceChanged,
+                          lyricAuxiliaryMode: lyricAuxiliaryMode,
+                          onLyricAuxiliaryModeChanged:
+                              onLyricAuxiliaryModeChanged,
+                        ),
+                      ],
                     );
                   }
+                  final innerWidth = constraints.maxWidth - 28;
+                  final secondaryButtonSize = innerWidth < 680 ? 40.0 : 48.0;
+                  final primaryButtonSize = innerWidth < 680 ? 48.0 : 56.0;
                   final transport = _transportControls(
                     context,
                     controller,
                     authenticationFailure,
                     onSignInAgain,
                     prominentPrimary: true,
-                    buttonSize: 48,
+                    prominentPrimarySize: primaryButtonSize,
+                    buttonSize: secondaryButtonSize,
                   );
                   final utilities = <Widget>[
                     if (lyricAuxiliaryMode case final mode?)
@@ -705,7 +832,7 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                               controller.lyrics?.lyrics?.hasRomanization ??
                               false,
                           onChanged: onChanged,
-                          dimension: 48,
+                          dimension: secondaryButtonSize,
                         ),
                     if (qualityPreference case final preference?)
                       if (onQualityPreferenceChanged case final onChanged?)
@@ -713,34 +840,74 @@ class _ExpandedPlaybackControls extends StatelessWidget {
                           preference: preference,
                           actualQuality: playback.resolvedQuality,
                           onChanged: onChanged,
-                          dimension: 48,
+                          dimension: secondaryButtonSize,
                         ),
-                    _VolumeButton(controller: controller),
-                    _QueueButton(controller: controller),
+                    _VolumeButton(
+                      controller: controller,
+                      dimension: secondaryButtonSize,
+                    ),
+                    _QueueButton(
+                      controller: controller,
+                      dimension: secondaryButtonSize,
+                    ),
                   ];
+                  final transportWidth =
+                      ((transport.length - 1) * secondaryButtonSize) +
+                      primaryButtonSize;
+                  final maxLeadingWidth = math
+                      .max(0.0, (innerWidth - transportWidth) / 2 - 8)
+                      .toDouble();
                   return Padding(
                     padding: const EdgeInsetsDirectional.only(
                       start: 16,
                       end: 12,
                     ),
-                    child: SizedBox(
-                      key: const ValueKey('expanded-now-playing-wide-controls'),
-                      height: 56,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: transport,
-                          ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: utilities,
+                    child: IconButtonTheme(
+                      data: const IconButtonThemeData(
+                        style: ButtonStyle(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                      child: SizedBox(
+                        key: const ValueKey(
+                          'expanded-now-playing-wide-controls',
+                        ),
+                        height: 56,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Align(
+                              alignment: AlignmentDirectional.centerStart,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: maxLeadingWidth,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _TrackLikeButton(
+                                      track: track,
+                                      dimension: secondaryButtonSize,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Flexible(child: statusWidget),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: transport,
+                            ),
+                            Align(
+                              alignment: AlignmentDirectional.centerEnd,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: utilities,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
@@ -1320,7 +1487,11 @@ List<Widget> _transportControls(
       ? TextButton(
           key: const ValueKey('now-playing-sign-in-again'),
           onPressed: onSignInAgain,
-          child: Text(context.l10n.playbackSignIn),
+          child: Text(
+            context.l10n.playbackSignIn,
+            maxLines: 1,
+            softWrap: false,
+          ),
         )
       : prominentPrimary
       ? IconButton.filled(
@@ -1331,6 +1502,8 @@ List<Widget> _transportControls(
               : null,
           style: IconButton.styleFrom(
             minimumSize: Size.square(prominentPrimarySize),
+            fixedSize: Size.square(prominentPrimarySize),
+            padding: EdgeInsets.zero,
           ),
           icon: Icon(
             _primaryIcon(playback.stage),
@@ -1380,9 +1553,38 @@ List<Widget> _transportControls(
         key: const ValueKey('now-playing-stop'),
         tooltip: context.l10n.playbackStop,
         onPressed: () => unawaited(controller.stop()),
+        constraints: BoxConstraints.tightFor(
+          width: buttonSize,
+          height: buttonSize,
+        ),
+        padding: EdgeInsets.zero,
         icon: const Icon(Icons.stop_rounded),
       ),
   ];
+}
+
+ButtonStyle _toggleControlButtonStyle(
+  BuildContext context, {
+  required bool selected,
+}) {
+  final colors = Theme.of(context).colorScheme;
+  const shape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.all(Radius.circular(14)),
+  );
+  if (!selected) {
+    return IconButton.styleFrom(
+      foregroundColor: colors.onSurfaceVariant,
+      backgroundColor: Colors.transparent,
+      side: BorderSide.none,
+      shape: shape,
+    );
+  }
+  return IconButton.styleFrom(
+    foregroundColor: colors.primary,
+    backgroundColor: colors.primary.withValues(alpha: 0.16),
+    side: BorderSide.none,
+    shape: shape,
+  );
 }
 
 class _ShuffleButton extends StatelessWidget {
@@ -1406,6 +1608,7 @@ class _ShuffleButton extends StatelessWidget {
         key: const ValueKey('now-playing-shuffle'),
         tooltip: label,
         isSelected: enabled,
+        style: _toggleControlButtonStyle(context, selected: enabled),
         onPressed: () => unawaited(controller.toggleShuffle()),
         constraints: BoxConstraints.tightFor(
           width: dimension,
@@ -1428,6 +1631,7 @@ class _RepeatButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mode = controller.repeatMode;
+    final enabled = mode != PlaybackRepeatMode.off;
     final label = switch (mode) {
       PlaybackRepeatMode.off => context.l10n.playbackRepeatOff,
       PlaybackRepeatMode.all => context.l10n.playbackRepeatAll,
@@ -1435,13 +1639,14 @@ class _RepeatButton extends StatelessWidget {
     };
     return Semantics(
       button: true,
-      selected: mode != PlaybackRepeatMode.off,
+      selected: enabled,
       label: label,
       excludeSemantics: true,
       child: IconButton(
         key: const ValueKey('now-playing-repeat'),
         tooltip: label,
-        isSelected: mode != PlaybackRepeatMode.off,
+        isSelected: enabled,
+        style: _toggleControlButtonStyle(context, selected: enabled),
         onPressed: () => unawaited(controller.cycleRepeatMode()),
         constraints: BoxConstraints.tightFor(
           width: dimension,
@@ -1803,41 +2008,122 @@ class _TrackInfo extends StatelessWidget {
         ? context.l10n.trackUnknownArtist
         : track.artistNames.join(' · ');
     final semantics = context.l10n.playbackTrackStatusSemantics(artist, status);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _trackTitle(theme),
-        const SizedBox(height: 2),
-        Semantics(
-          container: true,
-          liveRegion: true,
-          label: semantics,
-          excludeSemantics: true,
-          child: Text(
-            semantics,
-            key: const ValueKey('now-playing-status'),
-            maxLines: compact ? 1 : 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: error
-                  ? theme.colorScheme.error
-                  : theme.colorScheme.onSurfaceVariant,
+    final titleStyle = theme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w700,
+    );
+    final statusStyle = theme.textTheme.bodySmall?.copyWith(
+      color: error
+          ? theme.colorScheme.error
+          : theme.colorScheme.onSurfaceVariant,
+    );
+    final textScaler = MediaQuery.textScalerOf(context);
+    final textDirection = Directionality.of(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        var statusMaxLines = compact ? 1 : 2;
+        var scaleDown = false;
+        if (constraints.hasBoundedHeight &&
+            constraints.maxWidth.isFinite &&
+            constraints.maxWidth > 0) {
+          final titleHeight = _measureTextHeight(
+            text: track.title,
+            style: titleStyle,
+            maxLines: 1,
+            maxWidth: constraints.maxWidth,
+            textScaler: textScaler,
+            textDirection: textDirection,
+          );
+          if (statusMaxLines == 2) {
+            final twoLineStatusHeight = _measureTextHeight(
+              text: semantics,
+              style: statusStyle,
+              maxLines: 2,
+              maxWidth: constraints.maxWidth,
+              textScaler: textScaler,
+              textDirection: textDirection,
+            );
+            if (titleHeight + 2 + twoLineStatusHeight > constraints.maxHeight) {
+              statusMaxLines = 1;
+            }
+          }
+          final singleLineStatusHeight = _measureTextHeight(
+            text: semantics,
+            style: statusStyle,
+            maxLines: 1,
+            maxWidth: constraints.maxWidth,
+            textScaler: textScaler,
+            textDirection: textDirection,
+          );
+          if (titleHeight + 2 + singleLineStatusHeight >
+              constraints.maxHeight) {
+            scaleDown = true;
+          }
+        }
+
+        final column = Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              track.title,
+              key: const ValueKey('now-playing-title'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: titleStyle,
             ),
+            SizedBox(height: scaleDown ? 0 : 2),
+            Semantics(
+              container: true,
+              liveRegion: true,
+              label: semantics,
+              excludeSemantics: true,
+              child: Text(
+                semantics,
+                key: const ValueKey('now-playing-status'),
+                maxLines: statusMaxLines,
+                overflow: TextOverflow.ellipsis,
+                style: statusStyle,
+              ),
+            ),
+          ],
+        );
+        if (!scaleDown) return column;
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: AlignmentDirectional.centerStart,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+            child: column,
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
-  Widget _trackTitle(ThemeData theme) => Text(
-    track.title,
-    key: const ValueKey('now-playing-title'),
-    maxLines: 1,
-    overflow: TextOverflow.ellipsis,
-    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-  );
+  static double _measureTextHeight({
+    required String text,
+    required TextStyle? style,
+    required int maxLines,
+    required double maxWidth,
+    required TextScaler textScaler,
+    required TextDirection textDirection,
+  }) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: maxLines,
+      ellipsis: '…',
+      textScaler: textScaler,
+      textDirection: textDirection,
+    );
+    try {
+      painter.layout(maxWidth: maxWidth);
+      return painter.height;
+    } finally {
+      painter.dispose();
+    }
+  }
 }
 
 class _QueueButton extends StatelessWidget {
@@ -1857,24 +2143,70 @@ class _QueueButton extends StatelessWidget {
   );
 }
 
-class _VolumeButton extends StatelessWidget {
-  const _VolumeButton({required this.controller});
+final Expando<BuildContext> _activeVolumeButtonContexts = Expando<BuildContext>(
+  'activeVolumeButtonContext',
+);
+
+class _VolumeButton extends StatefulWidget {
+  const _VolumeButton({required this.controller, this.dimension = 48});
 
   final QueuePlaybackController controller;
+  final double dimension;
 
   @override
-  Widget build(BuildContext context) => IconButton(
-    key: const ValueKey('now-playing-volume'),
-    tooltip: context.l10n.playbackVolume,
-    onPressed: () => unawaited(_showVolumeControl(context, controller)),
-    icon: Icon(
-      controller.playback.volume == 0
-          ? Icons.volume_off_rounded
-          : controller.playback.volume < 0.5
-          ? Icons.volume_down_rounded
-          : Icons.volume_up_rounded,
-    ),
-  );
+  State<_VolumeButton> createState() => _VolumeButtonState();
+}
+
+class _VolumeButtonState extends State<_VolumeButton> {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _activeVolumeButtonContexts[widget.controller.playback] = context;
+  }
+
+  @override
+  void didUpdateWidget(_VolumeButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller.playback != widget.controller.playback &&
+        _activeVolumeButtonContexts[oldWidget.controller.playback] == context) {
+      _activeVolumeButtonContexts[oldWidget.controller.playback] = null;
+    }
+    _activeVolumeButtonContexts[widget.controller.playback] = context;
+  }
+
+  @override
+  void dispose() {
+    if (_activeVolumeButtonContexts[widget.controller.playback] == context) {
+      _activeVolumeButtonContexts[widget.controller.playback] = null;
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _activeVolumeButtonContexts[widget.controller.playback] = context;
+    return AnimatedBuilder(
+      animation: widget.controller.playback,
+      builder: (context, _) => IconButton(
+        key: const ValueKey('now-playing-volume'),
+        tooltip: context.l10n.playbackVolume,
+        onPressed: () =>
+            unawaited(_showVolumeControl(context, widget.controller)),
+        constraints: BoxConstraints.tightFor(
+          width: widget.dimension,
+          height: widget.dimension,
+        ),
+        padding: EdgeInsets.zero,
+        icon: Icon(
+          widget.controller.playback.volume == 0
+              ? Icons.volume_off_rounded
+              : widget.controller.playback.volume < 0.5
+              ? Icons.volume_down_rounded
+              : Icons.volume_up_rounded,
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> _showVolumeControl(
@@ -1898,28 +2230,249 @@ Future<void> _showVolumeControl(
     );
     return;
   }
-  await showDialog<void>(
-    context: context,
-    animationStyle: furaDialogAnimationStyle(context),
-    builder: (context) => FuraDialogTransition(
-      child: AlertDialog(
-        title: Text(context.l10n.playbackVolume),
-        content: PlaybackShortcuts(
-          controller: controller,
-          child: SizedBox(
-            width: 320,
-            child: _VolumePanel(controller: controller.playback),
+  Rect? initialAnchorRect;
+  final buttonObject = context.findRenderObject();
+  final overlayObject = Overlay.of(context).context.findRenderObject();
+  if (buttonObject is RenderBox &&
+      buttonObject.hasSize &&
+      overlayObject is RenderBox &&
+      overlayObject.hasSize) {
+    final topLeft = buttonObject.localToGlobal(
+      Offset.zero,
+      ancestor: overlayObject,
+    );
+    initialAnchorRect = topLeft & buttonObject.size;
+  }
+  const popoverWidth = 296.0;
+  final initialPlaceAbove =
+      initialAnchorRect == null || initialAnchorRect.top >= 156;
+  final disableAnimations =
+      MediaQuery.disableAnimationsOf(context) ||
+      MediaQuery.accessibleNavigationOf(context);
+  var dismissScheduled = false;
+  late final RawDialogRoute<void> route;
+  route = RawDialogRoute<void>(
+    barrierDismissible: true,
+    barrierColor: Colors.transparent,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    transitionDuration: disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 160),
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      if (disableAnimations) return child;
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
+          alignment: initialPlaceAbove
+              ? Alignment.bottomCenter
+              : Alignment.topCenter,
+          child: child,
+        ),
+      );
+    },
+    pageBuilder: (routeContext, _, _) {
+      final viewportSize = MediaQuery.sizeOf(routeContext);
+      if (viewportSize.width < 600) {
+        if (!dismissScheduled) {
+          dismissScheduled = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (route.isActive && routeContext.mounted) {
+              Navigator.of(routeContext).removeRoute(route);
+            }
+          });
+        }
+        return const SizedBox.shrink();
+      }
+      final theme = Theme.of(routeContext);
+      final colors = theme.colorScheme;
+      final surface = Material(
+        key: const ValueKey('volume-popover'),
+        color: colors.surfaceContainerHigh,
+        surfaceTintColor: Colors.transparent,
+        elevation: 3,
+        shadowColor: colors.shadow.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(18),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints.tightFor(width: popoverWidth),
+          child: PlaybackShortcuts(
+            controller: controller,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: _VolumePanel(
+                controller: controller.playback,
+                showHeader: true,
+              ),
+            ),
           ),
         ),
-      ),
+      );
+      return _VolumePopoverPositioner(
+        buttonContext: context,
+        playbackController: controller.playback,
+        initialAnchorRect: initialAnchorRect,
+        viewportSize: viewportSize,
+        onButtonLost: () {
+          if (dismissScheduled) return;
+          dismissScheduled = true;
+          if (route.isActive && routeContext.mounted) {
+            Navigator.of(routeContext).removeRoute(route);
+          }
+        },
+        child: surface,
+      );
+    },
+  );
+  await Navigator.of(context).push<void>(route);
+}
+
+class _VolumePopoverPositioner extends StatefulWidget {
+  const _VolumePopoverPositioner({
+    required this.buttonContext,
+    required this.playbackController,
+    required this.initialAnchorRect,
+    required this.viewportSize,
+    required this.onButtonLost,
+    required this.child,
+  });
+
+  final BuildContext buttonContext;
+  final TrackPlaybackController playbackController;
+  final Rect? initialAnchorRect;
+  final Size viewportSize;
+  final VoidCallback onButtonLost;
+  final Widget child;
+
+  @override
+  State<_VolumePopoverPositioner> createState() =>
+      _VolumePopoverPositionerState();
+}
+
+class _VolumePopoverPositionerState extends State<_VolumePopoverPositioner> {
+  Rect? _anchorRect;
+  bool _measureScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _anchorRect = widget.initialAnchorRect;
+    _scheduleAnchorMeasurement();
+  }
+
+  @override
+  void didUpdateWidget(_VolumePopoverPositioner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.viewportSize != widget.viewportSize) {
+      _scheduleAnchorMeasurement();
+    }
+  }
+
+  void _scheduleAnchorMeasurement() {
+    if (_measureScheduled) return;
+    _measureScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _measureScheduled = false;
+      if (!mounted) return;
+      final activeButton = widget.buttonContext.mounted
+          ? widget.buttonContext
+          : _activeVolumeButtonContexts[widget.playbackController];
+      if (activeButton == null || !activeButton.mounted) {
+        widget.onButtonLost();
+        return;
+      }
+      final overlayState = Overlay.maybeOf(context);
+      if (overlayState == null || !overlayState.mounted) return;
+      final buttonObject = activeButton.findRenderObject();
+      final overlayObject = overlayState.context.findRenderObject();
+      if (buttonObject is! RenderBox ||
+          !buttonObject.hasSize ||
+          !buttonObject.attached ||
+          overlayObject is! RenderBox ||
+          !overlayObject.hasSize ||
+          !overlayObject.attached) {
+        return;
+      }
+      final nextRect =
+          buttonObject.localToGlobal(Offset.zero, ancestor: overlayObject) &
+          buttonObject.size;
+      if (_anchorRect != nextRect) {
+        setState(() => _anchorRect = nextRect);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => CustomSingleChildLayout(
+    delegate: _VolumePopoverLayoutDelegate(
+      anchorRect: _anchorRect,
+      viewportSize: widget.viewportSize,
     ),
+    child: widget.child,
   );
 }
 
+class _VolumePopoverLayoutDelegate extends SingleChildLayoutDelegate {
+  const _VolumePopoverLayoutDelegate({
+    required this.anchorRect,
+    required this.viewportSize,
+  });
+
+  static const double _edgeMargin = 12.0;
+  static const double _anchorGap = 8.0;
+
+  final Rect? anchorRect;
+  final Size viewportSize;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      constraints.loosen();
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final resolvedAnchor = anchorRect;
+    if (resolvedAnchor == null) {
+      return Offset(
+        math.max(0.0, (size.width - childSize.width) / 2),
+        math.max(0.0, (size.height - childSize.height) / 2),
+      );
+    }
+    final maxLeft = math.max(
+      _edgeMargin,
+      size.width - childSize.width - _edgeMargin,
+    );
+    final left = (resolvedAnchor.center.dx - childSize.width / 2).clamp(
+      _edgeMargin,
+      maxLeft,
+    );
+    final placeAbove =
+        resolvedAnchor.top >= childSize.height + _edgeMargin + _anchorGap;
+    final maxTop = math.max(
+      _edgeMargin,
+      size.height - childSize.height - _edgeMargin,
+    );
+    final rawTop = placeAbove
+        ? resolvedAnchor.top - childSize.height - _anchorGap
+        : resolvedAnchor.bottom + _anchorGap;
+    final top = rawTop.clamp(_edgeMargin, maxTop);
+    return Offset(left, top);
+  }
+
+  @override
+  bool shouldRelayout(_VolumePopoverLayoutDelegate oldDelegate) =>
+      anchorRect != oldDelegate.anchorRect ||
+      viewportSize != oldDelegate.viewportSize;
+}
+
 class _VolumePanel extends StatefulWidget {
-  const _VolumePanel({required this.controller});
+  const _VolumePanel({required this.controller, this.showHeader = false});
 
   final TrackPlaybackController controller;
+  final bool showHeader;
 
   @override
   State<_VolumePanel> createState() => _VolumePanelState();
@@ -1933,18 +2486,43 @@ class _VolumePanelState extends State<_VolumePanel> {
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: widget.controller,
     builder: (context, _) {
+      final theme = Theme.of(context);
+      final colors = theme.colorScheme;
       final value = (_preview ?? widget.controller.volume)
           .clamp(0, 1)
           .toDouble();
+      final percentLabel = Text(
+        '${(value * 100).round()}%',
+        key: const ValueKey('volume-percent'),
+        style: theme.textTheme.labelLarge?.copyWith(
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      );
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (widget.showHeader)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    context.l10n.playbackVolume,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  percentLabel,
+                ],
+              ),
+            ),
           Row(
             children: [
               Icon(
-                value == 0
-                    ? Icons.volume_off_rounded
-                    : Icons.volume_down_rounded,
+                Icons.volume_mute_rounded,
+                size: 20,
+                color: colors.onSurfaceVariant,
               ),
               Expanded(
                 child: Slider(
@@ -1958,17 +2536,13 @@ class _VolumePanelState extends State<_VolumePanel> {
                 ),
               ),
               Icon(
-                value < 0.5
-                    ? Icons.volume_down_rounded
-                    : Icons.volume_up_rounded,
+                Icons.volume_up_rounded,
+                size: 20,
+                color: colors.onSurfaceVariant,
               ),
             ],
           ),
-          Text(
-            '${(value * 100).round()}%',
-            key: const ValueKey('volume-percent'),
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
+          if (!widget.showHeader) percentLabel,
         ],
       );
     },
@@ -2021,10 +2595,9 @@ class _NowPlayingArtwork extends StatelessWidget {
                     fit: BoxFit.cover,
                     excludeFromSemantics: true,
                     gaplessPlayback: true,
-                    loadingBuilder: (context, child, progress) =>
-                        progress == null
-                        ? child
-                        : const _NowPlayingArtworkPlaceholder(),
+                    frameBuilder: musicArtworkFrameBuilder(
+                      const _NowPlayingArtworkPlaceholder(),
+                    ),
                     errorBuilder: musicArtworkErrorBuilder(
                       artworkUri,
                       const _NowPlayingArtworkPlaceholder(),

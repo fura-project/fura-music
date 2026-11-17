@@ -330,6 +330,72 @@ void main() {
     },
   );
 
+  testWidgets(
+    'starts scrolling immediately on active line change without flashing unsung words',
+    (tester) async {
+      tester.view.physicalSize = const Size(400, 560);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final controller = LyricController(
+        _ScriptedGateway([_ImmediateOperation(_longLyrics())]),
+      );
+      await controller.load(_track);
+      controller.updatePositionMs(250);
+      await _pumpPanel(tester, controller);
+      await tester.pumpAndSettle();
+
+      final list = find.byKey(const ValueKey('lyrics-line-list'));
+      final initialOffset = _scrollOffset(tester, list);
+      expect(initialOffset, 0);
+
+      controller.updatePositionMs(4250);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(_scrollOffset(tester, list), greaterThan(initialOffset));
+      await tester.pumpAndSettle();
+
+      controller.updatePositionMs(11250);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      controller.updatePositionMs(2250);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('lyrics-line-2')), findsOneWidget);
+
+      final timedController = LyricController(
+        _ScriptedGateway([_ImmediateOperation(_success())]),
+      );
+      await timedController.load(_track);
+      await _pumpPanel(tester, timedController);
+      await tester.pumpAndSettle();
+
+      final secondWord = find.descendant(
+        of: find.byKey(const ValueKey('lyrics-word-0-1')),
+        matching: find.byType(Text),
+      );
+      expect(
+        tester.widget<Text>(secondWord).style?.fontWeight,
+        FontWeight.w500,
+      );
+
+      timedController.updatePositionMs(1250);
+      await tester.pump();
+      expect(
+        tester.widget<Text>(secondWord).style?.fontWeight,
+        FontWeight.w700,
+      );
+
+      final unsungStyleColor = tester.widget<Text>(secondWord).style?.color;
+      final scheme = Theme.of(tester.element(secondWord)).colorScheme;
+      expect(unsungStyleColor, isNotNull);
+      expect(unsungStyleColor, isNot(scheme.onSurface));
+
+      controller.dispose();
+      timedController.dispose();
+    },
+  );
+
   testWidgets('shows loading then an honest unavailable state', (tester) async {
     final semantics = tester.ensureSemantics();
     final pending = _PendingOperation();

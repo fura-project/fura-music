@@ -88,6 +88,9 @@ void main() {
     final netEaseTheme = MusicMaterialTheme.light(
       seed: MusicMaterialTheme.brandSeedFor(AppMusicProvider.netEaseCloudMusic),
     );
+    final netEaseDarkTheme = MusicMaterialTheme.dark(
+      seed: MusicMaterialTheme.brandSeedFor(AppMusicProvider.netEaseCloudMusic),
+    );
 
     expect(
       MusicMaterialTheme.brandSeedFor(AppMusicProvider.qqMusic),
@@ -101,6 +104,22 @@ void main() {
       qqTheme.colorScheme.primary,
       isNot(netEaseTheme.colorScheme.primary),
     );
+    expect(
+      netEaseDarkTheme.colorScheme.surfaceContainerLowest,
+      isNot(const Color(0xFF0D0F0E)),
+    );
+    expect(
+      netEaseDarkTheme.colorScheme.outlineVariant,
+      isNot(const Color(0xFF414843)),
+    );
+    final dropdownEnabledBorder =
+        qqTheme.dropdownMenuTheme.inputDecorationTheme?.enabledBorder
+            as OutlineInputBorder?;
+    final dropdownDisabledBorder =
+        qqTheme.dropdownMenuTheme.inputDecorationTheme?.disabledBorder
+            as OutlineInputBorder?;
+    expect(dropdownEnabledBorder?.borderSide, BorderSide.none);
+    expect(dropdownDisabledBorder?.borderSide, BorderSide.none);
   });
 
   test('preserves complete supplied system color schemes', () {

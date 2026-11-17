@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/paged_tracks_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -14,6 +15,7 @@ import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 class RecentPlaysPage extends StatefulWidget {
   const RecentPlaysPage({
@@ -210,147 +212,164 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: Listenable.merge([
-      ?_controller,
-      widget.playback.currentTrackListenable,
-    ]),
-    builder: (context, _) {
-      final controller = _controller;
-      final loaded = controller?.tracks ?? const <PlaylistTrackSummary>[];
-      if (!identical(loaded, _indexedTracks)) {
-        _index.update(loaded);
-        _indexedTracks = loaded;
-      }
-      final result = _query.isEmpty
-          ? PlaylistTrackSearchResult(
-              tracks: loaded,
-              exactMatchCount: loaded.length,
-            )
-          : _index.search(_query);
-      final tracks = result.tracks;
-      final hasSnapshot =
-          controller?.stage == PlaylistDetailStage.content ||
-          controller?.stage == PlaylistDetailStage.empty;
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final l10n = context.l10n;
-          final desktop = constraints.maxWidth >= 820;
-          final padding = desktop ? 28.0 : 16.0;
-          final theme = Theme.of(context);
-          final canCollapse = constraints.maxHeight >= 480;
-          final header = _buildHeader(
-            context: context,
-            constraints: constraints,
-            controller: controller,
-            tracks: tracks,
-            hasSnapshot: hasSnapshot,
-            desktop: desktop,
-            padding: padding,
-            collapsed:
-                canCollapse && _headerCollapsed && !widget.collapseSuppressed,
-          );
-          final scrollView = CustomScrollView(
-            key: const PageStorageKey('recent-plays-tracks'),
-            controller: _scroll,
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(padding, 20, padding, 6),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Semantics(
-                        header: true,
-                        child: Text(
-                          l10n.recentTitle,
-                          style: theme.textTheme.headlineLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(
-                            controller == null
-                                ? Icons.cloud_off_outlined
-                                : Icons.cloud_queue_rounded,
-                            size: 18,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              controller == null
-                                  ? l10n.recentCloudNotConnectedShort
-                                  : l10n.recentCloudSubtitle,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
+  Widget build(BuildContext context) => SafeArea(
+    child: AnimatedBuilder(
+      animation: Listenable.merge([
+        ?_controller,
+        widget.playback.currentTrackListenable,
+      ]),
+      builder: (context, _) {
+        final controller = _controller;
+        final loaded = controller?.tracks ?? const <PlaylistTrackSummary>[];
+        if (!identical(loaded, _indexedTracks)) {
+          _index.update(loaded);
+          _indexedTracks = loaded;
+        }
+        final result = _query.isEmpty
+            ? PlaylistTrackSearchResult(
+                tracks: loaded,
+                exactMatchCount: loaded.length,
+              )
+            : _index.search(_query);
+        final tracks = result.tracks;
+        final hasSnapshot =
+            controller?.stage == PlaylistDetailStage.content ||
+            controller?.stage == PlaylistDetailStage.empty;
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final l10n = context.l10n;
+            final desktop = constraints.maxWidth >= 820;
+            final padding = desktop ? 28.0 : 16.0;
+            final theme = Theme.of(context);
+            final canCollapse = constraints.maxHeight >= 480;
+            final header = _buildHeader(
+              context: context,
+              constraints: constraints,
+              controller: controller,
+              tracks: tracks,
+              hasSnapshot: hasSnapshot,
+              desktop: desktop,
+              padding: padding,
+              collapsed:
+                  canCollapse && _headerCollapsed && !widget.collapseSuppressed,
+            );
+            final scrollView = CustomScrollView(
+              key: const PageStorageKey('recent-plays-tracks'),
+              controller: _scroll,
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(padding, 20, padding, 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            l10n.recentTitle,
+                            style: theme.textTheme.headlineLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              // Let controls scroll on short windows / with the soft keyboard.
-              if (canCollapse)
-                PinnedHeaderSliver(child: header)
-              else
-                SliverToBoxAdapter(child: header),
-              _body(controller, tracks, desktop, padding),
-            ],
-          );
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (notification) => _handleCollectionScroll(
-                    notification,
-                    canCollapse: canCollapse,
-                  ),
-                  child: controller == null
-                      ? scrollView
-                      : BoundedViewportPageDemand(
-                          enabled:
-                              widget.active &&
-                              _query.isNotEmpty &&
-                              controller.hasMore &&
-                              controller.appendFailure == null,
-                          generation: _query,
-                          onDemand: _requestSearchWindow,
-                          onRetreat: controller.cancelSearchScan,
-                          child: PlaylistScrollPrefetch(
-                            controller: controller,
-                            enabled: widget.active && _query.isEmpty,
-                            child: scrollView,
-                          ),
                         ),
-                ),
-              ),
-              if (hasSnapshot && desktop)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(padding, 8, padding, 12),
-                  child: Text(
-                    _processedStatus(
-                      l10n,
-                      controller!,
-                      result.approximateMatchCount,
-                    ),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(
+                              controller == null
+                                  ? Icons.cloud_off_outlined
+                                  : Icons.cloud_queue_rounded,
+                              size: 18,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                controller == null
+                                    ? l10n.recentCloudNotConnectedShort
+                                    : l10n.recentCloudSubtitle,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
-            ],
-          );
-        },
-      );
-    },
+                // Let controls scroll on short windows / with the soft keyboard.
+                if (canCollapse)
+                  PinnedHeaderSliver(child: header)
+                else
+                  SliverToBoxAdapter(child: header),
+                _body(controller, tracks, desktop, padding),
+              ],
+            );
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: MusicTrackLocatorOverlay(
+                    controller: _scroll,
+                    currentIndex: hasSnapshot
+                        ? musicTrackIndexOf(
+                            tracks,
+                            widget.playback.currentTrackListenable.value,
+                          )
+                        : null,
+                    desktop: desktop,
+                    leadingExtent: desktop ? 210 : 250,
+                    itemExtent: musicTrackRowExtent(
+                      desktop: desktop,
+                      includesSeparator: false,
+                    ),
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (notification) => _handleCollectionScroll(
+                        notification,
+                        canCollapse: canCollapse,
+                      ),
+                      child: controller == null
+                          ? scrollView
+                          : BoundedViewportPageDemand(
+                              enabled:
+                                  widget.active &&
+                                  _query.isNotEmpty &&
+                                  controller.hasMore &&
+                                  controller.appendFailure == null,
+                              generation: _query,
+                              onDemand: _requestSearchWindow,
+                              onRetreat: controller.cancelSearchScan,
+                              child: PlaylistScrollPrefetch(
+                                controller: controller,
+                                enabled: widget.active && _query.isEmpty,
+                                child: scrollView,
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
+                if (hasSnapshot && desktop)
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(padding, 8, padding, 12),
+                    child: Text(
+                      _processedStatus(
+                        l10n,
+                        controller!,
+                        result.approximateMatchCount,
+                      ),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
+    ),
   );
 
   Widget _buildHeader({
@@ -518,18 +537,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
             ],
           ],
         ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: 32,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary,
-              borderRadius: BorderRadius.circular(2),
-            ),
-            child: const SizedBox(height: 3),
-          ),
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -640,27 +648,13 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     ),
   );
 
-  Widget _collapsedCount(BuildContext context, String label) => SizedBox(
-    height: 48,
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          label,
-          key: const ValueKey('recent-plays-count-tab'),
-          style: Theme.of(context).textTheme.titleSmall
-              ?.copyWith(color: Theme.of(context).colorScheme.primary),
-        ),
-        const SizedBox(height: 7),
-        Container(
-          width: 32,
-          height: 3,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-      ],
+  Widget _collapsedCount(BuildContext context, String label) => Align(
+    alignment: AlignmentDirectional.centerStart,
+    child: Text(
+      label,
+      key: const ValueKey('recent-plays-count-tab'),
+      style: Theme.of(context).textTheme.titleSmall
+          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
     ),
   );
 
@@ -708,9 +702,10 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     key: const ValueKey('recent-plays-search'),
     controller: _search,
     enabled: enabled,
-    decoration: InputDecoration(
+    decoration: MusicMaterialTheme.searchDecoration(
+      context,
       hintText: context.l10n.recentSearchHint,
-      prefixIcon: const Icon(Icons.search_rounded),
+      dense: true,
       suffixIcon: _query.isEmpty
           ? null
           : IconButton(
@@ -718,12 +713,6 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
               onPressed: _search.clear,
               icon: const Icon(Icons.close_rounded),
             ),
-      isDense: true,
-      filled: true,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(28),
-        borderSide: BorderSide.none,
-      ),
     ),
   );
 
@@ -803,31 +792,51 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
           ),
         );
       case PlaylistDetailStage.content:
+        final current = widget.playback.currentTrackListenable.value;
         return SliverPadding(
-          padding: EdgeInsets.fromLTRB(padding, 0, padding, desktop ? 24 : 112),
+          padding: EdgeInsets.fromLTRB(
+            padding,
+            0,
+            padding,
+            24 +
+                MusicViewportClearance.bottomOf(
+                  context,
+                  fallbackPlayerPresent: current != null,
+                ),
+          ),
           sliver: SliverList.builder(
             itemCount: tracks.length + 1,
             itemBuilder: (context, index) {
               if (index == tracks.length) {
                 return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Column(
                     children: [
                       if (tracks.isEmpty)
-                        Text(
-                          controller.isScanningSearch
-                              ? context.l10n.recentSearchingAll
-                              : context.l10n.recentNoMatch,
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            controller.isScanningSearch
+                                ? context.l10n.recentSearchingAll
+                                : context.l10n.recentNoMatch,
+                          ),
                         ),
                       if (controller.isLoadingMore ||
                           controller.isScanningSearch)
                         const Padding(
                           padding: EdgeInsets.all(12),
-                          child: LinearProgressIndicator(),
+                          child: SizedBox.square(
+                            dimension: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              strokeCap: StrokeCap.round,
+                            ),
+                          ),
                         )
                       else if (controller.appendFailure != null) ...[
                         Text(context.l10n.recentAppendFailure),
-                        TextButton(
+                        const SizedBox(height: 10),
+                        FilledButton.tonal(
                           onPressed: controller.canRetryMore
                               ? () => _query.isEmpty
                                     ? controller.retryMore()
@@ -840,7 +849,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                           child: Text(context.l10n.recentContinueLoading),
                         ),
                       ] else if (controller.hasMore)
-                        TextButton(
+                        FilledButton.tonal(
                           onPressed: _query.isEmpty
                               ? controller.loadMore
                               : _requestSearchWindow,
@@ -851,7 +860,6 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                 );
               }
               final track = tracks[index];
-              final current = widget.playback.currentTrackListenable.value;
               final selected =
                   current?.providerId == track.providerId &&
                   current?.opaqueId == track.opaqueId;
@@ -870,8 +878,15 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                   track.title,
                 ),
                 onTap: () => _playRecent(tracks, index),
-                onContextMenuRequested: (_) =>
-                    unawaited(_showTrackActions(track)),
+                onContextMenuRequested: (position) => unawaited(
+                  _showTrackActions(
+                    tracks: tracks,
+                    index: index,
+                    track: track,
+                    desktop: desktop,
+                    anchorPosition: position,
+                  ),
+                ),
                 contentBuilder: (context, active, hovered) =>
                     MusicTrackRowContent(
                       index: index + 1,
@@ -882,8 +897,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                       showInlineQueueAction: hovered,
                       artistNames: artists,
                       onPlay: () => _playRecent(tracks, index),
-                      onAddToQueue: () =>
-                          unawaited(widget.playback.push(track)),
+                      onAddToQueue: () => _queueRecent(track),
                       onOpenAlbum:
                           track.album == null || widget.onOpenAlbum == null
                           ? null
@@ -891,18 +905,25 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                       onOpenArtist:
                           widget.onOpenArtist == null || track.artists.isEmpty
                           ? null
-                          : () => unawaited(
-                              openMusicTrackArtists(
-                                context: context,
-                                artists: track.artists,
-                                onSelected: widget.onOpenArtist,
-                                title: context.l10n.trackChooseArtistTitle,
-                                detail: context.l10n.recentChooseArtistDetail,
-                                cancelLabel: context.l10n.commonCancel,
-                                itemKeyPrefix: 'recent-track-artist',
-                              ),
-                            ),
-                      onMore: () => _showTrackActions(track),
+                          : () => _openRecentArtist(track),
+                      onMore: () => unawaited(
+                        _showTrackActions(
+                          tracks: tracks,
+                          index: index,
+                          track: track,
+                          desktop: desktop,
+                          anchorPosition: null,
+                        ),
+                      ),
+                      onMoreAt: (position) => unawaited(
+                        _showTrackActions(
+                          tracks: tracks,
+                          index: index,
+                          track: track,
+                          desktop: desktop,
+                          anchorPosition: position,
+                        ),
+                      ),
                       addToQueueTooltip: context.l10n.recentAddToQueue,
                       moreTooltip: context.l10n.commonMoreActions,
                       playTooltip: context.l10n.commonPlayFromHere,
@@ -936,101 +957,113 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     unawaited(widget.playback.replaceAndPlay(tracks, index));
   }
 
+  void _queueRecent(PlaylistTrackSummary track) {
+    final playbackStart = widget.playback.push(track);
+    if (!mounted) {
+      unawaited(playbackStart);
+      return;
+    }
+    final message = widget.playback.failure == null
+        ? context.l10n.queueAddedMessage
+        : context.l10n.queueUpdateFailureMessage;
+    showFuraToast(context, message);
+    unawaited(playbackStart);
+  }
+
+  void _openRecentArtist(PlaylistTrackSummary track) {
+    unawaited(
+      openMusicTrackArtists(
+        context: context,
+        artists: track.artists,
+        onSelected: widget.onOpenArtist,
+        title: context.l10n.trackChooseArtistTitle,
+        detail: context.l10n.recentChooseArtistDetail,
+        cancelLabel: context.l10n.commonCancel,
+        itemKeyPrefix: 'recent-track-artist',
+      ),
+    );
+  }
+
   Widget _messageSliver(Widget message) =>
       SliverFillRemaining(hasScrollBody: false, child: message);
 
-  Future<void> _showTrackActions(PlaylistTrackSummary track) async {
+  Future<void> _showTrackActions({
+    required List<PlaylistTrackSummary> tracks,
+    required int index,
+    required PlaylistTrackSummary track,
+    required bool desktop,
+    required Offset? anchorPosition,
+  }) async {
     final likeAction = await resolveMusicTrackLikeAction(context, track);
     if (!mounted) return;
-    final pageContext = context;
     final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
-    Widget actions(BuildContext context) => SafeArea(
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: Text(
-                track.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (likeAction != null)
-              ListTile(
-                leading: Icon(
-                  likeAction == MusicTrackAction.like
-                      ? Icons.favorite_border_rounded
-                      : Icons.favorite_rounded,
-                ),
-                title: Text(
-                  likeAction == MusicTrackAction.like
-                      ? context.l10n.libraryLikeTrack
-                      : context.l10n.libraryUnlikeTrack,
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  unawaited(
-                    runMusicTrackLikeAction(pageContext, track, likeAction),
-                  );
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.queue_music_rounded),
-              title: Text(context.l10n.recentAddToQueue),
-              onTap: () {
-                Navigator.pop(context);
-                unawaited(widget.playback.push(track));
-              },
-            ),
-            if (canAddToPlaylist)
-              ListTile(
-                leading: const Icon(Icons.playlist_add_rounded),
-                title: Text(context.l10n.libraryAddTrackToPlaylist),
-                onTap: () {
-                  Navigator.pop(context);
-                  unawaited(
-                    showAddTrackToPlaylist(context: pageContext, track: track),
-                  );
-                },
-              ),
-            if (track.album != null && widget.onOpenAlbum != null)
-              ListTile(
-                leading: const Icon(Icons.album_outlined),
-                title: Text(context.l10n.commonOpenAlbum),
-                onTap: () {
-                  Navigator.pop(context);
-                  widget.onOpenAlbum!(track.album!);
-                },
-              ),
-            if (widget.onOpenArtist != null)
-              for (final artist in track.artists)
-                ListTile(
-                  leading: const Icon(Icons.person_outline_rounded),
-                  title: Text(artist.name),
-                  onTap: () {
-                    Navigator.pop(context);
-                    widget.onOpenArtist!(artist);
-                  },
-                ),
-          ],
+    final canOpenAlbum = track.album != null && widget.onOpenAlbum != null;
+    final canOpenArtist =
+        widget.onOpenArtist != null && track.artists.isNotEmpty;
+    final action = await showAdaptiveMusicContextMenu<MusicTrackAction>(
+      context: context,
+      desktop: desktop,
+      anchorPosition: anchorPosition,
+      headerTitle: desktop ? null : track.title,
+      entries: [
+        MusicTrackMenuEntry(
+          value: MusicTrackAction.play,
+          icon: Icons.play_arrow_rounded,
+          label: context.l10n.commonPlayFromHere,
         ),
-      ),
+        if (likeAction != null)
+          MusicTrackMenuEntry(
+            value: likeAction,
+            icon: likeAction == MusicTrackAction.like
+                ? Icons.favorite_border_rounded
+                : Icons.favorite_rounded,
+            label: likeAction == MusicTrackAction.like
+                ? context.l10n.libraryLikeTrack
+                : context.l10n.libraryUnlikeTrack,
+          ),
+        MusicTrackMenuEntry(
+          value: MusicTrackAction.addToQueue,
+          icon: Icons.queue_music_rounded,
+          label: context.l10n.recentAddToQueue,
+        ),
+        if (canAddToPlaylist)
+          MusicTrackMenuEntry(
+            value: MusicTrackAction.addToPlaylist,
+            icon: Icons.playlist_add_rounded,
+            label: context.l10n.libraryAddTrackToPlaylist,
+          ),
+        if (canOpenAlbum)
+          MusicTrackMenuEntry(
+            value: MusicTrackAction.openAlbum,
+            icon: Icons.album_rounded,
+            label: context.l10n.commonOpenAlbum,
+          ),
+        if (canOpenArtist)
+          MusicTrackMenuEntry(
+            value: MusicTrackAction.openArtist,
+            icon: Icons.person_rounded,
+            label: track.artists.length > 1
+                ? context.l10n.commonChooseArtist
+                : context.l10n.commonOpenArtist,
+          ),
+      ],
     );
-    if (MediaQuery.sizeOf(context).width >= 840) {
-      await showDialog<void>(
-        context: context,
-        animationStyle: furaDialogAnimationStyle(context),
-        builder: (context) => FuraDialogTransition(
-          child: Dialog(child: SizedBox(width: 420, child: actions(context))),
-        ),
-      );
-    } else {
-      await showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        builder: actions,
-      );
+    if (!mounted) return;
+    switch (action) {
+      case MusicTrackAction.play:
+        _playRecent(tracks, index);
+      case MusicTrackAction.addToQueue:
+        _queueRecent(track);
+      case MusicTrackAction.addToPlaylist:
+        await showAddTrackToPlaylist(context: context, track: track);
+      case MusicTrackAction.openAlbum:
+        widget.onOpenAlbum!(track.album!);
+      case MusicTrackAction.openArtist:
+        _openRecentArtist(track);
+      case MusicTrackAction.like || MusicTrackAction.unlike:
+        await runMusicTrackLikeAction(context, track, action!);
+      case null:
+        return;
     }
   }
 }
@@ -1050,36 +1083,16 @@ class _RecentMessage extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (loading)
-              const CircularProgressIndicator()
-            else
-              Icon(
-                icon,
-                size: 44,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            if (detail != null) ...[
-              const SizedBox(height: 8),
-              Text(detail!, textAlign: TextAlign.center),
-            ],
-            if (action != null) ...[const SizedBox(height: 16), action!],
-          ],
-        ),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) {
+    if (loading) {
+      return MusicLoadingPanel(label: title, detail: detail);
+    }
+    return MusicContentStatePanel(
+      icon: icon,
+      title: title,
+      detail: detail,
+      liveRegion: action != null,
+      action: action,
+    );
+  }
 }

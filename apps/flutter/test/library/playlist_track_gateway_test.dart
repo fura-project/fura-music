@@ -145,6 +145,80 @@ void main() {
       PlaylistTrackMutationFailure.credentialRejectedStorageCleanupFailed,
     );
   });
+
+  test(
+    'QQ rejection continues the session without replaying the write',
+    () async {
+      final vault = _Vault();
+      var continuationCount = 0;
+      var mutationCount = 0;
+      final gateway = RustPlaylistTrackGateway(
+        credentialVault: vault,
+        qqSessionContinuation: () async {
+          continuationCount += 1;
+        },
+        operationFactory: (_, _, _, _) {
+          mutationCount += 1;
+          return const _Operation(
+            PlaylistTrackMutationResult(
+              failure: PlaylistTrackMutationFailure.credentialRejected,
+            ),
+          );
+        },
+      );
+
+      final result = await gateway
+          .beginMutation(
+            providerId: 'qq-music',
+            opaquePlaylistId: 'owned:7002:902',
+            opaqueTrackId: 'opaque',
+            desiredState: PlaylistTrackState.present,
+          )
+          .run();
+
+      expect(result.failure, PlaylistTrackMutationFailure.credentialRejected);
+      expect(mutationCount, 1);
+      expect(continuationCount, 1);
+      expect(vault.deleteCount, 0);
+    },
+  );
+
+  test(
+    'NetEase rejection continues the session without replaying the write',
+    () async {
+      final vault = _Vault();
+      var continuationCount = 0;
+      var mutationCount = 0;
+      final gateway = RustPlaylistTrackGateway(
+        credentialVault: vault,
+        sessionContinuation: () async {
+          continuationCount += 1;
+        },
+        operationFactory: (_, _, _, _) {
+          mutationCount += 1;
+          return const _Operation(
+            PlaylistTrackMutationResult(
+              failure: PlaylistTrackMutationFailure.credentialRejected,
+            ),
+          );
+        },
+      );
+
+      final result = await gateway
+          .beginMutation(
+            providerId: 'netease-cloud-music',
+            opaquePlaylistId: '4',
+            opaqueTrackId: '1',
+            desiredState: PlaylistTrackState.present,
+          )
+          .run();
+
+      expect(result.failure, PlaylistTrackMutationFailure.credentialRejected);
+      expect(mutationCount, 1);
+      expect(continuationCount, 1);
+      expect(vault.deleteCount, 0);
+    },
+  );
 }
 
 class _Operation implements PlaylistTrackMutationOperation {

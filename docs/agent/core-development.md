@@ -78,3 +78,21 @@ cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 Bridge changes also require the code-generation and orphan-file checks in `AGENTS.md`, followed by affected Dart/Flutter validation from the UI guide. Targeted regression work does not require unrelated full-suite ceremony unless its changed boundary could regress what that suite proves.
+
+### Proportional validation cadence
+
+During an active investigation, validation is evidence for the current hypothesis rather than a phase to repeat after every edit:
+
+- A diagnostic-only change or narrow implementation correction first gets the smallest test that compiles and exercises the changed behavior, plus applicable formatting and diff checks.
+- Do not repeatedly run the full Rust workspace, full Flutter suite, packaging matrix, or an already-completed regression matrix after each intermediate edit. Run the broader affected gate once the candidate has stabilized, then run the required final gate once at the relevant handoff, activation, commit, Release, or publication boundary.
+- Run a broader gate earlier when the change touches a shared/public API, generated Bridge, persistence format or migration, session/concurrency owner, security/privacy boundary, build surface, or another layer that can plausibly invalidate the gate's prior evidence.
+- A passing narrow check proves only its target. Delaying broader validation never erases a previously observed failure or permits weakening an existing regression.
+
+For example, changing a secret-safe failure category requires its focused classification test, formatting, and diff checks; it does not by itself require the full Rust and Flutter suites. A provider-session regression matrix belongs after the protocol/ownership candidate is stable or before production activation and publication.
+
+Human-operated authentication or protocol checks follow the same bounded cadence:
+
+- Exhaust deterministic, synthetic, and static investigation before asking for account/device interaction.
+- Prepare all machine-executable work before the interaction and make the live run answer one explicit unresolved compatibility question.
+- Do not repeat an equivalent login, QR scan, or bounded request merely because an intermediate edit compiled. Repeat it only after a material candidate change, or after adding a diagnostic that makes the next result distinguish a previously collapsed failure.
+- After sufficient live evidence arrives, continue the already-authorized machine work without introducing routine phase confirmations or additional live runs.

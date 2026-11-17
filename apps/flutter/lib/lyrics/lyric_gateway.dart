@@ -116,6 +116,7 @@ class RustLyricGateway implements LyricGateway {
     Map<String, CredentialVault>? credentialVaults,
     LyricLoadOperationFactory? operationFactory,
     this.qqSessionContinuation,
+    Map<String, SessionContinuationCoordinator>? sessionContinuations,
   }) : _operationFactory = operationFactory ?? _beginRustLoad,
        _credentialVaults = Map.unmodifiable(
          credentialVaults ??
@@ -124,11 +125,15 @@ class RustLyricGateway implements LyricGateway {
                  credentialVault ?? PlatformCredentialVault(),
                ),
              },
+       ),
+       _sessionContinuations = Map.unmodifiable(
+         sessionContinuations ?? {'qq-music': ?qqSessionContinuation},
        );
 
   final Map<String, CredentialVault> _credentialVaults;
   final LyricLoadOperationFactory _operationFactory;
-  final QqSessionContinuationCoordinator? qqSessionContinuation;
+  final SessionContinuationCoordinator? qqSessionContinuation;
+  final Map<String, SessionContinuationCoordinator> _sessionContinuations;
 
   @override
   LyricLoadOperation beginLoad({
@@ -145,9 +150,7 @@ class RustLyricGateway implements LyricGateway {
             operation,
             vault,
             retryFactory: createOperation,
-            continuation: providerId == 'qq-music'
-                ? qqSessionContinuation
-                : null,
+            continuation: _sessionContinuations[providerId],
           );
   }
 }
@@ -189,7 +192,7 @@ class _VaultCleaningLyricLoadOperation implements LyricLoadOperation {
   LyricLoadOperation _inner;
   final CredentialVault _vault;
   final LyricLoadOperation Function()? retryFactory;
-  final QqSessionContinuationCoordinator? continuation;
+  final SessionContinuationCoordinator? continuation;
   bool _cancelled = false;
 
   @override

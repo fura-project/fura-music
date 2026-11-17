@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/library/album_favorite_gateway.dart';
@@ -347,27 +348,31 @@ class AlbumFavoritePresentationController extends ChangeNotifier {
     if (page == null) {
       final source = _sourceGateway.beginLoad(offset: offset, size: size);
       final generation = _generation;
-      late final Future<FavoriteAlbumPageResult> future;
-      future = source.run().then((result) {
+      late final _SharedAlbumPage created;
+      final future = source.run().then((result) {
         if (_isCurrent(generation)) {
           if (_isSessionFailure(result.failure)) {
             _invalidateSession();
-          } else if (result.failure == null) {
+          } else if (result.failure == null && result.offset == offset) {
+            if (identical(_sharedPages[key], created)) {
+              created.resolved = result;
+            }
             if (_refreshing) {
               _acceptRefreshPage(result);
             } else {
               _acceptCurrentPage(result);
             }
-          } else if (identical(_sharedPages[key]?.future, future)) {
+          } else if (identical(_sharedPages[key], created)) {
             _sharedPages.remove(key);
           }
         }
         return result;
       });
-      page = _SharedAlbumPage(source, future);
+      created = _SharedAlbumPage(source, future);
+      page = created;
       _sharedPages[key] = page;
     }
-    return _JoinedAlbumPageLoadOperation(page.future);
+    return _JoinedAlbumPageLoadOperation(page);
   }
 
   void _acceptCurrentPage(FavoriteAlbumPageResult result) {
@@ -522,16 +527,17 @@ class _AlbumPageKey {
 }
 
 class _SharedAlbumPage {
-  const _SharedAlbumPage(this.source, this.future);
+  _SharedAlbumPage(this.source, this.future);
 
   final FavoriteAlbumPageLoadOperation source;
   final Future<FavoriteAlbumPageResult> future;
+  FavoriteAlbumPageResult? resolved;
 }
 
 class _JoinedAlbumPageLoadOperation implements FavoriteAlbumPageLoadOperation {
-  _JoinedAlbumPageLoadOperation(this._future);
+  _JoinedAlbumPageLoadOperation(this._page);
 
-  final Future<FavoriteAlbumPageResult> _future;
+  final _SharedAlbumPage _page;
   bool _active = true;
 
   @override
@@ -542,18 +548,23 @@ class _JoinedAlbumPageLoadOperation implements FavoriteAlbumPageLoadOperation {
   }
 
   @override
-  Future<FavoriteAlbumPageResult> run() async {
+  Future<FavoriteAlbumPageResult> run() {
     if (!_active) {
-      return const FavoriteAlbumPageResult(
-        failure: FavoriteAlbumFailure.cancelled,
+      return SynchronousFuture(
+        const FavoriteAlbumPageResult(failure: FavoriteAlbumFailure.cancelled),
       );
     }
-    final result = await _future;
-    return _active
-        ? result
-        : const FavoriteAlbumPageResult(
-            failure: FavoriteAlbumFailure.cancelled,
-          );
+    final resolved = _page.resolved;
+    if (resolved != null) {
+      return SynchronousFuture(resolved);
+    }
+    return _page.future.then(
+      (result) => _active
+          ? result
+          : const FavoriteAlbumPageResult(
+              failure: FavoriteAlbumFailure.cancelled,
+            ),
+    );
   }
 }
 

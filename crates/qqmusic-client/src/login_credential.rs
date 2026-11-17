@@ -1,8 +1,8 @@
 use serde::Deserialize;
 
 use crate::{
-    Credential, CredentialExpiry, CredentialSessionSecrets, InvalidCredential,
-    InvalidCredentialExpiry, LoginType,
+    Credential, CredentialExpiry, CredentialRefreshExpiry, CredentialSessionSecrets,
+    InvalidCredential, InvalidCredentialExpiry, LoginType,
 };
 
 #[derive(Debug)]
@@ -113,19 +113,18 @@ pub(crate) fn decode_login_credential(
     result_key: &str,
     login_type: LoginType,
 ) -> Result<Credential, LoginCredentialError> {
-    let envelope: serde_json::Value =
+    let mut envelope: serde_json::Value =
         serde_json::from_slice(bytes).map_err(|_| LoginCredentialError::InvalidJson)?;
     let global_code = envelope
         .get("code")
         .and_then(serde_json::Value::as_i64)
         .ok_or(LoginCredentialError::MissingGlobalCode)?;
-    let login: LoginResponse = serde_json::from_value(
-        envelope
-            .get(result_key)
-            .cloned()
-            .ok_or(LoginCredentialError::MissingLoginResult)?,
-    )
-    .map_err(|_| LoginCredentialError::InvalidJson)?;
+    let login_value = envelope
+        .get_mut(result_key)
+        .ok_or(LoginCredentialError::MissingLoginResult)?;
+    normalize_wechat_session_aliases(login_value, login_type);
+    let login: LoginResponse = serde_json::from_value(login_value.clone())
+        .map_err(|_| LoginCredentialError::InvalidJson)?;
     if global_code != 0 || login.code != Some(0) {
         return Err(LoginCredentialError::Upstream {
             global_code,
@@ -163,30 +162,156 @@ pub(crate) fn decode_login_credential(
             raw.encrypted_uin,
         ));
 
-    match (
-        raw.created_at.unwrap_or(0),
-        raw.lifetime.unwrap_or(0),
-        raw.expired_at.unwrap_or(0),
-    ) {
-        (0, 0, 0) => {}
-        (0, 0, expires_at) => {
-            let expiry = CredentialExpiry::from_expires_at(expires_at)
-                .map_err(LoginCredentialError::InvalidExpiry)?;
-            credential = credential.with_expiry(expiry);
-        }
-        (created_at, lifetime, expires_at) => {
+    match (raw.created_at.unwrap_or(0), raw.lifetime.unwrap_or(0)) {
+        (0, 0) => {}
+        (created_at, lifetime) => {
             let expiry = CredentialExpiry::new(created_at, lifetime)
                 .map_err(LoginCredentialError::InvalidExpiry)?;
-            if expires_at != 0 && expiry.expires_at_unix_seconds() != expires_at {
-                return Err(LoginCredentialError::InvalidExpiry(InvalidCredentialExpiry));
-            }
             credential = credential.with_expiry(expiry);
         }
     }
+    if let Some(value) = raw.expired_at.filter(|value| *value != 0) {
+        credential = credential.with_refresh_expiry(
+            CredentialRefreshExpiry::new(value).map_err(LoginCredentialError::InvalidExpiry)?,
+        );
+    }
     Ok(credential)
+}
+
+fn normalize_wechat_session_aliases(login: &mut serde_json::Value, login_type: LoginType) {
+    if login_type != LoginType::WECHAT {
+        return;
+    }
+    let Some(data) = login
+        .get_mut("data")
+        .and_then(serde_json::Value::as_object_mut)
+    else {
+        return;
+    };
+    for (canonical, aliases) in [
+        ("openid", &["psrf_wxopenid", "wxopenid"][..]),
+        (
+            "refresh_token",
+            &["psrf_wxrefresh_token", "wxrefresh_token"][..],
+        ),
+        ("unionid", &["psrf_wxunionid", "wxunionid"][..]),
+    ] {
+        // Presence is authoritative even for null/empty values. An explicit
+        // deletion must never be replaced by an alias from the same response.
+        if data.contains_key(canonical) {
+            continue;
+        }
+        if let Some(value) = aliases.iter().find_map(|alias| data.get(*alias).cloned()) {
+            data.insert(canonical.to_owned(), value);
+        }
+    }
 }
 
 fn usable_identifier(value: &str) -> Option<String> {
     let value = value.trim().to_owned();
     (!value.is_empty() && value != "0").then_some(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::decode_login_credential;
+    use crate::LoginType;
+
+    #[test]
+    fn keeps_music_key_lifetime_and_oauth_refresh_expiry_distinct() {
+        let response = json!({
+            "code": 0,
+            "QQConnectLogin.LoginServer.QQLogin": {
+                "code": 0,
+                "data": {
+                    "str_musicid": "123456",
+                    "musickey": "synthetic-key",
+                    "loginType": 2,
+                    "musickeyCreateTime": 1_900_000_000_u64,
+                    "keyExpiresIn": 100_000_000_u64,
+                    "expired_at": 1_950_000_000_u64
+                }
+            }
+        });
+
+        let credential = decode_login_credential(
+            &serde_json::to_vec(&response).expect("fixture JSON"),
+            "QQConnectLogin.LoginServer.QQLogin",
+            LoginType::QQ,
+        )
+        .expect("independent expiry fields are valid");
+
+        assert_eq!(credential.expires_at_unix_seconds(), Some(2_000_000_000));
+        assert_eq!(credential.refresh_expiry_value(), Some(1_950_000_000));
+    }
+
+    #[test]
+    fn rejects_partial_music_key_lifetime_even_with_oauth_refresh_expiry() {
+        let response = json!({
+            "code": 0,
+            "QQConnectLogin.LoginServer.QQLogin": {
+                "code": 0,
+                "data": {
+                    "str_musicid": "123456",
+                    "musickey": "synthetic-key",
+                    "loginType": 2,
+                    "musickeyCreateTime": 1_900_000_000_u64,
+                    "expired_at": 1_950_000_000_u64
+                }
+            }
+        });
+
+        assert!(
+            decode_login_credential(
+                &serde_json::to_vec(&response).expect("fixture JSON"),
+                "QQConnectLogin.LoginServer.QQLogin",
+                LoginType::QQ,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn normalizes_evidenced_wechat_session_aliases() {
+        for prefix in ["psrf_wx", "wx"] {
+            let mut data = json!({
+                "str_musicid": "123456",
+                "musickey": "synthetic-key",
+                "loginType": 1
+            });
+            let object = data.as_object_mut().expect("fixture object");
+            object.insert(format!("{prefix}openid"), json!("synthetic-open"));
+            object.insert(format!("{prefix}refresh_token"), json!("synthetic-refresh"));
+            object.insert(format!("{prefix}unionid"), json!("synthetic-union"));
+            let response = json!({
+                "code": 0,
+                "music.login.LoginServer.Login": {
+                    "code": 0,
+                    "data": data
+                }
+            });
+
+            let credential = decode_login_credential(
+                &serde_json::to_vec(&response).expect("fixture JSON"),
+                "music.login.LoginServer.Login",
+                LoginType::WECHAT,
+            )
+            .expect("evidenced WeChat aliases");
+            assert_eq!(
+                credential.session_secrets().open_id(),
+                Some("synthetic-open")
+            );
+            assert_eq!(
+                credential.session_secrets().refresh_token(),
+                Some("synthetic-refresh")
+            );
+            assert_eq!(
+                credential.session_secrets().union_id(),
+                Some("synthetic-union")
+            );
+            assert!(!format!("{credential:?}").contains("synthetic-refresh"));
+        }
+    }
 }

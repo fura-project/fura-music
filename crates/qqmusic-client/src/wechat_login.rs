@@ -275,7 +275,7 @@ impl<T> WechatQrLoginCoordinator<T> {
 
     fn allocate_generation(&self) -> u64 {
         self.next_generation
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
                 Some(if current == u64::MAX { 1 } else { current + 1 })
             })
             .expect("generation update closure always returns Some")

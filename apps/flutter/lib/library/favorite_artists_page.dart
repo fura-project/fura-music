@@ -61,10 +61,7 @@ class _FavoriteArtistsPageState extends State<FavoriteArtistsPage> {
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          final body = AnimatedSwitcher(
-            duration: const Duration(milliseconds: 240),
-            child: _body(context),
-          );
+          final body = MusicStageTransition(child: _body(context));
           return Column(
             children: [
               LibraryCollectionHeader(
@@ -238,9 +235,19 @@ class _ArtistCollection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomClearance = MusicViewportClearance.bottomOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop = constraints.maxWidth >= 760;
+        final horizontalPadding = desktop
+            ? MusicSpacing.pageWide
+            : MusicSpacing.pageCompact;
+        final scrollPadding = EdgeInsets.fromLTRB(
+          horizontalPadding,
+          0,
+          horizontalPadding,
+          MusicSpacing.pageCompact + bottomClearance,
+        );
         final footer = _CollectionFooter(
           isLoading: isLoadingMore,
           failure: appendFailure,
@@ -250,67 +257,75 @@ class _ArtistCollection extends StatelessWidget {
           onRetry: onRetryMore,
           providerDisplayName: providerDisplayName,
         );
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
-            0,
-            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
-            MusicSpacing.pageCompact,
-          ),
-          child: Column(
-            children: [
-              if (omittedArtistCount > 0) ...[
-                PartialResultsNotice(
+        return Column(
+          children: [
+            if (omittedArtistCount > 0)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  0,
+                  horizontalPadding,
+                  8,
+                ),
+                child: PartialResultsNotice(
                   omittedCount: omittedArtistCount,
                   resultRevision: partialResultRevision,
                 ),
-                const SizedBox(height: 8),
-              ],
-              Expanded(
-                child: BoundedViewportPageDemand(
-                  enabled: canLoadMore,
-                  onDemand: onLoadMore,
-                  child: desktop
-                      ? GridView.builder(
-                          key: const PageStorageKey<String>(
-                            'favorite-artist-grid',
-                          ),
-                          gridDelegate:
-                              const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 220,
-                                mainAxisExtent: 210,
-                                crossAxisSpacing: 24,
-                                mainAxisSpacing: 28,
-                              ),
-                          itemCount: artists.length + 1,
-                          itemBuilder: (context, index) =>
-                              index == artists.length
-                              ? footer
-                              : _ArtistGridItem(
-                                  index: index,
-                                  artist: artists[index],
-                                  onTap: () => onOpenArtist(artists[index]),
-                                ),
-                        )
-                      : ListView.separated(
-                          key: const PageStorageKey<String>(
-                            'favorite-artist-list',
-                          ),
-                          itemCount: artists.length + 1,
-                          separatorBuilder: (_, _) => const SizedBox(height: 8),
-                          itemBuilder: (context, index) =>
-                              index == artists.length
-                              ? footer
-                              : _ArtistListItem(
-                                  index: index,
-                                  artist: artists[index],
-                                  onTap: () => onOpenArtist(artists[index]),
-                                ),
-                        ),
-                ),
               ),
-            ],
-          ),
+            Expanded(
+              child: BoundedViewportPageDemand(
+                enabled: canLoadMore,
+                onDemand: onLoadMore,
+                child: desktop
+                    ? CustomScrollView(
+                        key: const PageStorageKey<String>(
+                          'favorite-artist-grid',
+                        ),
+                        slivers: [
+                          SliverPadding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: horizontalPadding,
+                            ),
+                            sliver: SliverGrid.builder(
+                              gridDelegate:
+                                  const SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 220,
+                                    mainAxisExtent: 210,
+                                    crossAxisSpacing: 24,
+                                    mainAxisSpacing: 28,
+                                  ),
+                              itemCount: artists.length,
+                              itemBuilder: (context, index) => _ArtistGridItem(
+                                index: index,
+                                artist: artists[index],
+                                onTap: () => onOpenArtist(artists[index]),
+                              ),
+                            ),
+                          ),
+                          SliverPadding(
+                            padding: scrollPadding,
+                            sliver: SliverToBoxAdapter(child: footer),
+                          ),
+                        ],
+                      )
+                    : ListView.separated(
+                        key: const PageStorageKey<String>(
+                          'favorite-artist-list',
+                        ),
+                        padding: scrollPadding,
+                        itemCount: artists.length + 1,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) => index == artists.length
+                            ? footer
+                            : _ArtistListItem(
+                                index: index,
+                                artist: artists[index],
+                                onTap: () => onOpenArtist(artists[index]),
+                              ),
+                      ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -428,23 +443,31 @@ class _CollectionFooter extends StatelessWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(20),
-          child: CircularProgressIndicator(),
+          child: SizedBox.square(
+            dimension: 28,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
         ),
       );
     }
     if (failure != null) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_failureCopy(context.l10n, failure, providerDisplayName)),
-              if (canRetry)
-                TextButton(
+              Text(
+                _failureCopy(context.l10n, failure, providerDisplayName),
+                textAlign: TextAlign.center,
+              ),
+              if (canRetry) ...[
+                const SizedBox(height: 8),
+                FilledButton.tonal(
                   onPressed: onRetry,
                   child: Text(context.l10n.commonRetry),
                 ),
+              ],
             ],
           ),
         ),
@@ -453,8 +476,8 @@ class _CollectionFooter extends StatelessWidget {
     if (canLoadMore) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: OutlinedButton(
+          padding: const EdgeInsets.all(16),
+          child: FilledButton.tonal(
             key: const ValueKey('favorite-artists-load-more'),
             onPressed: onLoadMore,
             child: Text(context.l10n.commonLoadMore),

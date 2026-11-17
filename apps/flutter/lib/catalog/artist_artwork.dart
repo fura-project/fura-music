@@ -37,6 +37,8 @@ class ArtistArtwork extends StatelessWidget {
               width: double.infinity,
               height: double.infinity,
               fit: BoxFit.cover,
+              gaplessPlayback: true,
+              frameBuilder: musicArtworkFrameBuilder(fallback),
               errorBuilder: musicArtworkErrorBuilder(uri!, fallback),
             ),
     );

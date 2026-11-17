@@ -128,6 +128,113 @@ void main() {
     expect(netease.deleteCount, 1);
   });
 
+  test('QQ rejection continues the session without replaying the mutation or deleting early', () async {
+    final qq = _Vault();
+    var continuationCount = 0;
+    var mutationCount = 0;
+    final gateway = RustTrackLikeGateway(
+      credentialVault: qq,
+      qqSessionContinuation: () async {
+        continuationCount += 1;
+      },
+      operationFactory: (_, _, _) {
+        mutationCount += 1;
+        return const _Operation(
+          TrackLikeMutationResult(
+            failure: TrackLikeMutationFailure.credentialRejected,
+          ),
+        );
+      },
+    );
+
+    final result = await gateway
+        .beginMutation(
+          providerId: 'qq-music',
+          opaqueTrackId: 'opaque',
+          desiredState: TrackLikeState.liked,
+        )
+        .run();
+
+    expect(result.failure, TrackLikeMutationFailure.credentialRejected);
+    expect(mutationCount, 1, reason: 'a remote write is never replayed');
+    expect(continuationCount, 1);
+    expect(qq.deleteCount, 0, reason: 'the continuation owns final cleanup');
+  });
+
+  test(
+    'NetEase rejection continues the session without replaying the mutation',
+    () async {
+      final vault = _Vault();
+      var continuationCount = 0;
+      var mutationCount = 0;
+      final gateway = RustTrackLikeGateway(
+        netEaseCredentialVault: vault,
+        neteaseSessionContinuation: () async {
+          continuationCount += 1;
+        },
+        operationFactory: (_, _, _) {
+          mutationCount += 1;
+          return const _Operation(
+            TrackLikeMutationResult(
+              failure: TrackLikeMutationFailure.credentialRejected,
+            ),
+          );
+        },
+      );
+
+      final result = await gateway
+          .beginMutation(
+            providerId: 'netease-cloud-music',
+            opaqueTrackId: 'opaque',
+            desiredState: TrackLikeState.liked,
+          )
+          .run();
+
+      expect(result.failure, TrackLikeMutationFailure.credentialRejected);
+      expect(mutationCount, 1, reason: 'a remote write is never replayed');
+      expect(continuationCount, 1);
+      expect(
+        vault.deleteCount,
+        0,
+        reason: 'the continuation owns final cleanup',
+      );
+    },
+  );
+
+  test(
+    'transient QQ continuation failure retains the durable credential',
+    () async {
+      final vault = _Vault();
+      var mutationCount = 0;
+      final gateway = RustTrackLikeGateway(
+        credentialVault: vault,
+        qqSessionContinuation: () async {
+          throw StateError('synthetic transient continuation failure');
+        },
+        operationFactory: (_, _, _) {
+          mutationCount += 1;
+          return const _Operation(
+            TrackLikeMutationResult(
+              failure: TrackLikeMutationFailure.credentialRejected,
+            ),
+          );
+        },
+      );
+
+      final result = await gateway
+          .beginMutation(
+            providerId: 'qq-music',
+            opaqueTrackId: 'opaque',
+            desiredState: TrackLikeState.liked,
+          )
+          .run();
+
+      expect(result.failure, TrackLikeMutationFailure.credentialRejected);
+      expect(mutationCount, 1);
+      expect(vault.deleteCount, 0);
+    },
+  );
+
   test('cleans rejected credentials and exposes cleanup failure', () async {
     final deleted = _Vault();
     final rejected = RustTrackLikeGateway(

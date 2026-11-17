@@ -713,9 +713,14 @@ own explicit opt-in solely for bounded protocol observation. No Provider
 construction framework, generic authentication abstraction, device/profile
 strategy or fallback route was added.
 
-The activation does not weaken eligibility. `CredentialRefreshError` still
-admits only the complete WeChat rotation material and rejects unsupported login
-types before transport. The Provider still owns one complete refresh decision
+The activation does not weaken lifecycle ownership. The later 2026-11-17
+WeChat long-session audit corrected the old assumption that every optional
+identity/rotation field and every refresh response must be complete:
+`refresh_token` remains required by Fura's current Web candidate, while missing
+`openid`, `unionid`, or `refresh_key` no longer blocks transport, and omitted
+response fields retain the prior WeChat session material. Explicit empty/null
+values are not resurrected. Unsupported login types are still rejected before
+transport. The Provider still owns one complete refresh decision
 per exact generation/account, and Flutter's app-lifetime coordinator still owns
 only the durable opaque current/stage acknowledgement sequence. Startup,
 locally-known expiry, application resume and authenticated-read rejection use
@@ -723,8 +728,18 @@ that same owner. Safe reads retry their original operation at most once;
 mutations remain single-dispatch and are never replayed. Logout, account
 replacement and identical-account re-login continue to dominate stale work.
 
-No further real QQ request was made for this activation. The 2026-10-22 bounded
-PASS remains the V1 wire evidence. Machine validation adds:
+A separately authorized 2026-11-17 disposable WeChat gate subsequently used
+one fresh QR credential, one refresh and one same-account verification. Both
+the initial credential and refresh response contained open ID, refresh token,
+union ID, refresh key and expiry categories; the candidate remained locally
+next-refreshable and verification passed. The run used no application Vault,
+retry or fallback and removed its temporary QR. This proves the corrected
+current request/candidate path, while leaving the historical long-duration
+drop and live partial-response behavior unproved.
+
+The 2026-10-22 bounded PASS remains the V1 production-activation evidence; the
+2026-11-17 run above is additional evidence for the corrected WeChat
+credential semantics. Machine validation adds:
 
 - an actual Release-profile construction test that reaches `NoCredential`
   rather than `ProductionGateDisabled`, plus Debug/Release checks with the old
@@ -781,13 +796,17 @@ the second bit and exercise the same single-flight/stage/verify/commit owner.
 `crates/qqmusic-client/tests/live_qq_type2_refresh_gate.rs` is ignored and
 Debug-only. It reads no stored credential, writes one create-new private
 transient QR, performs at most one refresh and exactly one account verification,
-and logs no identity or secret material. It has not been run. A Human scan and
-confirmation are the next required evidence. HTTP 429, risk/secondary
-verification, account mismatch, or a device/signature/private-secret request
-ends the gate without endpoint/profile fallback. Even a PASS does not authorize
-Release activation.
+and logs no identity or secret material. A temporary 2026-11-16 conclusion
+treated a newly issued credential as ineligible until the Provider's
+five-minute due window. The 2026-11-17 constraint audit supersedes that
+interpretation: the failed request encoded Type 2 `musicid` as a string, a
+shape independently associated with upstream rejection. The corrected gate
+therefore permits its one explicitly authorized refresh for a fresh disposable
+credential. HTTP 429, risk/secondary verification, account mismatch, or a
+device/signature/private-secret request still ends the gate without
+endpoint/profile fallback. Even a PASS does not authorize Release activation.
 
-After explicit Human authorization, the disposable gate entry point is:
+The entry point remains Human-operated and requires separate authorization:
 
 ```sh
 FURA_QQ_TYPE2_REFRESH_PROTOCOL_GATE=1 \
@@ -799,8 +818,8 @@ cargo test --locked -p qqmusic-client \
 
 The path must not already exist. The harness adds the actual image extension,
 creates it with create-new semantics and Unix mode `0600`, and removes it on
-drop. The command is documentation, not authorization; it was not run in this
-workstream.
+drop. This command is documentation, not authorization; it was not run by the
+2026-11-17 static audit.
 
 Offline proof covers the exact request, missing material before transport,
 complete rotation, login/account boundaries, rate/risk/secondary failures,
@@ -863,3 +882,95 @@ does not call refresh. Low-level QR evidence is a separate control. Third-party
 refresh sources remain reference; the Fura live refresh gate is still pending,
 Release auto-refresh disabled. See the [current implementation, safe diagnostic
 schema and exact Human steps](netease-official-web-session-v1.md).
+
+### 2026-11-16 long-lived-session rejection and Track-like follow-up
+
+The production QQ constructor is now described and regression-tested as two
+independent activation bits rather than one ambiguous Boolean: verified WeChat
+continuation is enabled and QQ `loginType=2` continuation remains disabled.
+For a Type 2 credential, the current exact path is authenticated rejection,
+`ContinuationRequired`, `allowed=false`, `ProductionGateDisabled`, Rust
+`SignedOut`, and transaction-scoped vault deletion by the Dart continuation.
+This is a confirmed implementation path, not proof that the reported account
+used Type 2; the fixed `login_type=qq` diagnostic is still required to bind a
+specific live report to it. The ignored Type 2 gate remains aligned with the
+same `music.login.LoginServer/Login` candidate. A 2026-11-16 Human scan reached
+approval but failed during the preceding QQ Connect credential exchange, so no
+refresh request or account verification ran. Offline reproduction proved the
+QR callback parser changed literal `+` in opaque `ptsigx` into a space. The
+parser now preserves the bounded raw value, and the gate now distinguishes
+fixed secret-safe exchange subphases.
+
+A later completed scan crossed that boundary and stopped before refresh with
+`credential_expiry_invalid`. The credential decoder had required OAuth
+`expired_at` to equal the separate music-key end computed from
+`musickeyCreateTime + keyExpiresIn`, then reused one stored value for local key
+validity and Type 2 `expired_in`. Current QQMusicApi and AllMusic protocol
+evidence model those values independently. Fura now does the same: key lifetime
+owns local validity, the opaque OAuth value owns refresh serialization, and a
+version-2 secure-storage document persists both with a version-1 QQ migration.
+Regressions deliberately use unequal values and prove exact refresh
+serialization, migration, redaction and partial-pair rejection. The live
+refresh and production activation claims remain pending.
+
+Subsequent bounded runs reached one refresh request but returned the fixed
+secret-safe `upstream_rejected` result while the QR credential was still newly
+issued. Alternative outer/module profile experiments were not promoted and
+were reverted. A temporary interpretation made the ignored gate check the
+Provider's five-minute due predicate and report `not_due` for fresh credentials.
+The 2026-11-17 constraint audit found that timing conclusion was confounded:
+Fura had serialized Type 2 `musicid` as a JSON string, whereas active direct
+implementations send a number and a resolved upstream issue documents rejection
+of the string shape. Fura now sends and regression-tests the numeric shape. The
+five-minute production checkpoint remains a conservative scheduling policy,
+but no longer blocks the bounded Human protocol gate.
+
+The subsequent separately authorized corrected gate used one disposable login,
+one refresh and one same-account verification and returned
+`classification=PASS phase=account_verification detail=accepted`. It performed
+no vault access, mutation, retry or endpoint/profile fallback. After confirming
+that startup, resume, proactive expiry and read rejection share the existing
+single-flight session owner; that candidate stage/verify/publish/commit is
+generation-safe; and that logout/relogin dominance, read retry-once and
+mutation no-replay remain covered, native production construction enabled the
+Type 2 activation bit alongside WeChat. The endpoint, Web profile and
+five-minute schedule were not changed. This is one-current-candidate live pass,
+not long-term soak or universal scheduling evidence.
+
+QQ remote Track-like, Album-favorite, Playlist-track, Playlist-creation and
+Playlist-deletion writes formerly
+deleted the vault immediately on `CredentialRejected`, bypassing the QQ
+continuation used by reads. They now dispatch each write exactly once, return
+the original mutation failure, and independently invoke the same session
+continuation only for future operations. That continuation retains the durable
+credential on transient failure and owns definitive transaction cleanup. No
+write is retried. Deterministic gateway regressions prove one write, one
+continuation and no eager deletion.
+
+The visible disabled Heart had a separate presentation failure mode. If the
+Liked Songs membership preload stopped on a transient page failure, state
+remained authoritative `unknown`; `_TrackLikeButton` remembered that it had
+already scheduled resolution and exposed no retry. The expanded Heart now
+offers an explicit membership retry in `unknown`, sends no mutation while
+unknown/loading, and becomes a like/unlike action only after an authoritative
+membership result. The Compact outer player still contains no Heart.
+
+NetEase remains structurally different at the wire-evidence boundary, but no
+longer lacks continuation ownership. A provider-owned coordinator now reserves
+the rejected exact generation, coalesces concurrent callers into one full
+refresh decision, stages an opaque candidate, requires same-account
+verification and durable publication before install, and supports bounded
+startup/resume recovery. Safe reads retry once only after success. Mutations
+never replay. Transient failures retain the durable current credential, while
+definitive reauthentication cleans only the owning epoch. Production activation
+is still explicitly false.
+
+The feature-gated `netease-refresh-gate` supplies the missing evidence boundary:
+isolated official-Web capture first reports only U/R/CSRF presence; absent
+independent `MUSIC_R_U` stops before refresh. A second exact Human approval is
+required before one refresh and source/candidate same-account verification.
+The gate performs no vault I/O and no retry. Historical capture still has
+`observed_music_r_u=false`, so the live wire candidate and production activation
+remain unproved. `deviceId=undefined` belongs to the current desktop media
+compatibility profile; no evidence obtained here connects it to Web refresh
+rejection, so no installation identity was invented.

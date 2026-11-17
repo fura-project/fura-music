@@ -53,11 +53,30 @@ Map<String, String>? musicArtworkRequestHeaders(String artworkUri) {
   return null;
 }
 
+const _minimumMusicArtworkCacheEntries = 2500;
+const _minimumMusicArtworkCacheBytes = 256 << 20;
+
+void _ensureMusicArtworkCachePolicy() {
+  final binding = PaintingBinding.instance;
+  final cache = binding.imageCache;
+  if (cache.maximumSize < _minimumMusicArtworkCacheEntries) {
+    cache.maximumSize = _minimumMusicArtworkCacheEntries;
+  }
+  if (cache.maximumSizeBytes < _minimumMusicArtworkCacheBytes) {
+    cache.maximumSizeBytes = _minimumMusicArtworkCacheBytes;
+  }
+}
+
 /// Creates the provider used by artwork-dependent color extraction and image
 /// prefetch so those paths use the same provider-specific HTTP policy as the
 /// visible image widgets.
-ImageProvider<Object> musicArtworkImageProvider(String artworkUri) =>
-    NetworkImage(artworkUri, headers: musicArtworkRequestHeaders(artworkUri));
+ImageProvider<Object> musicArtworkImageProvider(String artworkUri) {
+  _ensureMusicArtworkCachePolicy();
+  return NetworkImage(
+    artworkUri,
+    headers: musicArtworkRequestHeaders(artworkUri),
+  );
+}
 
 /// Produces a log-safe failure summary for physical-device diagnosis.
 ///
@@ -94,4 +113,142 @@ ImageErrorWidgetBuilder musicArtworkErrorBuilder(
     }
     return fallback;
   };
+}
+
+/// Smoothly reveals decoded network artwork over [placeholder] while
+/// bypassing the transition for warm-cache synchronous hits, already-decoded
+/// frames, and reduced-motion accessibility modes.
+ImageFrameBuilder musicArtworkFrameBuilder(
+  Widget placeholder, {
+  Duration duration = const Duration(milliseconds: 120),
+}) {
+  _ensureMusicArtworkCachePolicy();
+  return (context, child, frame, wasSynchronouslyLoaded) {
+    final disableAnimations =
+        (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ||
+        (MediaQuery.maybeAccessibleNavigationOf(context) ?? false);
+    if (disableAnimations || duration <= Duration.zero) {
+      return frame == null ? placeholder : child;
+    }
+    return _MusicArtworkFrameReveal(
+      placeholder: placeholder,
+      hasFrame: frame != null,
+      wasSynchronouslyLoaded: wasSynchronouslyLoaded,
+      duration: duration,
+      child: child,
+    );
+  };
+}
+
+class _MusicArtworkFrameReveal extends StatefulWidget {
+  const _MusicArtworkFrameReveal({
+    required this.placeholder,
+    required this.hasFrame,
+    required this.wasSynchronouslyLoaded,
+    required this.duration,
+    required this.child,
+  });
+
+  final Widget placeholder;
+  final bool hasFrame;
+  final bool wasSynchronouslyLoaded;
+  final Duration duration;
+  final Widget child;
+
+  @override
+  State<_MusicArtworkFrameReveal> createState() =>
+      _MusicArtworkFrameRevealState();
+}
+
+class _MusicArtworkFrameRevealState extends State<_MusicArtworkFrameReveal>
+    with SingleTickerProviderStateMixin {
+  AnimationController? _controller;
+  Animation<double>? _opacity;
+  bool _revealing = false;
+  bool _tickerEnabled = true;
+  bool _suppressRevealThisFrame = false;
+
+  void _ensureController() {
+    if (_controller != null) {
+      _controller!.duration = widget.duration;
+      return;
+    }
+    final controller = AnimationController(
+      vsync: this,
+      duration: widget.duration,
+    )..addStatusListener(_handleStatus);
+    _controller = controller;
+    _opacity = CurvedAnimation(
+      parent: controller,
+      curve: Curves.easeOutCubic,
+    ).drive(Tween<double>(begin: 0.35, end: 1.0));
+  }
+
+  void _handleStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && _revealing && mounted) {
+      setState(() => _revealing = false);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final enabled = TickerMode.valuesOf(context).enabled;
+    if (!enabled) {
+      _controller?.stop();
+      _revealing = false;
+    } else if (!_tickerEnabled) {
+      _suppressRevealThisFrame = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _suppressRevealThisFrame = false;
+      });
+    }
+    _tickerEnabled = enabled;
+  }
+
+  @override
+  void didUpdateWidget(_MusicArtworkFrameReveal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final tickerEnabledNow = TickerMode.valuesOf(context).enabled;
+    if (!widget.hasFrame ||
+        widget.wasSynchronouslyLoaded ||
+        !tickerEnabledNow ||
+        !_tickerEnabled ||
+        _suppressRevealThisFrame) {
+      _controller?.stop();
+      _revealing = false;
+      return;
+    }
+    if (!oldWidget.hasFrame && widget.hasFrame) {
+      _ensureController();
+      _revealing = true;
+      _controller!.forward(from: 0);
+    } else if (_controller != null) {
+      _controller!.duration = widget.duration;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.hasFrame) {
+      return widget.placeholder;
+    }
+    if (!_revealing || _opacity == null) {
+      return widget.child;
+    }
+    return Stack(
+      fit: StackFit.passthrough,
+      alignment: Alignment.center,
+      children: <Widget>[
+        Positioned.fill(child: widget.placeholder),
+        FadeTransition(opacity: _opacity!, child: widget.child),
+      ],
+    );
+  }
 }

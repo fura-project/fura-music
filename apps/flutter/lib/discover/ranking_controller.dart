@@ -35,28 +35,49 @@ class RankingGroupController extends ChangeNotifier {
     _operation?.cancel();
     final operation = _gateway.beginGroupLoad();
     _operation = operation;
+
+    RankingGroupResult? synchronousResult;
+    final future = operation.run().then((value) {
+      synchronousResult = value;
+      return value;
+    });
+    if (synchronousResult != null) {
+      if (identical(_operation, operation)) _operation = null;
+      if (!_isCurrent(generation)) return;
+      _applyLoadResult(synchronousResult!);
+      _notify();
+      return;
+    }
+
     _groups = const [];
     _omittedRankingCount = 0;
     _failure = null;
     _stage = RankingGroupStage.loading;
     _notify();
 
-    final result = await operation.run();
+    final result = await future;
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
 
+    _applyLoadResult(result);
+    _notify();
+  }
+
+  void _applyLoadResult(RankingGroupResult result) {
     if (result.failure == null) {
       _groups = List.unmodifiable(result.groups);
       _omittedRankingCount = result.omittedRankingCount;
+      _failure = null;
       if (result.omittedRankingCount > 0) _partialResultRevision += 1;
       _stage = _groups.isEmpty && _omittedRankingCount == 0
           ? RankingGroupStage.empty
           : RankingGroupStage.content;
     } else {
+      _groups = const [];
+      _omittedRankingCount = 0;
       _failure = result.failure;
       _stage = RankingGroupStage.error;
     }
-    _notify();
   }
 
   void retry() {
@@ -182,21 +203,40 @@ class RankingTrackController extends ChangeNotifier {
       size: pageSize,
     );
     _operation = operation;
-    _tracks = const [];
     _failure = null;
     _appendFailure = null;
+    _isLoadingMore = false;
+
+    RankingTrackPageResult? synchronousResult;
+    final future = operation.run().then((value) {
+      synchronousResult = value;
+      return value;
+    });
+    if (synchronousResult != null) {
+      if (identical(_operation, operation)) _operation = null;
+      if (!_isCurrent(generation)) return;
+      _applyFirstPageResult(synchronousResult!);
+      _notify();
+      return;
+    }
+
+    _tracks = const [];
     _total = 0;
     _nextOffset = 0;
     _hasMore = false;
     _omittedTrackCount = 0;
-    _isLoadingMore = false;
     _stage = RankingTrackStage.loading;
     _notify();
 
-    final result = await operation.run();
+    final result = await future;
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
 
+    _applyFirstPageResult(result);
+    _notify();
+  }
+
+  void _applyFirstPageResult(RankingTrackPageResult result) {
     if (_validPage(result, expectedOffset: 0)) {
       _ranking = result.ranking!;
       _tracks = List.unmodifiable(result.tracks);
@@ -209,10 +249,14 @@ class RankingTrackController extends ChangeNotifier {
           ? RankingTrackStage.empty
           : RankingTrackStage.content;
     } else {
+      _tracks = const [];
+      _total = 0;
+      _nextOffset = 0;
+      _hasMore = false;
+      _omittedTrackCount = 0;
       _failure = result.failure ?? RankingFailure.invalidResponse;
       _stage = RankingTrackStage.error;
     }
-    _notify();
   }
 
   Future<void> loadMore() async {
@@ -225,15 +269,38 @@ class RankingTrackController extends ChangeNotifier {
       size: pageSize,
     );
     _operation = operation;
-    _isLoadingMore = true;
     _appendFailure = null;
+
+    RankingTrackPageResult? synchronousResult;
+    final future = operation.run().then((value) {
+      synchronousResult = value;
+      return value;
+    });
+    if (synchronousResult != null) {
+      if (identical(_operation, operation)) _operation = null;
+      if (!_isCurrent(generation)) return;
+      _isLoadingMore = false;
+      _applyLoadMoreResult(synchronousResult!, expectedOffset: expectedOffset);
+      _notify();
+      return;
+    }
+
+    _isLoadingMore = true;
     _notify();
 
-    final result = await operation.run();
+    final result = await future;
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
     _isLoadingMore = false;
 
+    _applyLoadMoreResult(result, expectedOffset: expectedOffset);
+    _notify();
+  }
+
+  void _applyLoadMoreResult(
+    RankingTrackPageResult result, {
+    required int expectedOffset,
+  }) {
     if (_validPage(result, expectedOffset: expectedOffset)) {
       _ranking = result.ranking!;
       final seen = _tracks
@@ -251,7 +318,6 @@ class RankingTrackController extends ChangeNotifier {
     } else {
       _appendFailure = result.failure ?? RankingFailure.invalidResponse;
     }
-    _notify();
   }
 
   void retry() {

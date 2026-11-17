@@ -291,9 +291,11 @@ where
             68 => Ok(QqQrPollResult::Refused),
             0 => {
                 let redirect = args.get(2).ok_or(QqQrError::MissingAuthorization)?;
-                let url = Url::parse(redirect).map_err(|_| QqQrError::MissingAuthorization)?;
-                let uin = query_value(&url, "uin").ok_or(QqQrError::MissingAuthorization)?;
-                let sigx = query_value(&url, "ptsigx").ok_or(QqQrError::MissingAuthorization)?;
+                Url::parse(redirect).map_err(|_| QqQrError::MissingAuthorization)?;
+                let uin =
+                    raw_query_value(redirect, "uin").ok_or(QqQrError::MissingAuthorization)?;
+                let sigx =
+                    raw_query_value(redirect, "ptsigx").ok_or(QqQrError::MissingAuthorization)?;
                 session.authorization = Some(QqQrAuthorization { uin, sigx });
                 Ok(QqQrPollResult::Authorized)
             }
@@ -636,6 +638,25 @@ fn query_value(url: &Url, name: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+/// Extracts an opaque QQ authorization value without form-style decoding.
+///
+/// `Url::query_pairs` follows `application/x-www-form-urlencoded` semantics
+/// and turns a literal `+` into a space. QQ's one-time `ptsigx` is opaque and
+/// may contain that literal byte, so decoding it changes the signature before
+/// `check_sig`. The value is bounded and screened here, then encoded exactly
+/// once by the outgoing request builder.
+fn raw_query_value(url: &str, name: &str) -> Option<String> {
+    let query = url.split_once('?')?.1.split('#').next()?;
+    query.split('&').find_map(|pair| {
+        let (candidate, value) = pair.split_once('=')?;
+        (candidate == name
+            && !value.is_empty()
+            && value.len() <= 4096
+            && !value.bytes().any(|byte| byte <= 0x20 || byte == b'#'))
+        .then(|| value.to_owned())
+    })
+}
+
 fn ensure_success<E>(phase: &'static str, status: u16) -> Result<(), QqQrError<E>> {
     if (200..300).contains(&status) {
         Ok(())
@@ -736,6 +757,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn poll_preserves_literal_plus_in_the_one_time_signature() {
+        let transport = FakeTransport::new([
+            HttpResponse::new(200, png()).with_headers(vec![(
+                "set-cookie".into(),
+                "qrsig=secret-qrsig; Path=/; Secure".into(),
+            )]),
+            HttpResponse::new(
+                200,
+                b"ptuiCB('0','0','https://graph.qq.com/oauth2.0/login_jump?uin=123456&service=ptqrlogin&ptsigx=abc+def/ghi=&s_url=x','0','ok','');".to_vec(),
+            ),
+        ]);
+        let client = QqMusicClient::new(transport);
+        let mut session = client.create_qq_qr().await.expect("QQ QR bootstrap");
+        assert_eq!(
+            client.poll_qq_qr(&mut session).await.expect("QQ QR poll"),
+            QqQrPollResult::Authorized
+        );
+        let authorization = session.take_authorization().expect("authorization");
+        assert_eq!(authorization.sigx, "abc+def/ghi=");
+    }
+
+    #[tokio::test]
     async fn exchanges_confirmed_qq_authorization_through_redirect_chain() {
         // Real musicu envelopes also carry scalar transport metadata. The login
         // decoder must select the named result instead of flattening every
@@ -769,7 +812,7 @@ mod tests {
             )]),
             HttpResponse::new(
                 200,
-                b"ptuiCB('0','0','https://graph.qq.com/oauth2.0/login_jump?uin=456&service=ptqrlogin&ptsigx=secret-sigx&s_url=x','0','ok','');".to_vec(),
+                b"ptuiCB('0','0','https://graph.qq.com/oauth2.0/login_jump?uin=456&service=ptqrlogin&ptsigx=secret+sigx/value=&s_url=x','0','ok','');".to_vec(),
             ),
             HttpResponse::new(302, Vec::new()).with_headers(vec![
                 ("set-cookie".into(), "p_skey=secret-p-skey; Path=/".into()),
@@ -814,6 +857,11 @@ mod tests {
                 .headers()
                 .iter()
                 .all(|(name, _)| !name.eq_ignore_ascii_case("cookie"))
+        );
+        assert!(
+            requests[2]
+                .query_pairs()
+                .contains(&("ptsigx".into(), "secret+sigx/value=".into(),))
         );
         assert!(requests[3].headers().iter().any(|(name, value)| {
             name.eq_ignore_ascii_case("referer") && value == "https://xui.ptlogin2.qq.com/"

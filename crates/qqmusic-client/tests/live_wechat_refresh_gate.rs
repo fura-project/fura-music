@@ -1,12 +1,15 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use qqmusic_client::{
-    Credential, CredentialRefreshError, CredentialVerificationError, QqMusicClient,
-    QrImageMediaType, ReqwestTransport, WechatCredentialExchangeError, WechatQrError,
-    WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress,
+    Credential, CredentialRefreshError, CredentialVerificationError, HttpRequest, HttpResponse,
+    HttpTransport, QqMusicClient, QrImageMediaType, ReqwestTransport, ReqwestTransportError,
+    WechatCredentialExchangeError, WechatQrError, WechatQrLoginCoordinator, WechatQrLoginError,
+    WechatQrLoginProgress, validate_credential_refresh_material,
 };
 
 const ENABLE_ENV: &str = "FURA_QQ_WECHAT_REFRESH_PROTOCOL_GATE";
@@ -18,6 +21,102 @@ enum GateClassification {
     BlockedByProtocol,
     BlockedByRiskControl,
     ImplementationDefect,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct RefreshResponsePresence {
+    music_key: bool,
+    open_id: bool,
+    refresh_token: bool,
+    union_id: bool,
+    refresh_key: bool,
+    expiry: bool,
+}
+
+impl RefreshResponsePresence {
+    fn decode(bytes: &[u8]) -> Self {
+        let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+            return Self::default();
+        };
+        let Some(data) = value
+            .get("music.login.LoginServer.Login")
+            .and_then(|login| login.get("data"))
+            .and_then(serde_json::Value::as_object)
+        else {
+            return Self::default();
+        };
+        let nonempty = |names: &[&str]| {
+            names.iter().any(|name| {
+                data.get(*name)
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(|value| !value.is_empty())
+            })
+        };
+        let positive = |names: &[&str]| {
+            names.iter().any(|name| {
+                data.get(*name)
+                    .and_then(serde_json::Value::as_u64)
+                    .is_some_and(|value| value > 0)
+            })
+        };
+        Self {
+            music_key: nonempty(&["musickey"]),
+            open_id: nonempty(&["openid", "psrf_wxopenid", "wxopenid"]),
+            refresh_token: nonempty(&["refresh_token", "psrf_wxrefresh_token", "wxrefresh_token"]),
+            union_id: nonempty(&["unionid", "psrf_wxunionid", "wxunionid"]),
+            refresh_key: nonempty(&["refresh_key"]),
+            expiry: positive(&["musickeyCreateTime", "keyExpiresIn", "expired_at"]),
+        }
+    }
+}
+
+#[derive(Default)]
+struct RefreshObservationState {
+    armed: AtomicBool,
+    response: Mutex<Option<RefreshResponsePresence>>,
+}
+
+#[derive(Clone)]
+struct ObservingTransport {
+    inner: ReqwestTransport,
+    observation: Arc<RefreshObservationState>,
+}
+
+impl ObservingTransport {
+    fn new(inner: ReqwestTransport) -> Self {
+        Self {
+            inner,
+            observation: Arc::new(RefreshObservationState::default()),
+        }
+    }
+
+    fn begin_refresh_observation(&self) {
+        *self.observation.response.lock().expect("observation lock") = None;
+        self.observation.armed.store(true, Ordering::SeqCst);
+    }
+
+    fn take_refresh_observation(&self) -> Option<RefreshResponsePresence> {
+        self.observation.armed.store(false, Ordering::SeqCst);
+        self.observation
+            .response
+            .lock()
+            .expect("observation lock")
+            .take()
+    }
+}
+
+impl HttpTransport for ObservingTransport {
+    type Error = ReqwestTransportError;
+
+    async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+        let observe = self.observation.armed.swap(false, Ordering::SeqCst);
+        let response = self.inner.execute(request).await?;
+        if observe {
+            *self.observation.response.lock().expect("observation lock") =
+                Some(RefreshResponsePresence::decode(response.body()));
+        }
+        Ok(response)
+    }
 }
 
 impl GateClassification {
@@ -134,7 +233,7 @@ fn classify_verification_error(
 
 async fn authenticate_disposable_session(
     qr_path: PathBuf,
-) -> Option<(WechatQrLoginCoordinator<ReqwestTransport>, Credential)> {
+) -> Option<(WechatQrLoginCoordinator<ObservingTransport>, Credential)> {
     let Ok(transport) = ReqwestTransport::new() else {
         report(
             GateClassification::ImplementationDefect,
@@ -143,7 +242,8 @@ async fn authenticate_disposable_session(
         );
         return None;
     };
-    let coordinator = WechatQrLoginCoordinator::new(QqMusicClient::new(transport));
+    let coordinator =
+        WechatQrLoginCoordinator::new(QqMusicClient::new(ObservingTransport::new(transport)));
     let mut session = match coordinator.begin().await {
         Ok(session) => session,
         Err(error) => {
@@ -204,10 +304,36 @@ async fn authenticate_disposable_session(
 }
 
 async fn refresh_once_and_verify_once(
-    coordinator: &WechatQrLoginCoordinator<ReqwestTransport>,
+    coordinator: &WechatQrLoginCoordinator<ObservingTransport>,
     credential: &Credential,
 ) {
-    let refreshed = match coordinator.client().refresh_credential(credential).await {
+    let initial = credential.session_secrets();
+    eprintln!(
+        "FURA_QQ_REFRESH_GATE phase=initial_capture initial_openid_present={} initial_refresh_token_present={} initial_unionid_present={} initial_refresh_key_present={} initial_expiry_present={}",
+        initial.open_id().is_some(),
+        initial.refresh_token().is_some(),
+        initial.union_id().is_some(),
+        initial.refresh_key().is_some(),
+        credential.expires_at_unix_seconds().is_some()
+            || credential.refresh_expiry_value().is_some(),
+    );
+    coordinator.client().transport().begin_refresh_observation();
+    let refresh_result = coordinator.client().refresh_credential(credential).await;
+    let returned = coordinator
+        .client()
+        .transport()
+        .take_refresh_observation()
+        .unwrap_or_default();
+    eprintln!(
+        "FURA_QQ_REFRESH_GATE phase=refresh_response returned_musickey_present={} returned_openid_present={} returned_refresh_token_present={} returned_unionid_present={} returned_refresh_key_present={} returned_expiry_present={}",
+        returned.music_key,
+        returned.open_id,
+        returned.refresh_token,
+        returned.union_id,
+        returned.refresh_key,
+        returned.expiry,
+    );
+    let refreshed = match refresh_result {
         Ok(credential) => credential,
         Err(CredentialRefreshError::RateLimited | CredentialRefreshError::AccountChanged) => {
             report(
@@ -226,6 +352,15 @@ async fn refresh_once_and_verify_once(
             return;
         }
     };
+    let candidate = refreshed.session_secrets();
+    eprintln!(
+        "FURA_QQ_REFRESH_GATE phase=candidate_decode candidate_openid_present={} candidate_refresh_token_present={} candidate_unionid_present={} candidate_refresh_key_present={} candidate_next_refreshable={}",
+        candidate.open_id().is_some(),
+        candidate.refresh_token().is_some(),
+        candidate.union_id().is_some(),
+        candidate.refresh_key().is_some(),
+        validate_credential_refresh_material(&refreshed).is_ok(),
+    );
 
     match coordinator.client().verify_credential(&refreshed).await {
         Ok(summary) => {
@@ -311,6 +446,25 @@ fn risk_classification_is_fail_closed_for_rate_limit_and_account_change() {
         GateClassification::ImplementationDefect.label(),
         "IMPLEMENTATION_DEFECT",
     );
+}
+
+#[test]
+fn refresh_presence_diagnostic_recognizes_aliases_without_values() {
+    let observed = RefreshResponsePresence::decode(
+        br#"{"code":0,"music.login.LoginServer.Login":{"code":0,"data":{"musickey":"do-not-echo-key-7x","psrf_wxopenid":"do-not-echo-open-7x","wxrefresh_token":"do-not-echo-token-7x","psrf_wxunionid":"do-not-echo-union-7x","refresh_key":"do-not-echo-refresh-key-7x","keyExpiresIn":123}}}"#,
+    );
+    assert_eq!(
+        observed,
+        RefreshResponsePresence {
+            music_key: true,
+            open_id: true,
+            refresh_token: true,
+            union_id: true,
+            refresh_key: true,
+            expiry: true,
+        }
+    );
+    assert!(!format!("{observed:?}").contains("do-not-echo"));
 }
 
 #[test]

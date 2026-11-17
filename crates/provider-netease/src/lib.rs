@@ -2,6 +2,7 @@
 mod auth;
 mod catalog;
 mod read_parity;
+mod refresh;
 pub use auth::{NeteaseQrCancellation, NeteaseQrSession};
 pub use catalog::NeteaseMediaSourceResolver;
 use music_domain::{
@@ -14,20 +15,41 @@ use provider_api::{
     AlbumSearchProvider, ArtistSearchProvider, MusicProvider, PlaylistSearchProvider,
     ProviderCapability, ProviderDescriptor, SearchError, TrackSearchProvider,
 };
+pub use refresh::{
+    NeteaseRefreshFailure, NeteaseRefreshPreparation, NeteaseRefreshPrepareResult,
+    NeteaseRefreshPrepareState, NeteaseRefreshTrigger, NeteaseStagedRecovery,
+    NeteaseStagedRecoveryAction, NeteaseStagedRecoveryError,
+};
 use std::sync::Arc;
+use std::sync::atomic::AtomicU32;
 
 pub struct NeteaseProvider<T> {
     client: Arc<NeteaseClient<T>>,
     auth: Arc<auth::AuthOwner>,
     media_cache: tokio::sync::Mutex<provider_api::MediaResolutionCache>,
+    refresh_enabled: bool,
+    next_refresh_reservation: AtomicU32,
+    refresh: std::sync::Mutex<refresh::RefreshCoordinatorState>,
 }
 impl<T> NeteaseProvider<T> {
     #[must_use]
     pub fn new(client: NeteaseClient<T>) -> Self {
+        Self::new_with_refresh_activation(client, false)
+    }
+
+    /// Constructs a provider with the evidence-gated refresh candidate.
+    ///
+    /// Production callers must keep this disabled until the bounded Human
+    /// protocol gate has verified independent `MUSIC_R_U` rotation.
+    #[must_use]
+    pub fn new_with_refresh_activation(client: NeteaseClient<T>, refresh_enabled: bool) -> Self {
         Self {
             client: Arc::new(client),
             auth: Arc::new(auth::AuthOwner::new()),
             media_cache: tokio::sync::Mutex::new(provider_api::MediaResolutionCache::default()),
+            refresh_enabled,
+            next_refresh_reservation: AtomicU32::new(1),
+            refresh: std::sync::Mutex::new(refresh::RefreshCoordinatorState::Idle),
         }
     }
 }

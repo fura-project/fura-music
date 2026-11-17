@@ -97,6 +97,28 @@ proxy interception, risk-control bypass, or default-profile switch was used.
 Browser stdout/stderr was not captured, preventing the CDP token-bearing URL
 from entering Fura logs.
 
+### Current official-login presentation compatibility
+
+The historical standalone probe above used Chromium app presentation. During
+the bounded 2026-11-17 refresh-material observation, the current official login
+interaction was not usable in that presentation even though Chromium/CDP stayed
+alive and cleanup completed. Production NetEase capture now uses a normal
+isolated window instead:
+
+```text
+--new-window
+https://music.163.com/#/login
+--user-data-dir=<fresh-attempt-profile>
+--remote-debugging-address=127.0.0.1
+--remote-debugging-port=0
+--no-first-run
+--no-default-browser-check
+```
+
+No security or identity flag changed. The standard window completed the
+Human-operated login and presence-only capture; the profile was then removed.
+This presentation fix does not broaden Cookie selection or activate refresh.
+
 ### CDP bootstrap boundary
 
 The probe and production code both:

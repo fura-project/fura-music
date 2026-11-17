@@ -150,8 +150,8 @@ class PagedTracksController extends ChangeNotifier {
         _stage == PlaylistDetailStage.empty,
   );
 
-  Future<void> _load({required bool preserveSnapshot}) async {
-    if (_disposed) return;
+  Future<void> _load({required bool preserveSnapshot}) {
+    if (_disposed) return Future.value();
     final generation = ++_generation;
     _appendPump = null;
     _manualPageRequested = false;
@@ -159,6 +159,7 @@ class PagedTracksController extends ChangeNotifier {
     cancelPrefetch();
     _isLoadingAll = false;
     _operation?.cancel();
+    final latency = Stopwatch()..start();
     final operation = _beginLoad(0, pageSize);
     _operation = operation;
     _failure = null;
@@ -166,6 +167,22 @@ class PagedTracksController extends ChangeNotifier {
     _isRefreshing = preserveSnapshot;
     _appendFailure = null;
     _refreshFailure = null;
+
+    var completedSynchronously = false;
+    final future = operation.run().then((result) {
+      completedSynchronously = true;
+      _completeFirstPage(
+        generation: generation,
+        operation: operation,
+        result: result,
+        preserveSnapshot: preserveSnapshot,
+        elapsed: latency.elapsed,
+      );
+    });
+    if (completedSynchronously) {
+      return future;
+    }
+
     if (!preserveSnapshot) {
       _tracks = const [];
       _total = 0;
@@ -176,9 +193,16 @@ class PagedTracksController extends ChangeNotifier {
       _stage = PlaylistDetailStage.loading;
     }
     _notify();
+    return future;
+  }
 
-    final latency = Stopwatch()..start();
-    final result = await operation.run();
+  void _completeFirstPage({
+    required int generation,
+    required PlaylistTrackPageLoadOperation operation,
+    required PlaylistTrackPageResult result,
+    required bool preserveSnapshot,
+    required Duration elapsed,
+  }) {
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
 
@@ -190,7 +214,7 @@ class PagedTracksController extends ChangeNotifier {
         result.offset == 0 &&
         _validPage(result, nextOffset, hasMore);
     if (validSuccess) {
-      _recordPageLatency(latency.elapsed);
+      _recordPageLatency(elapsed);
       _tracks = List.unmodifiable(result.tracks);
       _total = result.total;
       _totalIsExact = result.totalIsExact;
@@ -329,18 +353,42 @@ class PagedTracksController extends ChangeNotifier {
       (_searchPageBudget > 0 && !(_searchHasEnoughMatches?.call() ?? false)) ||
       (_prefetchPages > 0 && _tracks.length < _prefetchTarget);
 
-  Future<void> _loadNextPage() async {
-    if (!canLoadMore && !canRetryMore) return;
+  Future<void> _loadNextPage() {
+    if (!canLoadMore && !canRetryMore) return Future.value();
     final generation = _generation;
     final expectedOffset = _nextOffset;
+    final latency = Stopwatch()..start();
     final operation = _beginLoad(expectedOffset, pageSize);
     _operation = operation;
-    _isLoadingMore = true;
     _appendFailure = null;
-    _notify();
 
-    final latency = Stopwatch()..start();
-    final result = await operation.run();
+    var completedSynchronously = false;
+    final future = operation.run().then((result) {
+      completedSynchronously = true;
+      _completeNextPage(
+        generation: generation,
+        expectedOffset: expectedOffset,
+        operation: operation,
+        result: result,
+        elapsed: latency.elapsed,
+      );
+    });
+    if (completedSynchronously) {
+      return future;
+    }
+
+    _isLoadingMore = true;
+    _notify();
+    return future;
+  }
+
+  void _completeNextPage({
+    required int generation,
+    required int expectedOffset,
+    required PlaylistTrackPageLoadOperation operation,
+    required PlaylistTrackPageResult result,
+    required Duration elapsed,
+  }) {
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
     _isLoadingMore = false;
@@ -350,7 +398,7 @@ class PagedTracksController extends ChangeNotifier {
     if (result.failure == null &&
         result.offset == expectedOffset &&
         _validPage(result, pageEnd, hasMore)) {
-      _recordPageLatency(latency.elapsed);
+      _recordPageLatency(elapsed);
       final seen = _tracks
           .map((track) => '${track.providerId}\u0000${track.opaqueId}')
           .toSet();

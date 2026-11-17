@@ -109,6 +109,7 @@ class MusicApp extends StatefulWidget {
     CredentialRestoreResult initialCredentialRestore =
         CredentialRestoreResult.signedOut,
     QqSessionContinuationCoordinator? qqSessionContinuation,
+    SessionContinuationCoordinator? neteaseSessionContinuation,
     Key? key,
   }) {
     RustMediaResolutionGateway? defaultMediaResolutionGateway;
@@ -179,6 +180,11 @@ class MusicApp extends StatefulWidget {
       );
       trackLikeGateway ??= RustTrackLikeGateway(
         credentialVault: fallbackCredentialVault,
+        qqSessionContinuation: qqSessionContinuation == null
+            ? null
+            : () async {
+                await qqSessionContinuation.continueAfterReadRejection();
+              },
       );
       favoriteAlbumGateway ??= RustFavoriteAlbumGateway(
         credentialVault: fallbackCredentialVault,
@@ -275,6 +281,7 @@ class MusicApp extends StatefulWidget {
               : (preference) => defaultMediaResolutionGateway!
                     .updatePreferredQuality(preference.audioPreference)),
       qqSessionContinuation: qqSessionContinuation,
+      neteaseSessionContinuation: neteaseSessionContinuation,
       key: key,
     );
   }
@@ -287,6 +294,7 @@ class MusicApp extends StatefulWidget {
     required this.settingsStore,
     required this.onPlaybackQualityChanged,
     this.qqSessionContinuation,
+    this.neteaseSessionContinuation,
     super.key,
   });
 
@@ -297,6 +305,7 @@ class MusicApp extends StatefulWidget {
   final AppSettingsStore? settingsStore;
   final ValueChanged<AppPlaybackQualityPreference>? onPlaybackQualityChanged;
   final QqSessionContinuationCoordinator? qqSessionContinuation;
+  final SessionContinuationCoordinator? neteaseSessionContinuation;
 
   @override
   State<MusicApp> createState() => _MusicAppState();
@@ -327,6 +336,7 @@ class _MusicAppState extends State<MusicApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(widget.qqSessionContinuation?.checkpoint());
+      unawaited(widget.neteaseSessionContinuation?.checkpoint());
     }
   }
 
@@ -634,16 +644,16 @@ class _AuthenticationDialogState extends State<_AuthenticationDialog> {
           clipBehavior: Clip.antiAlias,
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: widget.controller.supportsDesktopQuickLogin ? 720 : 440,
+              maxWidth: widget.controller.supportsDesktopQuickLogin ? 640 : 420,
               maxHeight: 720,
             ),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+              padding: const EdgeInsets.fromLTRB(28, 16, 28, 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Align(
-                    alignment: Alignment.centerRight,
+                    alignment: AlignmentDirectional.centerEnd,
                     child: IconButton(
                       key: const ValueKey('close-authentication-dialog'),
                       onPressed: widget.onClose,
@@ -839,32 +849,18 @@ class _AuthenticationPanel extends StatelessWidget {
   final LoginController controller;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        borderRadius: MusicRadii.panel,
-        border: Border.all(color: colors.outlineVariant),
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, _) => AnimatedSwitcher(
+      duration: MusicMotion.stateChange,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: _AuthenticationContent(
+        key: ValueKey(controller.stage),
+        controller: controller,
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(MusicSpacing.panel),
-        child: AnimatedBuilder(
-          animation: controller,
-          builder: (context, _) => AnimatedSwitcher(
-            duration: MusicMotion.stateChange,
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            child: _AuthenticationContent(
-              key: ValueKey(controller.stage),
-              controller: controller,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }
 
 class _AuthenticationContent extends StatelessWidget {
@@ -922,15 +918,18 @@ class _AuthenticationContent extends StatelessWidget {
 
   Widget _idle(BuildContext context) => Column(
     key: const ValueKey('login-idle'),
-    crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     mainAxisSize: MainAxisSize.min,
     children: [
-      _PanelIcon(
-        icon: controller.usesOfficialWebOnly
-            ? Icons.open_in_browser_rounded
-            : Icons.qr_code_2_rounded,
+      Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: _PanelIcon(
+          icon: controller.usesOfficialWebOnly
+              ? Icons.open_in_browser_rounded
+              : Icons.qr_code_2_rounded,
+        ),
       ),
-      const SizedBox(height: 24),
+      const SizedBox(height: 20),
       Text(
         controller.usesOfficialWebOnly
             ? context.l10n.authOfficialWebTitle
@@ -946,7 +945,7 @@ class _AuthenticationContent extends StatelessWidget {
             : context.l10n.authIntroductionSingle(_providerName(context)),
         style: _supportingStyle(context),
       ),
-      const SizedBox(height: 28),
+      const SizedBox(height: 24),
       if (controller.usesOfficialWebOnly)
         FilledButton.icon(
           key: const ValueKey('start-official-web-login-button'),
@@ -989,7 +988,7 @@ class _AuthenticationContent extends StatelessWidget {
       if (!controller.usesOfficialWebOnly &&
           controller.supportsOfficialWebLogin) ...[
         const SizedBox(height: 10),
-        TextButton.icon(
+        FilledButton.tonalIcon(
           key: const ValueKey('start-official-web-login-button'),
           onPressed: controller.startOfficialWebLogin,
           icon: const Icon(Icons.open_in_browser_rounded),

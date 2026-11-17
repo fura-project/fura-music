@@ -7,6 +7,7 @@ import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/track_like_presentation_controller.dart';
 import 'package:flutterustmusic/library/playlist_track_presentation_controller.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 export 'package:flutterustmusic/library/playlist_track_presentation_controller.dart'
     show showAddTrackToPlaylist;
@@ -281,8 +282,8 @@ class _MusicTrackRowSurfaceState extends State<MusicTrackRowSurface> {
         button: true,
         selected: widget.current,
         onTap: widget.onTap,
-        onLongPress: !widget.desktop && widget.onContextMenuRequested != null
-            ? () => widget.onContextMenuRequested!(null)
+        onLongPress: widget.onContextMenuRequested != null
+            ? _showKeyboardMenu
             : null,
         child: MouseRegion(
           onEnter: (_) => _handleHoverChanged(true),
@@ -295,9 +296,11 @@ class _MusicTrackRowSurfaceState extends State<MusicTrackRowSurface> {
               _focusNode.requestFocus();
               widget.onTap();
             },
-            onLongPress:
-                !widget.desktop && widget.onContextMenuRequested != null
-                ? () => widget.onContextMenuRequested!(null)
+            onLongPress: widget.onContextMenuRequested != null
+                ? () {
+                    _focusNode.requestFocus();
+                    _showKeyboardMenu();
+                  }
                 : null,
             onSecondaryTapDown:
                 widget.desktop && widget.onContextMenuRequested != null
@@ -331,6 +334,111 @@ class _MusicTrackRowSurfaceState extends State<MusicTrackRowSurface> {
       ),
     );
   }
+}
+
+class MusicTrackMenuEntry<T> {
+  const MusicTrackMenuEntry({
+    required this.value,
+    required this.icon,
+    required this.label,
+    this.key,
+  });
+
+  final T value;
+  final IconData icon;
+  final String label;
+  final Key? key;
+}
+
+Offset? musicTrackAnchorOffset(BuildContext context) {
+  final box = context.findRenderObject();
+  if (box is! RenderBox || !box.hasSize) return null;
+  return box.localToGlobal(Offset(box.size.width / 2, box.size.height));
+}
+
+Future<T?> showAdaptiveMusicContextMenu<T>({
+  required BuildContext context,
+  required bool desktop,
+  required List<MusicTrackMenuEntry<T>> entries,
+  Offset? anchorPosition,
+  String? headerTitle,
+}) {
+  if (entries.isEmpty) return Future<T?>.value();
+  if (!desktop) {
+    return showModalBottomSheet<T>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (headerTitle != null && headerTitle.isNotEmpty)
+                ListTile(
+                  title: Text(
+                    headerTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              for (final entry in entries)
+                ListTile(
+                  key: entry.key,
+                  leading: Icon(entry.icon),
+                  title: Text(entry.label),
+                  onTap: () => Navigator.pop(context, entry.value),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  final overlay = Overlay.of(context).context.findRenderObject();
+  if (overlay is! RenderBox) return Future<T?>.value();
+  final resolvedPosition =
+      anchorPosition ??
+      musicTrackAnchorOffset(context) ??
+      overlay.size.center(Offset.zero);
+  final theme = Theme.of(context);
+  final colors = theme.colorScheme;
+  return showMenu<T>(
+    context: context,
+    position: RelativeRect.fromLTRB(
+      resolvedPosition.dx,
+      resolvedPosition.dy,
+      overlay.size.width - resolvedPosition.dx,
+      overlay.size.height - resolvedPosition.dy,
+    ),
+    items: [
+      for (final entry in entries)
+        PopupMenuItem<T>(
+          key: entry.key,
+          value: entry.value,
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(entry.icon, size: 20, color: colors.onSurfaceVariant),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  entry.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+    ],
+  );
 }
 
 class MusicTrackTableHeader extends StatelessWidget {
@@ -377,6 +485,7 @@ class MusicTrackTableHeader extends StatelessWidget {
             width: 52,
             child: Text(durationLabel, textAlign: TextAlign.end, style: style),
           ),
+          const SizedBox(width: 36),
         ],
       ),
     );
@@ -394,6 +503,7 @@ class MusicTrackRowContent extends StatelessWidget {
     required this.onPlay,
     required this.onAddToQueue,
     required this.onMore,
+    this.onMoreAt,
     this.onOpenAlbum,
     this.onOpenArtist,
     this.showInlineQueueAction,
@@ -417,6 +527,7 @@ class MusicTrackRowContent extends StatelessWidget {
   final VoidCallback onPlay;
   final VoidCallback onAddToQueue;
   final VoidCallback onMore;
+  final ValueChanged<Offset?>? onMoreAt;
   final VoidCallback? onOpenAlbum;
   final VoidCallback? onOpenArtist;
   final bool? showInlineQueueAction;
@@ -438,9 +549,11 @@ class MusicTrackRowContent extends StatelessWidget {
     final resolvedPlayTooltip = playTooltip ?? context.l10n.commonPlayFromHere;
     final resolvedQueueTooltip =
         addToQueueTooltip ?? context.l10n.commonAddToQueue;
+    final resolvedMoreTooltip = moreTooltip ?? context.l10n.commonMoreActions;
     final resolvedArtistTooltip =
         artistTooltip ?? context.l10n.commonOpenArtist;
     final resolvedAlbumTooltip = albumTooltip ?? context.l10n.commonOpenAlbum;
+    final showMoreAction = active || current;
     return Row(
       children: [
         SizedBox(
@@ -544,6 +657,35 @@ class MusicTrackRowContent extends StatelessWidget {
             formatTrackDuration(track.durationSeconds),
             alignment: TextAlign.end,
           ),
+        ),
+        const SizedBox(width: 4),
+        SizedBox(
+          width: 32,
+          height: 32,
+          child: showMoreAction
+              ? ExcludeFocus(
+                  child: Builder(
+                    builder: (buttonContext) => IconButton(
+                      key: moreKey,
+                      tooltip: resolvedMoreTooltip,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 32,
+                        height: 32,
+                      ),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () {
+                        if (onMoreAt != null) {
+                          onMoreAt!(musicTrackAnchorOffset(buttonContext));
+                          return;
+                        }
+                        onMore();
+                      },
+                      icon: const Icon(Icons.more_horiz_rounded, size: 19),
+                    ),
+                  ),
+                )
+              : null,
         ),
       ],
     );
@@ -741,6 +883,8 @@ class MusicTrackArtwork extends StatelessWidget {
               uri!,
               headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
+              gaplessPlayback: true,
+              frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );
@@ -871,7 +1015,14 @@ class _MusicTrackLocatorOverlayState extends State<MusicTrackLocatorOverlay> {
       ),
       PositionedDirectional(
         end: 16,
-        bottom: widget.bottomInset ?? (widget.desktop ? 16 : 84),
+        bottom:
+            widget.bottomInset ??
+            (16 +
+                MusicViewportClearance.bottomOf(
+                  context,
+                  fallbackPlayerPresent:
+                      !widget.desktop && widget.currentIndex != null,
+                )),
         child: IgnorePointer(
           ignoring: !_visible,
           child: ExcludeSemantics(

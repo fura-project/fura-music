@@ -180,3 +180,98 @@ Linux Release build, privacy and diff checks pass. Whole-workspace strict
 all-target Clippy still fails on the existing QQ test-only
 `unused_async_trait_impl` diagnostics under Rust 1.98; none of those fixtures
 or lint settings was changed.
+
+## 2026-11-16 production-continuation preparation
+
+The long-lived-session follow-up added the production-shaped continuation
+architecture without activating its unproved wire candidate. An exact
+authenticated `301` now transfers the matching Rust credential generation to
+a provider-owned continuation reservation instead of making the rejection
+callback itself the credential owner. One app-lifetime coordinator then owns a
+single full refresh decision, opaque current/staged durable rotation,
+same-account verification, publish-before-commit, startup/resume recovery and
+generation-safe abort. A safe read may retry once only after continuation
+success; mutations invoke continuation only for future requests and are never
+replayed. Transient transport/service failure retains the current durable
+credential. Logout, account replacement and same-account relogin dominate any
+late result.
+
+The native production constructor still sets NetEase refresh activation to
+`false`. This is deliberate: historical official-Web capture observed
+`MUSIC_U` and `__csrf` but not independent `MUSIC_R_U`, and no live refresh has
+passed. The feature-gated `netease-refresh-gate` is now the bounded evidence
+entry point. It uses an isolated official-Web profile, reports only credential
+presence booleans, stops before refresh when `MUSIC_R_U` is absent, and requires
+a second exact Human approval before at most one refresh and same-account
+candidate verification. It never reads or writes the application vault and
+does not retry. `MUSIC_U` is never copied into `MUSIC_R_U`.
+
+Before the bounded observation below, no stored credential was read and no
+real NetEase refresh/account request was sent during implementation. Until a
+gate reports independent refresh material and a verified candidate, there is
+no evidence to activate production refresh or to infer an App/device profile.
+`deviceId=undefined` remains a media compatibility fact, not evidence of the
+session rejection cause.
+
+## 2026-11-17 constraint-audit clarification
+
+HD-036 permits an official Web/App/Desktop profile and a stable Fura-owned
+installation identity when protocol evidence requires them. It does not prove
+that either is required here. Current active implementations conflict: direct
+CookieJar clients retain all scoped server cookies and profile state, while
+wrappers often expose only auth cookies despite sending a larger caller-owned
+collection. One active direct client records that WEAPI refresh returns a
+business 400 without independent `MUSIC_R_U`, but no independent observation
+proves that U/R/CSRF is the complete durable Web session or that both U and R
+must rotate in one response.
+
+Accordingly, production remains disabled and U is never copied into R. The next
+bounded observation should record only the presence and insert/update/delete/
+unchanged state of allowlisted cookies from the official-Web source, then send
+one refresh only if independent R exists and separately authorized. No broader
+CookieJar, App profile or installation identity is introduced by static
+evidence alone. See the
+[full constraint audit](provider-session-constraint-audit-2026-11-17.md).
+
+## 2026-11-17 bounded official-Web observation
+
+One Human-operated login completed in a fresh Linux Chromium profile owned by
+the feature-gated harness. The capture used the official
+`https://music.163.com/#/login` origin, read no application Vault or daily
+browser profile, and emitted only fixed Cookie-presence/metadata classes.
+
+Observed authentication material:
+
+- `MUSIC_U`: present on the exact music domain, root path, expiry present,
+  HttpOnly;
+- `MUSIC_R_U`: absent on both the music domain and parent `163.com` domain;
+- `__csrf`: present on the exact music domain, root path, expiry present;
+- `NMTID` and `WNMCID`: present on the music domain;
+- `_ntes_nuid`: present only on the parent `163.com` domain;
+- the observed profile had no `os`, `appver`, `buildver`, `deviceId`,
+  `__remember_me`, or anti-cheat token Cookie.
+
+This is one current login-source observation, not a claim that the service can
+never issue R. It does prove that Fura's current production official-Web source
+cannot satisfy the independently evidenced WEAPI candidate's R precondition.
+The harness therefore returned
+`BLOCKED_BY_PROTOCOL / refresh_material / MUSIC_R_U_MISSING` before transport:
+zero refresh requests, zero account-verification requests and zero retries were
+sent. No risk-control response occurred because no authenticated protocol
+request was made.
+
+The first two attempts also exposed a local presentation compatibility defect:
+Chromium's `--app=` shell left the current official login interaction unusable
+for the maintainer. NetEase capture now opens the same isolated profile and
+loopback-only CDP endpoint in a standard `--new-window` presentation. The
+ordinary window completed login and capture; KuGou's disconnected CDP fixture
+retains its separate app presentation. The bounded login window is now 15
+minutes, and debug output reports only changing fixed presence/domain booleans.
+
+Production refresh remains disabled. Current evidence does not authorize an
+U-to-R copy, a full browser-CookieJar import, an invented device identity, a
+WEAPI-without-R request, or a Web-to-App profile substitution. A future
+production promotion requires a separately evidenced refreshable login source
+and a bounded accepted refresh plus same-account verification. The current Web
+credential remains valid for ordinary restore/use until the service actually
+rejects it; transient failures continue to retain the durable credential.

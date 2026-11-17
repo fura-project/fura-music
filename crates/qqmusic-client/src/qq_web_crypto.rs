@@ -11,8 +11,7 @@ use sha1::{Digest as _, Sha1};
 const PART_1_INDEXES: [usize; 7] = [23, 14, 6, 36, 16, 7, 19];
 const PART_2_INDEXES: [usize; 8] = [16, 1, 32, 12, 19, 27, 8, 5];
 const SCRAMBLE_VALUES: [u8; 20] = [
-    89, 39, 179, 150, 218, 82, 58, 252, 177, 52, 186, 123, 120, 64, 242, 133, 143, 161, 121,
-    179,
+    89, 39, 179, 150, 218, 82, 58, 252, 177, 52, 186, 123, 120, 64, 242, 133, 143, 161, 121, 179,
 ];
 const REQUEST_KEY: [u8; 16] = [
     189, 48, 95, 16, 208, 255, 116, 182, 239, 84, 218, 184, 53, 181, 225, 207,
@@ -92,7 +91,11 @@ pub(crate) fn decode_ag1_response(data: &[u8]) -> String {
 #[cfg(test)]
 pub(crate) fn decode_ag1_request_for_test(data: &[u8]) -> Result<String, Ag1Error> {
     let wire = STANDARD.decode(data).map_err(|_| Ag1Error)?;
-    let nonce: [u8; 12] = wire.get(..12).ok_or(Ag1Error)?.try_into().map_err(|_| Ag1Error)?;
+    let nonce: [u8; 12] = wire
+        .get(..12)
+        .ok_or(Ag1Error)?
+        .try_into()
+        .map_err(|_| Ag1Error)?;
     let mut encrypted = wire.get(12..).ok_or(Ag1Error)?.to_vec();
     let plain = request_key()?
         .open_in_place(

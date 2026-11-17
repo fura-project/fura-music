@@ -2,7 +2,8 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-const CREDENTIAL_PERSISTENCE_VERSION: u64 = 1;
+const LEGACY_CREDENTIAL_PERSISTENCE_VERSION: u64 = 1;
+const CREDENTIAL_PERSISTENCE_VERSION: u64 = 2;
 const CREDENTIAL_ROTATION_VERSION: u64 = 1;
 
 /// Numeric QQ Music login type carried by musicu requests.
@@ -53,6 +54,34 @@ impl std::error::Error for InvalidLoginType {}
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CredentialExpiry {
     expires_at_unix_seconds: u64,
+}
+
+/// Opaque OAuth expiry value returned by QQ login and required unchanged by
+/// the login-type-2 refresh request.
+///
+/// This is deliberately separate from [`CredentialExpiry`]. QQ responses can
+/// carry both `expired_at` and the music-key lifetime pair, and current direct
+/// clients treat them as independent protocol fields rather than equivalent
+/// timestamps.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CredentialRefreshExpiry(u64);
+
+impl CredentialRefreshExpiry {
+    /// # Errors
+    ///
+    /// Zero denotes an absent protocol value and cannot authorize refresh.
+    pub const fn new(value: u64) -> Result<Self, InvalidCredentialExpiry> {
+        if value == 0 {
+            Err(InvalidCredentialExpiry)
+        } else {
+            Ok(Self(value))
+        }
+    }
+
+    #[must_use]
+    pub const fn value(self) -> u64 {
+        self.0
+    }
 }
 
 impl CredentialExpiry {
@@ -208,6 +237,7 @@ pub struct Credential {
     music_key: String,
     login_type: LoginType,
     expiry: Option<CredentialExpiry>,
+    refresh_expiry: Option<CredentialRefreshExpiry>,
     session_secrets: CredentialSessionSecrets,
 }
 
@@ -243,6 +273,7 @@ impl Credential {
             music_key,
             login_type,
             expiry: None,
+            refresh_expiry: None,
             session_secrets: CredentialSessionSecrets::default(),
         })
     }
@@ -250,6 +281,12 @@ impl Credential {
     #[must_use]
     pub fn with_expiry(mut self, expiry: CredentialExpiry) -> Self {
         self.expiry = Some(expiry);
+        self
+    }
+
+    #[must_use]
+    pub fn with_refresh_expiry(mut self, refresh_expiry: CredentialRefreshExpiry) -> Self {
+        self.refresh_expiry = Some(refresh_expiry);
         self
     }
 
@@ -287,6 +324,16 @@ impl Credential {
     pub const fn expires_at_unix_seconds(&self) -> Option<u64> {
         match self.expiry {
             Some(expiry) => Some(expiry.expires_at_unix_seconds()),
+            None => None,
+        }
+    }
+
+    /// Returns the opaque OAuth expiry value required by QQ Type 2 refresh.
+    /// It is not used to infer the music-key's local validity.
+    #[must_use]
+    pub const fn refresh_expiry_value(&self) -> Option<u64> {
+        match self.refresh_expiry {
+            Some(expiry) => Some(expiry.value()),
             None => None,
         }
     }
@@ -342,12 +389,13 @@ impl Credential {
             lifetime_seconds: expiry.expires_at_unix_seconds() - 1,
         });
         let secrets = &self.session_secrets;
-        let document = StoredCredentialV1 {
+        let document = StoredCredentialV2 {
             version: CREDENTIAL_PERSISTENCE_VERSION,
             music_id: self.music_id.clone(),
             music_key: self.music_key.clone(),
             login_type: self.login_type.value(),
             expiry,
+            refresh_expiry_value: self.refresh_expiry_value(),
             open_id: secrets.open_id.clone(),
             access_token: secrets.access_token.clone(),
             refresh_token: secrets.refresh_token.clone(),
@@ -369,36 +417,19 @@ impl Credential {
     pub fn decode_from_secure_storage(bytes: &[u8]) -> Result<Self, CredentialPersistenceError> {
         let header: StoredCredentialHeader = serde_json::from_slice(bytes)
             .map_err(|_| CredentialPersistenceError::InvalidDocument)?;
-        if header.version != CREDENTIAL_PERSISTENCE_VERSION {
-            return Err(CredentialPersistenceError::UnsupportedVersion(
-                header.version,
-            ));
+        match header.version {
+            LEGACY_CREDENTIAL_PERSISTENCE_VERSION => {
+                let document: StoredCredentialV1 = serde_json::from_slice(bytes)
+                    .map_err(|_| CredentialPersistenceError::InvalidDocument)?;
+                decode_stored_credential(StoredCredentialParts::from_legacy(document))
+            }
+            CREDENTIAL_PERSISTENCE_VERSION => {
+                let document: StoredCredentialV2 = serde_json::from_slice(bytes)
+                    .map_err(|_| CredentialPersistenceError::InvalidDocument)?;
+                decode_stored_credential(StoredCredentialParts::from_current(document))
+            }
+            version => Err(CredentialPersistenceError::UnsupportedVersion(version)),
         }
-
-        let document: StoredCredentialV1 = serde_json::from_slice(bytes)
-            .map_err(|_| CredentialPersistenceError::InvalidDocument)?;
-
-        let login_type = LoginType::new(document.login_type)
-            .map_err(CredentialPersistenceError::InvalidLoginType)?;
-        let mut credential = Self::new(document.music_id, document.music_key, login_type)
-            .map_err(CredentialPersistenceError::InvalidCredential)?;
-        if let Some(expiry) = document.expiry {
-            credential = credential.with_expiry(
-                CredentialExpiry::new(expiry.created_at_unix_seconds, expiry.lifetime_seconds)
-                    .map_err(CredentialPersistenceError::InvalidExpiry)?,
-            );
-        }
-
-        Ok(
-            credential.with_session_secrets(CredentialSessionSecrets::new(
-                document.open_id,
-                document.access_token,
-                document.refresh_token,
-                document.refresh_key,
-                document.union_id,
-                document.encrypted_uin,
-            )),
-        )
     }
 
     #[must_use]
@@ -574,6 +605,119 @@ struct StoredCredentialV1 {
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+struct StoredCredentialV2 {
+    version: u64,
+    music_id: String,
+    music_key: String,
+    login_type: u32,
+    expiry: Option<StoredCredentialExpiry>,
+    refresh_expiry_value: Option<u64>,
+    open_id: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    refresh_key: Option<String>,
+    union_id: Option<String>,
+    encrypted_uin: Option<String>,
+}
+
+struct StoredCredentialParts {
+    music_id: String,
+    music_key: String,
+    raw_login_type: u32,
+    stored_expiry: Option<StoredCredentialExpiry>,
+    stored_refresh_expiry_value: Option<u64>,
+    open_id: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    refresh_key: Option<String>,
+    union_id: Option<String>,
+    encrypted_uin: Option<String>,
+    migrate_legacy_qq_expiry: bool,
+}
+
+impl StoredCredentialParts {
+    fn from_legacy(document: StoredCredentialV1) -> Self {
+        Self {
+            music_id: document.music_id,
+            music_key: document.music_key,
+            raw_login_type: document.login_type,
+            stored_expiry: document.expiry,
+            stored_refresh_expiry_value: None,
+            open_id: document.open_id,
+            access_token: document.access_token,
+            refresh_token: document.refresh_token,
+            refresh_key: document.refresh_key,
+            union_id: document.union_id,
+            encrypted_uin: document.encrypted_uin,
+            migrate_legacy_qq_expiry: true,
+        }
+    }
+
+    fn from_current(document: StoredCredentialV2) -> Self {
+        Self {
+            music_id: document.music_id,
+            music_key: document.music_key,
+            raw_login_type: document.login_type,
+            stored_expiry: document.expiry,
+            stored_refresh_expiry_value: document.refresh_expiry_value,
+            open_id: document.open_id,
+            access_token: document.access_token,
+            refresh_token: document.refresh_token,
+            refresh_key: document.refresh_key,
+            union_id: document.union_id,
+            encrypted_uin: document.encrypted_uin,
+            migrate_legacy_qq_expiry: false,
+        }
+    }
+}
+
+fn decode_stored_credential(
+    document: StoredCredentialParts,
+) -> Result<Credential, CredentialPersistenceError> {
+    let login_type = LoginType::new(document.raw_login_type)
+        .map_err(CredentialPersistenceError::InvalidLoginType)?;
+    let expiry = document
+        .stored_expiry
+        .map(|expiry| {
+            CredentialExpiry::new(expiry.created_at_unix_seconds, expiry.lifetime_seconds)
+                .map_err(CredentialPersistenceError::InvalidExpiry)
+        })
+        .transpose()?;
+    let legacy_refresh_expiry_value =
+        if document.migrate_legacy_qq_expiry && login_type == LoginType::QQ {
+            expiry.map(CredentialExpiry::expires_at_unix_seconds)
+        } else {
+            None
+        };
+    let refresh_expiry = document
+        .stored_refresh_expiry_value
+        .or(legacy_refresh_expiry_value)
+        .map(CredentialRefreshExpiry::new)
+        .transpose()
+        .map_err(CredentialPersistenceError::InvalidExpiry)?;
+
+    let mut credential = Credential::new(document.music_id, document.music_key, login_type)
+        .map_err(CredentialPersistenceError::InvalidCredential)?;
+    if let Some(expiry) = expiry {
+        credential = credential.with_expiry(expiry);
+    }
+    if let Some(refresh_expiry) = refresh_expiry {
+        credential = credential.with_refresh_expiry(refresh_expiry);
+    }
+    Ok(
+        credential.with_session_secrets(CredentialSessionSecrets::new(
+            document.open_id,
+            document.access_token,
+            document.refresh_token,
+            document.refresh_key,
+            document.union_id,
+            document.encrypted_uin,
+        )),
+    )
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct StoredCredentialRotationV1 {
     version: u64,
     source: Vec<u8>,
@@ -634,6 +778,7 @@ impl fmt::Debug for Credential {
             .field("music_key", &Redacted)
             .field("login_type", &self.login_type)
             .field("expiry", &self.expiry)
+            .field("refresh_expiry_present", &self.refresh_expiry.is_some())
             .field("session_secrets", &self.session_secrets)
             .finish()
     }
@@ -713,9 +858,9 @@ impl CredentialRestorePlan {
 #[cfg(test)]
 mod tests {
     use super::{
-        Credential, CredentialExpiry, CredentialPersistenceError, CredentialRestorePlan,
-        CredentialRotation, CredentialRotationError, CredentialSessionSecrets, InvalidCredential,
-        LocalCredentialValidity, LoginType,
+        Credential, CredentialExpiry, CredentialPersistenceError, CredentialRefreshExpiry,
+        CredentialRestorePlan, CredentialRotation, CredentialRotationError,
+        CredentialSessionSecrets, InvalidCredential, LocalCredentialValidity, LoginType,
     };
 
     fn credential() -> Credential {
@@ -766,6 +911,7 @@ mod tests {
         assert!(!debug.contains("secret-"));
         assert_eq!(debug.matches("[REDACTED]").count(), 2);
         assert!(debug.contains("refresh_token_present: true"));
+        assert!(debug.contains("refresh_expiry_present: false"));
     }
 
     #[test]
@@ -873,6 +1019,7 @@ mod tests {
     fn secure_storage_document_round_trips_all_credential_fields() {
         let original = credential()
             .with_expiry(CredentialExpiry::new(1_000, 300).expect("valid expiry"))
+            .with_refresh_expiry(CredentialRefreshExpiry::new(1_250).expect("valid refresh expiry"))
             .with_session_secrets(CredentialSessionSecrets::new(
                 Some("secret-open-id".into()),
                 Some("secret-access-token".into()),
@@ -890,6 +1037,8 @@ mod tests {
 
         assert_eq!(decoded, original);
         assert!(!format!("{decoded:?}").contains("secret-"));
+        assert!(format!("{decoded:?}").contains("refresh_expiry_present: true"));
+        assert!(!format!("{decoded:?}").contains("1250"));
     }
 
     #[test]
@@ -904,11 +1053,39 @@ mod tests {
             .expect("serialize credential");
         let future = String::from_utf8(encoded)
             .expect("credential JSON is UTF-8")
-            .replace("\"version\":1", "\"version\":2,\"future_field\":true");
+            .replace("\"version\":2", "\"version\":3,\"future_field\":true");
         assert_eq!(
             Credential::decode_from_secure_storage(future.as_bytes()),
-            Err(CredentialPersistenceError::UnsupportedVersion(2)),
+            Err(CredentialPersistenceError::UnsupportedVersion(3)),
         );
+    }
+
+    #[test]
+    fn legacy_qq_storage_migrates_the_single_expiry_without_losing_refreshability() {
+        let legacy = serde_json::json!({
+            "version": 1,
+            "music_id": "123456789",
+            "music_key": "Q_H_L_super-secret",
+            "login_type": 2,
+            "expiry": {
+                "created_at_unix_seconds": 1,
+                "lifetime_seconds": 1_999_999_999_u64
+            },
+            "open_id": "synthetic-open",
+            "access_token": "synthetic-access",
+            "refresh_token": "synthetic-refresh",
+            "refresh_key": "synthetic-refresh-key",
+            "union_id": null,
+            "encrypted_uin": null
+        });
+
+        let credential = Credential::decode_from_secure_storage(
+            &serde_json::to_vec(&legacy).expect("legacy fixture JSON"),
+        )
+        .expect("version-one QQ credential migration");
+
+        assert_eq!(credential.expires_at_unix_seconds(), Some(2_000_000_000));
+        assert_eq!(credential.refresh_expiry_value(), Some(2_000_000_000));
     }
 
     #[test]

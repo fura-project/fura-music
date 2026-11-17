@@ -20,7 +20,7 @@ mod credential;
 mod credential_refresh;
 mod credential_transfer;
 mod credential_verification;
-pub use credential_refresh::CredentialRefreshError;
+pub use credential_refresh::{CredentialRefreshError, validate_credential_refresh_material};
 mod daily_recommendation;
 mod favorite_albums;
 mod favorite_artists;
@@ -66,9 +66,10 @@ pub use comments::{
     QqMusicTrackCommentsPage,
 };
 pub use credential::{
-    Credential, CredentialExpiry, CredentialPersistenceError, CredentialRestorePlan,
-    CredentialRotation, CredentialRotationError, CredentialSessionSecrets, InvalidCredential,
-    InvalidCredentialExpiry, InvalidLoginType, LocalCredentialValidity, LoginType,
+    Credential, CredentialExpiry, CredentialPersistenceError, CredentialRefreshExpiry,
+    CredentialRestorePlan, CredentialRotation, CredentialRotationError, CredentialSessionSecrets,
+    InvalidCredential, InvalidCredentialExpiry, InvalidLoginType, LocalCredentialValidity,
+    LoginType,
 };
 pub use credential_transfer::{
     CredentialTransferError, CredentialTransferImport, CredentialTransferPackage,

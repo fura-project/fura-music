@@ -27,17 +27,9 @@ import '../support/test_playback_queue_gateway.dart';
 final AppLocalizations _en = lookupAppLocalizations(englishAppLocale);
 
 Future<void> _selectSearchType(WidgetTester tester, String type) async {
-  await tester.tap(find.byKey(const ValueKey('search-types')));
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 250));
-  final menuItem = find
-      .ancestor(
-        of: find.byKey(ValueKey('search-type-$type')),
-        matching: find.byType(MenuItemButton),
-      )
-      .hitTestable();
-  expect(menuItem, findsOneWidget);
-  await tester.tap(menuItem);
+  final item = find.byKey(ValueKey('search-type-$type'));
+  await tester.ensureVisible(item);
+  await tester.tap(item);
   await tester.pumpAndSettle();
 }
 
@@ -846,6 +838,23 @@ void main() {
         ),
       );
     }
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await tester.pump();
+    await mouse.moveTo(tester.getCenter(find.byType(MusicTrackRowSurface)));
+    await tester.pumpAndSettle();
+
+    final moreButton = find.byKey(const ValueKey('track-search-more-0'));
+    expect(moreButton, findsOneWidget);
+    await tester.tap(moreButton);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(
+      find.byType(PopupMenuItem<MusicTrackAction>),
+      findsAtLeastNWidgets(1),
+    );
   });
 
   testWidgets('Tracks, Artists, and Albums preserve independent Search state', (

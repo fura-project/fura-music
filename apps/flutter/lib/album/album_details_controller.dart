@@ -25,17 +25,33 @@ class AlbumDetailsController extends ChangeNotifier {
   bool get canRetry =>
       _stage == AlbumDetailsStage.error && _isRetryable(_failure);
 
-  Future<void> load() async {
+  Future<void> load() {
     final generation = ++_generation;
     _operation?.cancel();
     final operation = _gateway.beginLoad(album);
     _operation = operation;
-    _details = null;
     _failure = null;
+
+    var completedSynchronously = false;
+    final future = operation.run().then((result) {
+      completedSynchronously = true;
+      _completeLoad(generation, operation, result);
+    });
+    if (completedSynchronously) {
+      return future;
+    }
+
+    _details = null;
     _stage = AlbumDetailsStage.loading;
     _notify();
+    return future;
+  }
 
-    final result = await operation.run();
+  void _completeLoad(
+    int generation,
+    AlbumDetailsLoadOperation operation,
+    AlbumDetailsResult result,
+  ) {
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
     final details = result.details;
@@ -43,6 +59,7 @@ class AlbumDetailsController extends ChangeNotifier {
       _details = details;
       _stage = AlbumDetailsStage.content;
     } else {
+      _details = null;
       _failure = result.failure ?? AlbumDetailsFailure.invalidResponse;
       _stage = AlbumDetailsStage.error;
     }

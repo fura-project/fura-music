@@ -101,5 +101,47 @@ void main() {
         same(fallback),
       );
     });
+
+    testWidgets(
+      'frame builder expands ImageCache limits and skips fade when TickerMode resumes',
+      (tester) async {
+        const placeholder = SizedBox(key: ValueKey('placeholder'));
+        const artwork = SizedBox(key: ValueKey('artwork'));
+        final builder = musicArtworkFrameBuilder(placeholder);
+        final cache = PaintingBinding.instance.imageCache;
+        expect(cache.maximumSize, greaterThanOrEqualTo(2500));
+        expect(cache.maximumSizeBytes, greaterThanOrEqualTo(256 << 20));
+
+        var tickerEnabled = false;
+        int? frame;
+        late StateSetter update;
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: StatefulBuilder(
+              builder: (context, setState) {
+                update = setState;
+                return TickerMode(
+                  enabled: tickerEnabled,
+                  child: Builder(
+                    builder: (context) =>
+                        builder(context, artwork, frame, false),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+        expect(find.byKey(const ValueKey('placeholder')), findsOneWidget);
+
+        update(() {
+          tickerEnabled = true;
+          frame = 0;
+        });
+        await tester.pump();
+        expect(find.byKey(const ValueKey('artwork')), findsOneWidget);
+        expect(find.byKey(const ValueKey('placeholder')), findsNothing);
+      },
+    );
   });
 }

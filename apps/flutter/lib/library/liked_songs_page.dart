@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/album_favorite_presentation_controller.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
@@ -280,7 +281,6 @@ class _LikedSongsPageState extends State<LikedSongsPage>
 
   @override
   Widget build(BuildContext context) => SafeArea(
-    top: false,
     child: AnimatedBuilder(
       animation: _pageListenable,
       builder: (context, _) => LayoutBuilder(
@@ -344,11 +344,13 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                     controller: _tabController,
                     children: [
                       _RetainedLikedSection(
-                        child: _body(
-                          desktop,
-                          tracks,
-                          approximateMatchCount:
-                              searchResult.approximateMatchCount,
+                        child: MusicStageTransition(
+                          child: _body(
+                            desktop,
+                            tracks,
+                            approximateMatchCount:
+                                searchResult.approximateMatchCount,
+                          ),
                         ),
                       ),
                       _RetainedLikedSection(
@@ -674,96 +676,68 @@ class _LikedSongsHeader extends StatelessWidget {
     );
   }
 
-  Widget _expandedHeader(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _title(context, compact: false),
-      const SizedBox(height: 18),
-      _tabs(),
-      const SizedBox(height: 18),
-      if (desktop)
-        Row(
-          children: [
+  Widget _expandedHeader(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final useDesktopRow =
+          desktop && constraints.maxWidth >= 820 - 2 * MusicSpacing.page;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _title(context, compact: false),
+          const SizedBox(height: 18),
+          _tabs(),
+          const SizedBox(height: 18),
+          if (useDesktopRow)
+            Row(
+              children: [
+                if (selectedSection == _LikedCollectionSection.songs) ...[
+                  _PlayAllButton(onPressed: onPlayAll),
+                  const SizedBox(width: 10),
+                  _RefreshButton(
+                    refreshing: isRefreshing,
+                    onPressed: onRefresh,
+                  ),
+                ],
+                const Spacer(),
+                SizedBox(width: 220, child: _search()),
+              ],
+            )
+          else ...[
             if (selectedSection == _LikedCollectionSection.songs) ...[
-              _PlayAllButton(onPressed: onPlayAll),
-              const SizedBox(width: 10),
-              _RefreshButton(refreshing: isRefreshing, onPressed: onRefresh),
-            ],
-            const Spacer(),
-            SizedBox(width: 220, child: _search()),
-          ],
-        )
-      else ...[
-        if (selectedSection == _LikedCollectionSection.songs) ...[
-          Row(
-            children: [
-              Expanded(child: _PlayAllButton(onPressed: onPlayAll)),
-              const SizedBox(width: 10),
-              _RefreshButton(
-                refreshing: isRefreshing,
-                onPressed: onRefresh,
-                compact: true,
+              Row(
+                children: [
+                  Expanded(child: _PlayAllButton(onPressed: onPlayAll)),
+                  const SizedBox(width: 10),
+                  _RefreshButton(
+                    refreshing: isRefreshing,
+                    onPressed: onRefresh,
+                    compact: true,
+                  ),
+                ],
               ),
+              const SizedBox(height: 12),
             ],
-          ),
-          const SizedBox(height: 12),
+            _search(),
+          ],
         ],
-        _search(),
-      ],
-    ],
+      );
+    },
   );
 
-  Widget _collapsedHeader(BuildContext context) {
-    if (desktop) {
-      return SizedBox(
-        height: 48,
-        child: Row(
-          key: const ValueKey('liked-songs-collapsed-row'),
-          children: [
-            _title(context, compact: true),
-            const SizedBox(width: 12),
-            Expanded(child: _tabs()),
-            if (selectedSection == _LikedCollectionSection.songs) ...[
-              const SizedBox(width: 8),
-              _PlayAllButton(onPressed: onPlayAll, compact: true),
-              const SizedBox(width: 8),
-              _RefreshButton(
-                refreshing: isRefreshing,
-                onPressed: onRefresh,
-                compact: true,
-              ),
-            ],
-            const SizedBox(width: 12),
-            SizedBox(width: 220, child: _search()),
-            if (collapsedActions case final actions?) ...[
-              const SizedBox(width: 4),
-              actions,
-            ],
-          ],
-        ),
-      );
-    }
-    return Column(
-      key: const ValueKey('liked-songs-collapsed-column'),
-      children: [
-        Row(
-          children: [
-            _title(context, compact: true),
-            const SizedBox(width: 12),
-            Expanded(child: _search()),
-            if (collapsedActions case final actions?) ...[
-              const SizedBox(width: 4),
-              actions,
-            ],
-          ],
-        ),
-        const SizedBox(height: 4),
-        SizedBox(
+  Widget _collapsedHeader(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final useSingleRow = desktop && constraints.maxWidth >= 820 - 24;
+      if (useSingleRow) {
+        return SizedBox(
           height: 48,
           child: Row(
+            key: const ValueKey('liked-songs-collapsed-row'),
             children: [
+              _title(context, compact: true),
+              const SizedBox(width: 12),
               Expanded(child: _tabs()),
               if (selectedSection == _LikedCollectionSection.songs) ...[
+                const SizedBox(width: 8),
                 _PlayAllButton(onPressed: onPlayAll, compact: true),
                 const SizedBox(width: 8),
                 _RefreshButton(
@@ -772,12 +746,52 @@ class _LikedSongsHeader extends StatelessWidget {
                   compact: true,
                 ),
               ],
+              const SizedBox(width: 12),
+              SizedBox(width: 220, child: _search()),
+              if (collapsedActions case final actions?) ...[
+                const SizedBox(width: 4),
+                actions,
+              ],
             ],
           ),
-        ),
-      ],
-    );
-  }
+        );
+      }
+      return Column(
+        key: const ValueKey('liked-songs-collapsed-column'),
+        children: [
+          Row(
+            children: [
+              _title(context, compact: true),
+              const SizedBox(width: 12),
+              Expanded(child: _search()),
+              if (collapsedActions case final actions?) ...[
+                const SizedBox(width: 4),
+                actions,
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 48,
+            child: Row(
+              children: [
+                Expanded(child: _tabs()),
+                if (selectedSection == _LikedCollectionSection.songs) ...[
+                  _PlayAllButton(onPressed: onPlayAll, compact: true),
+                  const SizedBox(width: 8),
+                  _RefreshButton(
+                    refreshing: isRefreshing,
+                    onPressed: onRefresh,
+                    compact: true,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    },
+  );
 
   Widget _title(BuildContext context, {required bool compact}) => Text(
     context.l10n.likedTitle,
@@ -937,7 +951,11 @@ class _LikedPlaylistsCollection extends StatelessWidget {
               columns: columns,
               horizontal: horizontal,
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 24 + MusicViewportClearance.bottomOf(context),
+              ),
+            ),
           ],
         );
       },
@@ -1109,6 +1127,8 @@ class _LikedPlaylistCardState extends State<_LikedPlaylistCard> {
                                   playlist.artworkUri!,
                                 ),
                                 fit: BoxFit.cover,
+                                gaplessPlayback: true,
+                                frameBuilder: musicArtworkFrameBuilder(artwork),
                                 errorBuilder: musicArtworkErrorBuilder(
                                   playlist.artworkUri!,
                                   artwork,
@@ -1183,39 +1203,8 @@ class _UnavailableLikedCollection extends StatelessWidget {
   final String detail;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 480),
-      child: Padding(
-        padding: const EdgeInsets.all(MusicSpacing.page),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 48,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 18),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              detail,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) =>
+      MusicContentStatePanel(icon: icon, title: title, detail: detail);
 }
 
 class _RetainedLikedSection extends StatefulWidget {
@@ -1318,32 +1307,28 @@ class _LikedCollectionSearch extends StatelessWidget {
       _LikedCollectionSection.videos =>
         context.l10n.likedVideosSearchUnavailable,
     };
-    return TextField(
-      key: ValueKey(
-        section == _LikedCollectionSection.songs
-            ? 'liked-songs-search'
-            : 'liked-${section.name}-search',
-      ),
-      controller: controller,
-      enabled: enabled,
-      textInputAction: TextInputAction.search,
-      decoration: InputDecoration(
-        hintText: hint,
-        prefixIcon: const Icon(Icons.search_rounded, size: 20),
-        suffixIcon: ValueListenableBuilder<TextEditingValue>(
-          valueListenable: controller,
-          builder: (context, value, _) => value.text.isEmpty
-              ? const SizedBox.shrink()
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) => TextField(
+        key: ValueKey(
+          section == _LikedCollectionSection.songs
+              ? 'liked-songs-search'
+              : 'liked-${section.name}-search',
+        ),
+        controller: controller,
+        enabled: enabled,
+        textInputAction: TextInputAction.search,
+        decoration: MusicMaterialTheme.searchDecoration(
+          context,
+          hintText: hint,
+          dense: true,
+          suffixIcon: value.text.isEmpty
+              ? null
               : IconButton(
                   tooltip: context.l10n.commonClearSearch,
                   onPressed: controller.clear,
                   icon: const Icon(Icons.close_rounded, size: 18),
                 ),
-        ),
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 10,
         ),
       ),
     );
@@ -1471,7 +1456,16 @@ class _LikedTrackCollectionState extends State<_LikedTrackCollection> {
                 controller: _scrollController,
                 key: const PageStorageKey<String>('liked-songs-track-list'),
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 20),
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  0,
+                  horizontal,
+                  20 +
+                      MusicViewportClearance.bottomOf(
+                        context,
+                        fallbackPlayerPresent: widget.current != null,
+                      ),
+                ),
                 itemCount: widget.tracks.length + 1,
                 separatorBuilder: (_, _) => const SizedBox(height: 1),
                 itemBuilder: (context, index) {
@@ -1588,11 +1582,8 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
         widget.track.title,
       ),
       onTap: widget.onPlay,
-      onContextMenuRequested: (position) => unawaited(
-        position == null
-            ? _showCompactMenu(context)
-            : _showDesktopMenu(context, position),
-      ),
+      onContextMenuRequested: (position) =>
+          unawaited(_showActions(context, position)),
       contentBuilder: (context, active, hovered) => widget.desktop
           ? _desktopContent(context, artists, active, hovered)
           : _compactContent(context, artists),
@@ -1618,7 +1609,8 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
       onOpenArtist: widget.onOpenArtist == null || widget.track.artists.isEmpty
           ? null
           : _openArtist,
-      onMore: () => unawaited(_showDesktopMenuAtRow(context)),
+      onMore: () => unawaited(_showActions(context, null)),
+      onMoreAt: (position) => unawaited(_showActions(context, position)),
       showInlineQueueAction: hovered,
       addToQueueTooltip: context.l10n.commonAddToQueue,
       moreTooltip: context.l10n.commonMoreActions,
@@ -1645,7 +1637,7 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
             widget.onOpenArtist == null || widget.track.artists.isEmpty
             ? null
             : _openArtist,
-        onMore: () => unawaited(_showCompactMenu(context)),
+        onMore: () => unawaited(_showActions(context, null)),
         addToQueueTooltip: context.l10n.commonAddToQueue,
         moreTooltip: context.l10n.commonMoreActions,
         playTooltip: context.l10n.commonPlayFromHere,
@@ -1655,137 +1647,55 @@ class _LikedTrackRowState extends State<_LikedTrackRow> {
             : context.l10n.commonOpenArtist,
       );
 
-  Future<void> _showDesktopMenuAtRow(BuildContext context) async {
-    final box = context.findRenderObject();
-    if (box is! RenderBox) return;
-    await _showDesktopMenu(
-      context,
-      box.localToGlobal(box.size.center(Offset.zero)),
-    );
-  }
-
-  Future<void> _showDesktopMenu(BuildContext context, Offset position) async {
-    final overlay = Overlay.of(context).context.findRenderObject();
-    if (overlay is! RenderBox) return;
+  Future<void> _showActions(
+    BuildContext context,
+    Offset? anchorPosition,
+  ) async {
     final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
-    final action = await showMenu<_LikedTrackAction>(
+    final action = await showAdaptiveMusicContextMenu<_LikedTrackAction>(
       context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy,
-        overlay.size.width - position.dx,
-        overlay.size.height - position.dy,
-      ),
-      items: _menuItems(canAddToPlaylist),
+      desktop: widget.desktop,
+      anchorPosition: anchorPosition,
+      entries: [
+        MusicTrackMenuEntry(
+          value: _LikedTrackAction.play,
+          icon: Icons.play_arrow_rounded,
+          label: context.l10n.commonPlayFromHere,
+        ),
+        if (canAddToPlaylist)
+          MusicTrackMenuEntry(
+            value: _LikedTrackAction.addToPlaylist,
+            icon: Icons.playlist_add_rounded,
+            label: context.l10n.libraryAddTrackToPlaylist,
+          ),
+        MusicTrackMenuEntry(
+          value: _LikedTrackAction.addToQueue,
+          icon: Icons.queue_music_rounded,
+          label: context.l10n.commonAddToQueue,
+        ),
+        if (widget.onOpenAlbum != null)
+          MusicTrackMenuEntry(
+            value: _LikedTrackAction.openAlbum,
+            icon: Icons.album_rounded,
+            label: context.l10n.commonOpenAlbum,
+          ),
+        if (widget.onOpenArtist != null)
+          MusicTrackMenuEntry(
+            value: _LikedTrackAction.openArtist,
+            icon: Icons.person_rounded,
+            label: context.l10n.commonOpenArtist,
+          ),
+        if (widget.onUnlike != null)
+          MusicTrackMenuEntry(
+            key: const ValueKey('liked-track-unlike-action'),
+            value: _LikedTrackAction.unlike,
+            icon: Icons.heart_broken_outlined,
+            label: context.l10n.libraryUnlikeTrack,
+          ),
+      ],
     );
     _runAction(action);
   }
-
-  Future<void> _showCompactMenu(BuildContext context) async {
-    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
-    final action = await showModalBottomSheet<_LikedTrackAction>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.play_arrow_rounded),
-              title: Text(context.l10n.commonPlayFromHere),
-              onTap: () => Navigator.pop(context, _LikedTrackAction.play),
-            ),
-            if (canAddToPlaylist)
-              ListTile(
-                leading: const Icon(Icons.playlist_add_rounded),
-                title: Text(context.l10n.libraryAddTrackToPlaylist),
-                onTap: () =>
-                    Navigator.pop(context, _LikedTrackAction.addToPlaylist),
-              ),
-            ListTile(
-              leading: const Icon(Icons.playlist_add_rounded),
-              title: Text(context.l10n.commonAddToQueue),
-              onTap: () => Navigator.pop(context, _LikedTrackAction.addToQueue),
-            ),
-            if (widget.onOpenAlbum != null)
-              ListTile(
-                leading: const Icon(Icons.album_rounded),
-                title: Text(context.l10n.commonOpenAlbum),
-                onTap: () =>
-                    Navigator.pop(context, _LikedTrackAction.openAlbum),
-              ),
-            if (widget.onOpenArtist != null)
-              ListTile(
-                leading: const Icon(Icons.person_rounded),
-                title: Text(context.l10n.commonOpenArtist),
-                onTap: () =>
-                    Navigator.pop(context, _LikedTrackAction.openArtist),
-              ),
-            if (widget.onUnlike != null)
-              ListTile(
-                key: const ValueKey('liked-track-unlike-action'),
-                leading: const Icon(Icons.heart_broken_outlined),
-                title: Text(context.l10n.libraryUnlikeTrack),
-                onTap: () => Navigator.pop(context, _LikedTrackAction.unlike),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    _runAction(action);
-  }
-
-  List<PopupMenuEntry<_LikedTrackAction>> _menuItems(bool canAddToPlaylist) => [
-    PopupMenuItem(
-      value: _LikedTrackAction.play,
-      child: ListTile(
-        leading: Icon(Icons.play_arrow_rounded),
-        title: Text(context.l10n.commonPlayFromHere),
-      ),
-    ),
-    if (canAddToPlaylist)
-      PopupMenuItem(
-        value: _LikedTrackAction.addToPlaylist,
-        child: ListTile(
-          leading: const Icon(Icons.playlist_add_rounded),
-          title: Text(context.l10n.libraryAddTrackToPlaylist),
-        ),
-      ),
-    PopupMenuItem(
-      value: _LikedTrackAction.addToQueue,
-      child: ListTile(
-        leading: Icon(Icons.playlist_add_rounded),
-        title: Text(context.l10n.commonAddToQueue),
-      ),
-    ),
-    if (widget.onOpenAlbum != null)
-      PopupMenuItem(
-        value: _LikedTrackAction.openAlbum,
-        child: ListTile(
-          leading: Icon(Icons.album_rounded),
-          title: Text(context.l10n.commonOpenAlbum),
-        ),
-      ),
-    if (widget.onOpenArtist != null)
-      PopupMenuItem(
-        value: _LikedTrackAction.openArtist,
-        child: ListTile(
-          leading: Icon(Icons.person_rounded),
-          title: Text(context.l10n.commonOpenArtist),
-        ),
-      ),
-    if (widget.onUnlike != null)
-      PopupMenuItem(
-        key: const ValueKey('liked-track-unlike-action'),
-        value: _LikedTrackAction.unlike,
-        child: ListTile(
-          leading: const Icon(Icons.heart_broken_outlined),
-          title: Text(context.l10n.libraryUnlikeTrack),
-        ),
-      ),
-  ];
 
   void _runAction(_LikedTrackAction? action) {
     switch (action) {
@@ -1985,47 +1895,22 @@ class _LikedSongsMessage extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: context.l10n.commonAnnouncement(detail, title),
-    liveRegion: loading || action != null,
-    excludeSemantics: true,
-    child: Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(MusicSpacing.panel),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (loading)
-                const CircularProgressIndicator()
-              else
-                Icon(
-                  icon,
-                  size: 42,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                detail,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              if (action != null) ...[const SizedBox(height: 18), action!],
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) {
+    if (loading) {
+      return MusicLoadingPanel(label: title, detail: detail);
+    }
+    final announce = action != null;
+    return MusicContentStatePanel(
+      icon: icon,
+      title: title,
+      detail: detail,
+      liveRegion: announce,
+      announcementLabel: announce
+          ? context.l10n.commonAnnouncement(detail, title)
+          : null,
+      action: action,
+    );
+  }
 }
 
 bool _sameTrack(PlaylistTrackSummary? left, PlaylistTrackSummary right) =>

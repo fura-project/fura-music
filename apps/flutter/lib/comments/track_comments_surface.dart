@@ -174,10 +174,7 @@ class _TrackCommentsPanelState extends State<TrackCommentsPanel> {
       Expanded(
         child: AnimatedBuilder(
           animation: _controller,
-          builder: (context, _) => AnimatedSwitcher(
-            duration: MusicMotion.stateChange,
-            child: _body(context),
-          ),
+          builder: (context, _) => MusicStageTransition(child: _body(context)),
         ),
       ),
     ],
@@ -304,7 +301,11 @@ class _CommentList extends StatelessWidget {
             index -= 1;
           }
           if (index < hotComments.length) {
-            return _CommentItem(comment: hotComments[index], section: 'hot');
+            return _CommentItem(
+              comment: hotComments[index],
+              section: 'hot',
+              showDivider: index + 1 < hotComments.length,
+            );
           }
           index -= hotComments.length;
           if (latestHeadingCount == 1) {
@@ -317,6 +318,7 @@ class _CommentList extends StatelessWidget {
             return _CommentItem(
               comment: latestComments[index],
               section: 'latest',
+              showDivider: index + 1 < latestComments.length,
             );
           }
           return _CommentFooter(
@@ -350,76 +352,93 @@ class _SectionHeading extends StatelessWidget {
 }
 
 class _CommentItem extends StatelessWidget {
-  const _CommentItem({required this.comment, required this.section});
+  const _CommentItem({
+    required this.comment,
+    required this.section,
+    this.showDivider = false,
+  });
 
   final TrackCommentSummary comment;
   final String section;
+  final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final authorInitial = comment.authorDisplayName.characters.first;
+    final trimmedAuthor = comment.authorDisplayName.trim();
+    final authorInitial = trimmedAuthor.characters.firstOrNull ?? '?';
     final time = _commentTime(context, comment.publishedAtUnixSeconds);
-    return Semantics(
-      container: true,
-      child: Padding(
-        key: ValueKey('track-comment-$section-${comment.opaqueId}'),
-        padding: const EdgeInsets.symmetric(vertical: MusicSpacing.itemGap),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _CommentAvatar(
-              authorInitial: authorInitial,
-              artworkUri: comment.authorAvatarUri,
-            ),
-            const SizedBox(width: MusicSpacing.contentGap),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          container: true,
+          child: Padding(
+            key: ValueKey('track-comment-$section-${comment.opaqueId}'),
+            padding: const EdgeInsets.symmetric(vertical: MusicSpacing.itemGap),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _CommentAvatar(
+                  authorInitial: authorInitial,
+                  artworkUri: comment.authorAvatarUri,
+                ),
+                const SizedBox(width: MusicSpacing.contentGap),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          comment.authorDisplayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              comment.authorDisplayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                          const SizedBox(width: MusicSpacing.itemGap),
+                          Text(
+                            time,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: colors.onSurfaceVariant),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: MusicSpacing.itemGap),
-                      Text(
-                        time,
-                        style: Theme.of(context).textTheme.labelSmall
-                            ?.copyWith(color: colors.onSurfaceVariant),
+                      const SizedBox(height: 4),
+                      Text(comment.content),
+                      const SizedBox(height: MusicSpacing.itemGap),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.thumb_up_outlined,
+                            size: 16,
+                            color: colors.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${comment.praiseCount}',
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(color: colors.onSurfaceVariant),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(comment.content),
-                  const SizedBox(height: MusicSpacing.itemGap),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.thumb_up_outlined,
-                        size: 16,
-                        color: colors.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${comment.praiseCount}',
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(color: colors.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+        if (showDivider)
+          Divider(
+            height: 1,
+            indent: 40 + MusicSpacing.contentGap,
+            color: colors.outlineVariant.withValues(alpha: 0.45),
+          ),
+      ],
     );
   }
 }
@@ -456,8 +475,7 @@ class _CommentAvatar extends StatelessWidget {
                 fit: BoxFit.cover,
                 excludeFromSemantics: true,
                 gaplessPlayback: true,
-                loadingBuilder: (context, child, progress) =>
-                    progress == null ? child : fallback,
+                frameBuilder: musicArtworkFrameBuilder(fallback),
                 errorBuilder: musicArtworkErrorBuilder(uri, fallback),
               ),
       ),
@@ -513,7 +531,7 @@ class _CommentFooter extends StatelessWidget {
               ),
               if (canRetry) ...[
                 const SizedBox(height: MusicSpacing.itemGap),
-                TextButton(
+                FilledButton.tonal(
                   key: const ValueKey('track-comments-retry-more'),
                   onPressed: onRetry,
                   child: Text(context.l10n.commonRetry),
@@ -528,7 +546,7 @@ class _CommentFooter extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(MusicSpacing.contentGap),
       child: Center(
-        child: OutlinedButton(
+        child: FilledButton.tonal(
           key: const ValueKey('track-comments-load-more'),
           onPressed: onLoadMore,
           child: Text(context.l10n.commentsLoadMore),

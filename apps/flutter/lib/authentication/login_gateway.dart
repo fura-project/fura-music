@@ -154,6 +154,22 @@ typedef CredentialRotationRestorer = bridge.QqMusicStagedRecovery Function({
   required Uint8List stagedSecretBytes,
 });
 
+typedef NeteaseCredentialRotationRestorer =
+    netease_bridge.NeteaseStagedRecovery Function({
+      required Uint8List? currentSecretBytes,
+      required Uint8List stagedSecretBytes,
+    });
+
+typedef NeteaseRefreshVerifier =
+    Future<netease_bridge.NeteaseRefreshVerification> Function({
+      required int reservationId,
+    });
+
+typedef NeteaseRefreshCommitter =
+    netease_bridge.NeteaseRefreshFailure? Function({
+      required int reservationId,
+    });
+
 typedef CredentialPersistenceExporter =
     bridge.QqMusicCredentialExport Function();
 
@@ -643,13 +659,25 @@ class RustNeteaseAuthenticationGateway
     CredentialVerificationOperationFactory? verificationOperationFactory,
     bool Function()? authenticatedCredentialReader,
     OfficialWebCredentialStager? officialWebCredentialStager,
+    NeteaseCredentialRotationRestorer? credentialRotationRestorer,
+    NeteaseRefreshVerifier? refreshVerifier,
+    NeteaseRefreshCommitter? refreshCommitter,
     this.diagnostics = const NeteaseWebRefreshDiagnostics(),
-  }) : _credentialVault = SerializedCredentialVault(
-         credentialVault ??
-             PlatformCredentialVault(
-               credentialKey: PlatformCredentialVault.netEaseCredentialKey,
+  }) : _credentialVault = credentialVault is CredentialRotationVault
+           ? credentialVault
+           : SerializedCredentialVault(
+               credentialVault ??
+                   PlatformCredentialVault(
+                     credentialKey:
+                         PlatformCredentialVault.netEaseCredentialKey,
+                   ),
+               stagedVault: credentialVault == null
+                   ? PlatformCredentialVault(
+                       credentialKey:
+                           PlatformCredentialVault.netEaseStagedCredentialKey,
+                     )
+                   : null,
              ),
-       ),
        _officialWebLoginBroker =
            officialWebLoginBroker ?? PlatformNeteaseOfficialWebLoginBroker(),
        _usesLinuxSystemBrowser =
@@ -671,9 +699,18 @@ class RustNeteaseAuthenticationGateway
            netease_bridge.neteaseHasAuthenticatedCredential,
        _officialWebCredentialStager =
            officialWebCredentialStager ??
-           _stageNeteaseOfficialWebCredentialInRust;
+           _stageNeteaseOfficialWebCredentialInRust,
+       _credentialRotationRestorer =
+           credentialRotationRestorer ??
+           netease_bridge.restoreNeteaseStagedCredentialRotation,
+       _refreshVerifier =
+           refreshVerifier ??
+           netease_bridge.verifyNeteaseStagedRefreshCandidate,
+       _refreshCommitter =
+           refreshCommitter ??
+           netease_bridge.commitNeteaseStagedRefreshCandidate;
 
-  final SerializedCredentialVault _credentialVault;
+  final CredentialRotationVault _credentialVault;
   final OfficialWebLoginBroker _officialWebLoginBroker;
   final bool _usesLinuxSystemBrowser;
   final _SystemBrowserOfficialWebPresentation _systemBrowserPresentation =
@@ -684,11 +721,15 @@ class RustNeteaseAuthenticationGateway
   final CredentialVerificationOperationFactory _verificationOperationFactory;
   final bool Function() _authenticatedCredentialReader;
   final OfficialWebCredentialStager _officialWebCredentialStager;
+  final NeteaseCredentialRotationRestorer _credentialRotationRestorer;
+  final NeteaseRefreshVerifier _refreshVerifier;
+  final NeteaseRefreshCommitter _refreshCommitter;
   final NeteaseWebRefreshDiagnostics diagnostics;
   int _sessionEpoch = 0;
   Future<CredentialRestoreResult>? _pendingRestore;
   CredentialVerificationOperation? _pendingVerification;
   bool _pendingCandidateFromWeb = false;
+  _NeteasePendingCredentialRecovery? _pendingRecovery;
 
   NeteaseWebLoginPath get _webPath => _usesLinuxSystemBrowser
       ? NeteaseWebLoginPath.linuxIsolatedChromium
@@ -699,6 +740,7 @@ class RustNeteaseAuthenticationGateway
     _pendingRestore = null;
     _pendingVerification?.cancel();
     _pendingVerification = null;
+    _pendingRecovery = null;
   }
 
   @override
@@ -757,12 +799,27 @@ class RustNeteaseAuthenticationGateway
   CredentialVerificationOperation beginCredentialVerification() {
     _pendingVerification?.cancel();
     final epoch = _sessionEpoch;
-    final operation = _NeteaseVaultVerificationOperation(
-      _verificationOperationFactory(),
-      _credentialVault,
-      isCurrent: () => epoch == _sessionEpoch,
-      cleanupRejected: !_pendingCandidateFromWeb,
-    );
+    final recovery = _pendingRecovery;
+    final CredentialVerificationOperation operation = recovery == null
+        ? _NeteaseVaultVerificationOperation(
+            _verificationOperationFactory(),
+            _credentialVault,
+            isCurrent: () => epoch == _sessionEpoch,
+            cleanupRejected: !_pendingCandidateFromWeb,
+          )
+        : _NeteaseRecoveryCredentialVerificationOperation(
+            recovery: recovery,
+            vault: _credentialVault,
+            isCurrent: () =>
+                epoch == _sessionEpoch && identical(_pendingRecovery, recovery),
+            onResolved: () {
+              if (identical(_pendingRecovery, recovery)) {
+                _pendingRecovery = null;
+              }
+            },
+            verify: _refreshVerifier,
+            commit: _refreshCommitter,
+          );
     _pendingVerification = operation;
     return operation;
   }
@@ -779,6 +836,7 @@ class RustNeteaseAuthenticationGateway
       // Replacement owns a new vault epoch synchronously. Logout and newer
       // login publication can invalidate a queued old write before it starts.
       await _credentialVault.publishReplacement(secretBytes);
+      _pendingRecovery = null;
       if (epoch != _sessionEpoch) {
         return CredentialPersistenceResult.noAuthenticatedCredential;
       }
@@ -816,6 +874,10 @@ class RustNeteaseAuthenticationGateway
   }
 
   Future<CredentialRestoreResult> _restoreCredential(int epoch) async {
+    if (_credentialVault.supportsStaging) {
+      final recovered = await _restoreCredentialTransaction(epoch);
+      if (recovered != null) return recovered;
+    }
     Uint8List? secretBytes;
     try {
       secretBytes = await _credentialVault.read();
@@ -838,6 +900,132 @@ class RustNeteaseAuthenticationGateway
     } finally {
       secretBytes?.fillRange(0, secretBytes.length, 0);
     }
+  }
+
+  Future<CredentialRestoreResult?> _restoreCredentialTransaction(
+    int sessionEpoch,
+  ) async {
+    final vaultEpoch = _credentialVault.reserveRotation();
+    CredentialTransactionSnapshot snapshot;
+    try {
+      snapshot = await _credentialVault.readTransaction();
+    } on FormatException {
+      return _discardUnreadableNeteaseStage(vaultEpoch, sessionEpoch);
+    } on Object {
+      return CredentialRestoreResult.storageUnavailable;
+    }
+    final staged = snapshot.staged;
+    if (staged == null) {
+      snapshot.current?.fillRange(0, snapshot.current!.length, 0);
+      return null;
+    }
+    try {
+      if (sessionEpoch != _sessionEpoch ||
+          !_credentialVault.isCurrent(vaultEpoch)) {
+        return CredentialRestoreResult.coreUnavailable;
+      }
+      final recovery = _credentialRotationRestorer(
+        currentSecretBytes: snapshot.current,
+        stagedSecretBytes: staged,
+      );
+      if (recovery.action == netease_bridge.NeteaseStagedRecoveryAction.stale ||
+          recovery.failure != null) {
+        final deleted = await _credentialVault.deleteStageIfCurrent(vaultEpoch);
+        if (!deleted || sessionEpoch != _sessionEpoch) {
+          return CredentialRestoreResult.coreUnavailable;
+        }
+        return _credentialImporter(snapshot.current);
+      }
+      final action = recovery.action;
+      final reservationId = recovery.reservationId;
+      if (action == null || reservationId == null) {
+        return CredentialRestoreResult.coreUnavailable;
+      }
+      _pendingRecovery = _NeteasePendingCredentialRecovery(
+        action: action,
+        reservationId: reservationId,
+        vaultEpoch: vaultEpoch,
+      );
+      _pendingCandidateFromWeb = false;
+      return CredentialRestoreResult.verificationRequired;
+    } on Object {
+      return CredentialRestoreResult.coreUnavailable;
+    } finally {
+      snapshot.current?.fillRange(0, snapshot.current!.length, 0);
+      staged.fillRange(0, staged.length, 0);
+    }
+  }
+
+  Future<CredentialRestoreResult> _discardUnreadableNeteaseStage(
+    int vaultEpoch,
+    int sessionEpoch,
+  ) async {
+    try {
+      if (!await _credentialVault.deleteStageIfCurrent(vaultEpoch)) {
+        return CredentialRestoreResult.coreUnavailable;
+      }
+    } on Object {
+      return CredentialRestoreResult.storageUnavailable;
+    }
+    Uint8List? current;
+    try {
+      current = await _credentialVault.read();
+      if (sessionEpoch != _sessionEpoch ||
+          !_credentialVault.isCurrent(vaultEpoch)) {
+        return CredentialRestoreResult.coreUnavailable;
+      }
+      return _credentialImporter(current);
+    } on FormatException {
+      return CredentialRestoreResult.invalidStoredCredential;
+    } on Object {
+      return CredentialRestoreResult.storageUnavailable;
+    } finally {
+      current?.fillRange(0, current.length, 0);
+    }
+  }
+
+  Future<StagedCredentialRecoveryResult>
+  recoverStagedCredentialIfPresent() async {
+    if (!_credentialVault.supportsStaging) {
+      return StagedCredentialRecoveryResult.notNeeded;
+    }
+    if (_pendingRecovery == null) {
+      final epoch = ++_sessionEpoch;
+      final restore = await _restoreCredentialTransaction(epoch);
+      if (restore == null || restore == CredentialRestoreResult.signedOut) {
+        return StagedCredentialRecoveryResult.notNeeded;
+      }
+      if (restore != CredentialRestoreResult.verificationRequired) {
+        return switch (restore) {
+          CredentialRestoreResult.invalidStoredCredential ||
+          CredentialRestoreResult.unsupportedStoredCredential =>
+            StagedCredentialRecoveryResult.reauthenticationRequired,
+          CredentialRestoreResult.storageUnavailable ||
+          CredentialRestoreResult.coreUnavailable =>
+            StagedCredentialRecoveryResult.temporarilyUnavailable,
+          CredentialRestoreResult.locallyExpired ||
+          CredentialRestoreResult.signedOut ||
+          CredentialRestoreResult.verificationRequired =>
+            StagedCredentialRecoveryResult.notNeeded,
+        };
+      }
+    }
+    final verification = await beginCredentialVerification().run();
+    return switch (verification) {
+      CredentialVerificationResult.authenticated =>
+        StagedCredentialRecoveryResult.recovered,
+      CredentialVerificationResult.replaced =>
+        StagedCredentialRecoveryResult.replaced,
+      CredentialVerificationResult.rejected ||
+      CredentialVerificationResult.noRestoredCredential =>
+        StagedCredentialRecoveryResult.reauthenticationRequired,
+      CredentialVerificationResult.network ||
+      CredentialVerificationResult.serviceUnavailable ||
+      CredentialVerificationResult.invalidResponse ||
+      CredentialVerificationResult.rejectedStorageCleanupFailed ||
+      CredentialVerificationResult.coreUnavailable =>
+        StagedCredentialRecoveryResult.temporarilyUnavailable,
+    };
   }
 
   @override
@@ -876,6 +1064,109 @@ class RustNeteaseAuthenticationGateway
   Future<bool> _clearEmbeddedOfficialWebSession() async {
     _officialWebLoginBroker.cancel();
     return _officialWebLoginBroker.clearWebsiteData();
+  }
+}
+
+class _NeteasePendingCredentialRecovery {
+  const _NeteasePendingCredentialRecovery({
+    required this.action,
+    required this.reservationId,
+    required this.vaultEpoch,
+  });
+
+  final netease_bridge.NeteaseStagedRecoveryAction action;
+  final int reservationId;
+  final int vaultEpoch;
+}
+
+class _NeteaseRecoveryCredentialVerificationOperation
+    implements CredentialVerificationOperation {
+  const _NeteaseRecoveryCredentialVerificationOperation({
+    required this.recovery,
+    required this.vault,
+    required this.isCurrent,
+    required this.onResolved,
+    required this.verify,
+    required this.commit,
+  });
+
+  final _NeteasePendingCredentialRecovery recovery;
+  final CredentialRotationVault vault;
+  final bool Function() isCurrent;
+  final VoidCallback onResolved;
+  final NeteaseRefreshVerifier verify;
+  final NeteaseRefreshCommitter commit;
+
+  @override
+  bool cancel() => false;
+
+  @override
+  Future<CredentialVerificationResult> run() async {
+    netease_bridge.NeteaseRefreshVerification verification;
+    try {
+      verification = await verify(reservationId: recovery.reservationId);
+    } on Object {
+      return CredentialVerificationResult.coreUnavailable;
+    }
+    if (!isCurrent()) return CredentialVerificationResult.replaced;
+    final failure = verification.failure;
+    if (failure != null) return _mapFailure(failure);
+    final bytes = verification.currentSecretBytes;
+    if (bytes == null) return CredentialVerificationResult.coreUnavailable;
+    try {
+      if (!await vault.publishIfCurrent(recovery.vaultEpoch, bytes) ||
+          !isCurrent()) {
+        return CredentialVerificationResult.replaced;
+      }
+    } on Object {
+      return CredentialVerificationResult.coreUnavailable;
+    } finally {
+      bytes.fillRange(0, bytes.length, 0);
+    }
+    final commitFailure = commit(reservationId: recovery.reservationId);
+    if (commitFailure != null) return _mapFailure(commitFailure);
+    try {
+      await vault.deleteStageIfCurrent(recovery.vaultEpoch);
+    } on Object {
+      // Verified current plus matching stage is recoverable on the next
+      // startup/resume checkpoint.
+    }
+    onResolved();
+    return CredentialVerificationResult.authenticated;
+  }
+
+  Future<CredentialVerificationResult> _mapFailure(
+    netease_bridge.NeteaseRefreshFailure failure,
+  ) async {
+    switch (failure) {
+      case netease_bridge.NeteaseRefreshFailure.reauthenticationRequired:
+      case netease_bridge.NeteaseRefreshFailure.notRefreshable:
+      case netease_bridge.NeteaseRefreshFailure.noCredential:
+        try {
+          final deleted = await vault.deleteTransactionIfCurrent(
+            recovery.vaultEpoch,
+          );
+          if (!deleted) return CredentialVerificationResult.replaced;
+        } on Object {
+          return CredentialVerificationResult.rejectedStorageCleanupFailed;
+        }
+        onResolved();
+        return CredentialVerificationResult.rejected;
+      case netease_bridge.NeteaseRefreshFailure.network:
+        return CredentialVerificationResult.network;
+      case netease_bridge.NeteaseRefreshFailure.replaced:
+        return CredentialVerificationResult.replaced;
+      case netease_bridge.NeteaseRefreshFailure.invalidResponse:
+        return CredentialVerificationResult.invalidResponse;
+      case netease_bridge.NeteaseRefreshFailure.productionGateDisabled:
+      case netease_bridge.NeteaseRefreshFailure.notDue:
+      case netease_bridge.NeteaseRefreshFailure.rateLimited:
+      case netease_bridge.NeteaseRefreshFailure.riskControl:
+      case netease_bridge.NeteaseRefreshFailure.secondaryVerificationRequired:
+      case netease_bridge.NeteaseRefreshFailure.serviceUnavailable:
+      case netease_bridge.NeteaseRefreshFailure.storageUnavailable:
+        return CredentialVerificationResult.serviceUnavailable;
+    }
   }
 }
 
@@ -1378,7 +1669,7 @@ class _NeteaseVaultVerificationOperation
   }) : _vaultEpoch = _vault.reserveRotation();
 
   final CredentialVerificationOperation _inner;
-  final SerializedCredentialVault _vault;
+  final CredentialRotationVault _vault;
   final bool Function() isCurrent;
   final bool cleanupRejected;
   final int _vaultEpoch;
@@ -1409,10 +1700,19 @@ class _NeteaseVaultVerificationOperation
     }
     try {
       final deleted = await _vault.deleteTransactionIfCurrent(_vaultEpoch);
+      debugPrint(
+        'FURA_SESSION_DIAGNOSTIC provider=netease-cloud-music '
+        'phase=restore_verification action=vault_cleanup '
+        'outcome=${deleted ? 'deleted' : 'stale'}',
+      );
       return deleted && !_cancelled && isCurrent()
           ? result
           : CredentialVerificationResult.replaced;
     } on Object {
+      debugPrint(
+        'FURA_SESSION_DIAGNOSTIC provider=netease-cloud-music '
+        'phase=restore_verification action=vault_cleanup outcome=failed',
+      );
       return CredentialVerificationResult.rejectedStorageCleanupFailed;
     }
   }
@@ -1437,8 +1737,16 @@ class _VaultCleaningCredentialVerificationOperation
     if (result != CredentialVerificationResult.rejected) return result;
     try {
       await _credentialVault.delete();
+      debugPrint(
+        'FURA_SESSION_DIAGNOSTIC provider=qq-music '
+        'phase=restore_verification action=vault_cleanup outcome=deleted',
+      );
       return result;
     } catch (_) {
+      debugPrint(
+        'FURA_SESSION_DIAGNOSTIC provider=qq-music '
+        'phase=restore_verification action=vault_cleanup outcome=failed',
+      );
       return CredentialVerificationResult.rejectedStorageCleanupFailed;
     }
   }

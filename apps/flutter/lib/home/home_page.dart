@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
 import 'package:flutterustmusic/discover/new_song_gateway.dart';
@@ -36,10 +37,8 @@ abstract final class _HomeGeometry {
   static const double wideShelfMaxWidth = 164;
   static const double trackRowHeight = 60;
   static const double trackArtworkSize = 44;
-  static const BorderRadius heroRadius = BorderRadius.all(Radius.circular(12));
-  static const BorderRadius artworkRadius = BorderRadius.all(
-    Radius.circular(8),
-  );
+  static const BorderRadius heroRadius = MusicRadii.content;
+  static const BorderRadius artworkRadius = MusicRadii.control;
 }
 
 class _HomeShelfNavigationController extends ChangeNotifier {
@@ -448,94 +447,108 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     widget.queuePlaybackController.current != null
                 ? 104.0
                 : 24.0;
-            if (constraints.maxWidth < _HomeGeometry.compactBreakpoint) {
-              return _HomeCompactLayout(
-                onRefresh: _refreshPlaylistShelf,
-                refreshingPlaylists: _refreshingPlaylists,
-                bottomContentPadding: bottomContentPadding,
-                homeController: widget.homeController,
-                recommendationController: widget.recommendationController,
-                newSongController: widget.newSongController,
-                radarController: widget.radarController,
-                radarEnabled: widget.radarEnabled,
-                dailyTracksEnabled: widget.dailyTracksEnabled,
-                personalFmEnabled: widget.personalFmEnabled,
-                queuePlaybackController: widget.queuePlaybackController,
-                authenticated: widget.authenticated,
-                providerDisplayName: provider,
-                spotlightPlaylist: spotlightPlaylist,
-                spotlightKind: spotlightKind,
-                spotlightStage: spotlightStage,
-                spotlightIdentities: spotlightIdentities,
-                onRetrySpotlight: widget.spotlightController.retry,
-                onPreviousSpotlight: () =>
-                    _moveSpotlight(-1, restartTimer: true),
-                onNextSpotlight: () => _moveSpotlight(1, restartTimer: true),
-                spotlightAutoPlaying:
-                    _spotlightAutoPlaying && !_animationsDisabled,
-                spotlightAutoPlayAvailable: !_animationsDisabled,
-                spotlightMotionDirection: _spotlightMotionDirection,
-                spotlightProgress: _spotlightProgress,
-                onToggleSpotlightAutoPlay: _toggleSpotlightAutoPlay,
-                onOpenDiscover: widget.onOpenDiscover,
-                onOpenLibrary: widget.onOpenLibrary,
-                onOpenRecommendation: _openShelf,
-                onOpenTrackAlbum: widget.onOpenTrackAlbum,
-                onOpenTrackArtist: widget.onOpenTrackArtist,
-                onOpenFeatured: _openFeatured,
-                featuredReturnFocusNode: _returnToShelf
-                    ? null
-                    : widget.recommendationReturnFocusNode,
-                lastOpenedRecommendation: widget.lastOpenedRecommendation,
-                recommendationReturnFocusNode: _returnToShelf
-                    ? widget.recommendationReturnFocusNode
-                    : null,
-                libraryShelfNavigation: _libraryShelfNavigation,
-                publicShelfNavigation: _publicShelfNavigation,
-              );
-            }
-            return _HomeWideLayout(
-              onRefresh: _refreshPlaylistShelf,
-              refreshingPlaylists: _refreshingPlaylists,
-              bottomContentPadding: bottomContentPadding,
-              homeController: widget.homeController,
-              recommendationController: widget.recommendationController,
-              newSongController: widget.newSongController,
-              radarController: widget.radarController,
-              radarEnabled: widget.radarEnabled,
-              dailyTracksEnabled: widget.dailyTracksEnabled,
-              personalFmEnabled: widget.personalFmEnabled,
-              queuePlaybackController: widget.queuePlaybackController,
-              authenticated: widget.authenticated,
-              providerDisplayName: provider,
-              spotlightPlaylist: spotlightPlaylist,
-              spotlightKind: spotlightKind,
-              spotlightStage: spotlightStage,
-              spotlightIdentities: spotlightIdentities,
-              onRetrySpotlight: widget.spotlightController.retry,
-              onPreviousSpotlight: () => _moveSpotlight(-1, restartTimer: true),
-              onNextSpotlight: () => _moveSpotlight(1, restartTimer: true),
-              spotlightAutoPlaying:
-                  _spotlightAutoPlaying && !_animationsDisabled,
-              spotlightAutoPlayAvailable: !_animationsDisabled,
-              spotlightMotionDirection: _spotlightMotionDirection,
-              spotlightProgress: _spotlightProgress,
-              onToggleSpotlightAutoPlay: _toggleSpotlightAutoPlay,
-              onOpenDiscover: widget.onOpenDiscover,
-              onOpenLibrary: widget.onOpenLibrary,
-              onOpenRecommendation: _openShelf,
-              onOpenTrackAlbum: widget.onOpenTrackAlbum,
-              onOpenTrackArtist: widget.onOpenTrackArtist,
-              onOpenFeatured: _openFeatured,
-              featuredReturnFocusNode: _returnToShelf
-                  ? null
-                  : widget.recommendationReturnFocusNode,
-              lastOpenedRecommendation: widget.lastOpenedRecommendation,
-              recommendationReturnFocusNode: _returnToShelf
-                  ? widget.recommendationReturnFocusNode
-                  : null,
-              libraryShelfNavigation: _libraryShelfNavigation,
-              publicShelfNavigation: _publicShelfNavigation,
+            final layout =
+                constraints.maxWidth < _HomeGeometry.compactBreakpoint
+                ? _HomeCompactLayout(
+                    onRefresh: _refreshPlaylistShelf,
+                    onRefreshAll: _refreshing
+                        ? null
+                        : () => unawaited(_refresh(manual: true)),
+                    refreshingPlaylists: _refreshingPlaylists,
+                    bottomContentPadding: bottomContentPadding,
+                    homeController: widget.homeController,
+                    recommendationController: widget.recommendationController,
+                    newSongController: widget.newSongController,
+                    radarController: widget.radarController,
+                    radarEnabled: widget.radarEnabled,
+                    dailyTracksEnabled: widget.dailyTracksEnabled,
+                    personalFmEnabled: widget.personalFmEnabled,
+                    queuePlaybackController: widget.queuePlaybackController,
+                    authenticated: widget.authenticated,
+                    providerDisplayName: provider,
+                    spotlightPlaylist: spotlightPlaylist,
+                    spotlightKind: spotlightKind,
+                    spotlightStage: spotlightStage,
+                    spotlightIdentities: spotlightIdentities,
+                    onRetrySpotlight: widget.spotlightController.retry,
+                    onPreviousSpotlight: () =>
+                        _moveSpotlight(-1, restartTimer: true),
+                    onNextSpotlight: () =>
+                        _moveSpotlight(1, restartTimer: true),
+                    spotlightAutoPlaying:
+                        _spotlightAutoPlaying && !_animationsDisabled,
+                    spotlightAutoPlayAvailable: !_animationsDisabled,
+                    spotlightMotionDirection: _spotlightMotionDirection,
+                    spotlightProgress: _spotlightProgress,
+                    onToggleSpotlightAutoPlay: _toggleSpotlightAutoPlay,
+                    onOpenDiscover: widget.onOpenDiscover,
+                    onOpenLibrary: widget.onOpenLibrary,
+                    onOpenRecommendation: _openShelf,
+                    onOpenTrackAlbum: widget.onOpenTrackAlbum,
+                    onOpenTrackArtist: widget.onOpenTrackArtist,
+                    onOpenFeatured: _openFeatured,
+                    featuredReturnFocusNode: _returnToShelf
+                        ? null
+                        : widget.recommendationReturnFocusNode,
+                    lastOpenedRecommendation: widget.lastOpenedRecommendation,
+                    recommendationReturnFocusNode: _returnToShelf
+                        ? widget.recommendationReturnFocusNode
+                        : null,
+                    libraryShelfNavigation: _libraryShelfNavigation,
+                    publicShelfNavigation: _publicShelfNavigation,
+                  )
+                : _HomeWideLayout(
+                    onRefresh: _refreshPlaylistShelf,
+                    onRefreshAll: _refreshing
+                        ? null
+                        : () => unawaited(_refresh(manual: true)),
+                    refreshingPlaylists: _refreshingPlaylists,
+                    bottomContentPadding: bottomContentPadding,
+                    homeController: widget.homeController,
+                    recommendationController: widget.recommendationController,
+                    newSongController: widget.newSongController,
+                    radarController: widget.radarController,
+                    radarEnabled: widget.radarEnabled,
+                    dailyTracksEnabled: widget.dailyTracksEnabled,
+                    personalFmEnabled: widget.personalFmEnabled,
+                    queuePlaybackController: widget.queuePlaybackController,
+                    authenticated: widget.authenticated,
+                    providerDisplayName: provider,
+                    spotlightPlaylist: spotlightPlaylist,
+                    spotlightKind: spotlightKind,
+                    spotlightStage: spotlightStage,
+                    spotlightIdentities: spotlightIdentities,
+                    onRetrySpotlight: widget.spotlightController.retry,
+                    onPreviousSpotlight: () =>
+                        _moveSpotlight(-1, restartTimer: true),
+                    onNextSpotlight: () =>
+                        _moveSpotlight(1, restartTimer: true),
+                    spotlightAutoPlaying:
+                        _spotlightAutoPlaying && !_animationsDisabled,
+                    spotlightAutoPlayAvailable: !_animationsDisabled,
+                    spotlightMotionDirection: _spotlightMotionDirection,
+                    spotlightProgress: _spotlightProgress,
+                    onToggleSpotlightAutoPlay: _toggleSpotlightAutoPlay,
+                    onOpenDiscover: widget.onOpenDiscover,
+                    onOpenLibrary: widget.onOpenLibrary,
+                    onOpenRecommendation: _openShelf,
+                    onOpenTrackAlbum: widget.onOpenTrackAlbum,
+                    onOpenTrackArtist: widget.onOpenTrackArtist,
+                    onOpenFeatured: _openFeatured,
+                    featuredReturnFocusNode: _returnToShelf
+                        ? null
+                        : widget.recommendationReturnFocusNode,
+                    lastOpenedRecommendation: widget.lastOpenedRecommendation,
+                    recommendationReturnFocusNode: _returnToShelf
+                        ? widget.recommendationReturnFocusNode
+                        : null,
+                    libraryShelfNavigation: _libraryShelfNavigation,
+                    publicShelfNavigation: _publicShelfNavigation,
+                  );
+            return RefreshIndicator(
+              key: const ValueKey('home-pull-to-refresh'),
+              onRefresh: () => _refresh(manual: true),
+              child: layout,
             );
           },
         ),
@@ -565,6 +578,7 @@ class _HomeWideLayout extends StatelessWidget {
     required this.onOpenFeatured,
     required this.featuredReturnFocusNode,
     required this.onRefresh,
+    required this.onRefreshAll,
     required this.refreshingPlaylists,
     required this.bottomContentPadding,
     required this.homeController,
@@ -602,6 +616,7 @@ class _HomeWideLayout extends StatelessWidget {
 
   final HomeController homeController;
   final VoidCallback onRefresh;
+  final VoidCallback? onRefreshAll;
   final bool refreshingPlaylists;
   final double bottomContentPadding;
   final ValueChanged<RecommendedPlaylistSummary> onOpenFeatured;
@@ -640,6 +655,7 @@ class _HomeWideLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     key: const PageStorageKey('home-scroll'),
+    physics: const AlwaysScrollableScrollPhysics(),
     padding: EdgeInsets.fromLTRB(
       _HomeGeometry.widePadding,
       _HomeGeometry.widePadding,
@@ -660,6 +676,7 @@ class _HomeWideLayout extends StatelessWidget {
           providerDisplayName: providerDisplayName,
           queueController: queuePlaybackController,
           authenticated: authenticated,
+          onRefreshAll: onRefreshAll,
           spotlightPlaylist: spotlightPlaylist,
           spotlightKind: spotlightKind,
           spotlightStage: spotlightStage,
@@ -820,6 +837,7 @@ class _HomeCompactLayout extends StatelessWidget {
     required this.onOpenFeatured,
     required this.featuredReturnFocusNode,
     required this.onRefresh,
+    required this.onRefreshAll,
     required this.refreshingPlaylists,
     required this.bottomContentPadding,
     required this.homeController,
@@ -857,6 +875,7 @@ class _HomeCompactLayout extends StatelessWidget {
 
   final HomeController homeController;
   final VoidCallback onRefresh;
+  final VoidCallback? onRefreshAll;
   final bool refreshingPlaylists;
   final double bottomContentPadding;
   final ValueChanged<RecommendedPlaylistSummary> onOpenFeatured;
@@ -895,6 +914,7 @@ class _HomeCompactLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     key: const PageStorageKey('home-scroll'),
+    physics: const AlwaysScrollableScrollPhysics(),
     padding: EdgeInsets.only(bottom: bottomContentPadding),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -920,6 +940,7 @@ class _HomeCompactLayout extends StatelessWidget {
                 providerDisplayName: providerDisplayName,
                 queueController: queuePlaybackController,
                 authenticated: authenticated,
+                onRefreshAll: onRefreshAll,
                 spotlightPlaylist: spotlightPlaylist,
                 spotlightKind: spotlightKind,
                 spotlightStage: spotlightStage,
@@ -1194,6 +1215,7 @@ class _DailyRecommendationSection extends StatelessWidget {
     required this.providerDisplayName,
     required this.queueController,
     required this.authenticated,
+    required this.onRefreshAll,
     required this.spotlightPlaylist,
     required this.spotlightKind,
     required this.spotlightStage,
@@ -1221,6 +1243,7 @@ class _DailyRecommendationSection extends StatelessWidget {
   final String providerDisplayName;
   final QueuePlaybackController queueController;
   final bool authenticated;
+  final VoidCallback? onRefreshAll;
   final RecommendedPlaylistSummary? spotlightPlaylist;
   final HomeSpotlightKind spotlightKind;
   final HomeSpotlightStage spotlightStage;
@@ -1261,11 +1284,49 @@ class _DailyRecommendationSection extends StatelessWidget {
                 dailyTracks.isNotEmpty ||
                 homeController.personalizedTracks.isNotEmpty))
           Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              context.l10n.homeRefreshWarning,
-              key: const ValueKey('home-refresh-warning'),
-              style: Theme.of(context).textTheme.bodySmall,
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Material(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              borderRadius: MusicRadii.control,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onSecondaryContainer,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        context.l10n.homeRefreshWarning,
+                        key: const ValueKey('home-refresh-warning'),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSecondaryContainer,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      key: const ValueKey('home-refresh-warning-retry'),
+                      onPressed: onRefreshAll,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(context)
+                            .colorScheme
+                            .onSecondaryContainer,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: Text(context.l10n.commonRetry),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         _PartialHomeSection(
@@ -1569,23 +1630,50 @@ class _DailyRecommendationContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final featured = MusicStageTransition(
+      slideOffset: 3,
+      loading:
+          featuredPlaylist == null &&
+          featuredStage == HomeResourceStage.loading,
+      child: _featuredSlot(context),
+    );
+    final daily = MusicStageTransition(
+      slideOffset: 3,
+      loading: authenticated
+          ? dailyPlaylist == null &&
+                dailyTracks.isEmpty &&
+                dailyStage == HomeResourceStage.loading
+          : guestPopularPlaylist == null &&
+                publicStage == RecommendedPlaylistStage.loading,
+      child: _dailySlot(context),
+    );
+    final radar = radarEnabled
+        ? MusicStageTransition(
+            slideOffset: 3,
+            loading: authenticated
+                ? radarController.stage == RadarStage.loading
+                : newSongController.stage == NewSongStage.loading,
+            child: _radarSlot(context),
+          )
+        : null;
+
     if (compact) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _featuredSlot(context),
+          featured,
           const SizedBox(height: _HomeGeometry.itemGap),
-          if (radarEnabled)
+          if (radar != null)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: _dailySlot(context)),
+                Expanded(child: daily),
                 const SizedBox(width: _HomeGeometry.itemGap),
-                Expanded(child: _radarSlot(context)),
+                Expanded(child: radar),
               ],
             )
           else
-            _dailySlot(context),
+            daily,
         ],
       );
     }
@@ -1595,15 +1683,15 @@ class _DailyRecommendationContent extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(flex: 2, child: _featuredSlot(context)),
+          Expanded(flex: 2, child: featured),
           const SizedBox(width: _HomeGeometry.itemGap),
           Expanded(
             child: Column(
               children: [
-                Expanded(child: _dailySlot(context)),
-                if (radarEnabled) ...[
+                Expanded(child: daily),
+                if (radar != null) ...[
                   const SizedBox(height: _HomeGeometry.itemGap),
-                  Expanded(child: _radarSlot(context)),
+                  Expanded(child: radar),
                 ],
               ],
             ),
@@ -2392,42 +2480,45 @@ class _GuestPlaylistSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return switch (controller.stage) {
-      RecommendedPlaylistStage.loading => _HomeLoadingShelf(
-        key: const ValueKey('home-guest-playlists-loading'),
-        compact: compact,
-        semanticLabel: context.l10n.homeLoadingPublicPlaylists,
-      ),
-      RecommendedPlaylistStage.empty => _HomeInlineState(
-        key: const ValueKey('home-guest-playlists-empty'),
-        icon: Icons.queue_music_outlined,
-        title: context.l10n.homeNoPublicPlaylists,
-        detail: context.l10n.homeNoPublicPlaylistsDetail(providerDisplayName),
-      ),
-      RecommendedPlaylistStage.error => _HomeInlineState(
-        key: const ValueKey('home-guest-playlists-error'),
-        icon: Icons.cloud_off_outlined,
-        title: context.l10n.homePublicPlaylistsFailure,
-        detail: _publicStateDetail(
-          context.l10n,
-          controller.stage,
-          providerDisplayName: providerDisplayName,
+    return MusicStageTransition(
+      slideOffset: 3,
+      child: switch (controller.stage) {
+        RecommendedPlaylistStage.loading => _HomeLoadingShelf(
+          key: const ValueKey('home-guest-playlists-loading'),
+          compact: compact,
+          semanticLabel: context.l10n.homeLoadingPublicPlaylists,
         ),
-        liveRegion: true,
-        action: controller.canRetry
-            ? FilledButton.tonal(
-                onPressed: controller.retry,
-                child: Text(context.l10n.commonRetry),
-              )
-            : null,
-      ),
-      RecommendedPlaylistStage.content => _PartialHomeSection(
-        key: const ValueKey('home-guest-playlists-partial-section'),
-        omittedCount: controller.omittedPlaylistCount,
-        resultRevision: controller.partialResultRevision,
-        child: _guestPlaylistContent(context),
-      ),
-    };
+        RecommendedPlaylistStage.empty => _HomeInlineState(
+          key: const ValueKey('home-guest-playlists-empty'),
+          icon: Icons.queue_music_outlined,
+          title: context.l10n.homeNoPublicPlaylists,
+          detail: context.l10n.homeNoPublicPlaylistsDetail(providerDisplayName),
+        ),
+        RecommendedPlaylistStage.error => _HomeInlineState(
+          key: const ValueKey('home-guest-playlists-error'),
+          icon: Icons.cloud_off_outlined,
+          title: context.l10n.homePublicPlaylistsFailure,
+          detail: _publicStateDetail(
+            context.l10n,
+            controller.stage,
+            providerDisplayName: providerDisplayName,
+          ),
+          liveRegion: true,
+          action: controller.canRetry
+              ? FilledButton.tonal(
+                  onPressed: controller.retry,
+                  child: Text(context.l10n.commonRetry),
+                )
+              : null,
+        ),
+        RecommendedPlaylistStage.content => _PartialHomeSection(
+          key: const ValueKey('home-guest-playlists-partial-section'),
+          omittedCount: controller.omittedPlaylistCount,
+          resultRevision: controller.partialResultRevision,
+          child: _guestPlaylistContent(context),
+        ),
+      },
+    );
   }
 
   Widget _guestPlaylistContent(BuildContext context) {
@@ -2492,61 +2583,73 @@ class _NewSongSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return switch (controller.stage) {
-      NewSongStage.loading => _HomeTrackLoading(
-        compact: compact,
-        semanticLabel: context.l10n.homeLoadingPublicNewSongs,
-      ),
-      NewSongStage.empty => _HomeInlineState(
-        key: ValueKey(
-          authenticated ? 'home-new-songs-empty' : 'home-guest-new-songs-empty',
-        ),
-        icon: Icons.new_releases_outlined,
-        title: context.l10n.homeNoNewSongs,
-        detail: context.l10n.homeNoNewSongsDetail(providerDisplayName),
-      ),
-      NewSongStage.error => _HomeInlineState(
-        key: ValueKey(
-          authenticated ? 'home-new-songs-error' : 'home-guest-new-songs-error',
-        ),
-        icon: Icons.cloud_off_outlined,
-        title: context.l10n.homeNewSongsFailure,
-        detail: _newSongFailureDetail(
-          context.l10n,
-          controller.failure,
-          providerDisplayName: providerDisplayName,
-        ),
-        liveRegion: true,
-        action: controller.canRetry
-            ? FilledButton.tonal(
-                onPressed: controller.retry,
-                child: Text(context.l10n.commonRetry),
-              )
-            : null,
-      ),
-      NewSongStage.content => _PartialHomeSection(
-        key: ValueKey(
-          authenticated
-              ? 'home-new-songs-partial-section'
-              : 'home-guest-new-songs-partial-section',
-        ),
-        omittedCount: controller.omittedTrackCount,
-        resultRevision: controller.partialResultRevision,
-        child: _HomeTrackContent(
-          tracks: controller.tracks.take(6).toList(growable: false),
-          queueController: queueController,
-          compact: compact,
-          sectionKey: ValueKey(
-            authenticated ? 'home-new-songs' : 'home-guest-new-songs',
+    return MusicStageTransition(
+      slideOffset: 3,
+      child: switch (controller.stage) {
+        NewSongStage.loading => _HomeTrackLoading(
+          key: ValueKey(
+            authenticated
+                ? 'home-new-songs-loading'
+                : 'home-guest-new-songs-loading',
           ),
-          itemKeyPrefix: authenticated
-              ? 'home-new-song'
-              : 'home-guest-new-song',
-          onOpenAlbum: onOpenAlbum,
-          onOpenArtist: onOpenArtist,
+          compact: compact,
+          semanticLabel: context.l10n.homeLoadingPublicNewSongs,
         ),
-      ),
-    };
+        NewSongStage.empty => _HomeInlineState(
+          key: ValueKey(
+            authenticated
+                ? 'home-new-songs-empty'
+                : 'home-guest-new-songs-empty',
+          ),
+          icon: Icons.new_releases_outlined,
+          title: context.l10n.homeNoNewSongs,
+          detail: context.l10n.homeNoNewSongsDetail(providerDisplayName),
+        ),
+        NewSongStage.error => _HomeInlineState(
+          key: ValueKey(
+            authenticated
+                ? 'home-new-songs-error'
+                : 'home-guest-new-songs-error',
+          ),
+          icon: Icons.cloud_off_outlined,
+          title: context.l10n.homeNewSongsFailure,
+          detail: _newSongFailureDetail(
+            context.l10n,
+            controller.failure,
+            providerDisplayName: providerDisplayName,
+          ),
+          liveRegion: true,
+          action: controller.canRetry
+              ? FilledButton.tonal(
+                  onPressed: controller.retry,
+                  child: Text(context.l10n.commonRetry),
+                )
+              : null,
+        ),
+        NewSongStage.content => _PartialHomeSection(
+          key: ValueKey(
+            authenticated
+                ? 'home-new-songs-partial-section'
+                : 'home-guest-new-songs-partial-section',
+          ),
+          omittedCount: controller.omittedTrackCount,
+          resultRevision: controller.partialResultRevision,
+          child: _HomeTrackContent(
+            tracks: controller.tracks.take(6).toList(growable: false),
+            queueController: queueController,
+            compact: compact,
+            sectionKey: ValueKey(
+              authenticated ? 'home-new-songs' : 'home-guest-new-songs',
+            ),
+            itemKeyPrefix: authenticated
+                ? 'home-new-song'
+                : 'home-guest-new-song',
+            onOpenAlbum: onOpenAlbum,
+            onOpenArtist: onOpenArtist,
+          ),
+        ),
+      },
+    );
   }
 }
 
@@ -2571,64 +2674,67 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return switch (controller.personalizedPlaylistsStage) {
-      HomeResourceStage.loading => _HomeLoadingShelf(
-        key: const ValueKey('home-library-loading'),
-        compact: compact,
-        semanticLabel: context.l10n.homeLoadingYourPlaylists,
-      ),
-      HomeResourceStage.empty => _HomeInlineState(
-        key: const ValueKey('home-library-empty'),
-        icon: Icons.library_music_outlined,
-        title: context.l10n.homeNoPersonalizedPlaylists,
-        detail: context.l10n.homeNoPersonalizedPlaylistsDetail,
-        compactFootprint: true,
-      ),
-      HomeResourceStage.error => _HomeInlineState(
-        key: const ValueKey('home-library-error'),
-        icon: Icons.cloud_off_rounded,
-        title: _personalizedPlaylistFailureTitle(
-          context.l10n,
-          controller.personalizedPlaylistsFailure,
-        ),
-        detail: _personalizedPlaylistFailureDetail(
-          context.l10n,
-          controller.personalizedPlaylistsFailure,
-          providerDisplayName: providerDisplayName,
-        ),
-        liveRegion: true,
-        compactFootprint: true,
-        action: FilledButton.tonal(
-          onPressed: controller.retryPersonalizedPlaylists,
-          child: Text(context.l10n.commonRetry),
-        ),
-      ),
-      HomeResourceStage.content => _PartialHomeSection(
-        key: const ValueKey('home-library-partial-section'),
-        omittedCount: controller.personalizedPlaylistsOmittedCount,
-        resultRevision: controller.personalizedPlaylistsPartialResultRevision,
-        child: _PlaylistShelf<RecommendedPlaylistSummary>(
-          key: const ValueKey('home-library-section'),
-          layoutKey: const ValueKey('home-library-shelf'),
-          items: controller.personalizedPlaylists,
+    return MusicStageTransition(
+      slideOffset: 3,
+      child: switch (controller.personalizedPlaylistsStage) {
+        HomeResourceStage.loading => _HomeLoadingShelf(
+          key: const ValueKey('home-library-loading'),
           compact: compact,
-          title: (playlist) => playlist.title,
-          artworkUri: (playlist) => playlist.artworkUri,
-          semanticLabel: (playlist) => playlist.trackCount == null
-              ? context.l10n.homePersonalizedPlaylistSemantics(playlist.title)
-              : '${playlist.title}, ${context.l10n.trackCount(playlist.trackCount!)}',
-          itemKey: (index) => ValueKey('home-library-playlist-$index'),
-          onSelected: onSelected,
-          focusNode: (playlist) =>
-              lastOpened?.providerId == playlist.providerId &&
-                  lastOpened?.opaqueId == playlist.opaqueId
-              ? returnFocusNode
-              : null,
-          placeholderIcon: Icons.auto_awesome_rounded,
-          navigation: navigation,
+          semanticLabel: context.l10n.homeLoadingYourPlaylists,
         ),
-      ),
-    };
+        HomeResourceStage.empty => _HomeInlineState(
+          key: const ValueKey('home-library-empty'),
+          icon: Icons.library_music_outlined,
+          title: context.l10n.homeNoPersonalizedPlaylists,
+          detail: context.l10n.homeNoPersonalizedPlaylistsDetail,
+          compactFootprint: true,
+        ),
+        HomeResourceStage.error => _HomeInlineState(
+          key: const ValueKey('home-library-error'),
+          icon: Icons.cloud_off_rounded,
+          title: _personalizedPlaylistFailureTitle(
+            context.l10n,
+            controller.personalizedPlaylistsFailure,
+          ),
+          detail: _personalizedPlaylistFailureDetail(
+            context.l10n,
+            controller.personalizedPlaylistsFailure,
+            providerDisplayName: providerDisplayName,
+          ),
+          liveRegion: true,
+          compactFootprint: true,
+          action: FilledButton.tonal(
+            onPressed: controller.retryPersonalizedPlaylists,
+            child: Text(context.l10n.commonRetry),
+          ),
+        ),
+        HomeResourceStage.content => _PartialHomeSection(
+          key: const ValueKey('home-library-partial-section'),
+          omittedCount: controller.personalizedPlaylistsOmittedCount,
+          resultRevision: controller.personalizedPlaylistsPartialResultRevision,
+          child: _PlaylistShelf<RecommendedPlaylistSummary>(
+            key: const ValueKey('home-library-section'),
+            layoutKey: const ValueKey('home-library-shelf'),
+            items: controller.personalizedPlaylists,
+            compact: compact,
+            title: (playlist) => playlist.title,
+            artworkUri: (playlist) => playlist.artworkUri,
+            semanticLabel: (playlist) => playlist.trackCount == null
+                ? context.l10n.homePersonalizedPlaylistSemantics(playlist.title)
+                : '${playlist.title}, ${context.l10n.trackCount(playlist.trackCount!)}',
+            itemKey: (index) => ValueKey('home-library-playlist-$index'),
+            onSelected: onSelected,
+            focusNode: (playlist) =>
+                lastOpened?.providerId == playlist.providerId &&
+                    lastOpened?.opaqueId == playlist.opaqueId
+                ? returnFocusNode
+                : null,
+            placeholderIcon: Icons.auto_awesome_rounded,
+            navigation: navigation,
+          ),
+        ),
+      },
+    );
   }
 }
 
@@ -2651,51 +2757,57 @@ class _PersonalizedTrackSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return switch (controller.personalizedTracksStage) {
-      HomeResourceStage.loading => _HomeTrackLoading(
-        compact: compact,
-        semanticLabel: personalFm
-            ? context.l10n.homeLoadingPersonalFm
-            : context.l10n.homeLoadingPersonalizedSongs,
-      ),
-      HomeResourceStage.empty => _HomeInlineState(
-        key: const ValueKey('home-personalized-tracks-empty'),
-        icon: Icons.music_note_outlined,
-        title: personalFm
-            ? context.l10n.homePersonalFmEmpty
-            : context.l10n.homePersonalizedSongsEmpty,
-        detail: context.l10n.homePersonalizedSongsEmptyDetail,
-        compactFootprint: true,
-      ),
-      HomeResourceStage.error => _HomeInlineState(
-        key: const ValueKey('home-personalized-tracks-error'),
-        icon: Icons.cloud_off_rounded,
-        title: personalFm
-            ? context.l10n.homePersonalFmFailure
-            : context.l10n.homePersonalizedSongsFailure,
-        detail: context.l10n.homeOtherSectionsAvailable,
-        liveRegion: true,
-        compactFootprint: true,
-        action: FilledButton.tonal(
-          onPressed: controller.retryPersonalizedTracks,
-          child: Text(context.l10n.commonRetry),
-        ),
-      ),
-      HomeResourceStage.content => _PartialHomeSection(
-        key: const ValueKey('home-personalized-tracks-partial-section'),
-        omittedCount: controller.personalizedTracksOmittedCount,
-        resultRevision: controller.personalizedTracksPartialResultRevision,
-        child: _HomeTrackContent(
-          tracks: controller.personalizedTracks.take(6).toList(growable: false),
-          queueController: queueController,
+    return MusicStageTransition(
+      slideOffset: 3,
+      child: switch (controller.personalizedTracksStage) {
+        HomeResourceStage.loading => _HomeTrackLoading(
+          key: const ValueKey('home-personalized-tracks-loading'),
           compact: compact,
-          sectionKey: const ValueKey('home-personalized-tracks'),
-          itemKeyPrefix: 'home-personalized-track',
-          onOpenAlbum: onOpenAlbum,
-          onOpenArtist: onOpenArtist,
+          semanticLabel: personalFm
+              ? context.l10n.homeLoadingPersonalFm
+              : context.l10n.homeLoadingPersonalizedSongs,
         ),
-      ),
-    };
+        HomeResourceStage.empty => _HomeInlineState(
+          key: const ValueKey('home-personalized-tracks-empty'),
+          icon: Icons.music_note_outlined,
+          title: personalFm
+              ? context.l10n.homePersonalFmEmpty
+              : context.l10n.homePersonalizedSongsEmpty,
+          detail: context.l10n.homePersonalizedSongsEmptyDetail,
+          compactFootprint: true,
+        ),
+        HomeResourceStage.error => _HomeInlineState(
+          key: const ValueKey('home-personalized-tracks-error'),
+          icon: Icons.cloud_off_rounded,
+          title: personalFm
+              ? context.l10n.homePersonalFmFailure
+              : context.l10n.homePersonalizedSongsFailure,
+          detail: context.l10n.homeOtherSectionsAvailable,
+          liveRegion: true,
+          compactFootprint: true,
+          action: FilledButton.tonal(
+            onPressed: controller.retryPersonalizedTracks,
+            child: Text(context.l10n.commonRetry),
+          ),
+        ),
+        HomeResourceStage.content => _PartialHomeSection(
+          key: const ValueKey('home-personalized-tracks-partial-section'),
+          omittedCount: controller.personalizedTracksOmittedCount,
+          resultRevision: controller.personalizedTracksPartialResultRevision,
+          child: _HomeTrackContent(
+            tracks: controller.personalizedTracks
+                .take(6)
+                .toList(growable: false),
+            queueController: queueController,
+            compact: compact,
+            sectionKey: const ValueKey('home-personalized-tracks'),
+            itemKeyPrefix: 'home-personalized-track',
+            onOpenAlbum: onOpenAlbum,
+            onOpenArtist: onOpenArtist,
+          ),
+        ),
+      },
+    );
   }
 }
 
@@ -2717,78 +2829,84 @@ class _RelatedTrackSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final seed = controller.relatedSeed;
-    return switch (controller.relatedTracksStage) {
-      HomeResourceStage.loading => _HomeTrackLoading(
-        compact: compact,
-        semanticLabel: context.l10n.homeLoadingRelatedSongs(
-          seed?.title ?? context.l10n.homeRecentListening,
+    return MusicStageTransition(
+      slideOffset: 3,
+      child: switch (controller.relatedTracksStage) {
+        HomeResourceStage.loading => _HomeTrackLoading(
+          key: const ValueKey('home-related-tracks-loading'),
+          compact: compact,
+          semanticLabel: context.l10n.homeLoadingRelatedSongs(
+            seed?.title ?? context.l10n.homeRecentListening,
+          ),
         ),
-      ),
-      HomeResourceStage.empty when seed == null => _HomeInlineState(
-        key: const ValueKey('home-related-tracks-no-seed'),
-        icon: Icons.music_note_outlined,
-        title: context.l10n.homeStartListeningTitle,
-        detail: context.l10n.homeStartListeningDetail,
-        compactFootprint: true,
-      ),
-      HomeResourceStage.empty => _HomeInlineState(
-        key: const ValueKey('home-related-tracks-empty'),
-        icon: Icons.music_note_outlined,
-        title: context.l10n.homeNoRelatedSongs,
-        detail: context.l10n.homeNoRelatedSongsDetail(seed!.title),
-        compactFootprint: true,
-      ),
-      HomeResourceStage.error => _HomeInlineState(
-        key: const ValueKey('home-related-tracks-error'),
-        icon: Icons.cloud_off_rounded,
-        title: _relatedTracksFailureTitle(
-          context.l10n,
-          controller.relatedTracksFailure,
+        HomeResourceStage.empty when seed == null => _HomeInlineState(
+          key: const ValueKey('home-related-tracks-no-seed'),
+          icon: Icons.music_note_outlined,
+          title: context.l10n.homeStartListeningTitle,
+          detail: context.l10n.homeStartListeningDetail,
+          compactFootprint: true,
         ),
-        detail: _relatedTracksFailureDetail(
-          context.l10n,
-          controller.relatedTracksFailure,
-          seed,
+        HomeResourceStage.empty => _HomeInlineState(
+          key: const ValueKey('home-related-tracks-empty'),
+          icon: Icons.music_note_outlined,
+          title: context.l10n.homeNoRelatedSongs,
+          detail: context.l10n.homeNoRelatedSongsDetail(seed!.title),
+          compactFootprint: true,
         ),
-        liveRegion: true,
-        compactFootprint: true,
-        action: seed == null
-            ? null
-            : FilledButton.tonal(
-                onPressed: controller.retryRelatedTracks,
-                child: Text(context.l10n.commonRetry),
+        HomeResourceStage.error => _HomeInlineState(
+          key: const ValueKey('home-related-tracks-error'),
+          icon: Icons.cloud_off_rounded,
+          title: _relatedTracksFailureTitle(
+            context.l10n,
+            controller.relatedTracksFailure,
+          ),
+          detail: _relatedTracksFailureDetail(
+            context.l10n,
+            controller.relatedTracksFailure,
+            seed,
+          ),
+          liveRegion: true,
+          compactFootprint: true,
+          action: seed == null
+              ? null
+              : FilledButton.tonal(
+                  onPressed: controller.retryRelatedTracks,
+                  child: Text(context.l10n.commonRetry),
+                ),
+        ),
+        HomeResourceStage.content => _PartialHomeSection(
+          key: const ValueKey('home-related-tracks-section'),
+          omittedCount: controller.relatedTracksOmittedCount,
+          resultRevision: controller.relatedTracksPartialResultRevision,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.l10n.homeBecauseListened(
+                  seed?.title ?? context.l10n.homeRecentSong,
+                ),
+                key: const ValueKey('home-related-tracks-seed'),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
-      ),
-      HomeResourceStage.content => _PartialHomeSection(
-        key: const ValueKey('home-related-tracks-section'),
-        omittedCount: controller.relatedTracksOmittedCount,
-        resultRevision: controller.relatedTracksPartialResultRevision,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.l10n.homeBecauseListened(
-                seed?.title ?? context.l10n.homeRecentSong,
+              const SizedBox(height: 8),
+              _HomeTrackContent(
+                tracks: controller.relatedTracks
+                    .take(6)
+                    .toList(growable: false),
+                queueController: queueController,
+                compact: compact,
+                sectionKey: const ValueKey('home-related-tracks'),
+                itemKeyPrefix: 'home-related-track',
+                onOpenAlbum: onOpenAlbum,
+                onOpenArtist: onOpenArtist,
               ),
-              key: const ValueKey('home-related-tracks-seed'),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _HomeTrackContent(
-              tracks: controller.relatedTracks.take(6).toList(growable: false),
-              queueController: queueController,
-              compact: compact,
-              sectionKey: const ValueKey('home-related-tracks'),
-              itemKeyPrefix: 'home-related-track',
-              onOpenAlbum: onOpenAlbum,
-              onOpenArtist: onOpenArtist,
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    };
+      },
+    );
   }
 }
 
@@ -2912,6 +3030,7 @@ class _HomeTrackTile extends StatelessWidget {
     void showActions([Offset? position]) => unawaited(
       _showHomeTrackActions(
         context: context,
+        desktop: !compact,
         position: position,
         track: track,
         onPlay: onPlay,
@@ -3009,15 +3128,18 @@ class _HomeTrackTile extends StatelessWidget {
                       height: 48,
                     ),
                   ),
-                  IconButton(
-                    key: moreKey,
-                    onPressed: showActions,
-                    tooltip: context.l10n.commonMoreActions,
-                    icon: const Icon(Icons.more_horiz_rounded),
-                    iconSize: 20,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 48,
-                      height: 48,
+                  Builder(
+                    builder: (buttonContext) => IconButton(
+                      key: moreKey,
+                      onPressed: () =>
+                          showActions(musicTrackAnchorOffset(buttonContext)),
+                      tooltip: context.l10n.commonMoreActions,
+                      icon: const Icon(Icons.more_horiz_rounded),
+                      iconSize: 20,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 48,
+                        height: 48,
+                      ),
                     ),
                   ),
                 ],
@@ -3045,6 +3167,7 @@ Future<void> _queueHomeTrack(
 
 Future<void> _showHomeTrackActions({
   required BuildContext context,
+  required bool desktop,
   required Offset? position,
   required PlaylistTrackSummary track,
   required VoidCallback onPlay,
@@ -3057,103 +3180,52 @@ Future<void> _showHomeTrackActions({
   final likeAction = await resolveMusicTrackLikeAction(context, track);
   if (!context.mounted) return;
   final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
-  final compact = MediaQuery.sizeOf(context).width < 600;
-  final action = compact || position == null
-      ? await showModalBottomSheet<MusicTrackAction>(
-          context: context,
-          showDragHandle: true,
-          builder: (context) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.play_arrow_rounded),
-                  title: Text(context.l10n.commonPlayFromHere),
-                  onTap: () => Navigator.pop(context, MusicTrackAction.play),
-                ),
-                if (canAddToPlaylist)
-                  ListTile(
-                    leading: const Icon(Icons.playlist_add_rounded),
-                    title: Text(context.l10n.libraryAddTrackToPlaylist),
-                    onTap: () =>
-                        Navigator.pop(context, MusicTrackAction.addToPlaylist),
-                  ),
-                if (likeAction != null)
-                  ListTile(
-                    leading: Icon(
-                      likeAction == MusicTrackAction.like
-                          ? Icons.favorite_border_rounded
-                          : Icons.favorite_rounded,
-                    ),
-                    title: Text(
-                      likeAction == MusicTrackAction.like
-                          ? context.l10n.libraryLikeTrack
-                          : context.l10n.libraryUnlikeTrack,
-                    ),
-                    onTap: () => Navigator.pop(context, likeAction),
-                  ),
-                ListTile(
-                  leading: const Icon(Icons.playlist_add_rounded),
-                  title: Text(context.l10n.commonAddToQueue),
-                  onTap: () =>
-                      Navigator.pop(context, MusicTrackAction.addToQueue),
-                ),
-                if (canOpenAlbum)
-                  ListTile(
-                    leading: const Icon(Icons.album_outlined),
-                    title: Text(context.l10n.commonOpenAlbum),
-                    onTap: () =>
-                        Navigator.pop(context, MusicTrackAction.openAlbum),
-                  ),
-                if (canOpenArtist)
-                  ListTile(
-                    leading: const Icon(Icons.person_outline_rounded),
-                    title: Text(context.l10n.commonOpenArtist),
-                    onTap: () =>
-                        Navigator.pop(context, MusicTrackAction.openArtist),
-                  ),
-              ],
-            ),
-          ),
-        )
-      : await showMenu<MusicTrackAction>(
-          context: context,
-          position: RelativeRect.fromLTRB(position.dx, position.dy, 0, 0),
-          items: [
-            PopupMenuItem(
-              value: MusicTrackAction.play,
-              child: Text(context.l10n.commonPlayFromHere),
-            ),
-            if (canAddToPlaylist)
-              PopupMenuItem(
-                value: MusicTrackAction.addToPlaylist,
-                child: Text(context.l10n.libraryAddTrackToPlaylist),
-              ),
-            if (likeAction != null)
-              PopupMenuItem(
-                value: likeAction,
-                child: Text(
-                  likeAction == MusicTrackAction.like
-                      ? context.l10n.libraryLikeTrack
-                      : context.l10n.libraryUnlikeTrack,
-                ),
-              ),
-            PopupMenuItem(
-              value: MusicTrackAction.addToQueue,
-              child: Text(context.l10n.commonAddToQueue),
-            ),
-            if (canOpenAlbum)
-              PopupMenuItem(
-                value: MusicTrackAction.openAlbum,
-                child: Text(context.l10n.commonOpenAlbum),
-              ),
-            if (canOpenArtist)
-              PopupMenuItem(
-                value: MusicTrackAction.openArtist,
-                child: Text(context.l10n.commonOpenArtist),
-              ),
-          ],
-        );
+  final action = await showAdaptiveMusicContextMenu<MusicTrackAction>(
+    context: context,
+    desktop: desktop,
+    anchorPosition: position,
+    headerTitle: track.title,
+    entries: [
+      MusicTrackMenuEntry(
+        value: MusicTrackAction.play,
+        icon: Icons.play_arrow_rounded,
+        label: context.l10n.commonPlayFromHere,
+      ),
+      if (canAddToPlaylist)
+        MusicTrackMenuEntry(
+          value: MusicTrackAction.addToPlaylist,
+          icon: Icons.playlist_add_rounded,
+          label: context.l10n.libraryAddTrackToPlaylist,
+        ),
+      if (likeAction != null)
+        MusicTrackMenuEntry(
+          value: likeAction,
+          icon: likeAction == MusicTrackAction.like
+              ? Icons.favorite_border_rounded
+              : Icons.favorite_rounded,
+          label: likeAction == MusicTrackAction.like
+              ? context.l10n.libraryLikeTrack
+              : context.l10n.libraryUnlikeTrack,
+        ),
+      MusicTrackMenuEntry(
+        value: MusicTrackAction.addToQueue,
+        icon: Icons.queue_music_rounded,
+        label: context.l10n.commonAddToQueue,
+      ),
+      if (canOpenAlbum)
+        MusicTrackMenuEntry(
+          value: MusicTrackAction.openAlbum,
+          icon: Icons.album_outlined,
+          label: context.l10n.commonOpenAlbum,
+        ),
+      if (canOpenArtist)
+        MusicTrackMenuEntry(
+          value: MusicTrackAction.openArtist,
+          icon: Icons.person_outline_rounded,
+          label: context.l10n.commonOpenArtist,
+        ),
+    ],
+  );
   if (!context.mounted) return;
   switch (action) {
     case MusicTrackAction.play:
@@ -3179,37 +3251,98 @@ Future<void> _showHomeTrackActions({
 }
 
 class _HomeTrackLoading extends StatelessWidget {
-  const _HomeTrackLoading({required this.compact, required this.semanticLabel});
+  const _HomeTrackLoading({
+    required this.compact,
+    required this.semanticLabel,
+    super.key,
+  });
 
   final bool compact;
   final String semanticLabel;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: semanticLabel,
-    child: LayoutBuilder(
-      builder: (context, constraints) {
-        final width = compact
-            ? constraints.maxWidth
-            : (constraints.maxWidth - _HomeGeometry.itemGap) / 2;
-        return Wrap(
-          spacing: _HomeGeometry.itemGap,
-          children: [
-            for (var index = 0; index < 6; index++)
-              Container(
-                width: width,
-                height: _HomeGeometry.trackRowHeight,
-                margin: const EdgeInsets.only(bottom: 1),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerLow,
-                  borderRadius: _HomeGeometry.artworkRadius,
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      label: semanticLabel,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = compact
+              ? constraints.maxWidth
+              : (constraints.maxWidth - _HomeGeometry.itemGap) / 2;
+          return Wrap(
+            spacing: _HomeGeometry.itemGap,
+            children: [
+              for (var index = 0; index < 6; index++)
+                Container(
+                  width: width,
+                  height: _HomeGeometry.trackRowHeight,
+                  margin: const EdgeInsets.only(bottom: 1),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: colors.surfaceContainerLow,
+                    borderRadius: _HomeGeometry.artworkRadius,
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox.square(
+                        dimension: _HomeGeometry.trackArtworkSize,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colors.surfaceContainerHigh,
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(6),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            FractionallySizedBox(
+                              widthFactor: 0.62,
+                              child: SizedBox(
+                                height: 12,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: colors.surfaceContainerHigh,
+                                    borderRadius: const BorderRadius.all(
+                                      Radius.circular(4),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            FractionallySizedBox(
+                              widthFactor: 0.38,
+                              child: SizedBox(
+                                height: 10,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: colors.surfaceContainer,
+                                    borderRadius: const BorderRadius.all(
+                                      Radius.circular(4),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-          ],
-        );
-      },
-    ),
-  );
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _MoreRecommendationsSection extends StatelessWidget {
@@ -3567,6 +3700,8 @@ class _HomeArtwork extends StatelessWidget {
               uri!,
               headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
+              gaplessPlayback: true,
+              frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );
@@ -3584,53 +3719,86 @@ class _HomeLoadingShelf extends StatelessWidget {
   final String semanticLabel;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: semanticLabel,
-    child: compact
-        ? SizedBox(
-            height: _HomeGeometry.compactShelfWidth + 48,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: 3,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(width: _HomeGeometry.itemGap),
-              itemBuilder: (_, _) => Container(
-                width: _HomeGeometry.compactShelfWidth,
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    Widget skeletonCard([double? width]) => SizedBox(
+      width: width,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 1,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerLow,
+                borderRadius: _HomeGeometry.artworkRadius,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          FractionallySizedBox(
+            widthFactor: 0.76,
+            child: SizedBox(
+              height: 12,
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerLow,
-                  borderRadius: _HomeGeometry.artworkRadius,
+                  color: colors.surfaceContainerLow,
+                  borderRadius: const BorderRadius.all(Radius.circular(4)),
                 ),
               ),
             ),
-          )
-        : LayoutBuilder(
-            builder: (context, constraints) {
-              final width =
-                  (constraints.maxWidth - _HomeGeometry.itemGap * 5) / 6;
-              return SizedBox(
-                height: width + 44,
-                child: Row(
-                  children: [
-                    for (var index = 0; index < 6; index++) ...[
-                      if (index > 0)
-                        const SizedBox(width: _HomeGeometry.itemGap),
-                      Expanded(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerLow,
-                            borderRadius: _HomeGeometry.artworkRadius,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            },
           ),
-  );
+          const SizedBox(height: 6),
+          FractionallySizedBox(
+            widthFactor: 0.48,
+            child: SizedBox(
+              height: 10,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerLow.withValues(alpha: 0.72),
+                  borderRadius: const BorderRadius.all(Radius.circular(4)),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return Semantics(
+      label: semanticLabel,
+      child: compact
+          ? SizedBox(
+              height: _HomeGeometry.compactShelfWidth + 48,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: 3,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: _HomeGeometry.itemGap),
+                itemBuilder: (_, _) =>
+                    skeletonCard(_HomeGeometry.compactShelfWidth),
+              ),
+            )
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final width =
+                    (constraints.maxWidth - _HomeGeometry.itemGap * 5) / 6;
+                return SizedBox(
+                  height: width + 44,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var index = 0; index < 6; index++) ...[
+                        if (index > 0)
+                          const SizedBox(width: _HomeGeometry.itemGap),
+                        Expanded(child: skeletonCard()),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+    );
+  }
 }
 
 class _HomeInlineState extends StatelessWidget {

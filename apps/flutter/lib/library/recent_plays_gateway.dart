@@ -36,7 +36,7 @@ class RustRecentPlaysGateway implements RecentPlaysGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final RecentTrackPageLoadOperationFactory _operationFactory;
-  final QqSessionContinuationCoordinator? sessionContinuation;
+  final SessionContinuationCoordinator? sessionContinuation;
 
   @override
   PlaylistTrackPageLoadOperation beginLoad({
@@ -45,7 +45,7 @@ class RustRecentPlaysGateway implements RecentPlaysGateway {
   }) => _VaultCleaningRecentTrackPageLoadOperation(
     () => _operationFactory(providerId, offset, size),
     _credentialVault,
-    providerId == 'qq-music' ? sessionContinuation : null,
+    sessionContinuation,
   );
 }
 
@@ -116,7 +116,7 @@ class _VaultCleaningRecentTrackPageLoadOperation
   final PlaylistTrackPageLoadOperation Function() _factory;
   PlaylistTrackPageLoadOperation _inner;
   final CredentialVault _vault;
-  final QqSessionContinuationCoordinator? _continuation;
+  final SessionContinuationCoordinator? _continuation;
   bool _cancelled = false;
 
   @override

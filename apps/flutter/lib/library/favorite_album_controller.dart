@@ -70,6 +70,23 @@ class FavoriteAlbumController extends ChangeNotifier {
     _failure = null;
     _appendFailure = null;
     _isLoadingMore = false;
+
+    FavoriteAlbumPageResult? synchronousResult;
+    final future = operation.run().then((value) {
+      synchronousResult = value;
+      return value;
+    });
+    if (synchronousResult != null) {
+      if (identical(_operation, operation)) _operation = null;
+      if (!_isCurrent(generation)) return;
+      _applyFirstPageResult(
+        synchronousResult!,
+        preserveSnapshot: preserveSnapshot,
+      );
+      _notify();
+      return;
+    }
+
     if (!preserveSnapshot) {
       _albums = const [];
       _total = 0;
@@ -80,10 +97,18 @@ class FavoriteAlbumController extends ChangeNotifier {
     }
     _notify();
 
-    final result = await operation.run();
+    final result = await future;
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
 
+    _applyFirstPageResult(result, preserveSnapshot: preserveSnapshot);
+    _notify();
+  }
+
+  void _applyFirstPageResult(
+    FavoriteAlbumPageResult result, {
+    required bool preserveSnapshot,
+  }) {
     if (_validPage(result, expectedOffset: 0)) {
       _albums = List.unmodifiable(result.albums);
       _total = result.total;
@@ -95,11 +120,15 @@ class FavoriteAlbumController extends ChangeNotifier {
           ? FavoriteAlbumStage.empty
           : FavoriteAlbumStage.content;
     } else if (!preserveSnapshot || _isSessionFailure(result.failure)) {
+      _albums = const [];
+      _total = 0;
+      _nextOffset = 0;
+      _hasMore = false;
+      _omittedAlbumCount = 0;
       _applyInitialFailure(
         result.failure ?? FavoriteAlbumFailure.invalidResponse,
       );
     }
-    _notify();
   }
 
   Future<void> loadMore() async {
@@ -111,15 +140,38 @@ class FavoriteAlbumController extends ChangeNotifier {
       size: pageSize,
     );
     _operation = operation;
-    _isLoadingMore = true;
     _appendFailure = null;
+
+    FavoriteAlbumPageResult? synchronousResult;
+    final future = operation.run().then((value) {
+      synchronousResult = value;
+      return value;
+    });
+    if (synchronousResult != null) {
+      if (identical(_operation, operation)) _operation = null;
+      if (!_isCurrent(generation)) return;
+      _isLoadingMore = false;
+      _applyLoadMoreResult(synchronousResult!, expectedOffset: expectedOffset);
+      _notify();
+      return;
+    }
+
+    _isLoadingMore = true;
     _notify();
 
-    final result = await operation.run();
+    final result = await future;
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
     _isLoadingMore = false;
 
+    _applyLoadMoreResult(result, expectedOffset: expectedOffset);
+    _notify();
+  }
+
+  void _applyLoadMoreResult(
+    FavoriteAlbumPageResult result, {
+    required int expectedOffset,
+  }) {
     if (_validPage(result, expectedOffset: expectedOffset)) {
       final seen = _albums
           .map((album) => '${album.providerId}\u0000${album.opaqueId}')
@@ -145,7 +197,6 @@ class FavoriteAlbumController extends ChangeNotifier {
     } else {
       _appendFailure = result.failure ?? FavoriteAlbumFailure.invalidResponse;
     }
-    _notify();
   }
 
   void retry() {

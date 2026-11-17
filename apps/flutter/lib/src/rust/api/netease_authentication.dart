@@ -8,8 +8,8 @@ import 'authentication.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `classify_system_browser_cancellation`, `clear_attempt`, `failed_export`, `failed_restore`, `failed_sms`, `failed_start`, `failed_system_browser`, `failed_verification`, `lock_attempt`, `map_auth_error`, `map_progress`, `map_sms_error`, `map_system_browser_capture_failure`, `next_attempt`, `successful_sms`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `classify_system_browser_cancellation`, `clear_attempt`, `failed_export`, `failed_refresh_preparation`, `failed_refresh_verification`, `failed_restore`, `failed_sms`, `failed_staged_recovery`, `failed_start`, `failed_system_browser`, `failed_verification`, `lock_attempt`, `map_auth_error`, `map_progress`, `map_refresh_failure`, `map_refresh_preparation`, `map_sms_error`, `map_system_browser_capture_failure`, `next_attempt`, `successful_sms`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 int reserveNeteaseQrLoginStart() => RustLib.instance.api
     .crateApiNeteaseAuthenticationReserveNeteaseQrLoginStart();
@@ -115,6 +115,45 @@ QqMusicCredentialRestore restoreNeteaseCredentialFromSecureStorage({
       secretBytes: secretBytes,
     );
 
+NeteaseStagedRecovery restoreNeteaseStagedCredentialRotation({
+  Uint8List? currentSecretBytes,
+  required List<int> stagedSecretBytes,
+}) => RustLib.instance.api
+    .crateApiNeteaseAuthenticationRestoreNeteaseStagedCredentialRotation(
+      currentSecretBytes: currentSecretBytes,
+      stagedSecretBytes: stagedSecretBytes,
+    );
+
+Future<NeteaseRefreshPreparation> prepareNeteaseRefreshAfterReadRejection() =>
+    RustLib.instance.api
+        .crateApiNeteaseAuthenticationPrepareNeteaseRefreshAfterReadRejection();
+
+Future<NeteaseRefreshPreparation> prepareNeteaseRefreshCheckpoint() => RustLib
+    .instance
+    .api
+    .crateApiNeteaseAuthenticationPrepareNeteaseRefreshCheckpoint();
+
+Future<NeteaseRefreshVerification> verifyNeteaseStagedRefreshCandidate({
+  required int reservationId,
+}) => RustLib.instance.api
+    .crateApiNeteaseAuthenticationVerifyNeteaseStagedRefreshCandidate(
+      reservationId: reservationId,
+    );
+
+NeteaseRefreshFailure? commitNeteaseStagedRefreshCandidate({
+  required int reservationId,
+}) => RustLib.instance.api
+    .crateApiNeteaseAuthenticationCommitNeteaseStagedRefreshCandidate(
+      reservationId: reservationId,
+    );
+
+NeteaseRefreshFailure? abortNeteaseCredentialRefresh({
+  required int reservationId,
+}) => RustLib.instance.api
+    .crateApiNeteaseAuthenticationAbortNeteaseCredentialRefresh(
+      reservationId: reservationId,
+    );
+
 /// Stages the minimal Cookie header returned by an official `NetEase` web login.
 /// The caller must run the normal credential verification before treating the
 /// account as authenticated. Secret bytes are overwritten before returning.
@@ -185,6 +224,71 @@ class NeteaseQrLoginStart {
           failure == other.failure;
 }
 
+enum NeteaseRefreshFailure {
+  productionGateDisabled,
+  noCredential,
+  notDue,
+  notRefreshable,
+  network,
+  rateLimited,
+  riskControl,
+  secondaryVerificationRequired,
+  serviceUnavailable,
+  invalidResponse,
+  reauthenticationRequired,
+  replaced,
+  storageUnavailable,
+}
+
+class NeteaseRefreshPreparation {
+  final int? reservationId;
+  final Uint8List? stagedSecretBytes;
+  final bool reusedNewGeneration;
+  final NeteaseRefreshFailure? failure;
+
+  const NeteaseRefreshPreparation({
+    this.reservationId,
+    this.stagedSecretBytes,
+    required this.reusedNewGeneration,
+    this.failure,
+  });
+
+  @override
+  int get hashCode =>
+      reservationId.hashCode ^
+      stagedSecretBytes.hashCode ^
+      reusedNewGeneration.hashCode ^
+      failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NeteaseRefreshPreparation &&
+          runtimeType == other.runtimeType &&
+          reservationId == other.reservationId &&
+          stagedSecretBytes == other.stagedSecretBytes &&
+          reusedNewGeneration == other.reusedNewGeneration &&
+          failure == other.failure;
+}
+
+class NeteaseRefreshVerification {
+  final Uint8List? currentSecretBytes;
+  final NeteaseRefreshFailure? failure;
+
+  const NeteaseRefreshVerification({this.currentSecretBytes, this.failure});
+
+  @override
+  int get hashCode => currentSecretBytes.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NeteaseRefreshVerification &&
+          runtimeType == other.runtimeType &&
+          currentSecretBytes == other.currentSecretBytes &&
+          failure == other.failure;
+}
+
 enum NeteaseSmsAuthenticationFailure {
   coreUnavailable,
   network,
@@ -215,6 +319,39 @@ class NeteaseSmsAuthenticationOutcome {
           runtimeType == other.runtimeType &&
           success == other.success &&
           failure == other.failure;
+}
+
+class NeteaseStagedRecovery {
+  final NeteaseStagedRecoveryAction? action;
+  final int? reservationId;
+  final NeteaseStagedRecoveryFailure? failure;
+
+  const NeteaseStagedRecovery({this.action, this.reservationId, this.failure});
+
+  @override
+  int get hashCode =>
+      action.hashCode ^ reservationId.hashCode ^ failure.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NeteaseStagedRecovery &&
+          runtimeType == other.runtimeType &&
+          action == other.action &&
+          reservationId == other.reservationId &&
+          failure == other.failure;
+}
+
+enum NeteaseStagedRecoveryAction {
+  verifyCandidate,
+  verifyCommittedCurrent,
+  stale,
+}
+
+enum NeteaseStagedRecoveryFailure {
+  coreUnavailable,
+  unsupportedVersion,
+  invalidDocument,
 }
 
 enum NeteaseSystemBrowserAuthenticationFailure {

@@ -49,6 +49,8 @@ class RustTrackLikeGateway implements TrackLikeGateway {
   RustTrackLikeGateway({
     CredentialVault? credentialVault,
     CredentialVault? netEaseCredentialVault,
+    this.qqSessionContinuation,
+    this.neteaseSessionContinuation,
     TrackLikeMutationOperationFactory? operationFactory,
   }) : _operationFactory = operationFactory ?? _beginRustMutation,
        _qqCredentialVault = SerializedCredentialVault(
@@ -63,6 +65,8 @@ class RustTrackLikeGateway implements TrackLikeGateway {
 
   final CredentialVault _qqCredentialVault;
   final CredentialVault _netEaseCredentialVault;
+  final CredentialRejectionContinuation? qqSessionContinuation;
+  final CredentialRejectionContinuation? neteaseSessionContinuation;
   final TrackLikeMutationOperationFactory _operationFactory;
 
   @override
@@ -83,7 +87,15 @@ class RustTrackLikeGateway implements TrackLikeGateway {
     };
     return vault == null
         ? operation
-        : _VaultCleaningTrackLikeMutationOperation(operation, vault);
+        : _VaultCleaningTrackLikeMutationOperation(
+            operation,
+            vault,
+            continueSession: switch (providerId) {
+              'qq-music' => qqSessionContinuation,
+              'netease-cloud-music' => neteaseSessionContinuation,
+              _ => null,
+            },
+          );
   }
 }
 
@@ -126,11 +138,13 @@ class _VaultCleaningTrackLikeMutationOperation
     implements TrackLikeMutationOperation {
   const _VaultCleaningTrackLikeMutationOperation(
     this._inner,
-    this._credentialVault,
-  );
+    this._credentialVault, {
+    this.continueSession,
+  });
 
   final TrackLikeMutationOperation _inner;
   final CredentialVault _credentialVault;
+  final CredentialRejectionContinuation? continueSession;
 
   @override
   bool cancel() => _inner.cancel();
@@ -147,6 +161,7 @@ class _VaultCleaningTrackLikeMutationOperation
         failure:
             TrackLikeMutationFailure.credentialRejectedStorageCleanupFailed,
       ),
+      continueSession: continueSession,
     );
   }
 }

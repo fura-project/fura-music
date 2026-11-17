@@ -68,7 +68,7 @@ class RustFavoriteArtistGateway implements FavoriteArtistGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final FavoriteArtistPageLoadOperationFactory? operationFactory;
-  final QqSessionContinuationCoordinator? sessionContinuation;
+  final SessionContinuationCoordinator? sessionContinuation;
 
   @override
   FavoriteArtistPageLoadOperation beginLoad({
@@ -79,7 +79,7 @@ class RustFavoriteArtistGateway implements FavoriteArtistGateway {
         operationFactory?.call(offset, size) ??
         _beginRustLoad(providerId, offset, size),
     _credentialVault,
-    providerId == 'qq-music' ? sessionContinuation : null,
+    sessionContinuation,
   );
 }
 
@@ -126,7 +126,7 @@ class _ContinuingFavoriteArtistPageLoadOperation
 
   final _FavoriteArtistPageRetryFactory _factory;
   final CredentialVault _credentialVault;
-  final QqSessionContinuationCoordinator? _continuation;
+  final SessionContinuationCoordinator? _continuation;
   FavoriteArtistPageLoadOperation _active;
   bool _cancelled = false;
 

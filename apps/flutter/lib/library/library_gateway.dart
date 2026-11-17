@@ -73,13 +73,13 @@ class RustUserLibraryGateway implements UserLibraryGateway {
   final CredentialVault _credentialVault;
   final String providerId;
   final UserLibraryLoadOperationFactory? operationFactory;
-  final QqSessionContinuationCoordinator? sessionContinuation;
+  final SessionContinuationCoordinator? sessionContinuation;
 
   @override
   UserLibraryLoadOperation beginLoad() => _ContinuingLibraryLoadOperation(
     () => operationFactory?.call() ?? _beginRustUserLibraryLoad(providerId),
     _credentialVault,
-    providerId == 'qq-music' ? sessionContinuation : null,
+    sessionContinuation,
   );
 }
 
@@ -156,7 +156,7 @@ class _ContinuingLibraryLoadOperation implements UserLibraryLoadOperation {
 
   final UserLibraryLoadOperationFactory _factory;
   final CredentialVault _credentialVault;
-  final QqSessionContinuationCoordinator? _continuation;
+  final SessionContinuationCoordinator? _continuation;
   UserLibraryLoadOperation _active;
   bool _cancelled = false;
 

@@ -7,6 +7,8 @@ import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/authentication/netease_official_web_login.dart';
 import 'package:flutterustmusic/src/rust/api/authentication.dart' as bridge;
+import 'package:flutterustmusic/src/rust/api/netease_authentication.dart'
+    as netease_bridge;
 
 void main() {
   test('imports vault bytes once and zeroes the mutable buffer', () async {
@@ -751,6 +753,87 @@ void main() {
     expect(broker.clearCalls, 1);
     expect(vault.deleteCalls, 1);
   });
+
+  test(
+    'NetEase startup recovery verifies publishes commits and removes stage',
+    () async {
+      final current = _MemoryVault(Uint8List.fromList(<int>[1]));
+      final staged = _MemoryVault(Uint8List.fromList(<int>[2]));
+      final vault = SerializedCredentialVault(current, stagedVault: staged);
+      var commitCalls = 0;
+      final gateway = RustNeteaseAuthenticationGateway(
+        credentialVault: vault,
+        officialWebLoginBroker: _FakeOfficialWebBroker(),
+        credentialRotationRestorer:
+            ({required currentSecretBytes, required stagedSecretBytes}) {
+              expect(currentSecretBytes, orderedEquals(<int>[1]));
+              expect(stagedSecretBytes, orderedEquals(<int>[2]));
+              return const netease_bridge.NeteaseStagedRecovery(
+                action:
+                    netease_bridge.NeteaseStagedRecoveryAction.verifyCandidate,
+                reservationId: 17,
+              );
+            },
+        refreshVerifier: ({required reservationId}) async {
+          expect(reservationId, 17);
+          return netease_bridge.NeteaseRefreshVerification(
+            currentSecretBytes: Uint8List.fromList(<int>[3]),
+          );
+        },
+        refreshCommitter: ({required reservationId}) {
+          expect(reservationId, 17);
+          commitCalls++;
+          return null;
+        },
+      );
+
+      expect(
+        await gateway.restoreCredential(),
+        CredentialRestoreResult.verificationRequired,
+      );
+      expect(
+        await gateway.beginCredentialVerification().run(),
+        CredentialVerificationResult.authenticated,
+      );
+      expect(commitCalls, 1);
+      expect(await current.read(), orderedEquals(<int>[3]));
+      expect(await staged.read(), isNull);
+    },
+  );
+
+  test(
+    'NetEase resume recovery retains a transient staged candidate',
+    () async {
+      final current = _MemoryVault(Uint8List.fromList(<int>[1]));
+      final staged = _MemoryVault(Uint8List.fromList(<int>[2]));
+      final gateway = RustNeteaseAuthenticationGateway(
+        credentialVault: SerializedCredentialVault(
+          current,
+          stagedVault: staged,
+        ),
+        officialWebLoginBroker: _FakeOfficialWebBroker(),
+        credentialRotationRestorer:
+            ({required currentSecretBytes, required stagedSecretBytes}) =>
+                const netease_bridge.NeteaseStagedRecovery(
+                  action: netease_bridge
+                      .NeteaseStagedRecoveryAction
+                      .verifyCandidate,
+                  reservationId: 18,
+                ),
+        refreshVerifier: ({required reservationId}) async =>
+            const netease_bridge.NeteaseRefreshVerification(
+              failure: netease_bridge.NeteaseRefreshFailure.network,
+            ),
+      );
+
+      expect(
+        await gateway.recoverStagedCredentialIfPresent(),
+        StagedCredentialRecoveryResult.temporarilyUnavailable,
+      );
+      expect(await current.read(), orderedEquals(<int>[1]));
+      expect(await staged.read(), orderedEquals(<int>[2]));
+    },
+  );
 
   test('NetEase sign out reports website cleanup independently', () async {
     final vault = _FakeVault();

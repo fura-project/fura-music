@@ -44,6 +44,7 @@ typedef PlaylistDeletionOperationFactory = PlaylistDeletionOperation Function(
 class RustPlaylistDeletionGateway implements PlaylistDeletionGateway {
   RustPlaylistDeletionGateway({
     CredentialVault? credentialVault,
+    this.sessionContinuation,
     PlaylistDeletionOperationFactory? operationFactory,
   }) : _operationFactory = operationFactory ?? _beginRustDeletion,
        _credentialVault = SerializedCredentialVault(
@@ -51,6 +52,7 @@ class RustPlaylistDeletionGateway implements PlaylistDeletionGateway {
        );
 
   final CredentialVault _credentialVault;
+  final CredentialRejectionContinuation? sessionContinuation;
   final PlaylistDeletionOperationFactory _operationFactory;
 
   @override
@@ -60,6 +62,7 @@ class RustPlaylistDeletionGateway implements PlaylistDeletionGateway {
   }) => _VaultCleaningPlaylistDeletionOperation(
     _operationFactory(providerId, opaquePlaylistId),
     _credentialVault,
+    continueSession: sessionContinuation,
   );
 }
 
@@ -97,11 +100,13 @@ class _VaultCleaningPlaylistDeletionOperation
     implements PlaylistDeletionOperation {
   const _VaultCleaningPlaylistDeletionOperation(
     this._inner,
-    this._credentialVault,
-  );
+    this._credentialVault, {
+    this.continueSession,
+  });
 
   final PlaylistDeletionOperation _inner;
   final CredentialVault _credentialVault;
+  final CredentialRejectionContinuation? continueSession;
 
   @override
   bool cancel() => _inner.cancel();
@@ -117,6 +122,7 @@ class _VaultCleaningPlaylistDeletionOperation
       cleanupFailureResult: const PlaylistDeletionResult(
         failure: PlaylistDeletionFailure.credentialRejectedStorageCleanupFailed,
       ),
+      continueSession: continueSession,
     );
   }
 }

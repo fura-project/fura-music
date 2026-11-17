@@ -79,10 +79,7 @@ class _FavoriteAlbumsPageState extends State<FavoriteAlbumsPage> {
       child: AnimatedBuilder(
         animation: _pageListenable,
         builder: (context, _) {
-          final body = AnimatedSwitcher(
-            duration: const Duration(milliseconds: 240),
-            child: _body(context),
-          );
+          final body = MusicStageTransition(child: _body(context));
           return Column(
             children: [
               if (widget.showHeader)
@@ -293,9 +290,19 @@ class _AlbumCollection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomClearance = MusicViewportClearance.bottomOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop = constraints.maxWidth >= 760;
+        final horizontalPadding = desktop
+            ? MusicSpacing.pageWide
+            : MusicSpacing.pageCompact;
+        final scrollPadding = EdgeInsets.fromLTRB(
+          horizontalPadding,
+          0,
+          horizontalPadding,
+          MusicSpacing.pageCompact + bottomClearance,
+        );
         final footer = _CollectionFooter(
           isLoading: isLoadingMore,
           failure: appendFailure,
@@ -305,71 +312,79 @@ class _AlbumCollection extends StatelessWidget {
           onRetry: onRetryMore,
           providerDisplayName: providerDisplayName,
         );
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
-            0,
-            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
-            MusicSpacing.pageCompact,
-          ),
-          child: Column(
-            children: [
-              if (omittedAlbumCount > 0) ...[
-                PartialResultsNotice(
+        return Column(
+          children: [
+            if (omittedAlbumCount > 0)
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  0,
+                  horizontalPadding,
+                  8,
+                ),
+                child: PartialResultsNotice(
                   omittedCount: omittedAlbumCount,
                   resultRevision: partialResultRevision,
                 ),
-                const SizedBox(height: 8),
-              ],
-              Expanded(
-                child: BoundedViewportPageDemand(
-                  enabled: canLoadMore,
-                  onDemand: onLoadMore,
-                  child: desktop
-                      ? GridView.builder(
-                          key: const PageStorageKey<String>(
-                            'favorite-album-grid',
-                          ),
-                          gridDelegate:
-                              const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 220,
-                                mainAxisExtent: 255,
-                                crossAxisSpacing: 24,
-                                mainAxisSpacing: 28,
-                              ),
-                          itemCount: albums.length + 1,
-                          itemBuilder: (context, index) =>
-                              index == albums.length
-                              ? footer
-                              : _AlbumGridItem(
-                                  album: albums[index],
-                                  onTap: () => onOpenAlbum(albums[index]),
-                                  onUnfavorite: onUnfavorite == null
-                                      ? null
-                                      : () => onUnfavorite!(albums[index]),
-                                ),
-                        )
-                      : ListView.separated(
-                          key: const PageStorageKey<String>(
-                            'favorite-album-list',
-                          ),
-                          itemCount: albums.length + 1,
-                          separatorBuilder: (_, _) => const SizedBox(height: 8),
-                          itemBuilder: (context, index) =>
-                              index == albums.length
-                              ? footer
-                              : _AlbumListItem(
-                                  album: albums[index],
-                                  onTap: () => onOpenAlbum(albums[index]),
-                                  onUnfavorite: onUnfavorite == null
-                                      ? null
-                                      : () => onUnfavorite!(albums[index]),
-                                ),
-                        ),
-                ),
               ),
-            ],
-          ),
+            Expanded(
+              child: BoundedViewportPageDemand(
+                enabled: canLoadMore,
+                onDemand: onLoadMore,
+                child: desktop
+                    ? CustomScrollView(
+                        key: const PageStorageKey<String>(
+                          'favorite-album-grid',
+                        ),
+                        slivers: [
+                          SliverPadding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: horizontalPadding,
+                            ),
+                            sliver: SliverGrid.builder(
+                              gridDelegate:
+                                  const SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 220,
+                                    mainAxisExtent: 255,
+                                    crossAxisSpacing: 24,
+                                    mainAxisSpacing: 28,
+                                  ),
+                              itemCount: albums.length,
+                              itemBuilder: (context, index) => _AlbumGridItem(
+                                album: albums[index],
+                                onTap: () => onOpenAlbum(albums[index]),
+                                onUnfavorite: onUnfavorite == null
+                                    ? null
+                                    : () => onUnfavorite!(albums[index]),
+                              ),
+                            ),
+                          ),
+                          SliverPadding(
+                            padding: scrollPadding,
+                            sliver: SliverToBoxAdapter(child: footer),
+                          ),
+                        ],
+                      )
+                    : ListView.separated(
+                        key: const PageStorageKey<String>(
+                          'favorite-album-list',
+                        ),
+                        padding: scrollPadding,
+                        itemCount: albums.length + 1,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) => index == albums.length
+                            ? footer
+                            : _AlbumListItem(
+                                album: albums[index],
+                                onTap: () => onOpenAlbum(albums[index]),
+                                onUnfavorite: onUnfavorite == null
+                                    ? null
+                                    : () => onUnfavorite!(albums[index]),
+                              ),
+                      ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -434,45 +449,94 @@ class _AlbumListItem extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onUnfavorite;
 
+  Future<void> _showCompactActions(BuildContext context) async {
+    final action = onUnfavorite;
+    if (action == null) return;
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                album.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            ListTile(
+              key: const ValueKey('unfavorite-album-menu-item'),
+              leading: const Icon(Icons.heart_broken_outlined),
+              title: Text(sheetContext.l10n.libraryUnfavoriteAlbum),
+              onTap: () => Navigator.pop(sheetContext, true),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      action();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return _FavoriteAlbumItemMenu(
-      onUnfavorite: onUnfavorite,
-      child: Semantics(
-        label: context.l10n.favoriteAlbumSemantics(album.title),
-        button: true,
-        excludeSemantics: true,
-        onTap: onTap,
-        child: InkWell(
-          key: ValueKey('favorite-album-${album.opaqueId}'),
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                SizedBox.square(
-                  dimension: 72,
-                  child: _AlbumArtwork(album: album),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    album.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+    final openActions = onUnfavorite == null
+        ? null
+        : () => unawaited(_showCompactActions(context));
+    return Row(
+      children: [
+        Expanded(
+          child: Semantics(
+            label: context.l10n.favoriteAlbumSemantics(album.title),
+            button: true,
+            excludeSemantics: true,
+            onTap: onTap,
+            child: InkWell(
+              key: ValueKey('favorite-album-${album.opaqueId}'),
+              borderRadius: BorderRadius.circular(18),
+              onTap: onTap,
+              onLongPress: openActions,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    SizedBox.square(
+                      dimension: 72,
+                      child: _AlbumArtwork(album: album),
                     ),
-                  ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        album.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (onUnfavorite == null)
+                      const Icon(Icons.chevron_right_rounded),
+                  ],
                 ),
-                const Icon(Icons.chevron_right_rounded),
-              ],
+              ),
             ),
           ),
         ),
-      ),
+        if (openActions != null)
+          IconButton(
+            key: ValueKey('favorite-album-more-${album.opaqueId}'),
+            tooltip: context.l10n.commonMoreActions,
+            onPressed: openActions,
+            icon: const Icon(Icons.more_vert_rounded),
+          ),
+      ],
     );
   }
 }
@@ -554,7 +618,11 @@ class _AlbumArtwork extends StatelessWidget {
           : Image.network(
               uri,
               headers: musicArtworkRequestHeaders(uri),
+              width: double.infinity,
+              height: double.infinity,
               fit: BoxFit.cover,
+              gaplessPlayback: true,
+              frameBuilder: musicArtworkFrameBuilder(fallback),
               errorBuilder: musicArtworkErrorBuilder(uri, fallback),
             ),
     );
@@ -586,23 +654,31 @@ class _CollectionFooter extends StatelessWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(20),
-          child: CircularProgressIndicator(),
+          child: SizedBox.square(
+            dimension: 28,
+            child: CircularProgressIndicator(strokeWidth: 3),
+          ),
         ),
       );
     }
     if (failure != null) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(_failureCopy(context.l10n, failure, providerDisplayName)),
-              if (canRetry)
-                TextButton(
+              Text(
+                _failureCopy(context.l10n, failure, providerDisplayName),
+                textAlign: TextAlign.center,
+              ),
+              if (canRetry) ...[
+                const SizedBox(height: 8),
+                FilledButton.tonal(
                   onPressed: onRetry,
                   child: Text(context.l10n.commonRetry),
                 ),
+              ],
             ],
           ),
         ),
@@ -611,8 +687,8 @@ class _CollectionFooter extends StatelessWidget {
     if (canLoadMore) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: OutlinedButton(
+          padding: const EdgeInsets.all(16),
+          child: FilledButton.tonal(
             key: const ValueKey('favorite-albums-load-more'),
             onPressed: onLoadMore,
             child: Text(context.l10n.commonLoadMore),

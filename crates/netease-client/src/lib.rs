@@ -2,8 +2,9 @@
 mod auth;
 mod catalog;
 pub use auth::{
-    Account, CreatedPlaylist, Credential, CredentialRefreshError, QrKey, QrPoll,
-    RecentSongsSnapshot, SmsLoginChallenge, UserPlaylist, UserPlaylistPage,
+    Account, CreatedPlaylist, Credential, CredentialCookieRotation, CredentialRefreshError,
+    CredentialRefreshObservation, QrKey, QrPoll, RecentSongsSnapshot, SmsLoginChallenge,
+    UserPlaylist, UserPlaylistPage,
 };
 mod crypto;
 mod lyrics;
@@ -46,6 +47,34 @@ impl std::fmt::Display for Error {
     }
 }
 impl std::error::Error for Error {}
+
+fn session_diagnostic(message: std::fmt::Arguments<'_>) {
+    if cfg!(debug_assertions)
+        || matches!(
+            std::env::var("FURA_SESSION_DIAGNOSTIC").as_deref(),
+            Ok("1" | "true")
+        )
+    {
+        eprintln!("FURA_SESSION_DIAGNOSTIC provider=netease-cloud-music {message}");
+    }
+}
+
+fn diagnostic_endpoint(path: &str) -> &'static str {
+    match path {
+        "/api/nuser/account/get" => "account",
+        "/api/user/playlist" => "user_playlists",
+        "/api/v6/playlist/detail" => "playlist_detail",
+        "/api/v3/song/detail" => "song_detail",
+        "/api/v3/discovery/recommend/songs" => "daily_tracks",
+        "/api/v1/discovery/recommend/resource" => "personalized_playlists",
+        "/api/v1/radio/get" => "personal_fm",
+        "/api/playlist/manipulate/tracks" => "playlist_mutation",
+        "/api/playlist/create" => "playlist_create",
+        "/api/playlist/remove" => "playlist_delete",
+        "/api/login/token/refresh" => "credential_refresh",
+        _ => "other",
+    }
+}
 
 pub struct NeteaseClient<T> {
     transport: T,
@@ -160,6 +189,21 @@ impl<T: Transport> NeteaseClient<T> {
         cookie: Option<&str>,
     ) -> Result<(Value, Vec<String>), Error> {
         let (value, cookies) = self.raw_request(path, payload, eapi, cookie).await?;
+        if cookie.is_some()
+            && let Some(code) = value.get("code").and_then(Value::as_i64)
+            && code != 200
+        {
+            session_diagnostic(format_args!(
+                "phase=authenticated_response endpoint={} business_code={} classification={}",
+                diagnostic_endpoint(path),
+                code,
+                if code == 301 {
+                    "credential_rejected"
+                } else {
+                    "upstream_unknown"
+                }
+            ));
+        }
         Self::accepted_response(value, cookies, cookie.is_some())
     }
     fn accepted_response(

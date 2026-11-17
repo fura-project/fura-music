@@ -30,6 +30,7 @@ class NewAlbumController extends ChangeNotifier {
   NewAlbumPageLoadOperation? _operation;
   int _generation = 0;
   bool _disposed = false;
+  final Map<NewAlbumRegion, _CachedNewAlbumRegion> _regionCache = {};
 
   NewAlbumRegion get region => _region;
   NewAlbumStage get stage => _stage;
@@ -53,8 +54,40 @@ class NewAlbumController extends ChangeNotifier {
 
   void selectRegion(NewAlbumRegion region) {
     if (_region == region) return;
+    _saveCurrentRegionToCache();
     _region = region;
+    final cached = _regionCache[region];
+    if (cached != null) {
+      ++_generation;
+      _operation?.cancel();
+      _operation = null;
+      _releases = cached.releases;
+      _failure = null;
+      _appendFailure = null;
+      _total = cached.total;
+      _nextOffset = cached.nextOffset;
+      _hasMore = cached.hasMore;
+      _omittedReleaseCount = cached.omittedReleaseCount;
+      _isLoadingMore = false;
+      _stage = cached.stage;
+      _notify();
+      return;
+    }
     unawaited(_loadFirstPage(region));
+  }
+
+  void _saveCurrentRegionToCache() {
+    if (_stage != NewAlbumStage.content && _stage != NewAlbumStage.empty) {
+      return;
+    }
+    _regionCache[_region] = _CachedNewAlbumRegion(
+      stage: _stage,
+      releases: _releases,
+      total: _total,
+      nextOffset: _nextOffset,
+      hasMore: _hasMore,
+      omittedReleaseCount: _omittedReleaseCount,
+    );
   }
 
   Future<void> _loadFirstPage(NewAlbumRegion expectedRegion) async {
@@ -91,6 +124,7 @@ class NewAlbumController extends ChangeNotifier {
       _stage = _releases.isEmpty && _omittedReleaseCount == 0
           ? NewAlbumStage.empty
           : NewAlbumStage.content;
+      _saveCurrentRegionToCache();
     } else {
       _failure = result.failure ?? NewAlbumFailure.invalidResponse;
       _stage = NewAlbumStage.error;
@@ -140,6 +174,7 @@ class NewAlbumController extends ChangeNotifier {
       _hasMore = result.hasMore;
       _omittedReleaseCount += result.omittedReleaseCount;
       if (result.omittedReleaseCount > 0) _partialResultRevision += 1;
+      _saveCurrentRegionToCache();
     } else {
       _appendFailure = result.failure ?? NewAlbumFailure.invalidResponse;
     }
@@ -193,4 +228,22 @@ class NewAlbumController extends ChangeNotifier {
     _operation = null;
     super.dispose();
   }
+}
+
+class _CachedNewAlbumRegion {
+  const _CachedNewAlbumRegion({
+    required this.stage,
+    required this.releases,
+    required this.total,
+    required this.nextOffset,
+    required this.hasMore,
+    required this.omittedReleaseCount,
+  });
+
+  final NewAlbumStage stage;
+  final List<NewAlbumRelease> releases;
+  final int total;
+  final int nextOffset;
+  final bool hasMore;
+  final int omittedReleaseCount;
 }

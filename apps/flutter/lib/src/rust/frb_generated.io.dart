@@ -979,8 +979,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseRefreshFailure dco_decode_box_autoadd_netease_refresh_failure(
+    dynamic raw,
+  );
+
+  @protected
   NeteaseSmsAuthenticationFailure
   dco_decode_box_autoadd_netease_sms_authentication_failure(dynamic raw);
+
+  @protected
+  NeteaseStagedRecoveryAction
+  dco_decode_box_autoadd_netease_staged_recovery_action(dynamic raw);
+
+  @protected
+  NeteaseStagedRecoveryFailure
+  dco_decode_box_autoadd_netease_staged_recovery_failure(dynamic raw);
 
   @protected
   NeteaseSystemBrowserAuthenticationFailure
@@ -1335,12 +1348,36 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NeteaseQrLoginStart dco_decode_netease_qr_login_start(dynamic raw);
 
   @protected
+  NeteaseRefreshFailure dco_decode_netease_refresh_failure(dynamic raw);
+
+  @protected
+  NeteaseRefreshPreparation dco_decode_netease_refresh_preparation(dynamic raw);
+
+  @protected
+  NeteaseRefreshVerification dco_decode_netease_refresh_verification(
+    dynamic raw,
+  );
+
+  @protected
   NeteaseSmsAuthenticationFailure dco_decode_netease_sms_authentication_failure(
     dynamic raw,
   );
 
   @protected
   NeteaseSmsAuthenticationOutcome dco_decode_netease_sms_authentication_outcome(
+    dynamic raw,
+  );
+
+  @protected
+  NeteaseStagedRecovery dco_decode_netease_staged_recovery(dynamic raw);
+
+  @protected
+  NeteaseStagedRecoveryAction dco_decode_netease_staged_recovery_action(
+    dynamic raw,
+  );
+
+  @protected
+  NeteaseStagedRecoveryFailure dco_decode_netease_staged_recovery_failure(
     dynamic raw,
   );
 
@@ -1417,8 +1454,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseRefreshFailure? dco_decode_opt_box_autoadd_netease_refresh_failure(
+    dynamic raw,
+  );
+
+  @protected
   NeteaseSmsAuthenticationFailure?
   dco_decode_opt_box_autoadd_netease_sms_authentication_failure(dynamic raw);
+
+  @protected
+  NeteaseStagedRecoveryAction?
+  dco_decode_opt_box_autoadd_netease_staged_recovery_action(dynamic raw);
+
+  @protected
+  NeteaseStagedRecoveryFailure?
+  dco_decode_opt_box_autoadd_netease_staged_recovery_failure(dynamic raw);
 
   @protected
   NeteaseSystemBrowserAuthenticationFailure?
@@ -2916,8 +2966,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseRefreshFailure sse_decode_box_autoadd_netease_refresh_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   NeteaseSmsAuthenticationFailure
   sse_decode_box_autoadd_netease_sms_authentication_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseStagedRecoveryAction
+  sse_decode_box_autoadd_netease_staged_recovery_action(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseStagedRecoveryFailure
+  sse_decode_box_autoadd_netease_staged_recovery_failure(
     SseDeserializer deserializer,
   );
 
@@ -3376,12 +3443,42 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseRefreshFailure sse_decode_netease_refresh_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseRefreshPreparation sse_decode_netease_refresh_preparation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseRefreshVerification sse_decode_netease_refresh_verification(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   NeteaseSmsAuthenticationFailure sse_decode_netease_sms_authentication_failure(
     SseDeserializer deserializer,
   );
 
   @protected
   NeteaseSmsAuthenticationOutcome sse_decode_netease_sms_authentication_outcome(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseStagedRecovery sse_decode_netease_staged_recovery(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseStagedRecoveryAction sse_decode_netease_staged_recovery_action(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseStagedRecoveryFailure sse_decode_netease_staged_recovery_failure(
     SseDeserializer deserializer,
   );
 
@@ -3466,8 +3563,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  NeteaseRefreshFailure? sse_decode_opt_box_autoadd_netease_refresh_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   NeteaseSmsAuthenticationFailure?
   sse_decode_opt_box_autoadd_netease_sms_authentication_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseStagedRecoveryAction?
+  sse_decode_opt_box_autoadd_netease_staged_recovery_action(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NeteaseStagedRecoveryFailure?
+  sse_decode_opt_box_autoadd_netease_staged_recovery_failure(
     SseDeserializer deserializer,
   );
 
@@ -5263,8 +5377,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_netease_refresh_failure(
+    NeteaseRefreshFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_netease_sms_authentication_failure(
     NeteaseSmsAuthenticationFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_netease_staged_recovery_action(
+    NeteaseStagedRecoveryAction self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_netease_staged_recovery_failure(
+    NeteaseStagedRecoveryFailure self,
     SseSerializer serializer,
   );
 
@@ -5770,6 +5902,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_netease_refresh_failure(
+    NeteaseRefreshFailure self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_netease_refresh_preparation(
+    NeteaseRefreshPreparation self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_netease_refresh_verification(
+    NeteaseRefreshVerification self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_netease_sms_authentication_failure(
     NeteaseSmsAuthenticationFailure self,
     SseSerializer serializer,
@@ -5778,6 +5928,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_netease_sms_authentication_outcome(
     NeteaseSmsAuthenticationOutcome self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_netease_staged_recovery(
+    NeteaseStagedRecovery self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_netease_staged_recovery_action(
+    NeteaseStagedRecoveryAction self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_netease_staged_recovery_failure(
+    NeteaseStagedRecoveryFailure self,
     SseSerializer serializer,
   );
 
@@ -5872,8 +6040,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_netease_refresh_failure(
+    NeteaseRefreshFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_netease_sms_authentication_failure(
     NeteaseSmsAuthenticationFailure? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_netease_staged_recovery_action(
+    NeteaseStagedRecoveryAction? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_netease_staged_recovery_failure(
+    NeteaseStagedRecoveryFailure? self,
     SseSerializer serializer,
   );
 

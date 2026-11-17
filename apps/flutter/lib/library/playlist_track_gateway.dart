@@ -51,13 +51,18 @@ typedef PlaylistTrackMutationOperationFactory =
 class RustPlaylistTrackGateway implements PlaylistTrackGateway {
   RustPlaylistTrackGateway({
     CredentialVault? credentialVault,
+    this.qqSessionContinuation,
+    CredentialRejectionContinuation? sessionContinuation,
     PlaylistTrackMutationOperationFactory? operationFactory,
   }) : _operationFactory = operationFactory ?? _beginRustMutation,
        _credentialVault = SerializedCredentialVault(
          credentialVault ?? PlatformCredentialVault(),
-       );
+       ),
+       _sessionContinuation = sessionContinuation ?? qqSessionContinuation;
 
   final CredentialVault _credentialVault;
+  final CredentialRejectionContinuation? qqSessionContinuation;
+  final CredentialRejectionContinuation? _sessionContinuation;
   final PlaylistTrackMutationOperationFactory _operationFactory;
 
   @override
@@ -74,6 +79,7 @@ class RustPlaylistTrackGateway implements PlaylistTrackGateway {
       desiredState,
     ),
     _credentialVault,
+    continueSession: _sessionContinuation,
   );
 }
 
@@ -119,11 +125,13 @@ class _VaultCleaningPlaylistTrackMutationOperation
     implements PlaylistTrackMutationOperation {
   const _VaultCleaningPlaylistTrackMutationOperation(
     this._inner,
-    this._credentialVault,
-  );
+    this._credentialVault, {
+    this.continueSession,
+  });
 
   final PlaylistTrackMutationOperation _inner;
   final CredentialVault _credentialVault;
+  final CredentialRejectionContinuation? continueSession;
 
   @override
   bool cancel() => _inner.cancel();
@@ -140,6 +148,7 @@ class _VaultCleaningPlaylistTrackMutationOperation
         failure:
             PlaylistTrackMutationFailure.credentialRejectedStorageCleanupFailed,
       ),
+      continueSession: continueSession,
     );
   }
 }

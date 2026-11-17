@@ -120,7 +120,10 @@ class MusicTrackTile extends StatelessWidget {
                   PopupMenuItem(
                     key: const ValueKey('track-context-album'),
                     value: _TrackContextDestination(album: album),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                     child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.album_rounded),
                       title: Text(context.l10n.commonOpenAlbum),
                       subtitle: Text(
@@ -136,7 +139,10 @@ class MusicTrackTile extends StatelessWidget {
                     value: _TrackContextDestination(
                       artist: contextArtists[index],
                     ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                     child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.person_rounded),
                       title: Text(context.l10n.commonOpenArtist),
                       subtitle: Text(
@@ -204,6 +210,8 @@ class _TrackArtwork extends StatelessWidget {
                 headers: musicArtworkRequestHeaders(artworkUri),
                 fit: BoxFit.cover,
                 excludeFromSemantics: true,
+                gaplessPlayback: true,
+                frameBuilder: musicArtworkFrameBuilder(placeholder),
                 errorBuilder: musicArtworkErrorBuilder(artworkUri, placeholder),
               ),
       ),

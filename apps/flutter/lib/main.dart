@@ -9,6 +9,7 @@ import 'package:flutterustmusic/authenticated_dependencies.dart';
 import 'package:flutterustmusic/authentication/account_summary_gateway.dart';
 import 'package:flutterustmusic/authentication/credential_vault.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/authentication/netease_session_continuation.dart';
 import 'package:flutterustmusic/authentication/qq_music_media_credential_cleanup.dart';
 import 'package:flutterustmusic/authentication/qq_session_continuation.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
@@ -92,6 +93,9 @@ Future<void> main(List<String> arguments) async {
     PlatformCredentialVault(
       credentialKey: PlatformCredentialVault.netEaseCredentialKey,
     ),
+    stagedVault: PlatformCredentialVault(
+      credentialKey: PlatformCredentialVault.netEaseStagedCredentialKey,
+    ),
   );
   final qqAuthenticationGateway = RustQqMusicAuthenticationGateway(
     credentialVault: qqCredentialVault,
@@ -104,6 +108,11 @@ Future<void> main(List<String> arguments) async {
   final netEaseAuthenticationGateway = RustNeteaseAuthenticationGateway(
     credentialVault: netEaseCredentialVault,
   );
+  final netEaseSessionContinuation = NeteaseSessionContinuationCoordinator(
+    netEaseCredentialVault,
+    recoverStagedCredential:
+        netEaseAuthenticationGateway.recoverStagedCredentialIfPresent,
+  );
   final rustMediaResolutionGateway = RustMediaResolutionGateway(
     preferredQuality: settingsLoad.settings.playbackQuality.audioPreference,
   );
@@ -114,14 +123,21 @@ Future<void> main(List<String> arguments) async {
           AppMusicProvider.qqMusic.providerId: qqCredentialVault,
           AppMusicProvider.netEaseCloudMusic.providerId: netEaseCredentialVault,
         },
-        qqSessionContinuation: qqSessionContinuation,
+        sessionContinuations: {
+          AppMusicProvider.qqMusic.providerId: qqSessionContinuation,
+          AppMusicProvider.netEaseCloudMusic.providerId:
+              netEaseSessionContinuation,
+        },
       );
   final lyricGateway = RustLyricGateway(
     credentialVaults: {
       AppMusicProvider.qqMusic.providerId: qqCredentialVault,
       AppMusicProvider.netEaseCloudMusic.providerId: netEaseCredentialVault,
     },
-    qqSessionContinuation: qqSessionContinuation,
+    sessionContinuations: {
+      AppMusicProvider.qqMusic.providerId: qqSessionContinuation,
+      AppMusicProvider.netEaseCloudMusic.providerId: netEaseSessionContinuation,
+    },
   );
   logStartupPhase(phase: 'audio_engine_construct', outcome: 'started');
   late final ForegroundAudioEngine audioEngine;
@@ -189,7 +205,7 @@ Future<void> main(List<String> arguments) async {
         AppMusicProvider.qqMusic.providerId,
       ),
       desktopQuickLoginEnabled: _desktopQuickLoginSupported,
-      qqSessionContinuation: qqSessionContinuation,
+      sessionContinuation: qqSessionContinuation,
     ),
     netEase: _buildProviderDependencies(
       provider: AppMusicProvider.netEaseCloudMusic,
@@ -200,6 +216,7 @@ Future<void> main(List<String> arguments) async {
         bootstrap,
         AppMusicProvider.netEaseCloudMusic.providerId,
       ),
+      sessionContinuation: netEaseSessionContinuation,
     ),
   );
 
@@ -217,6 +234,7 @@ Future<void> main(List<String> arguments) async {
       initialSettings: settingsLoad.settings,
       settingsStore: settingsStore,
       qqSessionContinuation: qqSessionContinuation,
+      neteaseSessionContinuation: netEaseSessionContinuation,
       onPlaybackQualityChanged: (preference) {
         rustMediaResolutionGateway.updatePreferredQuality(
           preference.audioPreference,
@@ -238,10 +256,15 @@ MusicProviderDependencies _buildProviderDependencies({
   required CredentialRestoreResult initialCredentialRestore,
   required Iterable<String> implementedCapabilities,
   bool desktopQuickLoginEnabled = false,
-  QqSessionContinuationCoordinator? qqSessionContinuation,
+  SessionContinuationCoordinator? sessionContinuation,
 }) {
   final providerId = provider.providerId;
   final qqMusic = provider == AppMusicProvider.qqMusic;
+  final continueSession = sessionContinuation != null
+      ? () async {
+          await sessionContinuation.continueAfterReadRejection();
+        }
+      : null;
   final trackSearchGateway = RustTrackSearchGateway(providerId: providerId);
   return MusicProviderDependencies(
     authenticationGateway: authenticationGateway,
@@ -249,12 +272,12 @@ MusicProviderDependencies _buildProviderDependencies({
       accountSummaryGateway: RustAccountSummaryGateway(
         providerId: providerId,
         credentialVault: credentialVault,
-        sessionContinuation: qqMusic ? qqSessionContinuation : null,
+        sessionContinuation: sessionContinuation,
       ),
       dailyRecommendationGateway: RustDailyRecommendationGateway(
         providerId: providerId,
         credentialVault: credentialVault,
-        sessionContinuation: qqMusic ? qqSessionContinuation : null,
+        sessionContinuation: sessionContinuation,
       ),
       officialPlaylistGateway: qqMusic
           ? RustOfficialPlaylistGateway(providerId: providerId)
@@ -262,12 +285,12 @@ MusicProviderDependencies _buildProviderDependencies({
       personalizedPlaylistsGateway: RustPersonalizedPlaylistsGateway(
         providerId: providerId,
         credentialVault: credentialVault,
-        sessionContinuation: qqMusic ? qqSessionContinuation : null,
+        sessionContinuation: sessionContinuation,
       ),
       personalizedTracksGateway: RustPersonalizedTracksGateway(
         providerId: providerId,
         credentialVault: credentialVault,
-        sessionContinuation: qqMusic ? qqSessionContinuation : null,
+        sessionContinuation: sessionContinuation,
       ),
       relatedTracksGateway: const RustRelatedTracksGateway(),
       recentListeningFactory: RustRecentListeningGateway.new,
@@ -276,11 +299,11 @@ MusicProviderDependencies _buildProviderDependencies({
       libraryGateway: RustUserLibraryGateway(
         providerId: providerId,
         credentialVault: credentialVault,
-        sessionContinuation: qqMusic ? qqSessionContinuation : null,
+        sessionContinuation: sessionContinuation,
       ),
       playlistDetailGateway: RustPlaylistDetailGateway(
         credentialVault: credentialVault,
-        sessionContinuation: qqMusic ? qqSessionContinuation : null,
+        sessionContinuation: sessionContinuation,
       ),
       albumTrackGateway: const RustAlbumTrackGateway(),
       albumDetailsGateway: const RustAlbumDetailsGateway(),
@@ -289,31 +312,44 @@ MusicProviderDependencies _buildProviderDependencies({
       favoriteAlbumGateway: RustFavoriteAlbumGateway(
         providerId: providerId,
         credentialVault: credentialVault,
-        sessionContinuation: qqMusic ? qqSessionContinuation : null,
+        sessionContinuation: sessionContinuation,
       ),
       favoriteArtistGateway: RustFavoriteArtistGateway(
         providerId: providerId,
         credentialVault: credentialVault,
-        sessionContinuation: qqMusic ? qqSessionContinuation : null,
+        sessionContinuation: sessionContinuation,
       ),
       recentPlaysGateway: RustRecentPlaysGateway(
         providerId: providerId,
         credentialVault: credentialVault,
-        sessionContinuation: qqMusic ? qqSessionContinuation : null,
+        sessionContinuation: sessionContinuation,
       ),
-      trackLikeGateway: RustTrackLikeGateway(credentialVault: credentialVault),
+      trackLikeGateway: RustTrackLikeGateway(
+        credentialVault: qqMusic ? credentialVault : null,
+        netEaseCredentialVault: qqMusic ? null : credentialVault,
+        qqSessionContinuation: qqMusic ? continueSession : null,
+        neteaseSessionContinuation: qqMusic ? null : continueSession,
+      ),
       albumFavoriteGateway: qqMusic
-          ? RustAlbumFavoriteGateway(credentialVault: credentialVault)
+          ? RustAlbumFavoriteGateway(
+              credentialVault: credentialVault,
+              qqSessionContinuation: continueSession,
+            )
           : null,
       playlistTrackGateway: RustPlaylistTrackGateway(
         credentialVault: credentialVault,
+        sessionContinuation: continueSession,
       ),
       playlistCreationGateway: RustPlaylistCreationGateway(
         providerId: providerId,
         credentialVault: credentialVault,
+        sessionContinuation: continueSession,
       ),
       playlistDeletionGateway: qqMusic
-          ? RustPlaylistDeletionGateway(credentialVault: credentialVault)
+          ? RustPlaylistDeletionGateway(
+              credentialVault: credentialVault,
+              sessionContinuation: continueSession,
+            )
           : null,
     ),
     discovery: AuthenticatedDiscoveryDependencies(
@@ -331,7 +367,7 @@ MusicProviderDependencies _buildProviderDependencies({
       radarGateway: qqMusic
           ? RustRadarGateway(
               credentialVault: credentialVault,
-              sessionContinuation: qqSessionContinuation,
+              sessionContinuation: sessionContinuation,
             )
           : const UnsupportedRadarGateway(),
     ),

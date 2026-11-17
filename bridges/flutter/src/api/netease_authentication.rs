@@ -8,7 +8,12 @@ use provider_api::{
     QrAuthenticationProvider, QrAuthenticationSession, QrImageFormat, SmsAuthenticationError,
     SmsAuthenticationProvider,
 };
-use provider_netease::{NeteaseQrCancellation, NeteaseQrSession};
+use provider_netease::{
+    NeteaseQrCancellation, NeteaseQrSession, NeteaseRefreshFailure as ProviderRefreshFailure,
+    NeteaseRefreshPrepareState as ProviderRefreshPrepareState, NeteaseRefreshTrigger,
+    NeteaseStagedRecoveryAction as ProviderStagedRecoveryAction,
+    NeteaseStagedRecoveryError as ProviderStagedRecoveryError,
+};
 use tokio::sync::Mutex as AsyncMutex;
 
 use super::authentication::{
@@ -82,6 +87,86 @@ pub enum NeteaseSystemBrowserAuthenticationFailure {
 pub struct NeteaseSystemBrowserAuthenticationOutcome {
     pub authenticated: bool,
     pub failure: Option<NeteaseSystemBrowserAuthenticationFailure>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NeteaseRefreshFailure {
+    ProductionGateDisabled,
+    NoCredential,
+    NotDue,
+    NotRefreshable,
+    Network,
+    RateLimited,
+    RiskControl,
+    SecondaryVerificationRequired,
+    ServiceUnavailable,
+    InvalidResponse,
+    ReauthenticationRequired,
+    Replaced,
+    StorageUnavailable,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct NeteaseRefreshPreparation {
+    pub reservation_id: Option<u32>,
+    pub staged_secret_bytes: Option<Vec<u8>>,
+    pub reused_new_generation: bool,
+    pub failure: Option<NeteaseRefreshFailure>,
+}
+
+impl fmt::Debug for NeteaseRefreshPreparation {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("NeteaseRefreshPreparation")
+            .field("reservation_id", &self.reservation_id)
+            .field(
+                "has_staged_secret_bytes",
+                &self.staged_secret_bytes.is_some(),
+            )
+            .field("reused_new_generation", &self.reused_new_generation)
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct NeteaseRefreshVerification {
+    pub current_secret_bytes: Option<Vec<u8>>,
+    pub failure: Option<NeteaseRefreshFailure>,
+}
+
+impl fmt::Debug for NeteaseRefreshVerification {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("NeteaseRefreshVerification")
+            .field(
+                "has_current_secret_bytes",
+                &self.current_secret_bytes.is_some(),
+            )
+            .field("failure", &self.failure)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NeteaseStagedRecoveryAction {
+    VerifyCandidate,
+    VerifyCommittedCurrent,
+    Stale,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NeteaseStagedRecoveryFailure {
+    CoreUnavailable,
+    UnsupportedVersion,
+    InvalidDocument,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NeteaseStagedRecovery {
+    pub action: Option<NeteaseStagedRecoveryAction>,
+    pub reservation_id: Option<u32>,
+    pub failure: Option<NeteaseStagedRecoveryFailure>,
 }
 
 impl fmt::Debug for NeteaseQrLoginStart {
@@ -492,6 +577,99 @@ pub fn restore_netease_credential_from_secure_storage(
     }
 }
 
+#[flutter_rust_bridge::frb(sync)]
+pub fn restore_netease_staged_credential_rotation(
+    current_secret_bytes: Option<Vec<u8>>,
+    staged_secret_bytes: Vec<u8>,
+) -> NeteaseStagedRecovery {
+    let Ok(provider) = crate::native_netease::native_netease_provider() else {
+        return failed_staged_recovery(NeteaseStagedRecoveryFailure::CoreUnavailable);
+    };
+    match provider
+        .restore_staged_credential_rotation(current_secret_bytes.as_deref(), &staged_secret_bytes)
+    {
+        Ok(recovery) => NeteaseStagedRecovery {
+            action: Some(match recovery.action {
+                ProviderStagedRecoveryAction::VerifyCandidate => {
+                    NeteaseStagedRecoveryAction::VerifyCandidate
+                }
+                ProviderStagedRecoveryAction::VerifyCommittedCurrent => {
+                    NeteaseStagedRecoveryAction::VerifyCommittedCurrent
+                }
+                ProviderStagedRecoveryAction::Stale => NeteaseStagedRecoveryAction::Stale,
+            }),
+            reservation_id: recovery.reservation_id,
+            failure: None,
+        },
+        Err(ProviderStagedRecoveryError::UnsupportedVersion) => {
+            failed_staged_recovery(NeteaseStagedRecoveryFailure::UnsupportedVersion)
+        }
+        Err(ProviderStagedRecoveryError::InvalidDocument) => {
+            failed_staged_recovery(NeteaseStagedRecoveryFailure::InvalidDocument)
+        }
+    }
+}
+
+pub async fn prepare_netease_refresh_after_read_rejection() -> NeteaseRefreshPreparation {
+    let Ok(provider) = crate::native_netease::native_netease_provider() else {
+        return failed_refresh_preparation(NeteaseRefreshFailure::NoCredential);
+    };
+    map_refresh_preparation(
+        provider
+            .prepare_credential_refresh(NeteaseRefreshTrigger::AuthenticatedReadRejection)
+            .await,
+    )
+}
+
+pub async fn prepare_netease_refresh_checkpoint() -> NeteaseRefreshPreparation {
+    let Ok(provider) = crate::native_netease::native_netease_provider() else {
+        return failed_refresh_preparation(NeteaseRefreshFailure::NoCredential);
+    };
+    map_refresh_preparation(
+        provider
+            .prepare_credential_refresh(NeteaseRefreshTrigger::Checkpoint)
+            .await,
+    )
+}
+
+pub async fn verify_netease_staged_refresh_candidate(
+    reservation_id: u32,
+) -> NeteaseRefreshVerification {
+    let Ok(provider) = crate::native_netease::native_netease_provider() else {
+        return failed_refresh_verification(NeteaseRefreshFailure::NoCredential);
+    };
+    match provider
+        .verify_staged_refresh_candidate(reservation_id)
+        .await
+    {
+        Ok(current_secret_bytes) => NeteaseRefreshVerification {
+            current_secret_bytes: Some(current_secret_bytes),
+            failure: None,
+        },
+        Err(failure) => failed_refresh_verification(map_refresh_failure(failure)),
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn commit_netease_staged_refresh_candidate(
+    reservation_id: u32,
+) -> Option<NeteaseRefreshFailure> {
+    crate::native_netease::native_netease_provider()
+        .map_err(|_| ProviderRefreshFailure::NoCredential)
+        .and_then(|provider| provider.commit_staged_refresh_candidate(reservation_id))
+        .err()
+        .map(map_refresh_failure)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn abort_netease_credential_refresh(reservation_id: u32) -> Option<NeteaseRefreshFailure> {
+    crate::native_netease::native_netease_provider()
+        .map_err(|_| ProviderRefreshFailure::NoCredential)
+        .and_then(|provider| provider.abort_credential_refresh(reservation_id))
+        .err()
+        .map(map_refresh_failure)
+}
+
 /// Stages the minimal Cookie header returned by an official `NetEase` web login.
 /// The caller must run the normal credential verification before treating the
 /// account as authenticated. Secret bytes are overwritten before returning.
@@ -596,7 +774,7 @@ pub fn sign_out_netease() -> bool {
 
 fn next_attempt() -> u32 {
     NEXT_ATTEMPT
-        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+        .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
             Some(if current == u32::MAX { 1 } else { current + 1 })
         })
         .expect("attempt update closure always returns Some")
@@ -611,6 +789,74 @@ fn clear_attempt(lock: &StdMutex<Option<u32>>, attempt: u32) {
     let mut active = lock_attempt(lock);
     if *active == Some(attempt) {
         *active = None;
+    }
+}
+
+fn map_refresh_preparation(
+    result: Result<provider_netease::NeteaseRefreshPrepareResult, ProviderRefreshFailure>,
+) -> NeteaseRefreshPreparation {
+    match result {
+        Ok(result) => {
+            let preparation = result.preparation;
+            NeteaseRefreshPreparation {
+                reservation_id: preparation.as_ref().map(|value| value.reservation_id),
+                staged_secret_bytes: preparation.map(|value| value.staged_secret_bytes),
+                reused_new_generation: matches!(
+                    result.state,
+                    ProviderRefreshPrepareState::ReusedNewGeneration
+                ),
+                failure: None,
+            }
+        }
+        Err(failure) => failed_refresh_preparation(map_refresh_failure(failure)),
+    }
+}
+
+const fn map_refresh_failure(failure: ProviderRefreshFailure) -> NeteaseRefreshFailure {
+    match failure {
+        ProviderRefreshFailure::ProductionGateDisabled => {
+            NeteaseRefreshFailure::ProductionGateDisabled
+        }
+        ProviderRefreshFailure::NoCredential => NeteaseRefreshFailure::NoCredential,
+        ProviderRefreshFailure::NotDue => NeteaseRefreshFailure::NotDue,
+        ProviderRefreshFailure::NotRefreshable => NeteaseRefreshFailure::NotRefreshable,
+        ProviderRefreshFailure::Network => NeteaseRefreshFailure::Network,
+        ProviderRefreshFailure::RateLimited => NeteaseRefreshFailure::RateLimited,
+        ProviderRefreshFailure::RiskControl => NeteaseRefreshFailure::RiskControl,
+        ProviderRefreshFailure::SecondaryVerificationRequired => {
+            NeteaseRefreshFailure::SecondaryVerificationRequired
+        }
+        ProviderRefreshFailure::ServiceUnavailable => NeteaseRefreshFailure::ServiceUnavailable,
+        ProviderRefreshFailure::InvalidResponse => NeteaseRefreshFailure::InvalidResponse,
+        ProviderRefreshFailure::ReauthenticationRequired => {
+            NeteaseRefreshFailure::ReauthenticationRequired
+        }
+        ProviderRefreshFailure::Replaced => NeteaseRefreshFailure::Replaced,
+        ProviderRefreshFailure::StorageUnavailable => NeteaseRefreshFailure::StorageUnavailable,
+    }
+}
+
+const fn failed_refresh_preparation(failure: NeteaseRefreshFailure) -> NeteaseRefreshPreparation {
+    NeteaseRefreshPreparation {
+        reservation_id: None,
+        staged_secret_bytes: None,
+        reused_new_generation: false,
+        failure: Some(failure),
+    }
+}
+
+const fn failed_refresh_verification(failure: NeteaseRefreshFailure) -> NeteaseRefreshVerification {
+    NeteaseRefreshVerification {
+        current_secret_bytes: None,
+        failure: Some(failure),
+    }
+}
+
+const fn failed_staged_recovery(failure: NeteaseStagedRecoveryFailure) -> NeteaseStagedRecovery {
+    NeteaseStagedRecovery {
+        action: None,
+        reservation_id: None,
+        failure: Some(failure),
     }
 }
 

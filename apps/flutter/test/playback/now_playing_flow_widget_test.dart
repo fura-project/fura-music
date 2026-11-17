@@ -335,7 +335,7 @@ void main() {
     }
   }
   testWidgets(
-    'phone outer bar hides Heart while expanded details keep it actionable',
+    'phone outer bar hides Heart and expanded Heart retries an unknown membership',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
@@ -397,6 +397,10 @@ void main() {
                 ? NowPlayingBar.expanded(
                     controller: queue,
                     onSignInAgain: () {},
+                    qualityPreference: AppPlaybackQualityPreference.standard,
+                    onQualityPreferenceChanged: (_) async {},
+                    lyricAuxiliaryMode: LyricAuxiliaryMode.auto,
+                    onLyricAuxiliaryModeChanged: (_) async => true,
                   )
                 : NowPlayingBar(controller: queue, onSignInAgain: () {}),
           ),
@@ -416,31 +420,119 @@ void main() {
       expect(heart, findsOneWidget);
       expect(tester.widget<IconButton>(heart).onPressed, isNull);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(
+        tester.getTopLeft(heart).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(find.byType(Slider)).dy - 4),
+      );
 
-      firstPage.complete(const PlaylistTrackPageResult());
+      firstPage.complete(
+        const PlaylistTrackPageResult(failure: UserLibraryFailure.network),
+      );
       await tester.pumpAndSettle();
 
+      expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(tester.widget<IconButton>(heart).onPressed, isNotNull);
+      await tester.tap(heart);
+      await tester.pump();
+      expect(writeGateway.runCount, 0, reason: 'unknown state must not write');
+      expect(membershipGateway.requestCount, 2);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      reconciliation.complete(const PlaylistTrackPageResult());
+      await tester.pumpAndSettle();
+
+      final lightColors = MusicMaterialTheme.light().colorScheme;
+      final unlikedButton = tester.widget<IconButton>(heart);
+      expect(unlikedButton.onPressed, isNotNull);
+      expect(unlikedButton.isSelected, isFalse);
+      expect(
+        unlikedButton.style?.backgroundColor?.resolve(const <WidgetState>{}),
+        Colors.transparent,
+      );
       await tester.tap(heart);
       await tester.pump();
       expect(writeGateway.runCount, 1);
       expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
-
-      reconciliation.complete(
-        const PlaylistTrackPageResult(
-          nextOffset: 1,
-          total: 1,
-          membershipTrackOpaqueIds: ['track:41:0:fixtureMid:-'],
-        ),
+      final likedButton = tester.widget<IconButton>(heart);
+      expect(likedButton.isSelected, isTrue);
+      expect(
+        likedButton.style?.backgroundColor?.resolve(const <WidgetState>{
+          WidgetState.selected,
+        }),
+        lightColors.primary.withValues(alpha: 0.16),
       );
-      await tester.pumpAndSettle();
-      expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+      expect(
+        likedButton.style?.foregroundColor?.resolve(const <WidgetState>{
+          WidgetState.selected,
+        }),
+        lightColors.primary,
+      );
 
       final requestsBeforeRebuild = membershipGateway.requestCount;
       await tester.pumpWidget(buildNowPlaying(expanded: true));
       await tester.pump();
       expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
       expect(membershipGateway.requestCount, requestsBeforeRebuild);
+
+      tester.view.physicalSize = const Size(1100, 800);
+      await tester.pumpWidget(buildNowPlaying(expanded: false));
+      await tester.pumpAndSettle();
+      final outerHeartRect = tester.getRect(heart);
+      final outerVolumeRect = tester.getRect(
+        find.byKey(const ValueKey('now-playing-volume')),
+      );
+      final outerQueueRect = tester.getRect(
+        find.byKey(const ValueKey('now-playing-show-queue')),
+      );
+      expect(outerVolumeRect.left - outerHeartRect.right, closeTo(8, 0.5));
+      expect(outerQueueRect.left - outerVolumeRect.right, closeTo(8, 0.5));
+
+      for (final width in const [600.0, 1100.0]) {
+        tester.view.physicalSize = Size(width, 800);
+        await tester.pumpWidget(buildNowPlaying(expanded: true));
+        await tester.pumpAndSettle();
+        final wideControls = find.byKey(
+          const ValueKey('expanded-now-playing-wide-controls'),
+        );
+        expect(wideControls, findsOneWidget, reason: '$width px');
+        expect(
+          find.descendant(of: wideControls, matching: heart),
+          findsOneWidget,
+          reason: '$width px',
+        );
+        expect(
+          tester.getTopLeft(heart).dy,
+          greaterThanOrEqualTo(tester.getBottomLeft(find.byType(Slider)).dy),
+          reason: '$width px',
+        );
+        final statusRect = tester.getRect(
+          find.byKey(const ValueKey('now-playing-status')),
+        );
+        final shuffleRect = tester.getRect(
+          find.byKey(const ValueKey('now-playing-shuffle')),
+        );
+        final stopRect = tester.getRect(
+          find.byKey(const ValueKey('now-playing-stop')),
+        );
+        final lyricAuxRect = tester.getRect(
+          find.byKey(const ValueKey('now-playing-lyric-auxiliary')),
+        );
+        expect(
+          tester.getBottomRight(heart).dx,
+          lessThanOrEqualTo(statusRect.left),
+          reason: '$width px',
+        );
+        expect(
+          statusRect.right,
+          lessThan(shuffleRect.left),
+          reason: '$width px',
+        );
+        expect(
+          stopRect.right,
+          lessThanOrEqualTo(lyricAuxRect.left),
+          reason: '$width px',
+        );
+      }
     },
   );
 
@@ -455,7 +547,7 @@ void main() {
       );
       expect(margin.left, 16);
       expect(margin.right, 16);
-      expect(margin.bottom, 152);
+      expect(margin.bottom, 164);
     }
     final desktop = playbackSnackBarMargin(
       viewportWidth: 1440,
@@ -677,6 +769,35 @@ void main() {
       expect(primaryAction.top - desktopLayout.top, closeTo(0, 1));
       expect(primaryAction.bottom, lessThanOrEqualTo(progressRow.top));
       expect(progressRow.bottom, desktopLayout.bottom);
+      final transportKeys = const [
+        'now-playing-shuffle',
+        'now-playing-previous',
+        'now-playing-primary-action',
+        'now-playing-next',
+        'now-playing-repeat',
+        'now-playing-stop',
+      ];
+      final transportRects = [
+        for (final key in transportKeys)
+          tester.getRect(find.byKey(ValueKey(key))),
+      ];
+      for (var index = 1; index < transportRects.length; index += 1) {
+        expect(
+          transportRects[index].left - transportRects[index - 1].right,
+          closeTo(8, 0.5),
+        );
+      }
+      final qualityRect = tester.getRect(
+        find.byKey(const ValueKey('now-playing-quality')),
+      );
+      final volumeRect = tester.getRect(
+        find.byKey(const ValueKey('now-playing-volume')),
+      );
+      final showQueueRect = tester.getRect(
+        find.byKey(const ValueKey('now-playing-show-queue')),
+      );
+      expect(volumeRect.left - qualityRect.right, closeTo(8, 0.5));
+      expect(showQueueRect.left - volumeRect.right, closeTo(8, 0.5));
       if (const bool.fromEnvironment('NOW_PLAYING_BAR_VISUAL_REVIEW')) {
         await expectLater(
           find.byType(MusicApp),
@@ -698,7 +819,28 @@ void main() {
         findsOneWidget,
       );
       expect(tester.takeException(), isNull);
+
+      expect(primaryAction.size, const Size(48, 48));
+      expect(
+        tester.getSize(find.byKey(const ValueKey('now-playing-shuffle'))),
+        const Size(40, 40),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('now-playing-volume'))),
+        const Size(40, 40),
+      );
+      tester.view.physicalSize = const Size(640, 700);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('now-playing-desktop-layout')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
     },
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.android,
+      TargetPlatform.linux,
+    }),
   );
 
   testWidgets('quality selector persists SQ and reloads the active source', (
@@ -1456,7 +1598,15 @@ void main() {
 
     await tester.tap(find.byTooltip('Volume'));
     await tester.pumpAndSettle();
-    expect(find.byType(Dialog), findsOneWidget);
+    final popover = find.byKey(const ValueKey('volume-popover'));
+    expect(popover, findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(
+      tester.getBottomLeft(popover).dy,
+      lessThanOrEqualTo(
+        tester.getTopLeft(find.byKey(const ValueKey('now-playing-volume'))).dy,
+      ),
+    );
     final slider = find.byKey(const ValueKey('volume-slider'));
     await tester.tapAt(tester.getCenter(slider));
     await tester.pumpAndSettle();
@@ -1468,7 +1618,30 @@ void main() {
       '50%',
     );
 
-    await tester.tapAt(const Offset(8, 8));
+    // Narrowing the desktop window while open must keep the popover clamped inside the viewport.
+    final originalSize = tester.view.physicalSize;
+    final originalDpr = tester.view.devicePixelRatio;
+    addTearDown(() {
+      tester.view.physicalSize = originalSize;
+      tester.view.devicePixelRatio = originalDpr;
+    });
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(1200, 800);
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(700, 800);
+    await tester.pumpAndSettle();
+    expect(popover, findsOneWidget);
+    expect(tester.getTopLeft(popover).dx, greaterThanOrEqualTo(12));
+    expect(tester.getTopRight(popover).dx, lessThanOrEqualTo(700 - 12));
+
+    // Crossing below the 600dp compact breakpoint must cleanly dismiss the desktop popover.
+    tester.view.physicalSize = const Size(480, 800);
+    await tester.pumpAndSettle();
+    expect(popover, findsNothing);
+    expect(tester.takeException(), isNull);
+
+    tester.view.physicalSize = originalSize;
+    tester.view.devicePixelRatio = originalDpr;
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Next'));
     await tester.pumpAndSettle();
@@ -2431,6 +2604,363 @@ void main() {
     },
   );
 
+  testWidgets(
+    'opening queue scrolls deep active track into view without disarming continuation demand',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final nextPage = Completer<CollectionPlaybackPage>();
+      var loads = 0;
+      final initialTracks = List.generate(
+        30,
+        (index) => PlaylistTrackSummary(
+          providerId: 'qq-music',
+          opaqueId: 'deep-queue-$index',
+          title: 'Deep queue track $index',
+          artistNames: const ['Queue artist'],
+          durationSeconds: 200,
+        ),
+      );
+      final queue = _WidgetQueueGateway();
+      final controller = QueuePlaybackController(
+        queue,
+        TrackPlaybackController(
+          _FakeMediaGateway([
+            _ImmediateMediaOperation(_success('deep-queue-18')),
+            _ImmediateMediaOperation(_success('deep-queue-29')),
+          ]),
+          ForegroundPlaybackController(
+            _FakeAudioEngine([_FakeAudioSession(), _FakeAudioSession()]),
+          ),
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      // Index 18 of 30 keeps remaining (11) above lookahead (3), so opening the
+      // side sheet must position to index 18 without triggering an unsolicited
+      // continuation load before the user scrolls downward.
+      await controller.replaceAndPlayCollection(
+        CollectionPlaybackSource(
+          sourceId: 'playlist:deep-queue',
+          providerId: 'qq-music',
+          initialTracks: initialTracks,
+          nextCursor: 30,
+          hasMore: true,
+          loader: (_) {
+            loads += 1;
+            return CallbackCollectionPlaybackPageOperation(
+              () => nextPage.future,
+              () => true,
+            );
+          },
+        ),
+        18,
+      );
+      expect(loads, 0);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: MusicMaterialTheme.light(),
+          home: Scaffold(
+            bottomNavigationBar: NowPlayingBar(
+              controller: controller,
+              onSignInAgain: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('now-playing-show-queue')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('playback-queue-wide-side-sheet')),
+        findsOneWidget,
+      );
+      expect(loads, 0);
+      expect(find.byKey(const ValueKey('queue-entry-0')), findsNothing);
+      final activeTile = find.byKey(const ValueKey('queue-entry-18'));
+      expect(activeTile, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('queue-current-indicator-18')),
+        findsOneWidget,
+      );
+      final listRect = tester.getRect(find.byType(ListView));
+      final activeRect = tester.getRect(activeTile);
+      expect(activeRect.top, greaterThanOrEqualTo(listRect.top));
+      expect(activeRect.bottom, lessThanOrEqualTo(listRect.bottom));
+
+      // Scrolling downward from the positioned offset still triggers bounded
+      // continuation demand normally.
+      await tester.drag(find.byType(ListView), const Offset(0, -600));
+      await tester.pump();
+      await tester.pump();
+      expect(loads, 1);
+      expect(
+        find.byKey(const ValueKey('queue-continuation-footer')),
+        findsOneWidget,
+      );
+
+      nextPage.complete(
+        const CollectionPlaybackPage(
+          requestCursor: 30,
+          nextCursor: 31,
+          hasMore: false,
+          tracks: [
+            PlaylistTrackSummary(
+              providerId: 'qq-music',
+              opaqueId: 'deep-queue-30',
+              title: 'Deep queue track 30',
+              artistNames: ['Queue artist'],
+              durationSeconds: 200,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(controller.tracks, hasLength(31));
+
+      await tester.tap(find.byTooltip('Close queue'));
+      await tester.pumpAndSettle();
+
+      // Reopening at the tail track under enlarged accessibility text scaling
+      // on a compact viewport also brings the active row into view.
+      await controller.select(29);
+      tester.view.physicalSize = const Size(390, 844);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('now-playing-show-queue')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BottomSheet), findsOneWidget);
+      final tailTile = find.byKey(const ValueKey('queue-entry-29'));
+      expect(tailTile, findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('queue-current-indicator-29')),
+        findsOneWidget,
+      );
+      final sheetListRect = tester.getRect(find.byType(ListView));
+      final tailRect = tester.getRect(tailTile);
+      expect(tailRect.top, greaterThanOrEqualTo(sheetListRect.top));
+      expect(tailRect.bottom, lessThanOrEqualTo(sheetListRect.bottom));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'desktop playback bar avoids overflow on narrow 640px auth failure and horizontal safe-area insets',
+    (tester) async {
+      tester.view.physicalSize = const Size(640, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final queue = _WidgetQueueGateway();
+      final controller = QueuePlaybackController(
+        queue,
+        TrackPlaybackController(
+          _FakeMediaGateway([
+            const _ImmediateMediaOperation(
+              MediaResolutionResult(
+                failure: MediaResolutionFailure.authenticationRequired,
+              ),
+            ),
+          ]),
+          ForegroundPlaybackController(_FakeAudioEngine([])),
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41:0:fixtureMid:-',
+        title: 'Narrow Desktop Auth Track',
+        artistNames: ['Desktop Artist'],
+        durationSeconds: 215,
+      );
+      await controller.replaceAndPlay(const [track], 0);
+
+      final page = Completer<PlaylistTrackPageResult>()
+        ..complete(const PlaylistTrackPageResult());
+      final mutations = LibraryMutationCoordinator(
+        providerId: 'qq-music',
+        trackLikeGateway: _LikeMutationGateway(),
+      );
+      addTearDown(mutations.dispose);
+      final likes =
+          TrackLikePresentationController(
+            providerId: 'qq-music',
+            enabled: true,
+            playlistGateway: _LikeMembershipGateway([_LikePendingPage(page)]),
+            mutations: mutations,
+          )..bindLikedPlaylist(
+            const UserPlaylistSummary(
+              providerId: 'qq-music',
+              opaqueId: 'liked',
+              title: 'Liked Songs',
+              isLikedSongs: true,
+              ownership: UserPlaylistOwnership.owned,
+            ),
+          );
+      addTearDown(likes.dispose);
+
+      tester.platformDispatcher.textScaleFactorTestValue = 1.4;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: MusicMaterialTheme.light(),
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(640, 700),
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              textScaler: TextScaler.linear(1.4),
+            ),
+            child: TrackLikeActionScope(
+              controller: likes,
+              child: Scaffold(
+                bottomNavigationBar: NowPlayingBar(
+                  controller: controller,
+                  onSignInAgain: () {},
+                  qualityPreference: AppPlaybackQualityPreference.lossless,
+                  onQualityPreferenceChanged: (_) async {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('now-playing-desktop-layout')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('now-playing-sign-in-again')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'queue panel positions deep rows in medium RTL dialog at large text scale and across empty repopulation',
+    (tester) async {
+      tester.view.physicalSize = const Size(720, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      final tracks = List.generate(
+        200,
+        (index) => PlaylistTrackSummary(
+          providerId: 'qq-music',
+          opaqueId: 'dialog-queue-$index',
+          title: index < 150
+              ? '🎵 歌曲标题 Deep Track $index'
+              : 'Plain track $index',
+          artistNames: const ['Queue artist'],
+          durationSeconds: 200,
+        ),
+      );
+      final queue = _WidgetQueueGateway();
+      final controller = QueuePlaybackController(
+        queue,
+        TrackPlaybackController(
+          _FakeMediaGateway([
+            _ImmediateMediaOperation(_success('dialog-queue-185')),
+            _ImmediateMediaOperation(_success('dialog-queue-0')),
+            _ImmediateMediaOperation(_success('dialog-queue-14')),
+          ]),
+          ForegroundPlaybackController(
+            _FakeAudioEngine([
+              _FakeAudioSession(),
+              _FakeAudioSession(),
+              _FakeAudioSession(),
+            ]),
+          ),
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      await controller.replaceAndPlay(tracks, 185);
+      tester.platformDispatcher.textScaleFactorTestValue = 2.4;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: MusicMaterialTheme.light(),
+          builder: (context, child) =>
+              Directionality(textDirection: TextDirection.rtl, child: child!),
+          home: Scaffold(
+            bottomNavigationBar: NowPlayingBar(
+              controller: controller,
+              onSignInAgain: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('now-playing-show-queue')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Dialog), findsOneWidget);
+      final activeTile = find.byKey(const ValueKey('queue-entry-185'));
+      expect(activeTile, findsOneWidget);
+      final listRect = tester.getRect(find.byType(ListView));
+      final activeRect = tester.getRect(activeTile);
+      expect(activeRect.top, greaterThanOrEqualTo(listRect.top));
+      expect(activeRect.bottom, lessThanOrEqualTo(listRect.bottom));
+      expect(tester.takeException(), isNull);
+
+      // Clear and repopulate while the queue dialog remains open.
+      await controller.clear();
+      await tester.pumpAndSettle();
+      expect(find.byType(ListView), findsNothing);
+
+      await controller.replaceAndPlay(tracks.take(25).toList(), 14);
+      await tester.pumpAndSettle();
+      final repopulatedTile = find.byKey(const ValueKey('queue-entry-14'));
+      expect(repopulatedTile, findsOneWidget);
+      final repopulatedListRect = tester.getRect(find.byType(ListView));
+      final repopulatedRect = tester.getRect(repopulatedTile);
+      expect(
+        repopulatedRect.top,
+        greaterThanOrEqualTo(repopulatedListRect.top),
+      );
+      expect(
+        repopulatedRect.bottom,
+        lessThanOrEqualTo(repopulatedListRect.bottom),
+      );
+
+      // Clearing again and repopulating at index 0 must start at the top rather
+      // than restoring the previous scroll offset from route PageStorage.
+      await controller.clear();
+      await tester.pumpAndSettle();
+      await controller.replaceAndPlay(tracks.take(25).toList(), 0);
+      await tester.pumpAndSettle();
+      final firstTile = find.byKey(const ValueKey('queue-entry-0'));
+      expect(firstTile, findsOneWidget);
+      final resetListRect = tester.getRect(find.byType(ListView));
+      final firstRect = tester.getRect(firstTile);
+      expect(firstRect.top, greaterThanOrEqualTo(resetListRect.top));
+      expect(firstRect.bottom, lessThanOrEqualTo(resetListRect.bottom));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('queue clear requires confirmation and keeps shortcuts active', (
     tester,
   ) async {
@@ -2787,27 +3317,78 @@ void main() {
     );
     expect(find.byTooltip('Shuffle off. Turn on shuffle'), findsOneWidget);
     expect(find.byTooltip('Repeat off. Set repeat all'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('now-playing-shuffle')));
+    final shuffleFinder = find.byKey(const ValueKey('now-playing-shuffle'));
+    final repeatFinder = find.byKey(const ValueKey('now-playing-repeat'));
+    final scheme = Theme.of(tester.element(shuffleFinder)).colorScheme;
+    expect(
+      tester
+          .widget<IconButton>(shuffleFinder)
+          .style
+          ?.backgroundColor
+          ?.resolve(const <WidgetState>{}),
+      Colors.transparent,
+    );
+    await tester.tap(shuffleFinder);
     await tester.pumpAndSettle();
     expect(queue._snapshot.order, PlaybackOrder.shuffle);
     expect(find.byTooltip('Shuffle on. Turn off shuffle'), findsOneWidget);
+    final shuffleSelectedStyle = tester.widget<IconButton>(shuffleFinder).style;
+    expect(
+      shuffleSelectedStyle?.backgroundColor?.resolve(const <WidgetState>{
+        WidgetState.selected,
+      }),
+      scheme.primary.withValues(alpha: 0.16),
+    );
+    expect(
+      shuffleSelectedStyle?.foregroundColor?.resolve(const <WidgetState>{
+        WidgetState.selected,
+      }),
+      scheme.primary,
+    );
+    expect(
+      shuffleSelectedStyle?.side?.resolve(const <WidgetState>{
+        WidgetState.selected,
+      }),
+      BorderSide.none,
+    );
 
-    await tester.tap(find.byKey(const ValueKey('now-playing-repeat')));
+    await tester.tap(repeatFinder);
     await tester.pumpAndSettle();
     expect(queue._snapshot.repeatMode, PlaybackRepeatMode.all);
     expect(find.byTooltip('Repeat all. Set repeat one'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('now-playing-repeat')));
+    final repeatAllStyle = tester.widget<IconButton>(repeatFinder).style;
+    expect(
+      repeatAllStyle?.backgroundColor?.resolve(const <WidgetState>{
+        WidgetState.selected,
+      }),
+      scheme.primary.withValues(alpha: 0.16),
+    );
+    expect(
+      repeatAllStyle?.foregroundColor?.resolve(const <WidgetState>{
+        WidgetState.selected,
+      }),
+      scheme.primary,
+    );
+    await tester.tap(repeatFinder);
     await tester.pumpAndSettle();
     expect(queue._snapshot.repeatMode, PlaybackRepeatMode.one);
     expect(find.byTooltip('Repeat one. Turn off repeat'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('now-playing-repeat')));
+    await tester.tap(repeatFinder);
     await tester.pumpAndSettle();
     expect(queue._snapshot.repeatMode, PlaybackRepeatMode.off);
+    expect(
+      tester
+          .widget<IconButton>(repeatFinder)
+          .style
+          ?.backgroundColor
+          ?.resolve(const <WidgetState>{}),
+      Colors.transparent,
+    );
     expect(media.requests, [('qq-music', 'first')]);
     expect(tester.takeException(), isNull);
 
-    expect(find.byKey(const ValueKey('now-playing-shuffle')), findsOneWidget);
-    expect(find.byKey(const ValueKey('now-playing-repeat')), findsOneWidget);
+    expect(shuffleFinder, findsOneWidget);
+    expect(repeatFinder, findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

@@ -78,7 +78,7 @@ class RustRadarGateway implements RadarGateway {
 
   final CredentialVault _credentialVault;
   final RadarTrackPageLoadOperationFactory _operationFactory;
-  final QqSessionContinuationCoordinator? sessionContinuation;
+  final SessionContinuationCoordinator? sessionContinuation;
 
   @override
   RadarTrackPageLoadOperation beginLoad({required int page}) =>
@@ -123,7 +123,7 @@ class _VaultCleaningRadarTrackPageLoadOperation
   final RadarTrackPageLoadOperation Function() _factory;
   RadarTrackPageLoadOperation _inner;
   final CredentialVault _vault;
-  final QqSessionContinuationCoordinator? _continuation;
+  final SessionContinuationCoordinator? _continuation;
   bool _cancelled = false;
 
   @override

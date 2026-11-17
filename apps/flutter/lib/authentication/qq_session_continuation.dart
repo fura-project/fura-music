@@ -12,6 +12,14 @@ enum QqSessionContinuationResult {
   replaced,
 }
 
+/// Provider-neutral behavior seam for safe authenticated-read continuation.
+/// Credential schemas, eligibility and session truth remain provider-owned.
+abstract interface class SessionContinuationCoordinator {
+  Future<QqSessionContinuationResult> continueAfterReadRejection();
+
+  Future<QqSessionContinuationResult> checkpoint();
+}
+
 typedef QqRefreshPrepare = Future<bridge.QqMusicRefreshPreparation> Function();
 typedef QqRefreshVerify = Future<bridge.QqMusicRefreshVerification> Function({
   required int reservationId,
@@ -28,7 +36,8 @@ typedef QqStagedRecovery = Future<StagedCredentialRecoveryResult> Function();
 ///
 /// It owns no credential fields or session truth. Its only authority is to
 /// await durable opaque-byte storage acknowledgement between Rust phases.
-class QqSessionContinuationCoordinator {
+class QqSessionContinuationCoordinator
+    implements SessionContinuationCoordinator {
   QqSessionContinuationCoordinator(
     this._vault, {
     QqRefreshPrepare? prepareAfterReadRejection,
@@ -55,10 +64,12 @@ class QqSessionContinuationCoordinator {
   final QqStagedRecovery? recoverStagedCredential;
   Future<void> _tail = Future<void>.value();
 
+  @override
   Future<QqSessionContinuationResult> continueAfterReadRejection() => _enqueue(
     () => _continue(_prepareAfterReadRejection, rejectionTrigger: true),
   );
 
+  @override
   Future<QqSessionContinuationResult> checkpoint() => _enqueue(() async {
     final recover = recoverStagedCredential;
     if (recover != null) {

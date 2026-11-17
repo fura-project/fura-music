@@ -65,6 +65,7 @@ use qqmusic_client::{
     WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
     WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
     export_encrypted_credential_bundle, import_encrypted_credential_bundle,
+    validate_credential_refresh_material,
 };
 
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
@@ -319,6 +320,34 @@ fn provider_diagnostic(message: std::fmt::Arguments<'_>) {
     }
 }
 
+fn session_diagnostic(message: std::fmt::Arguments<'_>) {
+    if cfg!(debug_assertions)
+        || matches!(
+            std::env::var("FURA_SESSION_DIAGNOSTIC").as_deref(),
+            Ok("1" | "true")
+        )
+    {
+        eprintln!("FURA_SESSION_DIAGNOSTIC provider=qq-music {message}");
+    }
+}
+
+fn qq_login_type_label(login_type: LoginType) -> &'static str {
+    if login_type == LoginType::WECHAT {
+        "wechat"
+    } else if login_type == LoginType::QQ {
+        "qq"
+    } else {
+        "other"
+    }
+}
+
+const fn refresh_trigger_label(trigger: QqMusicRefreshTrigger) -> &'static str {
+    match trigger {
+        QqMusicRefreshTrigger::AuthenticatedReadRejection => "read_rejection",
+        QqMusicRefreshTrigger::Checkpoint { .. } => "checkpoint",
+    }
+}
+
 impl QqMusicCredentialState {
     fn authenticated(credential: Credential) -> Self {
         Self::Authenticated(credential, RecentPlaysCache::default())
@@ -364,10 +393,10 @@ impl<T> QqMusicProvider<T> {
 
     /// Selectively enables evidence-bounded refresh protocol candidates.
     ///
-    /// Production callers must keep `qq_type_two_enabled` false until the
-    /// Human-operated QQ gate has passed. This constructor exists so the QQ
-    /// candidate can exercise the same owner, staging, recovery and
-    /// single-flight lifecycle offline without piggybacking on `WeChat`'s gate.
+    /// Production callers may enable `qq_type_two_enabled` only after their
+    /// Human-operated QQ gate has passed. This constructor keeps the two login
+    /// types explicit while reusing one owner, staging, recovery and
+    /// single-flight lifecycle.
     #[must_use]
     pub fn new_with_refresh_activations(
         client: QqMusicClient<T>,
@@ -461,6 +490,10 @@ impl<T> QqMusicProvider<T> {
             return Err(AccountSummaryError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=account action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(AccountSummaryError::CredentialRejected);
         }
@@ -487,6 +520,10 @@ impl<T> QqMusicProvider<T> {
             return Err(UserLibraryError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=library action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(UserLibraryError::CredentialRejected);
         }
@@ -590,6 +627,10 @@ impl<T> QqMusicProvider<T> {
             return Err(MediaResolutionError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=media action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(MediaResolutionError::CredentialRejected);
         }
@@ -621,6 +662,10 @@ impl<T> QqMusicProvider<T> {
             return Err(LyricsError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=lyrics action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(LyricsError::CredentialRejected);
         }
@@ -649,6 +694,10 @@ impl<T> QqMusicProvider<T> {
             return Err(RadarRecommendationError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=radar action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(RadarRecommendationError::CredentialRejected);
         }
@@ -677,6 +726,10 @@ impl<T> QqMusicProvider<T> {
             return Err(DailyRecommendationError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=daily action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(DailyRecommendationError::CredentialRejected);
         }
@@ -705,6 +758,10 @@ impl<T> QqMusicProvider<T> {
             return Err(PersonalizedPlaylistsError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=personalized_playlists action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(PersonalizedPlaylistsError::CredentialRejected);
         }
@@ -733,6 +790,10 @@ impl<T> QqMusicProvider<T> {
             return Err(PersonalizedTracksError::Replaced);
         }
         if rejected {
+            session_diagnostic(format_args!(
+                "phase=read_rejection owner=personalized_tracks action=continuation_required login_type={}",
+                qq_login_type_label(candidate.credential.login_type())
+            ));
             state.mark_continuation_required(candidate);
             return Err(PersonalizedTracksError::CredentialRejected);
         }
@@ -771,7 +832,7 @@ impl<T> QqMusicProvider<T> {
         }
         let attempt_id = self
             .next_restore_verification
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
                 Some(if current == u32::MAX { 1 } else { current + 1 })
             })
             .unwrap_or_else(std::convert::identity);
@@ -1029,10 +1090,22 @@ where
                 }
             };
 
-            if !self
-                .refresh_activation
-                .allows(source.credential.login_type())
-            {
+            let login_type = source.credential.login_type();
+            let refresh_allowed = self.refresh_activation.allows(login_type);
+            let source_secrets = source.credential.session_secrets();
+            session_diagnostic(format_args!(
+                "phase=refresh_prepare trigger={} login_type={} allowed={} openid_present={} refresh_token_present={} unionid_present={} refresh_key_present={} key_expiry_present={} refresh_expiry_present={}",
+                refresh_trigger_label(trigger),
+                qq_login_type_label(login_type),
+                refresh_allowed,
+                source_secrets.open_id().is_some(),
+                source_secrets.refresh_token().is_some(),
+                source_secrets.union_id().is_some(),
+                source_secrets.refresh_key().is_some(),
+                source.credential.expires_at_unix_seconds().is_some(),
+                source.credential.refresh_expiry_value().is_some()
+            ));
+            if !refresh_allowed {
                 if matches!(trigger, QqMusicRefreshTrigger::AuthenticatedReadRejection) {
                     let mut credential = credential_guard(&self.credential);
                     if credential.generation() == source.generation
@@ -1044,6 +1117,15 @@ where
                         credential.replace(QqMusicCredentialState::SignedOut);
                     }
                 }
+                session_diagnostic(format_args!(
+                    "phase=refresh_prepare trigger={} outcome=production_gate_disabled action={}",
+                    refresh_trigger_label(trigger),
+                    if matches!(trigger, QqMusicRefreshTrigger::AuthenticatedReadRejection) {
+                        "signed_out"
+                    } else {
+                        "retained"
+                    }
+                ));
                 return Err(QqMusicRefreshFailure::ProductionGateDisabled);
             }
 
@@ -1071,7 +1153,7 @@ where
                     _ => {
                         let reservation_id = self
                             .next_refresh_reservation
-                            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+                            .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
                                 Some(if current == u32::MAX { 1 } else { current + 1 })
                             })
                             .unwrap_or_else(std::convert::identity);
@@ -1098,6 +1180,10 @@ where
                 Ok(candidate) => candidate,
                 Err(error) => {
                     let failure = map_refresh_error(error);
+                    session_diagnostic(format_args!(
+                        "phase=refresh_request trigger={} outcome=failure failure={failure:?}",
+                        refresh_trigger_label(trigger)
+                    ));
                     self.finish_refresh_failure(source.generation, failure);
                     return Err(failure);
                 }
@@ -1133,6 +1219,16 @@ where
                 completed.notify_waiters();
                 return Err(QqMusicRefreshFailure::Replaced);
             }
+            let candidate_secrets = candidate.session_secrets();
+            session_diagnostic(format_args!(
+                "phase=refresh_request trigger={} outcome=candidate_ready candidate_openid_present={} candidate_refresh_token_present={} candidate_unionid_present={} candidate_refresh_key_present={} candidate_next_refreshable={}",
+                refresh_trigger_label(trigger),
+                candidate_secrets.open_id().is_some(),
+                candidate_secrets.refresh_token().is_some(),
+                candidate_secrets.union_id().is_some(),
+                candidate_secrets.refresh_key().is_some(),
+                validate_credential_refresh_material(&candidate).is_ok(),
+            ));
             active.candidate = candidate;
             return Ok(QqMusicRefreshPrepareResult {
                 state: QqMusicRefreshPrepareState::Candidate,
@@ -1214,6 +1310,9 @@ where
             return Err(QqMusicRefreshFailure::Replaced);
         }
         if let Some(failure) = failure {
+            session_diagnostic(format_args!(
+                "phase=refresh_verify outcome=failure failure={failure:?}"
+            ));
             let completed = Arc::clone(&active.completed);
             if failure == QqMusicRefreshFailure::ReauthenticationRequired {
                 credential.replace(QqMusicCredentialState::SignedOut);
@@ -3179,7 +3278,13 @@ const fn map_refresh_error(error: CredentialRefreshError) -> QqMusicRefreshFailu
         CredentialRefreshError::RiskControl
         | CredentialRefreshError::SecondaryVerificationRequired
         | CredentialRefreshError::ProtocolUnavailable => QqMusicRefreshFailure::ServiceUnavailable,
-        CredentialRefreshError::InvalidResponse => QqMusicRefreshFailure::InvalidResponse,
+        CredentialRefreshError::InvalidResponse
+        | CredentialRefreshError::MalformedResponse
+        | CredentialRefreshError::UpstreamRejected
+        | CredentialRefreshError::InvalidCredential
+        | CredentialRefreshError::InvalidExpiry
+        | CredentialRefreshError::UnexpectedLoginType
+        | CredentialRefreshError::IncompleteRotation => QqMusicRefreshFailure::InvalidResponse,
     }
 }
 
@@ -4983,15 +5088,15 @@ mod tests {
         UserPlaylistsProvider,
     };
     use qqmusic_client::{
-        Credential, CredentialExpiry, CredentialSessionSecrets, HttpMethod, HttpRequest,
-        HttpResponse, HttpTransport, LoginType, QqMusicAlbumDetailsError, QqMusicAlbumSearchError,
-        QqMusicAlbumTracksError, QqMusicArtistAlbumsError, QqMusicArtistSearchError,
-        QqMusicArtistTracksError, QqMusicClient, QqMusicDailyRecommendationError,
-        QqMusicFavoriteAlbumsError, QqMusicFavoriteArtistsError, QqMusicNewAlbumsError,
-        QqMusicNewSongsError, QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError,
-        QqMusicPlaylistSearchError, QqMusicRadarError, QqMusicRankingsError,
-        QqMusicRecommendedPlaylistsError, QqMusicSearchError, QqMusicTrackCommentsError,
-        QqMusicTrackMusicVideoError,
+        Credential, CredentialExpiry, CredentialRefreshExpiry, CredentialSessionSecrets,
+        HttpMethod, HttpRequest, HttpResponse, HttpTransport, LoginType, QqMusicAlbumDetailsError,
+        QqMusicAlbumSearchError, QqMusicAlbumTracksError, QqMusicArtistAlbumsError,
+        QqMusicArtistSearchError, QqMusicArtistTracksError, QqMusicClient,
+        QqMusicDailyRecommendationError, QqMusicFavoriteAlbumsError, QqMusicFavoriteArtistsError,
+        QqMusicNewAlbumsError, QqMusicNewSongsError, QqMusicPersonalizedPlaylistsError,
+        QqMusicPersonalizedTracksError, QqMusicPlaylistSearchError, QqMusicRadarError,
+        QqMusicRankingsError, QqMusicRecommendedPlaylistsError, QqMusicSearchError,
+        QqMusicTrackCommentsError, QqMusicTrackMusicVideoError,
     };
     use serde_json::{Value, json};
     use tokio::sync::{Barrier, Notify};
@@ -5267,6 +5372,19 @@ mod tests {
         }
     }
 
+    fn encode_ag1_response(response: &Value) -> Vec<u8> {
+        const RESPONSE_KEY: [u8; 21] = [
+            122, 63, 140, 29, 94, 155, 47, 10, 108, 77, 126, 139, 31, 58, 92, 157, 14, 43, 111, 74,
+            129,
+        ];
+        serde_json::to_vec(response)
+            .expect("fixture JSON")
+            .into_iter()
+            .enumerate()
+            .map(|(index, byte)| byte ^ RESPONSE_KEY[index % RESPONSE_KEY.len()])
+            .collect()
+    }
+
     impl TrackLikeTransport {
         fn new(response: &Value) -> Self {
             Self {
@@ -5274,6 +5392,13 @@ mod tests {
                     200,
                     serde_json::to_vec(response).expect("fixture JSON"),
                 ),
+                requests: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn signed(response: &Value) -> Self {
+            Self {
+                response: HttpResponse::new(200, encode_ag1_response(response)),
                 requests: Mutex::new(Vec::new()),
             }
         }
@@ -5394,13 +5519,8 @@ mod tests {
                         "music.login.LoginServer.Login": {
                             "code": 0,
                             "data": {
-                                "str_musicid": "123456",
                                 "musickey": "rotated-key",
-                                "loginType": 1,
-                                "openid": "synthetic-open",
-                                "unionid": "synthetic-union",
-                                "refresh_token": "rotated-refresh",
-                                "refresh_key": "rotated-refresh-key"
+                                "loginType": 1
                             }
                         }
                     }))
@@ -5669,9 +5789,18 @@ mod tests {
     impl HttpTransport for GatedTrackLikeTransport {
         type Error = Infallible;
 
-        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+        async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
             self.request_started.notify_one();
             self.release_request.notified().await;
+            if request.url() == "https://u6.y.qq.com/cgi-bin/musics.fcg" {
+                return Ok(HttpResponse::new(
+                    200,
+                    encode_ag1_response(&json!({
+                        "code": 0,
+                        "playlist": {"code": 0, "data": {"retCode": 0}}
+                    })),
+                ));
+            }
             Ok(HttpResponse::new(
                 200,
                 serde_json::to_vec(&json!({
@@ -7546,8 +7675,9 @@ mod tests {
     fn set_qq_type_two_continuation<T>(provider: &QqMusicProvider<T>) {
         let credential = Credential::new("123456", "old-qq-key", LoginType::QQ)
             .expect("QQ fixture credential")
-            .with_expiry(
-                CredentialExpiry::from_expires_at(2_000_000_000).expect("QQ fixture expiry"),
+            .with_expiry(CredentialExpiry::new(1_900_000_000, 100_000_000).expect("key expiry"))
+            .with_refresh_expiry(
+                CredentialRefreshExpiry::new(2_000_000_000).expect("refresh expiry"),
             )
             .with_session_secrets(CredentialSessionSecrets::new(
                 Some("synthetic-qq-open".into()),
@@ -7692,7 +7822,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn refresh_is_one_complete_flight_and_waiters_reuse_new_generation() {
+    async fn partial_wechat_rotation_is_one_complete_flight_and_waiters_reuse_new_generation() {
         let provider = Arc::new(QqMusicProvider::new_with_refresh_activation(
             QqMusicClient::new(RefreshAndVerifyTransport {
                 refresh_calls: AtomicUsize::new(0),
@@ -9159,32 +9289,37 @@ mod tests {
 
     #[tokio::test]
     async fn sets_liked_track_state_from_opaque_identity() {
-        for (liked, method) in [(true, "AddSonglist"), (false, "DelSonglist")] {
+        let mut signs = std::collections::BTreeSet::new();
+        for (opaque, liked) in [
+            ("track:41001:7:fixtureTrackMid1:fixtureFileMid1", true),
+            ("track:41001:7:fixtureTrackMid1:fixtureFileMid1", false),
+            ("track:41001:0:fixtureTrackMid1:fixtureFileMid1", true),
+            ("track:41002:7:fixtureTrackMid1:fixtureFileMid1", true),
+        ] {
             let provider =
-                QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::new(&json!({
+                QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::signed(&json!({
                     "code": 0,
-                    "req_0": {"code": 0, "data": {"retCode": 0}}
+                    "playlist": {"code": 0, "data": {"retCode": 0}}
                 }))));
             set_authenticated(&provider, "123456");
 
             provider
-                .set_track_liked(
-                    qq_track_id("track:41001:7:fixtureTrackMid1:fixtureFileMid1"),
-                    liked,
-                )
+                .set_track_liked(qq_track_id(opaque), liked)
                 .await
                 .expect("confirmed desired like state");
 
             let requests = provider.client().transport().requests();
             assert_eq!(requests.len(), 1);
-            let body: Value =
-                serde_json::from_slice(requests[0].body_bytes().expect("mutation body"))
-                    .expect("mutation JSON");
-            assert_eq!(body["req_0"]["method"], method);
-            assert_eq!(
-                body["req_0"]["param"]["v_songInfo"],
-                json!([{"songId": 41001, "songType": 7}])
-            );
+            assert_eq!(requests[0].url(), "https://u6.y.qq.com/cgi-bin/musics.fcg");
+            let query = requests[0]
+                .query_pairs()
+                .iter()
+                .cloned()
+                .collect::<std::collections::BTreeMap<_, _>>();
+            assert_eq!(query.get("encoding").map(String::as_str), Some("ag-1"));
+            let sign = query.get("sign").expect("signed request").clone();
+            assert!(sign.starts_with("zzc"));
+            assert!(signs.insert(sign));
         }
     }
 
@@ -9480,10 +9615,11 @@ mod tests {
 
     #[tokio::test]
     async fn like_mutation_rejects_invalid_identity_and_clears_only_rejected_credential() {
-        let invalid = QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::new(&json!({
-            "code": 0,
-            "req_0": {"code": 0, "data": {"retCode": 0}}
-        }))));
+        let invalid =
+            QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::signed(&json!({
+                "code": 0,
+                "playlist": {"code": 0, "data": {"retCode": 0}}
+            }))));
         set_authenticated(&invalid, "123456");
         assert_eq!(
             invalid
@@ -9500,10 +9636,11 @@ mod tests {
         );
         assert!(invalid.client().transport().requests().is_empty());
 
-        let rejected = QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::new(&json!({
-            "code": 0,
-            "req_0": {"code": 104_401}
-        }))));
+        let rejected =
+            QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::signed(&json!({
+                "code": 0,
+                "playlist": {"code": 104_401}
+            }))));
         set_authenticated(&rejected, "123456");
         assert_eq!(
             rejected
@@ -9516,10 +9653,11 @@ mod tests {
         );
         assert!(!rejected.has_authenticated_credential());
 
-        let service = QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::new(&json!({
-            "code": 0,
-            "req_0": {"code": 50006}
-        }))));
+        let service =
+            QqMusicProvider::new(QqMusicClient::new(TrackLikeTransport::signed(&json!({
+                "code": 0,
+                "playlist": {"code": 50006}
+            }))));
         set_authenticated(&service, "123456");
         assert_eq!(
             service

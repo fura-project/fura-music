@@ -170,6 +170,38 @@ void main() {
     expect(find.text('Loaded from the next page'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('falls back to ? avatar initial for empty or blank nicknames', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: MusicMaterialTheme.light(),
+        home: Scaffold(
+          body: TrackCommentsPanel(
+            gateway: _ScriptedGateway([
+              TrackCommentPageResult(
+                nextOffset: 2,
+                total: 2,
+                latestComments: [
+                  _comment('empty', 'Comment from empty author', author: ''),
+                  _comment('blank', 'Comment from blank author', author: '   '),
+                ],
+              ),
+            ]),
+            track: _track,
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Comment from empty author'), findsOneWidget);
+    expect(find.text('Comment from blank author'), findsOneWidget);
+    expect(find.text('?'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 const _track = PlaylistTrackSummary(
@@ -179,16 +211,20 @@ const _track = PlaylistTrackSummary(
   artistNames: ['Synthetic Artist'],
 );
 
-TrackCommentSummary _comment(String id, String content, {String? avatarUri}) =>
-    TrackCommentSummary(
-      providerId: 'qq-music',
-      opaqueId: 'comment:$id',
-      authorDisplayName: 'Synthetic author with a long name',
-      authorAvatarUri: avatarUri,
-      content: content,
-      publishedAtUnixSeconds: 1700000000,
-      praiseCount: 5,
-    );
+TrackCommentSummary _comment(
+  String id,
+  String content, {
+  String? avatarUri,
+  String author = 'Synthetic author with a long name',
+}) => TrackCommentSummary(
+  providerId: 'qq-music',
+  opaqueId: 'comment:$id',
+  authorDisplayName: author,
+  authorAvatarUri: avatarUri,
+  content: content,
+  publishedAtUnixSeconds: 1700000000,
+  praiseCount: 5,
+);
 
 class _ScriptedGateway implements TrackCommentGateway {
   _ScriptedGateway(this.results);

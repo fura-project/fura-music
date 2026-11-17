@@ -1353,9 +1353,11 @@ dependencies = [
 name = "provider-netease"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "music-domain",
  "netease-client",
  "provider-api",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",

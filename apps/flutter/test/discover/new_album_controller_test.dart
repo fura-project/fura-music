@@ -168,6 +168,49 @@ void main() {
     await disposedLoad;
     controller.dispose();
   });
+
+  test(
+    'restores already loaded regions from cache without re-fetching',
+    () async {
+      final gateway = _ScriptedGateway([
+        const _ImmediateOperation(
+          NewAlbumPageResult(
+            region: NewAlbumRegion.mainlandChina,
+            continuationOffset: 1,
+            total: 1,
+            releases: [first],
+          ),
+        ),
+        const _ImmediateOperation(
+          NewAlbumPageResult(
+            region: NewAlbumRegion.japan,
+            continuationOffset: 1,
+            total: 1,
+            releases: [second],
+          ),
+        ),
+      ]);
+      final controller = NewAlbumController(gateway);
+
+      await controller.load();
+      expect(controller.releases, [first]);
+
+      controller.selectRegion(NewAlbumRegion.japan);
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.region, NewAlbumRegion.japan);
+      expect(controller.releases, [second]);
+
+      controller.selectRegion(NewAlbumRegion.mainlandChina);
+      expect(controller.region, NewAlbumRegion.mainlandChina);
+      expect(controller.stage, NewAlbumStage.content);
+      expect(controller.releases, [first]);
+      expect(gateway.requests, [
+        (NewAlbumRegion.mainlandChina, 0, 20),
+        (NewAlbumRegion.japan, 0, 20),
+      ]);
+      controller.dispose();
+    },
+  );
 }
 
 class _ScriptedGateway implements NewAlbumGateway {

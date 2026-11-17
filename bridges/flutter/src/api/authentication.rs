@@ -31,12 +31,26 @@ pub(crate) type NativeProvider = QqMusicProvider<ReqwestTransport>;
 type NativeSession = QqMusicQrAuthenticationSession<ReqwestTransport>;
 type NativeDesktopQuickSession = QqMusicDesktopQuickAuthenticationSession<ReqwestTransport>;
 
-const fn qq_refresh_activation_enabled() -> bool {
-    true
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct QqRefreshActivations {
+    wechat: bool,
+    qq_type_two: bool,
+}
+
+const fn qq_refresh_activations() -> QqRefreshActivations {
+    QqRefreshActivations {
+        wechat: true,
+        qq_type_two: true,
+    }
 }
 
 fn build_native_qq_music_provider(client: QqMusicClient<ReqwestTransport>) -> NativeProvider {
-    QqMusicProvider::new_with_refresh_activation(client, qq_refresh_activation_enabled())
+    let activations = qq_refresh_activations();
+    QqMusicProvider::new_with_refresh_activations(
+        client,
+        activations.wechat,
+        activations.qq_type_two,
+    )
 }
 
 static QQ_MUSIC_PROVIDER: LazyLock<Result<NativeProvider, ()>> = LazyLock::new(|| {
@@ -544,7 +558,7 @@ impl QqMusicDesktopQuickLoginSessionHandle {
 #[flutter_rust_bridge::frb(sync)]
 pub fn reserve_qq_music_desktop_quick_login_start() -> u32 {
     let attempt_id = NEXT_START_ATTEMPT
-        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+        .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
             Some(if current == u32::MAX { 1 } else { current + 1 })
         })
         .expect("start-attempt update closure always returns Some");
@@ -611,7 +625,7 @@ pub fn cancel_qq_music_desktop_quick_login_start(attempt_id: u32) -> bool {
 #[flutter_rust_bridge::frb(sync)]
 pub fn reserve_qq_music_wechat_qr_login_start() -> u32 {
     NEXT_START_ATTEMPT
-        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+        .try_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
             Some(if current == u32::MAX { 1 } else { current + 1 })
         })
         .expect("start-attempt update closure always returns Some")
@@ -1514,7 +1528,7 @@ mod tests {
         QqMusicRefreshVerification, begin_qq_music_account_summary_load,
         build_native_qq_music_provider, clear_start_attempt, failed_start,
         map_account_summary_failure, map_desktop_quick_failure, map_error, map_persistence_error,
-        map_transfer_error, map_verification_failure, qq_refresh_activation_enabled,
+        map_transfer_error, map_verification_failure, qq_refresh_activations,
         reserve_qq_music_wechat_qr_login_start, start_attempt_guard, write_transfer_artifacts,
     };
     use provider_api::{AccountSummaryError, AuthenticationError, DesktopQuickAuthenticationError};
@@ -1528,14 +1542,18 @@ mod tests {
     };
 
     #[test]
-    fn refresh_activation_is_enabled_without_an_experiment_environment() {
-        assert!(qq_refresh_activation_enabled());
+    fn native_refresh_activations_are_explicit_per_login_type() {
+        let activations = qq_refresh_activations();
+        assert!(activations.wechat);
+        assert!(activations.qq_type_two);
     }
 
     #[tokio::test]
-    async fn release_profile_enables_the_verified_wechat_continuation() {
+    async fn release_profile_enables_both_verified_qq_continuations() {
         if !cfg!(debug_assertions) {
-            assert!(qq_refresh_activation_enabled());
+            let activations = qq_refresh_activations();
+            assert!(activations.wechat);
+            assert!(activations.qq_type_two);
             let provider = build_native_qq_music_provider(QqMusicClient::new(
                 ReqwestTransport::new().expect("native transport"),
             ));

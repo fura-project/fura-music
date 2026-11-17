@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/navigation/music_section_selector.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
@@ -87,20 +86,17 @@ void main() {
 
         final control = find.byKey(const ValueKey('section-selector'));
         final currentLabel = destinations.first.label;
-        expect(find.text(currentLabel), findsWidgets);
+        expect(find.text(currentLabel), findsOneWidget);
         expect(find.text('$label: $currentLabel'), findsNothing);
-        expect(find.byType(DropdownMenu<_Section>), findsOneWidget);
+        expect(find.byType(TabBar), findsOneWidget);
+        expect(find.byType(DropdownMenu<_Section>), findsNothing);
         expect(find.byType(FilledButton), findsNothing);
         final size = tester.getSize(control);
-        expect(size.width, 180);
-        expect(size.height, 56);
+        expect(size.width, lessThanOrEqualTo(width));
+        expect(size.height, 48);
         final semantics = tester.getSemantics(control);
         expect(semantics.label, contains(label));
         expect(semantics.label, contains(currentLabel));
-        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-        await tester.pump();
-        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-        await tester.pumpAndSettle();
         expect(
           find.byKey(const ValueKey('section-tracks')).hitTestable(),
           findsOneWidget,
@@ -109,6 +105,10 @@ void main() {
           find.byKey(const ValueKey('section-artists')).hitTestable(),
           findsOneWidget,
         );
+        await tester.ensureVisible(
+          find.byKey(const ValueKey('section-albums')),
+        );
+        await tester.pumpAndSettle();
         expect(
           find.byKey(const ValueKey('section-albums')).hitTestable(),
           findsOneWidget,
@@ -121,14 +121,10 @@ void main() {
             ),
           );
         }
-        await tester.tap(
-          find
-              .ancestor(
-                of: find.byKey(const ValueKey('section-artists')).hitTestable(),
-                matching: find.byType(MenuItemButton),
-              )
-              .hitTestable(),
-        );
+        final artistsTab = find.byKey(const ValueKey('section-artists'));
+        await tester.ensureVisible(artistsTab);
+        await tester.pumpAndSettle();
+        await tester.tap(artistsTab);
         await tester.pumpAndSettle();
         expect(selected, _Section.artists);
         expect(tester.takeException(), isNull);
@@ -165,4 +161,106 @@ void main() {
     expect(selected, _Section.albums);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'compact secondary TabBar stays strictly controlled by selected and scales cleanly at 2.0x',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 240);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const fourChineseTabs = [
+        ..._chineseDestinations,
+        MusicSectionDestination(
+          value: _Section.tracks,
+          icon: Icons.queue_music_rounded,
+          label: '推荐歌单精选',
+          itemKey: ValueKey('section-playlists'),
+        ),
+      ];
+
+      var selected = _Section.tracks;
+      var allowSelectionChange = false;
+      _Section? tapped;
+      late StateSetter rebuild;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: MusicMaterialTheme.light(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(2.0)),
+            child: child!,
+          ),
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              rebuild = setState;
+              return Scaffold(
+                body: Align(
+                  alignment: Alignment.topLeft,
+                  child: MusicSectionSelector<_Section>(
+                    controlKey: const ValueKey('section-selector'),
+                    label: '搜索类型',
+                    destinations: fourChineseTabs,
+                    selected: selected,
+                    compact: true,
+                    onSelected: (value) {
+                      tapped = value;
+                      if (allowSelectionChange) {
+                        setState(() => selected = value);
+                      }
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+
+      final tabBar = tester.widget<TabBar>(find.byType(TabBar));
+      expect(tabBar.indicatorSize, isNot(TabBarIndicatorSize.label));
+      expect(tabBar.controller!.index, 0);
+
+      final artistsTab = find.byKey(const ValueKey('section-artists'));
+      await tester.ensureVisible(artistsTab);
+      await tester.pumpAndSettle();
+      await tester.tap(artistsTab);
+      await tester.pumpAndSettle();
+
+      // Guarded parent kept selected == _Section.tracks, so TabController must not desync.
+      expect(tapped, _Section.artists);
+      expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, 0);
+
+      allowSelectionChange = true;
+      await tester.tap(artistsTab);
+      await tester.pumpAndSettle();
+      expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, 1);
+
+      final playlistsTab = find.byKey(const ValueKey('section-playlists'));
+      await tester.ensureVisible(playlistsTab);
+      await tester.pumpAndSettle();
+      expect(playlistsTab.hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      rebuild(() {});
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: MusicMaterialTheme.light(),
+          home: Scaffold(
+            body: MusicSectionSelector<_Section>(
+              controlKey: const ValueKey('empty-selector'),
+              label: 'Empty',
+              destinations: const [],
+              selected: _Section.albums,
+              compact: true,
+              onSelected: (_) {},
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

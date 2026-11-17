@@ -11,11 +11,19 @@ crate-type = ["cdylib", "staticlib"]
 [features]
 # Disconnected Rust-only Human gate. No API/Provider production activation.
 kugou-cdp-gate = ["dep:kugou-client", "dep:provider-kugou", "dep:base64", "tokio/signal", "tokio/rt-multi-thread", "nix/poll"]
+# Disconnected NetEase official-Web refresh evidence gate. It captures a new
+# disposable browser session and never reads or writes the production vault.
+netease-refresh-gate = ["tokio/signal", "tokio/rt-multi-thread"]
 
 [[bin]]
 name = "kugou-human-gate"
 path = "src/kugou_human_gate.rs"
 required-features = ["kugou-cdp-gate"]
+
+[[bin]]
+name = "netease-refresh-gate"
+path = "src/netease_refresh_gate.rs"
+required-features = ["netease-refresh-gate"]
 
 [dependencies]
 flutter_rust_bridge = "=2.13.0"

@@ -788,7 +788,8 @@ mod tests {
 
     fn assert_refreshable_qq_credential(credential: &Credential) {
         assert_eq!(credential.login_type(), LoginType::QQ);
-        assert_eq!(credential.expires_at_unix_seconds(), Some(2_000_000_000));
+        assert_eq!(credential.expires_at_unix_seconds(), None);
+        assert_eq!(credential.refresh_expiry_value(), Some(2_000_000_000));
         assert_eq!(
             credential.session_secrets().access_token(),
             Some("secret-access")

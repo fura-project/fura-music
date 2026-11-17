@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/scheduler.dart' show SchedulerPhase;
 import 'package:flutterustmusic/fura_toast.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
@@ -282,8 +284,30 @@ class _LyricContentState extends State<_LyricContent> {
   int? _pendingStopFollowingAttempt;
 
   @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    widget.controller.removeListener(_handleControllerChanged);
+    widget.controller.addListener(_handleControllerChanged);
+    final lyrics = widget.controller.lyrics;
+    final activeLineIndex = widget.controller.activeSelection?.lineIndex;
+    if (_following && lyrics != null && activeLineIndex != null) {
+      _scheduleFollow(activeLineIndex, lyrics.lines.length);
+    }
+  }
+
+  @override
   void didUpdateWidget(_LyricContent oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_handleControllerChanged);
+      widget.controller.addListener(_handleControllerChanged);
+    }
     if (oldWidget.auxiliaryMode == widget.auxiliaryMode || !_following) return;
     final activeLineIndex = widget.controller.activeSelection?.lineIndex;
     if (activeLineIndex != null) {
@@ -294,12 +318,36 @@ class _LyricContentState extends State<_LyricContent> {
     }
   }
 
+  void _handleControllerChanged() {
+    if (!mounted) return;
+    final lyrics = widget.controller.lyrics;
+    if (lyrics == null) return;
+    final lyricsChanged = !identical(lyrics, _lastLyrics);
+    if (lyricsChanged) {
+      _lastLyrics = lyrics;
+      _lineKeys.clear();
+      _lastActiveLineIndex = null;
+      _followAttempt += 1;
+      _following = true;
+    }
+    final activeLineIndex = widget.controller.activeSelection?.lineIndex;
+    if (activeLineIndex != _lastActiveLineIndex) {
+      _lastActiveLineIndex = activeLineIndex;
+      if (_following && activeLineIndex != null) {
+        _startOrScheduleFollow(activeLineIndex, lyrics.lines.length);
+      }
+    } else if (lyricsChanged && _following && lyrics.lines.isNotEmpty) {
+      _startOrScheduleFollow(0, lyrics.lines.length);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final lyrics = widget.controller.lyrics!;
     final lines = lyrics.lines;
     final activeLineIndex = widget.controller.activeSelection?.lineIndex;
-    if (!identical(lyrics, _lastLyrics)) {
+    final lyricsChanged = !identical(lyrics, _lastLyrics);
+    if (lyricsChanged) {
       _lastLyrics = lyrics;
       _lineKeys.clear();
       _lastActiveLineIndex = null;
@@ -311,6 +359,8 @@ class _LyricContentState extends State<_LyricContent> {
       if (_following && activeLineIndex != null) {
         _scheduleFollow(activeLineIndex, lines.length);
       }
+    } else if (lyricsChanged && _following && lines.isNotEmpty) {
+      _scheduleFollow(0, lines.length);
     }
 
     return Column(
@@ -420,6 +470,23 @@ class _LyricContentState extends State<_LyricContent> {
     }
   }
 
+  void _startOrScheduleFollow(int lineIndex, int lineCount) {
+    final phase = WidgetsBinding.instance.schedulerPhase;
+    final canStartImmediately =
+        phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks;
+    final targetContext = _lineKey(lineIndex).currentContext;
+    if (canStartImmediately &&
+        targetContext != null &&
+        targetContext.mounted &&
+        _scrollController.hasClients) {
+      final attempt = ++_followAttempt;
+      unawaited(_followLine(lineIndex, lineCount, attempt));
+      return;
+    }
+    _scheduleFollow(lineIndex, lineCount);
+  }
+
   void _scheduleFollow(int lineIndex, int lineCount) {
     final attempt = ++_followAttempt;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -428,18 +495,67 @@ class _LyricContentState extends State<_LyricContent> {
     });
   }
 
+  double _estimateLineOffset({
+    required int lineIndex,
+    required int lineCount,
+    required ScrollPosition position,
+  }) {
+    int? minMounted;
+    int? maxMounted;
+    for (final entry in _lineKeys.entries) {
+      final ctx = entry.value.currentContext;
+      if (ctx == null || !ctx.mounted) continue;
+      final idx = entry.key;
+      if (minMounted == null || idx < minMounted) minMounted = idx;
+      if (maxMounted == null || idx > maxMounted) maxMounted = idx;
+    }
+    if (minMounted != null && maxMounted != null) {
+      final mountedSpan = (maxMounted - minMounted + 1).clamp(1, lineCount);
+      final avgHeight = (position.viewportDimension / mountedSpan).clamp(
+        48.0,
+        160.0,
+      );
+      if (lineIndex > maxMounted) {
+        final delta = (lineIndex - maxMounted + 0.5) * avgHeight;
+        return (position.pixels + delta).clamp(
+          position.minScrollExtent,
+          position.maxScrollExtent,
+        );
+      }
+      if (lineIndex < minMounted) {
+        final delta = (minMounted - lineIndex + 0.5) * avgHeight;
+        return (position.pixels - delta).clamp(
+          position.minScrollExtent,
+          position.maxScrollExtent,
+        );
+      }
+    }
+    final fraction = lineCount <= 1 ? 0.0 : lineIndex / (lineCount - 1);
+    return (position.maxScrollExtent * fraction).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+  }
+
   Future<void> _followLine(int lineIndex, int lineCount, int attempt) async {
     var targetContext = _lineKey(lineIndex).currentContext;
-    if (targetContext == null && _scrollController.hasClients) {
+    for (
+      var step = 0;
+      step < 4 && targetContext == null && _scrollController.hasClients;
+      step += 1
+    ) {
       final position = _scrollController.position;
-      final fraction = lineCount <= 1 ? 0.0 : lineIndex / (lineCount - 1);
-      final estimatedOffset = (position.maxScrollExtent * fraction).clamp(
-        position.minScrollExtent,
-        position.maxScrollExtent,
+      final estimatedOffset = _estimateLineOffset(
+        lineIndex: lineIndex,
+        lineCount: lineCount,
+        position: position,
       );
+      if ((estimatedOffset - position.pixels).abs() < 1.0 && step > 0) {
+        break;
+      }
       await _scrollController.animateTo(
         estimatedOffset,
-        duration: const Duration(milliseconds: 220),
+        duration: Duration(milliseconds: step == 0 ? 180 : 90),
         curve: Curves.easeOutCubic,
       );
       if (!mounted || !_following || attempt != _followAttempt) return;
@@ -455,7 +571,7 @@ class _LyricContentState extends State<_LyricContent> {
     }
     await Scrollable.ensureVisible(
       targetContext,
-      alignment: 0.45,
+      alignment: 0.38,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,
     );
@@ -464,6 +580,7 @@ class _LyricContentState extends State<_LyricContent> {
   @override
   void dispose() {
     _followAttempt += 1;
+    widget.controller.removeListener(_handleControllerChanged);
     _scrollController.dispose();
     super.dispose();
   }
@@ -492,19 +609,18 @@ class _LyricLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textStyle =
+    final baseStyle =
         (immersive
-                ? active
-                      ? theme.textTheme.headlineSmall
-                      : theme.textTheme.titleLarge
-                : theme.textTheme.titleMedium)
-            ?.copyWith(
-              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              color: active
-                  ? theme.colorScheme.onSurface
-                  : theme.colorScheme.onSurfaceVariant,
-              height: 1.35,
-            );
+            ? theme.textTheme.titleLarge
+            : theme.textTheme.titleMedium) ??
+        const TextStyle(fontSize: 18);
+    final textStyle = baseStyle.copyWith(
+      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+      color: active
+          ? theme.colorScheme.onSurface
+          : theme.colorScheme.onSurfaceVariant,
+      height: 1.35,
+    );
     final segmentsComposeLine =
         line.segments.isNotEmpty &&
         line.segments.map((segment) => segment.text).join() == line.text;
@@ -526,9 +642,7 @@ class _LyricLine extends StatelessWidget {
         onTap: onSeek,
         excludeFromSemantics: true,
         borderRadius: BorderRadius.circular(immersive ? 22 : 18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
+        child: Container(
           margin: EdgeInsets.symmetric(vertical: immersive ? 6 : 4),
           padding: EdgeInsets.symmetric(
             horizontal: immersive ? 18 : 16,
@@ -536,61 +650,63 @@ class _LyricLine extends StatelessWidget {
           ),
           decoration: BoxDecoration(
             color: active
-                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.52)
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.56)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(immersive ? 22 : 18),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (segmentsComposeLine)
-                Wrap(
-                  spacing: 0,
-                  runSpacing: 4,
-                  children: [
-                    for (
-                      var index = 0;
-                      index < line.segments.length;
-                      index += 1
-                    )
-                      _TimedSegment(
-                        key: ValueKey('lyrics-word-$lineIndex-$index'),
-                        segment: line.segments[index],
-                        positionMs: active ? positionMs : -1,
-                        style: textStyle,
-                      ),
-                  ],
-                )
-              else
-                Text(line.text, style: textStyle),
-              if (auxiliaryText case final auxiliary?) ...[
-                const SizedBox(height: 6),
-                Text(
-                  auxiliary,
-                  key: ValueKey(
-                    auxiliaryIsRomanization
-                        ? 'lyrics-romanization-$lineIndex'
-                        : 'lyrics-translation-$lineIndex',
+          child: DefaultTextStyle.merge(
+            style: textStyle,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (segmentsComposeLine)
+                  Wrap(
+                    spacing: 0,
+                    runSpacing: 4,
+                    children: [
+                      for (
+                        var index = 0;
+                        index < line.segments.length;
+                        index += 1
+                      )
+                        _TimedSegment(
+                          key: ValueKey('lyrics-word-$lineIndex-$index'),
+                          segment: line.segments[index],
+                          positionMs: active ? positionMs : -1,
+                        ),
+                    ],
+                  )
+                else
+                  Text(line.text),
+                if (auxiliaryText case final auxiliary?) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    auxiliary,
+                    key: ValueKey(
+                      auxiliaryIsRomanization
+                          ? 'lyrics-romanization-$lineIndex'
+                          : 'lyrics-translation-$lineIndex',
+                    ),
+                    softWrap: true,
+                    maxLines: null,
+                    overflow: TextOverflow.visible,
+                    textWidthBasis: TextWidthBasis.parent,
+                    style: auxiliaryIsRomanization
+                        ? theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontStyle: FontStyle.italic,
+                          )
+                        : (immersive
+                                  ? theme.textTheme.bodyLarge
+                                  : theme.textTheme.bodyMedium)
+                              ?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                height: 1.4,
+                              ),
                   ),
-                  softWrap: true,
-                  maxLines: null,
-                  overflow: TextOverflow.visible,
-                  textWidthBasis: TextWidthBasis.parent,
-                  style: auxiliaryIsRomanization
-                      ? theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontStyle: FontStyle.italic,
-                        )
-                      : (immersive
-                                ? theme.textTheme.bodyLarge
-                                : theme.textTheme.bodyMedium)
-                            ?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              height: 1.4,
-                            ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -602,35 +718,47 @@ class _TimedSegment extends StatelessWidget {
   const _TimedSegment({
     required this.segment,
     required this.positionMs,
-    required this.style,
     super.key,
   });
 
   final TimedLyricSegment segment;
   final int positionMs;
-  final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
     final progress = _progress(segment, positionMs);
     final colors = Theme.of(context).colorScheme;
-    final text = Text(segment.text, style: style);
+    final animatedStyle = DefaultTextStyle.of(context).style;
+    final activeLine = positionMs >= 0;
+    final unsungColor = activeLine
+        ? Color.lerp(colors.onSurfaceVariant, colors.onSurface, 0.35)!
+        : colors.onSurfaceVariant;
+    final unsungText = Text(
+      segment.text,
+      style: animatedStyle.copyWith(color: unsungColor),
+    );
     final painted = progress <= 0
-        ? text
+        ? unsungText
         : progress >= 1
-        ? Text(segment.text, style: style?.copyWith(color: colors.primary))
+        ? Text(
+            segment.text,
+            style: animatedStyle.copyWith(color: colors.primary),
+          )
         : ShaderMask(
             blendMode: BlendMode.srcIn,
             shaderCallback: (bounds) => LinearGradient(
               colors: [
                 colors.primary,
                 colors.primary,
-                colors.onSurfaceVariant,
-                colors.onSurfaceVariant,
+                unsungColor,
+                unsungColor,
               ],
               stops: [0, progress, progress, 1],
             ).createShader(bounds),
-            child: text,
+            child: Text(
+              segment.text,
+              style: animatedStyle.copyWith(color: Colors.white),
+            ),
           );
     return Semantics(
       label: segment.text,
@@ -645,22 +773,8 @@ class _LyricLoading extends StatelessWidget {
   const _LyricLoading({super.key});
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SizedBox.square(
-          dimension: 36,
-          child: CircularProgressIndicator(strokeWidth: 3),
-        ),
-        const SizedBox(height: 18),
-        Text(
-          context.l10n.lyricsLoading,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) =>
+      MusicLoadingPanel(label: context.l10n.lyricsLoading);
 }
 
 class _LyricMessage extends StatelessWidget {
@@ -680,59 +794,16 @@ class _LyricMessage extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final copy = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          detail,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            height: 1.4,
-          ),
-        ),
-      ],
-    );
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 40, color: theme.colorScheme.primary),
-              const SizedBox(height: 18),
-              if (announce)
-                Semantics(
-                  container: true,
-                  liveRegion: true,
-                  label: context.l10n.lyricsAnnouncement(detail, title),
-                  excludeSemantics: true,
-                  child: copy,
-                )
-              else
-                copy,
-              if (action case final action?) ...[
-                const SizedBox(height: 20),
-                action,
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => MusicContentStatePanel(
+    icon: icon,
+    title: title,
+    detail: detail,
+    liveRegion: announce,
+    announcementLabel: announce
+        ? context.l10n.lyricsAnnouncement(detail, title)
+        : null,
+    action: action,
+  );
 }
 
 double _progress(TimedLyricSegment segment, int positionMs) {

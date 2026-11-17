@@ -242,6 +242,38 @@ void main() {
   );
 
   test(
+    'transient refresh failures retain current and staged credentials',
+    () async {
+      for (final failure in <bridge.QqMusicRefreshFailure>[
+        bridge.QqMusicRefreshFailure.network,
+        bridge.QqMusicRefreshFailure.rateLimited,
+        bridge.QqMusicRefreshFailure.serviceUnavailable,
+        bridge.QqMusicRefreshFailure.invalidResponse,
+        bridge.QqMusicRefreshFailure.storageUnavailable,
+      ]) {
+        final current = _MemoryVault()..value = Uint8List.fromList(<int>[1]);
+        final staged = _MemoryVault()..value = Uint8List.fromList(<int>[2]);
+        final coordinator = QqSessionContinuationCoordinator(
+          SerializedCredentialVault(current, stagedVault: staged),
+          prepareAfterReadRejection: () async =>
+              bridge.QqMusicRefreshPreparation(
+                reusedNewGeneration: false,
+                failure: failure,
+              ),
+        );
+
+        expect(
+          await coordinator.continueAfterReadRejection(),
+          QqSessionContinuationResult.temporarilyUnavailable,
+          reason: '$failure must not become logout',
+        );
+        expect(await current.read(), orderedEquals(<int>[1]));
+        expect(await staged.read(), orderedEquals(<int>[2]));
+      }
+    },
+  );
+
+  test(
     'checkpoint recovers a retained stage before preparing refresh',
     () async {
       final vault = SerializedCredentialVault(

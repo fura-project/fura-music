@@ -35,7 +35,7 @@ EdgeInsets furaPlaybackSnackBarMargin({
     final expandedControls = viewportWidth < 600 ? 132.0 : 124.0;
     bottom += expandedControls;
   } else if (playerPresent) {
-    final player = viewportWidth < 640 ? 68.0 : 88.0;
+    final player = viewportWidth < 640 ? 80.0 : 88.0;
     final navigation = viewportWidth < 840 && !settingsOpen ? 72.0 : 0.0;
     bottom += player + navigation;
   }

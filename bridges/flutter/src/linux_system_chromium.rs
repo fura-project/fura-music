@@ -8,6 +8,7 @@
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::env;
+use std::ffi::OsString;
 use std::fs::Metadata;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -41,11 +42,12 @@ pub(crate) mod kugou_harness;
 const OFFICIAL_LOGIN_URL: &str = "https://music.163.com/#/login";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
 const TARGET_TIMEOUT: Duration = Duration::from_secs(20);
-const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const CDP_COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 const CLEAN_CLOSE_TIMEOUT: Duration = Duration::from_secs(10);
 const TERMINATION_TIMEOUT: Duration = Duration::from_secs(5);
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
+const COOKIE_SETTLE_INTERVAL: Duration = Duration::from_millis(1500);
 const HTTP_RESPONSE_LIMIT: u64 = 64 * 1024;
 const DEVTOOLS_FILE_LIMIT: u64 = 4096;
 const CDP_PATH_LIMIT: usize = 256;
@@ -95,11 +97,65 @@ struct CdpCookie {
     name: String,
     value: String,
     domain: String,
+    #[serde(default)]
+    path: String,
+    #[serde(default)]
+    expires: f64,
+    #[serde(default, rename = "httpOnly")]
+    http_only: bool,
+    #[serde(default)]
+    secure: bool,
 }
 
 impl Drop for CdpCookie {
     fn drop(&mut self) {
         self.value.zeroize();
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct NeteaseCookieObservation {
+    pub present: bool,
+    pub music_domain: bool,
+    pub parent_163_domain: bool,
+    pub root_path: bool,
+    pub non_root_path: bool,
+    pub expiry_present: bool,
+    pub http_only: bool,
+    pub secure: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct NeteaseCaptureObservation {
+    pub music_u: NeteaseCookieObservation,
+    pub music_r_u: NeteaseCookieObservation,
+    pub csrf: NeteaseCookieObservation,
+    pub os: NeteaseCookieObservation,
+    pub appver: NeteaseCookieObservation,
+    pub buildver: NeteaseCookieObservation,
+    pub device_id: NeteaseCookieObservation,
+    pub nmtid: NeteaseCookieObservation,
+    pub wnmcid: NeteaseCookieObservation,
+    pub ntes_nuid: NeteaseCookieObservation,
+    pub remember_me: NeteaseCookieObservation,
+    pub anti_cheat_token: NeteaseCookieObservation,
+}
+
+pub(crate) struct CapturedNeteaseSession {
+    credential: Vec<u8>,
+    #[allow(dead_code)] // Read by the feature-gated binary's module instance.
+    pub observation: NeteaseCaptureObservation,
+}
+
+impl CapturedNeteaseSession {
+    pub(crate) fn take_credential(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.credential)
+    }
+}
+
+impl Drop for CapturedNeteaseSession {
+    fn drop(&mut self) {
+        self.credential.zeroize();
     }
 }
 
@@ -113,6 +169,15 @@ pub(crate) fn is_supported() -> bool {
 pub(crate) async fn capture_netease_credential(
     is_current: impl Fn() -> bool,
 ) -> Result<Vec<u8>, CaptureFailure> {
+    let mut captured = capture_netease_session(is_current).await?;
+    Ok(captured.take_credential())
+}
+
+/// Captures the minimal credential plus fixed, secret-free Cookie metadata for
+/// the bounded research gate. No additional Cookie value leaves this module.
+pub(crate) async fn capture_netease_session(
+    is_current: impl Fn() -> bool,
+) -> Result<CapturedNeteaseSession, CaptureFailure> {
     if !is_current() {
         return Err(CaptureFailure::Cancelled);
     }
@@ -144,9 +209,7 @@ pub(crate) async fn capture_netease_credential(
         },
     );
     if cleanup.is_err() {
-        if let Ok(mut credential) = capture {
-            credential.zeroize();
-        }
+        drop(capture);
         return Err(CaptureFailure::CleanupFailed);
     }
     capture
@@ -195,25 +258,82 @@ async fn start_browser(
     browser: &BrowserCandidate,
     is_current: &impl Fn() -> bool,
 ) -> Result<RunningBrowser, CaptureFailure> {
-    start_browser_at(browser, is_current, OFFICIAL_LOGIN_URL, &[]).await
+    start_browser_with_presentation(
+        browser,
+        is_current,
+        OFFICIAL_LOGIN_URL,
+        &[],
+        BrowserPresentation::Window,
+    )
+    .await
 }
 
+#[cfg(any(test, feature = "kugou-cdp-gate"))]
 async fn start_browser_at(
     browser: &BrowserCandidate,
     is_current: &impl Fn() -> bool,
     entry: &str,
     extra_args: &[String],
 ) -> Result<RunningBrowser, CaptureFailure> {
+    start_browser_with_presentation(
+        browser,
+        is_current,
+        entry,
+        extra_args,
+        BrowserPresentation::App,
+    )
+    .await
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BrowserPresentation {
+    #[cfg(any(test, feature = "kugou-cdp-gate"))]
+    App,
+    Window,
+}
+
+fn browser_arguments(
+    entry: &str,
+    profile_path: &Path,
+    extra_args: &[String],
+    presentation: BrowserPresentation,
+) -> Vec<OsString> {
+    let mut arguments = Vec::with_capacity(7 + extra_args.len());
+    match presentation {
+        #[cfg(any(test, feature = "kugou-cdp-gate"))]
+        BrowserPresentation::App => arguments.push(format!("--app={entry}").into()),
+        BrowserPresentation::Window => {
+            arguments.push("--new-window".into());
+            arguments.push(entry.into());
+        }
+    }
+    arguments.extend([
+        format!("--user-data-dir={}", profile_path.display()).into(),
+        "--remote-debugging-address=127.0.0.1".into(),
+        "--remote-debugging-port=0".into(),
+        "--no-first-run".into(),
+        "--no-default-browser-check".into(),
+    ]);
+    arguments.extend(extra_args.iter().map(OsString::from));
+    arguments
+}
+
+async fn start_browser_with_presentation(
+    browser: &BrowserCandidate,
+    is_current: &impl Fn() -> bool,
+    entry: &str,
+    extra_args: &[String],
+    presentation: BrowserPresentation,
+) -> Result<RunningBrowser, CaptureFailure> {
     let profile = create_profile()?;
     let profile_path = profile.path().to_path_buf();
     let child = Command::new(&browser.binary)
-        .arg(format!("--app={entry}"))
-        .arg(format!("--user-data-dir={}", profile_path.display()))
-        .arg("--remote-debugging-address=127.0.0.1")
-        .arg("--remote-debugging-port=0")
-        .arg("--no-first-run")
-        .arg("--no-default-browser-check")
-        .args(extra_args)
+        .args(browser_arguments(
+            entry,
+            &profile_path,
+            extra_args,
+            presentation,
+        ))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -636,8 +756,10 @@ async fn wait_for_credential(
     cdp: &mut CdpClient,
     child: &mut Child,
     is_current: &impl Fn() -> bool,
-) -> Result<Vec<u8>, CaptureFailure> {
+) -> Result<CapturedNeteaseSession, CaptureFailure> {
     let deadline = Instant::now() + ATTEMPT_TIMEOUT;
+    let mut settle_deadline = None;
+    let mut last_observation = None;
     loop {
         require_active(child, is_current)?;
         let mut result = cdp.command("Storage.getCookies", json!({})).await?;
@@ -648,9 +770,21 @@ async fn wait_for_credential(
                 .ok_or(CaptureFailure::DevtoolsInvalid)?,
         )
         .map_err(|_| CaptureFailure::DevtoolsInvalid)?;
-        if let Some(candidate) = credential_candidate(&cookies)? {
-            diagnostic("cookie", "candidate_ready");
-            return Ok(candidate);
+        let candidate = credential_candidate_with_observation(&cookies)?;
+        let observation = capture_cookie_observation(&cookies);
+        if std::env::var("FURA_NETEASE_WEB_REFRESH_DEBUG").as_deref() == Ok("1")
+            && last_observation != Some(observation)
+        {
+            eprintln!("{}", capture_observation(&cookies, candidate.is_some()));
+            last_observation = Some(observation);
+        }
+        if let Some(candidate) = candidate {
+            let settle_deadline =
+                settle_deadline.get_or_insert_with(|| Instant::now() + COOKIE_SETTLE_INTERVAL);
+            if Instant::now() >= *settle_deadline {
+                diagnostic("cookie", "candidate_ready");
+                return Ok(candidate);
+            }
         }
         if Instant::now() >= deadline {
             return Err(CaptureFailure::TimedOut);
@@ -659,31 +793,71 @@ async fn wait_for_credential(
     }
 }
 
+#[cfg(test)]
 fn credential_candidate(cookies: &[CdpCookie]) -> Result<Option<Vec<u8>>, CaptureFailure> {
-    let result = build_credential_candidate(cookies);
-    if std::env::var("FURA_NETEASE_WEB_REFRESH_DEBUG").as_deref() == Ok("1") {
-        eprintln!(
-            "{}",
-            capture_observation(cookies, matches!(result, Ok(Some(_))))
-        );
-    }
-    result
+    credential_candidate_with_observation(cookies)
+        .map(|candidate| candidate.map(|mut candidate| candidate.take_credential()))
+}
+
+fn credential_candidate_with_observation(
+    cookies: &[CdpCookie],
+) -> Result<Option<CapturedNeteaseSession>, CaptureFailure> {
+    build_credential_candidate(cookies).map(|candidate| {
+        candidate.map(|credential| CapturedNeteaseSession {
+            credential,
+            observation: capture_cookie_observation(cookies),
+        })
+    })
 }
 
 fn capture_observation(cookies: &[CdpCookie], valid: bool) -> String {
-    let observed = |name: &str| {
-        cookies.iter().any(|cookie| {
-            matches!(cookie.domain.as_str(), "music.163.com" | ".music.163.com")
-                && cookie.name == name
-                && !cookie.value.is_empty()
-        })
-    };
+    let observed = capture_cookie_observation(cookies);
     format!(
-        "FURA_NETEASE_WEB_REFRESH_DEBUG path=linux_isolated_chromium phase=capture observed_music_u={} observed_music_r_u={} observed_csrf={} candidate_valid={valid}",
-        observed("MUSIC_U"),
-        observed("MUSIC_R_U"),
-        observed("__csrf"),
+        "FURA_NETEASE_WEB_REFRESH_DEBUG path=linux_isolated_chromium phase=capture observed_music_u={} observed_music_u_parent_163={} observed_music_r_u={} observed_music_r_u_parent_163={} observed_csrf={} observed_csrf_parent_163={} candidate_valid={valid}",
+        observed.music_u.music_domain,
+        observed.music_u.parent_163_domain,
+        observed.music_r_u.music_domain,
+        observed.music_r_u.parent_163_domain,
+        observed.csrf.music_domain,
+        observed.csrf.parent_163_domain,
     )
+}
+
+fn capture_cookie_observation(cookies: &[CdpCookie]) -> NeteaseCaptureObservation {
+    fn observe(cookies: &[CdpCookie], expected_name: &str) -> NeteaseCookieObservation {
+        let mut observation = NeteaseCookieObservation::default();
+        for cookie in cookies
+            .iter()
+            .filter(|cookie| cookie.name == expected_name && !cookie.value.is_empty())
+        {
+            observation.present = true;
+            observation.music_domain |=
+                matches!(cookie.domain.as_str(), "music.163.com" | ".music.163.com");
+            observation.parent_163_domain |=
+                matches!(cookie.domain.as_str(), "163.com" | ".163.com");
+            observation.root_path |= cookie.path.is_empty() || cookie.path == "/";
+            observation.non_root_path |= !cookie.path.is_empty() && cookie.path != "/";
+            observation.expiry_present |= cookie.expires > 0.0;
+            observation.http_only |= cookie.http_only;
+            observation.secure |= cookie.secure;
+        }
+        observation
+    }
+
+    NeteaseCaptureObservation {
+        music_u: observe(cookies, "MUSIC_U"),
+        music_r_u: observe(cookies, "MUSIC_R_U"),
+        csrf: observe(cookies, "__csrf"),
+        os: observe(cookies, "os"),
+        appver: observe(cookies, "appver"),
+        buildver: observe(cookies, "buildver"),
+        device_id: observe(cookies, "deviceId"),
+        nmtid: observe(cookies, "NMTID"),
+        wnmcid: observe(cookies, "WNMCID"),
+        ntes_nuid: observe(cookies, "_ntes_nuid"),
+        remember_me: observe(cookies, "__remember_me"),
+        anti_cheat_token: observe(cookies, "x-antiCheatToken"),
+    }
 }
 
 pub(crate) fn report_web_account_verification() {
@@ -906,6 +1080,10 @@ mod tests {
             name: name.to_owned(),
             value: value.to_owned(),
             domain: domain.to_owned(),
+            path: "/".to_owned(),
+            expires: 0.0,
+            http_only: false,
+            secure: false,
         }
     }
 
@@ -948,6 +1126,45 @@ mod tests {
             validate_websocket_endpoint("ws://127.0.0.1:34567/devtools/browser/other", 34567, path)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn netease_uses_normal_window_while_cdp_fixture_keeps_app_mode() {
+        let profile = Path::new("/run/user/1000/fura-profile");
+        let window = browser_arguments(
+            OFFICIAL_LOGIN_URL,
+            profile,
+            &[],
+            BrowserPresentation::Window,
+        );
+        let window = window
+            .iter()
+            .map(|argument| argument.to_string_lossy())
+            .collect::<Vec<_>>();
+        assert!(window.contains(&std::borrow::Cow::Borrowed("--new-window")));
+        assert!(window.contains(&std::borrow::Cow::Borrowed(OFFICIAL_LOGIN_URL)));
+        assert!(!window.iter().any(|argument| argument.starts_with("--app=")));
+        assert!(
+            window
+                .iter()
+                .any(|argument| argument == "--remote-debugging-address=127.0.0.1")
+        );
+
+        let app = browser_arguments(
+            "https://fixture.invalid/",
+            profile,
+            &["--synthetic".into()],
+            BrowserPresentation::App,
+        );
+        let app = app
+            .iter()
+            .map(|argument| argument.to_string_lossy())
+            .collect::<Vec<_>>();
+        assert!(app.contains(&std::borrow::Cow::Borrowed(
+            "--app=https://fixture.invalid/"
+        )));
+        assert!(app.contains(&std::borrow::Cow::Borrowed("--synthetic")));
+        assert!(!app.contains(&std::borrow::Cow::Borrowed("--new-window")));
     }
 
     #[test]
@@ -1018,7 +1235,7 @@ mod tests {
                 assert_eq!(
                     capture_observation(&cookies, true),
                     format!(
-                        "FURA_NETEASE_WEB_REFRESH_DEBUG path=linux_isolated_chromium phase=capture observed_music_u=true observed_music_r_u={include_r} observed_csrf={include_csrf} candidate_valid=true"
+                        "FURA_NETEASE_WEB_REFRESH_DEBUG path=linux_isolated_chromium phase=capture observed_music_u=true observed_music_u_parent_163=false observed_music_r_u={include_r} observed_music_r_u_parent_163=true observed_csrf={include_csrf} observed_csrf_parent_163=false candidate_valid=true"
                     )
                 );
             }
@@ -1027,6 +1244,43 @@ mod tests {
             credential_candidate(&[cookie("MUSIC_R_U", "only-r", "music.163.com")]),
             Ok(None)
         );
+    }
+
+    #[test]
+    fn cookie_observation_reports_only_fixed_metadata_classes() {
+        let mut music_u = cookie("MUSIC_U", "must-not-appear", ".music.163.com");
+        music_u.expires = 1_900_000_000.0;
+        music_u.http_only = true;
+        music_u.secure = true;
+        let mut r = cookie("MUSIC_R_U", "also-secret", ".163.com");
+        r.path = "/weapi".into();
+        let cookies = vec![
+            music_u,
+            r,
+            cookie("appver", "9.9.9", ".music.163.com"),
+            cookie("unlisted", "ignored", ".music.163.com"),
+        ];
+        let observation = capture_cookie_observation(&cookies);
+        assert_eq!(
+            observation.music_u,
+            NeteaseCookieObservation {
+                present: true,
+                music_domain: true,
+                parent_163_domain: false,
+                root_path: true,
+                non_root_path: false,
+                expiry_present: true,
+                http_only: true,
+                secure: true,
+            }
+        );
+        assert!(observation.music_r_u.present);
+        assert!(observation.music_r_u.parent_163_domain);
+        assert!(observation.music_r_u.non_root_path);
+        assert!(observation.appver.present);
+        assert!(!format!("{observation:?}").contains("must-not-appear"));
+        assert!(!format!("{observation:?}").contains("also-secret"));
+        assert!(!format!("{observation:?}").contains("9.9.9"));
     }
 
     #[test]

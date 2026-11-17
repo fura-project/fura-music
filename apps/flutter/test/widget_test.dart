@@ -34,6 +34,7 @@ import 'package:flutter/material.dart'
         GlobalKey,
         GridView,
         IconButton,
+        Icons,
         InkWell,
         LinearProgressIndicator,
         ListTile,
@@ -57,6 +58,7 @@ import 'package:flutter/material.dart'
         SegmentedButton,
         Semantics,
         SingleChildScrollView,
+        SliverGrid,
         SnackBar,
         SnackBarBehavior,
         SizedBox,
@@ -113,6 +115,7 @@ import 'package:flutterustmusic/library/favorite_album_gateway.dart';
 import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/album_favorite_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
+import 'package:flutterustmusic/library/liked_songs_page.dart';
 import 'package:flutterustmusic/library/playlist_creation_gateway.dart';
 import 'package:flutterustmusic/library/playlist_deletion_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -3846,6 +3849,14 @@ void main() {
       final discoverEntry = find.byKey(const ValueKey('open-recommendations'));
       await tester.tap(discoverEntry);
       await tester.pumpAndSettle();
+      expect(discoverEntry, findsOneWidget);
+      expect(
+        find.descendant(
+          of: discoverEntry,
+          matching: find.byIcon(Icons.explore_rounded),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const ValueKey('recommendations-content')),
         findsOneWidget,
@@ -3867,6 +3878,14 @@ void main() {
 
       tester.view.physicalSize = const Size(1000, 700);
       await tester.pumpAndSettle();
+      expect(discoverEntry, findsOneWidget);
+      expect(
+        find.descendant(
+          of: discoverEntry,
+          matching: find.byIcon(Icons.explore_rounded),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.byKey(const PageStorageKey<String>('recommended-playlist-grid')),
         findsOneWidget,
@@ -5016,7 +5035,7 @@ void main() {
       expect(find.byKey(const ValueKey('liked-albums-search')), findsOneWidget);
       expect(find.text('Saved Album'), findsOneWidget);
       expect(favorites.requests, [(0, 20)]);
-      expect(find.byType(GridView), findsNothing);
+      expect(find.byType(SliverGrid), findsNothing);
       expect(find.byType(NavigationBar), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('primary-home-destination')));
@@ -5029,7 +5048,11 @@ void main() {
 
       tester.view.physicalSize = const Size(1000, 700);
       await tester.pumpAndSettle();
-      expect(find.byType(GridView), findsOneWidget);
+      expect(
+        find.byKey(const PageStorageKey<String>('favorite-album-grid')),
+        findsOneWidget,
+      );
+      expect(find.byType(SliverGrid), findsOneWidget);
       expect(favorites.requests, [(0, 20)]);
 
       await tester.tap(
@@ -7103,7 +7126,7 @@ void main() {
       expect(mutationSnackBar.behavior, SnackBarBehavior.floating);
       expect(
         mutationSnackBar.margin,
-        const EdgeInsets.fromLTRB(16, 0, 16, 152),
+        const EdgeInsets.fromLTRB(16, 0, 16, 164),
       );
       final mutationMessage = tester.getRect(
         find.text(_en.libraryMutationSuccess),
@@ -9339,6 +9362,201 @@ void main() {
     await tester.tap(find.text(_en.commonAddToQueue));
     await tester.pumpAndSettle();
     expect(reviewQueue.pushed, hasLength(1));
+
+    tester.view.padding = const FakeViewPadding(top: 44, bottom: 34);
+    addTearDown(tester.view.resetPadding);
+    await pumpLikedSongs(const Size(390, 844));
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('liked-songs-expanded-header')))
+          .dy,
+      closeTo(44 + kToolbarHeight, 1),
+    );
+    const syntheticPlaylist = UserPlaylistSummary(
+      providerId: 'qq-music',
+      opaqueId: 'synthetic-playlist',
+      title: 'A dream',
+      trackCount: 18,
+      ownership: UserPlaylistOwnership.owned,
+    );
+    reviewDetail.results.addAll(const [
+      PlaylistTrackPageResult(total: 0, tracks: []),
+      PlaylistTrackPageResult(total: 0, tracks: []),
+    ]);
+    tester
+        .widget<LikedSongsPage>(find.byType(LikedSongsPage))
+        .onOpenPlaylist(syntheticPlaylist);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(
+              const ValueKey('liked-songs-expanded-header'),
+              skipOffstage: false,
+            ),
+          )
+          .dy,
+      closeTo(44 + kToolbarHeight, 1),
+    );
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('collection-detail-adaptive-header')),
+          )
+          .dy,
+      closeTo(44, 1),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('playlist-detail-back')));
+    await tester.pumpAndSettle();
+    final paddedLikedList = find.byKey(
+      const PageStorageKey<String>('liked-songs-track-list'),
+    );
+    await tester.drag(paddedLikedList, const Offset(0, -180));
+    await tester.pumpAndSettle();
+    expect(find.byType(AppBar), findsNothing);
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('liked-songs-collapsed-header')),
+          )
+          .dy,
+      closeTo(44, 1),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('liked-songs-title'))).dy,
+      greaterThanOrEqualTo(50),
+    );
+    await tester.tap(find.byKey(const ValueKey('open-settings')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(
+              const ValueKey('liked-songs-collapsed-header'),
+              skipOffstage: false,
+            ),
+          )
+          .dy,
+      closeTo(44, 1),
+    );
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('embedded-settings-page')))
+          .dy,
+      closeTo(44, 1),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-back')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('liked-songs-collapsed-header')),
+          )
+          .dy,
+      closeTo(44, 1),
+    );
+    tester.view.physicalSize = const Size(600, 844);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('liked-songs-collapsed-header')),
+          )
+          .dy,
+      closeTo(44, 1),
+    );
+    tester
+        .widget<LikedSongsPage>(find.byType(LikedSongsPage))
+        .onOpenPlaylist(syntheticPlaylist);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(
+              const ValueKey('liked-songs-collapsed-header'),
+              skipOffstage: false,
+            ),
+          )
+          .dy,
+      closeTo(44, 1),
+    );
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('collection-detail-adaptive-header')),
+          )
+          .dy,
+      closeTo(44 + kToolbarHeight, 1),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('playlist-detail-back')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('liked-songs-collapsed-header')),
+          )
+          .dy,
+      closeTo(44, 1),
+    );
+    await tester.drag(paddedLikedList, const Offset(0, 400));
+    await tester.pumpAndSettle();
+    expect(find.byType(AppBar), findsOneWidget);
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('liked-songs-expanded-header')))
+          .dy,
+      closeTo(44 + kToolbarHeight, 1),
+    );
+    await tester.drag(paddedLikedList, const Offset(0, -180));
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(1440, 720);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('liked-songs-collapsed-header')),
+          )
+          .dy,
+      closeTo(44, 1),
+    );
+    await tester.tap(find.byKey(const ValueKey('open-settings')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('embedded-settings-page')))
+          .dy,
+      closeTo(44 + kToolbarHeight, 1),
+    );
+    await tester.tap(find.byKey(const ValueKey('settings-sidebar-back')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getTopLeft(
+            find.byKey(const ValueKey('liked-songs-collapsed-header')),
+          )
+          .dy,
+      closeTo(44, 1),
+    );
+    await tester.drag(paddedLikedList, const Offset(0, 400));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey('liked-songs-expanded-header')))
+          .dy,
+      closeTo(44 + kToolbarHeight, 1),
+    );
+    tester.view.resetPadding();
 
     tester.platformDispatcher.accessibilityFeaturesTestValue =
         FakeAccessibilityFeatures.allOn;

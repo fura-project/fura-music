@@ -233,6 +233,176 @@ The coordinator exchanges a 405 code inside the same attempt generation. Replace
 
 The Provider layer now maps raw protocol image/state/error types into provider-neutral QR contracts and retains the resulting credential internally. The Flutter bridge returns an opaque Rust-owned session with explicit advance/cancel operations, image bytes/media type, coarse progress/failure enums, and an authenticated boolean. Generated Dart contains no protocol UUID, OAuth code, credential, account identity, key, or refresh material. This establishes the boundary only; it does not prove a live successful login or credential persistence.
 
+### 2026-11-16 disposable Type 2 refresh gate login correction
+
+The first completed Human scan for the disposable Type 2 refresh gate reached
+QQ approval but failed before credential exchange completed. It sent no refresh
+request and performed no account verification. The original fixed diagnostic
+collapsed all exchange failures into `qq_login=failed`, so the gate now reports
+only a fixed secret-safe subcategory for check-signature HTTP/cookie,
+authorization redirect/code, credential envelope/material, transport or
+unexpected state. It still never prints the redirect, `ptsigx`, cookies, OAuth
+code, account identity or credential.
+
+Deterministic reproduction then exposed a concrete pre-exchange defect.
+`Url::query_pairs()` applies form semantics and changed a literal `+` in QQ's
+opaque one-time `ptsigx` into a space before `check_sig`. Current direct
+implementations independently preserve that field without form decoding:
+L-1124/QQMusicApi at `c046788dd1f11daacc74da487cbbf1bcd8ac6f33` extracts it from
+the callback string, while Melodex at
+`5a75844cbb5bd1605f5f07b8aa6f1a8f841c2763` documents and regression-tests the
+same plus-to-space failure. Fura now validates the callback URL but extracts
+only the bounded raw `uin` and `ptsigx` query values, then lets its outgoing
+request encode them exactly once. A regression failed with
+`"abc def/ghi=" != "abc+def/ghi="` before the change and now proves the raw
+value reaches the `check_sig` request builder unchanged.
+
+A later post-parser-fix Human scan completed QQ approval and crossed the
+check-signature, authorization and credential-exchange network phases. It
+stopped before any refresh or account verification with the fixed diagnostic
+`credential_expiry_invalid`. This was new bounded live evidence: the QR path
+could now obtain a Type 2 credential envelope, but Fura rejected its local
+timestamp model.
+
+The decoder had conflated two independent response fields. It required OAuth
+`expired_at` to equal the music-key end computed from
+`musickeyCreateTime + keyExpiresIn`, stored only one expiry, used it both for
+local key validity and as Type 2 refresh `expired_in`, and rejected a valid
+response when the two values differed. Two current direct implementations
+corroborate the separation without contributing copied code:
+
+- L-1124/QQMusicApi at
+  `c046788dd1f11daacc74da487cbbf1bcd8ac6f33` models the three fields
+  independently, uses the create-time/lifetime pair for music-key validity,
+  and sends `expired_at` as Type 2 `expired_in`.
+- AllMusic at `1628ca7978035e3d60a3b7bc381f42e104535bcb` independently treats
+  `expired_at` as the OAuth expiry and the create-time/lifetime pair as the
+  music-key expiry. It is protocol evidence only; no GPL implementation was
+  copied into Fura.
+
+Fura now stores the music-key lifetime and opaque refresh expiry separately.
+Local validity/checkpoints use only the former; Type 2 refresh transmits only
+the latter. Secure-storage credential version 2 persists both, while a bounded
+version-1 QQ migration retains the old single expiry as both fields so an
+existing refreshable document is not silently destroyed. Regressions use
+deliberately different values, reject a partial music-key lifetime pair, prove
+the exact OAuth value reaches `expired_in`, round-trip both fields, and keep
+diagnostics presence-only. QQ `loginType=2` production activation remains
+false.
+
+Post-correction Human runs did reach the one bounded refresh request and
+returned the fixed secret-safe result `upstream_rejected`. A first reading
+attributed that result to the newly issued credential being outside a
+five-minute pre-expiry window. The 2026-11-17 constraint audit corrected that
+conclusion: the request serialized Type 2 `musicid` as a JSON string, while
+current direct implementations send a number and QQMusicApi issue 90 records a
+real string-versus-number rejection. The live result therefore cannot prove a
+timing restriction or reject the endpoint/profile candidate.
+
+Fura now converts the already validated decimal account identity to a JSON
+number and asserts the exact wire type. The Provider retains its five-minute
+checkpoint as a conservative product scheduling choice, not a protocol fact.
+The disposable gate no longer suppresses its one explicitly authorized refresh
+solely because a credential is fresh. It remains Debug-only, reads no stored
+credential, performs no vault I/O, sends at most one refresh and one account
+verification, and has no endpoint/profile fallback.
+
+The corrected bounded run returned
+`classification=PASS phase=account_verification detail=accepted`: the one
+numeric-identity refresh produced a candidate accepted by the one same-account
+verification. Temporary QR material was removed and the live budget was not
+reused. This is live evidence for the current Web `LoginServer/Login` candidate
+on one newly issued disposable credential, not evidence for an optimal refresh
+schedule, `needRefreshKeyIn` semantics, every credential/profile or a
+long-duration soak.
+
+Following a lifecycle audit, native production construction now enables the
+Type 2 continuation independently alongside the already verified WeChat
+continuation. The existing app-lifetime owner, five-minute checkpoint,
+single-flight decision, staged vault rotation, same-account verification,
+generation dominance, safe-read retry-once and mutation no-replay semantics are
+unchanged. See the
+[constraint audit](provider-session-constraint-audit-2026-11-17.md).
+
+## 2026-11-17 WeChat long-session correction
+
+A Human report clarified that the observed long-lived session loss was a
+WeChat login, not Type 2. The production WeChat activation bit was already on,
+so the follow-up audited the complete initial-login -> durable restore -> read
+rejection/checkpoint -> refresh -> stage -> same-account verification ->
+publish -> commit path rather than changing activation.
+
+Two deterministic defects were found in the WeChat protocol boundary:
+
+1. Fura treated `openid`, `unionid`, `refresh_key` and `refresh_token` as four
+   non-empty refresh prerequisites. Current direct-client evidence only
+   supports `refresh_token` as a prerequisite for Fura's existing Web-profile
+   candidate. The other three fields are transmitted when known and remain
+   present-but-empty when unavailable.
+2. Fura decoded a successful refresh response as a complete standalone
+   credential. Multiple independent real clients instead overlay returned
+   fields onto the existing credential/session. A response that rotates only
+   `musickey` therefore lost the source account and refresh material and became
+   `InvalidCredential`/`IncompleteRotation` before staging.
+
+The evidence matrix used for the correction is:
+
+| Source | Pin / license | WeChat request evidence | Rotation evidence | Independence / use |
+| --- | --- | --- | --- | --- |
+| [L-1124/QQMusicApi](https://github.com/L-1124/QQMusicApi/tree/c046788dd1f11daacc74da487cbbf1bcd8ac6f33) | `c046788d`, GPL-3.0 | Sends `openid`, `refresh_token`, `unionid` and `refresh_key`; model defaults permit empty strings. | Decodes the response as a fresh credential. | Direct wire family; evidence only, no code copied. |
+| [cfour-hi/mygo-cloudmusic](https://github.com/cfour-hi/mygo-cloudmusic/tree/36d413ba928c4f076a3d4be44f8e1632588d7526) | `36d413ba`, AGPL-3.0 | Sends the same fields and considers a WeChat session refreshable with token or key. | Its fixture returns a narrow rotation and the product retains omitted refresh/session fields. | Independent real-client behavior; evidence only. |
+| [rzh0504/Qmdr](https://github.com/rzh0504/Qmdr/tree/6e779a474d8453d9ee6741449d1980404d554c49) | `6e779a47`, GPL-3.0 | Its candidate requires both refresh token and key, with a different request envelope. | Explicitly merges omitted response fields; tests cover that merge. | Independent implementation; evidence only. |
+| [SPlayer-Dev/SPlayer-Next](https://github.com/SPlayer-Dev/SPlayer-Next/tree/6b26b685f67cfac9d3233747b399255620f45b87) | `6b26b685`, AGPL-3.0 | Builds all fields from the current cookie map, using empty values when absent. | Copies the session map and overlays only fields returned by refresh. | Independent real product; evidence only. |
+| [Viemean/qmtui](https://github.com/Viemean/qmtui/tree/339d6c08a2756d08631a7f54ddf92f4800b9756b) | `339d6c08`, MIT | Its WeChat route requires refresh token, allows empty open ID, and sends empty union/key. | Retains omitted refresh token/open ID; also recognizes `psrf_wx*` response aliases. | Permissively licensed independent corroboration. |
+| [TIMER-err/qplayer-qqmusic-plugin](https://github.com/TIMER-err/qplayer-qqmusic-plugin/tree/b407a5e0c018221666dee476aedc3320f4365621) | `b407a5e0`, MIT | Reports one product observation where a cookie-derived key was rejected and omission worked. | Overlays returned values on the existing session. | Weak runtime observation; not counted as an independent protocol majority. |
+
+`refresh_key` is therefore `CONFLICTING`, not proven required and not proven
+universally harmful. Fura no longer makes its absence a local
+`NotRefreshable` result, but still sends a bounded value when the credential
+actually contains one; it does not delete the field or switch profiles based
+on one weak observation. `openid` and `unionid` are optional for the current
+request. `refresh_token` remains the conservative prerequisite for Fura's
+already live-proven Web-profile candidate; whether a key-only credential can
+use that exact profile remains unproven.
+
+Initial login decoding now normalizes the evidenced `wx*` and `psrf_wx*`
+aliases only when the canonical field is absent. Refresh decoding is
+login-type-specific: Type 2 retains its full-response contract, while WeChat
+retains only source fields omitted by the response. A present `null` or empty
+field remains an explicit deletion and never resurrects the old secret. The
+rotated `musickey` is never inherited. Account replacement remains rejected,
+the merged candidate must still build the next refresh request offline, and it
+must pass the existing same-account verification before durable publication.
+
+The failure/ownership audit found no transient path that deletes the durable
+WeChat credential: network, rate-limit, service/risk/secondary-verification,
+malformed/invalid response and storage failures retain current/staged Vault
+state. Only definitive rejection, unsupported/unrefreshable material on an
+authenticated-read rejection, or explicit logout/account replacement reaches
+epoch-safe cleanup. Production gateway construction injects the shared
+continuation owner; direct-delete branches remain compatibility fallbacks for
+tests or constructions that deliberately omit that owner. Mutations remain
+single-dispatch and never replay.
+
+This proves concrete lifecycle defects and makes a successfully rotated
+candidate locally next-refreshable. It is a **high-confidence contributor** to
+the reported drop, not a retrospective proof of the exact historical server
+response.
+
+A separately authorized disposable Human gate then used one fresh WeChat QR
+login, exactly one refresh request and exactly one same-account verification.
+The initial credential contained open ID, refresh token, union ID, refresh key
+and expiry material. The refresh response returned all five corresponding
+categories plus a new music key, so this particular live response was complete
+rather than partial. The corrected candidate retained all required material,
+passed the pure-local next-refresh eligibility check and passed same-account
+verification (`classification=PASS phase=account_verification`). The gate read
+no application Vault data, persisted no credential, retried nothing, used no
+fallback endpoint/profile and removed the temporary QR. This proves the
+corrected current WeChat request/candidate can complete the live wire flow; it
+does not reproduce the historical long-duration loss or provide live evidence
+that the service currently emits partial refresh responses.
+
 ## Evidence still required
 
 Before claiming M1 authentication acceptance:

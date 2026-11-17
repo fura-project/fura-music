@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -14,11 +15,13 @@ import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_scroll_prefetch.dart';
+import 'package:flutterustmusic/library/playlist_track_presentation_controller.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 class PlaylistDetailPage extends StatefulWidget {
   const PlaylistDetailPage({
@@ -105,7 +108,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
               ? context.l10n.libraryRefreshingPlaylist
               : context.l10n.libraryRefreshPlaylist,
           refreshing: _controller.isRefreshing,
-          onRefresh: _controller.isLoading ? null : _controller.refresh,
+          onRefresh: _controller.isLoading ? null : _refresh,
         ),
       );
     });
@@ -139,7 +142,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
             tooltip: _controller.isRefreshing
                 ? l10n.libraryRefreshingPlaylist
                 : l10n.libraryRefreshPlaylist,
-            onPressed: _controller.isLoading ? null : _controller.refresh,
+            onPressed: _controller.isLoading ? null : _refresh,
             icon: const Icon(Icons.refresh_rounded),
           ),
         ),
@@ -171,7 +174,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
             embedded: widget.embedded,
             onBack: widget.onBack,
             onPlayAll: _controller.tracks.isEmpty ? null : _playAll,
-            onRefresh: _controller.isLoading ? null : _controller.refresh,
+            onRefresh: _controller.isLoading ? null : _refresh,
             refreshing: _controller.isRefreshing,
             onDeletePlaylist: widget.onDeletePlaylist,
           ),
@@ -186,15 +189,10 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                   key: const ValueKey('playlist-detail-refresh-failure'),
                   message: _refreshFailureCopy(l10n, failure),
                   canRetry: _controller.canRetryRefresh,
-                  onRetry: _controller.retryRefresh,
+                  onRetry: _retryRefresh,
                   onDismiss: _controller.dismissRefreshFailure,
                 ),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 240),
-                  child: _body(desktop),
-                ),
-              ),
+              Expanded(child: MusicStageTransition(child: _body(desktop))),
             ],
           ),
         ),
@@ -317,6 +315,23 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     unawaited(playbackStart);
   }
 
+  Future<void> _refresh() {
+    if (mounted) {
+      PlaylistTrackActionScope.readOf(context)
+          ?.invalidateSessionCache(widget.playlist);
+    }
+    return _controller.refresh();
+  }
+
+  void _retryRefresh() {
+    if (!_controller.canRetryRefresh) return;
+    if (mounted) {
+      PlaylistTrackActionScope.readOf(context)
+          ?.invalidateSessionCache(widget.playlist);
+    }
+    _controller.retryRefresh();
+  }
+
   Future<void> _removeFromPlaylist(PlaylistTrackSummary track) async {
     final coordinator = widget.mutationCoordinator;
     if (coordinator == null) return;
@@ -324,7 +339,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       playlist: widget.playlist,
       track: track,
       present: false,
-      refreshAuthoritativeState: _controller.refresh,
+      refreshAuthoritativeState: _refresh,
     );
     if (!mounted) return;
     showLibraryMutationFeedback(context, outcome.status);
@@ -513,7 +528,16 @@ class _TrackCollectionState extends State<_TrackCollection> {
                 controller: _scrollController,
                 key: const PageStorageKey<String>('playlist-detail-track-list'),
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 20),
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  0,
+                  horizontal,
+                  20 +
+                      MusicViewportClearance.bottomOf(
+                        context,
+                        fallbackPlayerPresent: widget.current != null,
+                      ),
+                ),
                 itemCount: widget.tracks.length + 1,
                 separatorBuilder: (_, _) => const SizedBox(height: 1),
                 itemBuilder: (context, index) {
@@ -661,11 +685,8 @@ class _TrackRowState extends State<_TrackRow> {
       onHoverChanged: widget.onHoverChanged,
       semanticLabel: context.l10n.commonTrackSemantics(artists, title),
       onTap: widget.onTap,
-      onContextMenuRequested: (position) => unawaited(
-        position == null
-            ? _showMobileActions(context)
-            : _showDesktopActions(context, position),
-      ),
+      onContextMenuRequested: (position) =>
+          unawaited(_showActions(context, position)),
       contentBuilder: (context, active, hovered) => MusicTrackRowContent(
         index: widget.index,
         track: widget.track,
@@ -681,7 +702,8 @@ class _TrackRowState extends State<_TrackRow> {
             widget.onOpenArtist == null || widget.track.artists.isEmpty
             ? null
             : () => unawaited(_openArtist()),
-        onMore: () => unawaited(_showMobileActions(context)),
+        onMore: () => unawaited(_showActions(context, null)),
+        onMoreAt: (position) => unawaited(_showActions(context, position)),
         // Keep desktop Tab traversal row-to-row. The queue action appears on
         // pointer hover, as before, rather than being inserted after focus.
         showInlineQueueAction: hovered,
@@ -689,169 +711,68 @@ class _TrackRowState extends State<_TrackRow> {
     );
   }
 
-  Future<void> _showDesktopActions(
+  Future<void> _showActions(
     BuildContext context,
-    Offset globalPosition,
+    Offset? anchorPosition,
   ) async {
-    final overlay = Overlay.of(context).context.findRenderObject();
-    if (overlay is! RenderBox) return;
     final likeAction = await resolveMusicTrackLikeAction(context, widget.track);
     if (!context.mounted) return;
     final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
-    final action = await showMenu<_TrackAction>(
+    final action = await showAdaptiveMusicContextMenu<_TrackAction>(
       context: context,
-      position: RelativeRect.fromLTRB(
-        globalPosition.dx,
-        globalPosition.dy,
-        overlay.size.width - globalPosition.dx,
-        overlay.size.height - globalPosition.dy,
-      ),
-      items: [
-        PopupMenuItem(
+      desktop: widget.desktop,
+      anchorPosition: anchorPosition,
+      entries: [
+        MusicTrackMenuEntry(
           value: _TrackAction.playFromHere,
-          child: ListTile(
-            leading: Icon(Icons.play_arrow_rounded),
-            title: Text(context.l10n.commonPlayFromHere),
-          ),
+          icon: Icons.play_arrow_rounded,
+          label: context.l10n.commonPlayFromHere,
         ),
         if (likeAction != null)
-          PopupMenuItem(
+          MusicTrackMenuEntry(
             value: likeAction == MusicTrackAction.like
                 ? _TrackAction.like
                 : _TrackAction.unlike,
-            child: ListTile(
-              leading: Icon(
-                likeAction == MusicTrackAction.like
-                    ? Icons.favorite_border_rounded
-                    : Icons.favorite_rounded,
-              ),
-              title: Text(
-                likeAction == MusicTrackAction.like
-                    ? context.l10n.libraryLikeTrack
-                    : context.l10n.libraryUnlikeTrack,
-              ),
-            ),
+            icon: likeAction == MusicTrackAction.like
+                ? Icons.favorite_border_rounded
+                : Icons.favorite_rounded,
+            label: likeAction == MusicTrackAction.like
+                ? context.l10n.libraryLikeTrack
+                : context.l10n.libraryUnlikeTrack,
           ),
-        PopupMenuItem(
+        MusicTrackMenuEntry(
           value: _TrackAction.addToQueue,
-          child: ListTile(
-            leading: Icon(Icons.playlist_add_rounded),
-            title: Text(context.l10n.commonAddToQueue),
-          ),
+          icon: Icons.queue_music_rounded,
+          label: context.l10n.commonAddToQueue,
         ),
         if (canAddToPlaylist)
-          PopupMenuItem(
+          MusicTrackMenuEntry(
             value: _TrackAction.addToPlaylist,
-            child: ListTile(
-              leading: const Icon(Icons.playlist_add_rounded),
-              title: Text(context.l10n.libraryAddTrackToPlaylist),
-            ),
+            icon: Icons.playlist_add_rounded,
+            label: context.l10n.libraryAddTrackToPlaylist,
           ),
         if (widget.onOpenAlbum != null)
-          PopupMenuItem(
-            key: ValueKey('playlist-track-open-album-action'),
+          MusicTrackMenuEntry(
+            key: const ValueKey('playlist-track-open-album-action'),
             value: _TrackAction.openAlbum,
-            child: ListTile(
-              leading: Icon(Icons.album_rounded),
-              title: Text(context.l10n.commonOpenAlbum),
-            ),
+            icon: Icons.album_rounded,
+            label: context.l10n.commonOpenAlbum,
           ),
         if (widget.onOpenArtist != null && widget.track.artists.isNotEmpty)
-          PopupMenuItem(
-            key: ValueKey('playlist-track-open-artist-action'),
+          MusicTrackMenuEntry(
+            key: const ValueKey('playlist-track-open-artist-action'),
             value: _TrackAction.openArtist,
-            child: ListTile(
-              leading: Icon(Icons.person_rounded),
-              title: Text(context.l10n.commonOpenArtist),
-            ),
+            icon: Icons.person_rounded,
+            label: context.l10n.commonOpenArtist,
           ),
         if (widget.onRemoveFromPlaylist != null)
-          PopupMenuItem(
+          MusicTrackMenuEntry(
             key: const ValueKey('playlist-track-remove-action'),
             value: _TrackAction.removeFromPlaylist,
-            child: ListTile(
-              leading: const Icon(Icons.playlist_remove_rounded),
-              title: Text(context.l10n.libraryRemoveTrackFromPlaylist),
-            ),
+            icon: Icons.playlist_remove_rounded,
+            label: context.l10n.libraryRemoveTrackFromPlaylist,
           ),
       ],
-    );
-    await _runAction(action);
-  }
-
-  Future<void> _showMobileActions(BuildContext context) async {
-    final likeAction = await resolveMusicTrackLikeAction(context, widget.track);
-    if (!context.mounted) return;
-    final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
-    final action = await showModalBottomSheet<_TrackAction>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.play_arrow_rounded),
-              title: Text(context.l10n.commonPlayFromHere),
-              onTap: () => Navigator.pop(context, _TrackAction.playFromHere),
-            ),
-            if (likeAction != null)
-              ListTile(
-                leading: Icon(
-                  likeAction == MusicTrackAction.like
-                      ? Icons.favorite_border_rounded
-                      : Icons.favorite_rounded,
-                ),
-                title: Text(
-                  likeAction == MusicTrackAction.like
-                      ? context.l10n.libraryLikeTrack
-                      : context.l10n.libraryUnlikeTrack,
-                ),
-                onTap: () => Navigator.pop(
-                  context,
-                  likeAction == MusicTrackAction.like
-                      ? _TrackAction.like
-                      : _TrackAction.unlike,
-                ),
-              ),
-            ListTile(
-              leading: const Icon(Icons.playlist_add_rounded),
-              title: Text(context.l10n.commonAddToQueue),
-              onTap: () => Navigator.pop(context, _TrackAction.addToQueue),
-            ),
-            if (canAddToPlaylist)
-              ListTile(
-                leading: const Icon(Icons.playlist_add_rounded),
-                title: Text(context.l10n.libraryAddTrackToPlaylist),
-                onTap: () => Navigator.pop(context, _TrackAction.addToPlaylist),
-              ),
-            if (widget.onOpenAlbum != null)
-              ListTile(
-                key: const ValueKey('playlist-track-open-album-action'),
-                leading: const Icon(Icons.album_rounded),
-                title: Text(context.l10n.commonOpenAlbum),
-                onTap: () => Navigator.pop(context, _TrackAction.openAlbum),
-              ),
-            if (widget.onOpenArtist != null && widget.track.artists.isNotEmpty)
-              ListTile(
-                key: const ValueKey('playlist-track-open-artist-action'),
-                leading: const Icon(Icons.person_rounded),
-                title: Text(context.l10n.commonOpenArtist),
-                onTap: () => Navigator.pop(context, _TrackAction.openArtist),
-              ),
-            if (widget.onRemoveFromPlaylist != null)
-              ListTile(
-                key: const ValueKey('playlist-track-remove-action'),
-                leading: const Icon(Icons.playlist_remove_rounded),
-                title: Text(context.l10n.libraryRemoveTrackFromPlaylist),
-                onTap: () =>
-                    Navigator.pop(context, _TrackAction.removeFromPlaylist),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
     );
     await _runAction(action);
   }
@@ -943,6 +864,8 @@ class _Artwork extends StatelessWidget {
               uri!,
               headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
+              gaplessPlayback: true,
+              frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );
@@ -1010,42 +933,18 @@ class _DetailMessage extends StatelessWidget {
   final bool announce;
 
   @override
-  Widget build(BuildContext context) {
-    final message = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 48, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(height: 18),
-        Text(title, style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 8),
-        Text(detail, textAlign: TextAlign.center),
-      ],
-    );
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (announce)
-              Semantics(
-                container: true,
-                liveRegion: true,
-                label: context.l10n.commonAnnouncement(detail, title),
-                excludeSemantics: true,
-                child: message,
-              )
-            else
-              message,
-            if (actions.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              Wrap(spacing: 8, children: actions),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => MusicContentStatePanel(
+    icon: icon,
+    title: title,
+    detail: detail,
+    liveRegion: announce,
+    announcementLabel: announce
+        ? context.l10n.commonAnnouncement(detail, title)
+        : null,
+    action: actions.isEmpty
+        ? null
+        : Wrap(alignment: WrapAlignment.center, spacing: 8, children: actions),
+  );
 }
 
 (String, String) _failureCopy(

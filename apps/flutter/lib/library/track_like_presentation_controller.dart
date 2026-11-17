@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_mutation_coordinator.dart';
@@ -392,27 +393,31 @@ class TrackLikePresentationController extends ChangeNotifier {
         size: size,
       );
       final generation = _generation;
-      late final Future<PlaylistTrackPageResult> future;
-      future = source.run().then((result) {
+      late final _SharedTrackPage created;
+      final future = source.run().then((result) {
         if (_isCurrent(generation)) {
           if (_isSessionFailure(result.failure)) {
             _invalidate(null);
-          } else if (result.failure == null) {
+          } else if (result.failure == null && result.offset == offset) {
+            if (identical(_sharedPages[key], created)) {
+              created.resolved = result;
+            }
             if (_refreshing) {
               _acceptRefreshPage(result);
             } else {
               _acceptCurrentPage(result);
             }
-          } else if (identical(_sharedPages[key]?.future, future)) {
+          } else if (identical(_sharedPages[key], created)) {
             _sharedPages.remove(key);
           }
         }
         return result;
       });
-      page = _SharedTrackPage(source, future);
+      created = _SharedTrackPage(source, future);
+      page = created;
       _sharedPages[key] = page;
     }
-    return _JoinedTrackPageLoadOperation(page.future);
+    return _JoinedTrackPageLoadOperation(page);
   }
 
   void _acceptCurrentPage(PlaylistTrackPageResult result) {
@@ -589,16 +594,17 @@ class _TrackPageKey {
 }
 
 class _SharedTrackPage {
-  const _SharedTrackPage(this.source, this.future);
+  _SharedTrackPage(this.source, this.future);
 
   final PlaylistTrackPageLoadOperation source;
   final Future<PlaylistTrackPageResult> future;
+  PlaylistTrackPageResult? resolved;
 }
 
 class _JoinedTrackPageLoadOperation implements PlaylistTrackPageLoadOperation {
-  _JoinedTrackPageLoadOperation(this._future);
+  _JoinedTrackPageLoadOperation(this._page);
 
-  final Future<PlaylistTrackPageResult> _future;
+  final _SharedTrackPage _page;
   bool _active = true;
 
   @override
@@ -609,16 +615,23 @@ class _JoinedTrackPageLoadOperation implements PlaylistTrackPageLoadOperation {
   }
 
   @override
-  Future<PlaylistTrackPageResult> run() async {
+  Future<PlaylistTrackPageResult> run() {
     if (!_active) {
-      return const PlaylistTrackPageResult(
-        failure: UserLibraryFailure.cancelled,
+      return SynchronousFuture(
+        const PlaylistTrackPageResult(failure: UserLibraryFailure.cancelled),
       );
     }
-    final result = await _future;
-    return _active
-        ? result
-        : const PlaylistTrackPageResult(failure: UserLibraryFailure.cancelled);
+    final resolved = _page.resolved;
+    if (resolved != null) {
+      return SynchronousFuture(resolved);
+    }
+    return _page.future.then(
+      (result) => _active
+          ? result
+          : const PlaylistTrackPageResult(
+              failure: UserLibraryFailure.cancelled,
+            ),
+    );
   }
 }
 

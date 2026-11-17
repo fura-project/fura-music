@@ -13,7 +13,9 @@ import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/authenticated_dependencies.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
+import 'package:flutterustmusic/catalog/session_catalog_gateways.dart';
 import 'package:flutterustmusic/discover/radar_controller.dart';
 import 'package:flutterustmusic/discover/radar_gateway.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
@@ -387,12 +389,22 @@ class _ShellDetailTransitionState extends State<_ShellDetailTransition>
     builder: (context, _) {
       final value = Easing.emphasizedDecelerate.transform(_controller.value);
       final detailVisible = !_controller.isDismissed;
+      final topPadding = MediaQuery.paddingOf(context).top;
       final detailContent =
           widget.detailTopBar != null && !_retainedDetailUsesOwnToolbar
           ? Column(
               children: [
-                SizedBox(height: kToolbarHeight, child: widget.detailTopBar!),
-                Expanded(child: _retainedDetail),
+                SizedBox(
+                  height: topPadding + kToolbarHeight,
+                  child: widget.detailTopBar!,
+                ),
+                Expanded(
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeTop: true,
+                    child: _retainedDetail,
+                  ),
+                ),
               ],
             )
           : _retainedDetail;
@@ -427,12 +439,10 @@ class _ShellDetailTransitionState extends State<_ShellDetailTransition>
                   ignoring: !widget.open,
                   child: Transform.translate(
                     offset: Offset((1 - value) * 40, 0),
-                    child: widget.open
-                        ? detailSurface
-                        : Opacity(
-                            opacity: value.clamp(0.0, 1.0),
-                            child: detailSurface,
-                          ),
+                    child: Opacity(
+                      opacity: widget.open ? 1.0 : value.clamp(0.0, 1.0),
+                      child: detailSurface,
+                    ),
                   ),
                 ),
               ),
@@ -570,6 +580,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late TrackLikePresentationController _trackLikes;
   late AlbumFavoritePresentationController _albumFavorites;
   late PlaylistTrackPresentationController _playlistTracks;
+  late SessionAlbumTrackGateway _sessionAlbumTrackGateway;
+  late SessionAlbumDetailsGateway _sessionAlbumDetailsGateway;
+  late SessionArtistTrackGateway _sessionArtistTrackGateway;
+  late SessionArtistAlbumGateway _sessionArtistAlbumGateway;
+  late SessionRankingGateway _sessionRankingGateway;
   late HomeController _homeController;
   late final QueuePlaybackController _queuePlaybackController;
   late final ArtworkColorSchemeCache _expandedNowPlayingPalette;
@@ -677,6 +692,19 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       gateway: _library.playlistDetailGateway,
       mutations: _libraryMutations,
     );
+    _sessionAlbumTrackGateway = SessionAlbumTrackGateway(
+      _library.albumTrackGateway,
+    );
+    _sessionAlbumDetailsGateway = SessionAlbumDetailsGateway(
+      _library.albumDetailsGateway,
+    );
+    _sessionArtistTrackGateway = SessionArtistTrackGateway(
+      _library.artistTrackGateway,
+    );
+    _sessionArtistAlbumGateway = SessionArtistAlbumGateway(
+      _library.artistAlbumGateway,
+    );
+    _sessionRankingGateway = SessionRankingGateway(_discovery.rankingGateway);
     _controller.addListener(_onLibraryChanged);
     _homeController = HomeController(
       _home.accountSummaryGateway,
@@ -719,6 +747,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   void _disposeProviderControllers() {
     _controller.removeListener(_onLibraryChanged);
+    _sessionAlbumTrackGateway.dispose();
+    _sessionAlbumDetailsGateway.dispose();
+    _sessionArtistTrackGateway.dispose();
+    _sessionArtistAlbumGateway.dispose();
+    _sessionRankingGateway.dispose();
     _playlistTracks.dispose();
     _albumFavorites.dispose();
     _trackLikes.dispose();
@@ -782,6 +815,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   void _onLibraryChanged() {
     _trackLikes.bindLikedPlaylist(_controller.likedSongsPlaylist);
+    final likedPageActive =
+        _controller.stage == UserLibraryStage.content ||
+        _controller.stage == UserLibraryStage.empty;
+    if (!likedPageActive && _likedHeaderCollapsed && mounted) {
+      setState(() => _likedHeaderCollapsed = false);
+    }
   }
 
   void _onQueuePlaybackChanged() {
@@ -1010,7 +1049,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   }) => PlaylistDetailPage(
     key: ValueKey(_playlistRouteKey(route)),
     playlist: route.playlist,
-    gateway: _library.playlistDetailGateway,
+    gateway: _playlistTracks.sessionGateway,
     queuePlaybackController: _queuePlaybackController,
     onBack: _returnFromTopRoute,
     onOpenAlbum: _openTrackContextAlbum,
@@ -1041,8 +1080,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       AlbumPage(
         key: ValueKey(_albumRouteKey(route)),
         album: route.album,
-        gateway: _library.albumTrackGateway,
-        detailsGateway: _library.albumDetailsGateway,
+        gateway: _sessionAlbumTrackGateway,
+        detailsGateway: _sessionAlbumDetailsGateway,
         queuePlaybackController: _queuePlaybackController,
         onBack: _returnFromTopRoute,
         onOpenArtist: _albumCanOpenArtist(route.origin)
@@ -1064,7 +1103,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       RankingPage(
         key: ValueKey('ranking-detail-${route.ranking.opaqueId}'),
         ranking: route.ranking,
-        gateway: _discovery.rankingGateway,
+        gateway: _sessionRankingGateway,
         queuePlaybackController: _queuePlaybackController,
         onBack: _returnFromTopRoute,
         onOpenAlbum: _openTrackContextAlbum,
@@ -1084,8 +1123,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       ArtistPage(
         key: ValueKey(_artistRouteKey(route)),
         artist: route.artist,
-        gateway: _library.artistTrackGateway,
-        albumGateway: _library.artistAlbumGateway,
+        gateway: _sessionArtistTrackGateway,
+        albumGateway: _sessionArtistAlbumGateway,
         queuePlaybackController: _queuePlaybackController,
         onBack: _returnFromTopRoute,
         onOpenAlbum: (album) => _openAlbumFromArtist(route.origin, album),
@@ -1979,7 +2018,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
       final collectionIdentity = _collectionRouteIdentity(embeddedShellRoute);
       final collectionShellActions =
           _collectionShellActions[collectionIdentity];
-      final baseLikedOwnsTopBar = likedSongsOpen && _likedHeaderCollapsed;
+      final baseLikedOwnsTopBar =
+          likedSongsOpen &&
+          widget.authenticated &&
+          (_controller.stage == UserLibraryStage.content ||
+              _controller.stage == UserLibraryStage.empty) &&
+          _likedHeaderCollapsed;
       final baseRecentCollapsed =
           destination == AuthenticatedPrimaryDestination.recentPlays &&
           _recentHeaderCollapsed &&
@@ -2037,7 +2081,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 gateway: _discovery.recommendedPlaylistGateway,
                 newAlbumGateway: _discovery.newAlbumGateway,
                 newSongGateway: _discovery.newSongGateway,
-                rankingGateway: _discovery.rankingGateway,
+                rankingGateway: _sessionRankingGateway,
                 radarGateway: _discovery.radarGateway,
                 radarEnabled: widget.capabilities.radar,
                 supportedNewAlbumRegions:
@@ -2160,7 +2204,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           : null;
       final collectionPlayAction =
           showCollectionShellControls && collectionShellActions != null
-          ? IconButton(
+          ? IconButton.filled(
               key: const ValueKey('collection-detail-shell-play-all'),
               tooltip: collectionShellActions.playAllLabel,
               onPressed: collectionShellActions.playing
@@ -2443,6 +2487,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 body: _CompactPlayerOverlay(
                   enabled: constraints.maxWidth < 640,
                   applyBottomSafeArea: settingsOpen,
+                  playbackListenable: _queuePlaybackController,
+                  hasCurrentTrack: () =>
+                      _queuePlaybackController.current != null,
                   player: NowPlayingBar(
                     controller: _queuePlaybackController,
                     onSignInAgain: widget.onSignInAgain,
@@ -2468,11 +2515,27 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                       ),
                       _ => null,
                     },
-                    base: Padding(
-                      padding: EdgeInsets.only(
-                        top: settingsUsesOwnToolbar ? kToolbarHeight : 0,
-                      ),
-                      child: mainBody,
+                    base: Builder(
+                      builder: (context) {
+                        final compensateBaseTopBar =
+                            (settingsUsesOwnToolbar ||
+                                compactCatalogUsesOwnToolbar) &&
+                            !baseOwnsTopBar;
+                        return Padding(
+                          padding: compensateBaseTopBar
+                              ? EdgeInsets.only(
+                                  top:
+                                      MediaQuery.paddingOf(context).top +
+                                      kToolbarHeight,
+                                )
+                              : EdgeInsets.zero,
+                          child: MediaQuery.removePadding(
+                            context: context,
+                            removeTop: compensateBaseTopBar,
+                            child: mainBody,
+                          ),
+                        );
+                      },
                     ),
                     detail: IndexedStack(
                       index: embeddedShellRoutes.isEmpty
@@ -2570,7 +2633,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         Icons.home_outlined,
         key: ValueKey('primary-home-destination'),
       ),
-      selectedIcon: const Icon(Icons.home_rounded),
+      selectedIcon: const Icon(
+        Icons.home_rounded,
+        key: ValueKey('primary-home-destination'),
+      ),
       label: Text(context.l10n.navHome),
     ),
     NavigationRailDestination(
@@ -2579,6 +2645,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         focusNode: _recommendationsReturnFocusNode,
         destination: AuthenticatedPrimaryDestination.discover,
         icon: Icons.explore_outlined,
+      ),
+      selectedIcon: _destinationFocusIcon(
+        key: const ValueKey('open-recommendations'),
+        focusNode: _recommendationsReturnFocusNode,
+        destination: AuthenticatedPrimaryDestination.discover,
+        icon: Icons.explore_rounded,
       ),
       label: Text(context.l10n.navDiscover),
     ),
@@ -2597,7 +2669,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           Icons.favorite_border_rounded,
           key: ValueKey('primary-library-destination'),
         ),
-        selectedIcon: const Icon(Icons.favorite_rounded),
+        selectedIcon: const Icon(
+          Icons.favorite_rounded,
+          key: ValueKey('primary-library-destination'),
+        ),
         label: Text(context.l10n.navLiked),
       ),
     if (widget.authenticated && widget.capabilities.recentHistory)
@@ -2616,7 +2691,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         Icons.home_outlined,
         key: ValueKey('primary-home-destination'),
       ),
-      selectedIcon: const Icon(Icons.home_rounded),
+      selectedIcon: const Icon(
+        Icons.home_rounded,
+        key: ValueKey('primary-home-destination'),
+      ),
       label: context.l10n.navHome,
     ),
     NavigationDestination(
@@ -2625,6 +2703,12 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         focusNode: _recommendationsReturnFocusNode,
         destination: AuthenticatedPrimaryDestination.discover,
         icon: Icons.explore_outlined,
+      ),
+      selectedIcon: _destinationFocusIcon(
+        key: const ValueKey('open-recommendations'),
+        focusNode: _recommendationsReturnFocusNode,
+        destination: AuthenticatedPrimaryDestination.discover,
+        icon: Icons.explore_rounded,
       ),
       label: context.l10n.navDiscover,
     ),
@@ -2643,7 +2727,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           Icons.favorite_border_rounded,
           key: ValueKey('primary-library-destination'),
         ),
-        selectedIcon: const Icon(Icons.favorite_rounded),
+        selectedIcon: const Icon(
+          Icons.favorite_rounded,
+          key: ValueKey('primary-library-destination'),
+        ),
         label: context.l10n.navLiked,
       ),
     if (widget.authenticated && widget.capabilities.recentHistory)
@@ -3074,7 +3161,7 @@ class _DesktopSettingsSidebar extends StatelessWidget {
                       key: ValueKey('settings-nav-${section.name}'),
                       selected: selectedSection == section,
                       icon: section.icon,
-                      selectedIcon: section.icon,
+                      selectedIcon: section.selectedIcon,
                       label: section.label(context.l10n),
                       onTap: () => onSectionSelected(section),
                     ),
@@ -3123,7 +3210,10 @@ class _SettingsNavigationRail extends StatelessWidget {
             section.icon,
             key: ValueKey('settings-nav-${section.name}'),
           ),
-          selectedIcon: Icon(section.icon),
+          selectedIcon: Icon(
+            section.selectedIcon,
+            key: ValueKey('settings-nav-${section.name}'),
+          ),
           label: Text(section.label(context.l10n)),
         ),
     ],
@@ -3384,6 +3474,10 @@ class _SidebarIdentity extends StatelessWidget {
                             avatarUri!,
                             headers: musicArtworkRequestHeaders(avatarUri!),
                             fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                            frameBuilder: musicArtworkFrameBuilder(
+                              brandFallback,
+                            ),
                             errorBuilder: musicArtworkErrorBuilder(
                               avatarUri!,
                               brandFallback,
@@ -3994,12 +4088,16 @@ class _CompactPlayerOverlay extends StatelessWidget {
   const _CompactPlayerOverlay({
     required this.enabled,
     required this.applyBottomSafeArea,
+    required this.playbackListenable,
+    required this.hasCurrentTrack,
     required this.player,
     required this.child,
   });
 
   final bool enabled;
   final bool applyBottomSafeArea;
+  final Listenable playbackListenable;
+  final bool Function() hasCurrentTrack;
   final Widget player;
   final Widget child;
 
@@ -4012,7 +4110,16 @@ class _CompactPlayerOverlay extends StatelessWidget {
       key: const ValueKey('compact-player-overlay-shell'),
       fit: StackFit.expand,
       children: [
-        child,
+        AnimatedBuilder(
+          animation: playbackListenable,
+          child: child,
+          builder: (context, child) => MusicViewportClearance(
+            bottom: enabled && hasCurrentTrack()
+                ? MusicViewportClearance.compactPlayerHeight
+                : 0,
+            child: child!,
+          ),
+        ),
         if (enabled)
           Align(alignment: Alignment.bottomCenter, child: overlayPlayer),
       ],
@@ -4063,15 +4170,15 @@ class _PlaylistCollection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomClearance = MusicViewportClearance.bottomOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop = constraints.maxWidth >= 760;
         return Padding(
-          padding: EdgeInsets.fromLTRB(
-            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
-            0,
-            desktop ? MusicSpacing.pageWide : MusicSpacing.pageCompact,
-            MusicSpacing.pageCompact,
+          padding: EdgeInsets.symmetric(
+            horizontal: desktop
+                ? MusicSpacing.pageWide
+                : MusicSpacing.pageCompact,
           ),
           child: desktop
               ? _DesktopPlaylistList(
@@ -4082,6 +4189,9 @@ class _PlaylistCollection extends StatelessWidget {
                 )
               : ListView.separated(
                   key: const PageStorageKey<String>('user-playlist-list'),
+                  padding: EdgeInsets.only(
+                    bottom: MusicSpacing.pageCompact + bottomClearance,
+                  ),
                   itemCount: playlists.length,
                   separatorBuilder: (_, _) =>
                       const SizedBox(height: MusicSpacing.itemGap),
@@ -4151,6 +4261,7 @@ class _DesktopPlaylistList extends StatelessWidget {
         Expanded(
           child: ListView.separated(
             key: const PageStorageKey<String>('user-playlist-list-desktop'),
+            padding: const EdgeInsets.only(bottom: MusicSpacing.pageCompact),
             itemCount: playlists.length,
             separatorBuilder: (_, _) => const Divider(),
             itemBuilder: (context, index) {
@@ -4356,6 +4467,10 @@ class _PlaylistArtwork extends StatelessWidget {
               fit: BoxFit.cover,
               width: double.infinity,
               height: double.infinity,
+              gaplessPlayback: true,
+              frameBuilder: musicArtworkFrameBuilder(
+                const _ArtworkPlaceholder(),
+              ),
               errorBuilder: musicArtworkErrorBuilder(
                 uri,
                 const _ArtworkPlaceholder(),
@@ -4394,22 +4509,8 @@ class _LibraryLoading extends StatelessWidget {
   const _LibraryLoading({super.key});
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SizedBox.square(
-          dimension: 44,
-          child: CircularProgressIndicator(strokeWidth: 3),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          context.l10n.libraryLoadingPlaylists,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) =>
+      MusicLoadingPanel(label: context.l10n.libraryLoadingPlaylists);
 }
 
 class _LibraryEmpty extends StatelessWidget {
@@ -4494,73 +4595,18 @@ class _CenteredLibraryMessage extends StatelessWidget {
   final bool announce;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final message = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: Icon(
-            icon,
-            color: theme.colorScheme.onPrimaryContainer,
-            size: 32,
-          ),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 10),
-        Text(
-          detail,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            height: 1.45,
-          ),
-        ),
-      ],
-    );
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (announce)
-                Semantics(
-                  container: true,
-                  liveRegion: true,
-                  label: context.l10n.commonAnnouncement(detail, title),
-                  excludeSemantics: true,
-                  child: message,
-                )
-              else
-                message,
-              if (actions.isNotEmpty) ...[
-                const SizedBox(height: 24),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 8,
-                  children: actions,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => MusicContentStatePanel(
+    icon: icon,
+    title: title,
+    detail: detail,
+    liveRegion: announce,
+    announcementLabel: announce
+        ? context.l10n.commonAnnouncement(detail, title)
+        : null,
+    action: actions.isEmpty
+        ? null
+        : Wrap(alignment: WrapAlignment.center, spacing: 8, children: actions),
+  );
 }
 
 (String, String) _failureCopy(

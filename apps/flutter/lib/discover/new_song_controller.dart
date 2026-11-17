@@ -23,6 +23,7 @@ class NewSongController extends ChangeNotifier {
   NewSongLoadOperation? _operation;
   int _generation = 0;
   bool _disposed = false;
+  final Map<NewSongCategory, _CachedNewSongCategory> _categoryCache = {};
 
   NewSongCategory get category => _category;
   NewSongStage get stage => _stage;
@@ -37,6 +38,18 @@ class NewSongController extends ChangeNotifier {
   void selectCategory(NewSongCategory category) {
     if (_category == category) return;
     _category = category;
+    final cached = _categoryCache[category];
+    if (cached != null) {
+      ++_generation;
+      _operation?.cancel();
+      _operation = null;
+      _tracks = cached.tracks;
+      _omittedTrackCount = cached.omittedTrackCount;
+      _failure = null;
+      _stage = cached.stage;
+      _notify();
+      return;
+    }
     unawaited(_load(category));
   }
 
@@ -78,6 +91,11 @@ class NewSongController extends ChangeNotifier {
       _stage = _tracks.isEmpty && _omittedTrackCount == 0
           ? NewSongStage.empty
           : NewSongStage.content;
+      _categoryCache[expectedCategory] = _CachedNewSongCategory(
+        stage: _stage,
+        tracks: _tracks,
+        omittedTrackCount: _omittedTrackCount,
+      );
     } else {
       _failure = result.failure ?? NewSongFailure.invalidResponse;
       _stage = NewSongStage.error;
@@ -107,4 +125,16 @@ class NewSongController extends ChangeNotifier {
     _operation = null;
     super.dispose();
   }
+}
+
+class _CachedNewSongCategory {
+  const _CachedNewSongCategory({
+    required this.stage,
+    required this.tracks,
+    required this.omittedTrackCount,
+  });
+
+  final NewSongStage stage;
+  final List<PlaylistTrackSummary> tracks;
+  final int omittedTrackCount;
 }

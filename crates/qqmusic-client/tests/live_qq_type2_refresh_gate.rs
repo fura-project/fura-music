@@ -100,6 +100,64 @@ fn classify_qr_error(
     }
 }
 
+fn qq_login_failure_detail(
+    error: &QqQrError<qqmusic_client::ReqwestTransportError>,
+) -> &'static str {
+    match error {
+        QqQrError::Transport(_) => "transport",
+        QqQrError::HttpStatus {
+            phase: "check signature",
+            ..
+        } => "check_signature_http",
+        QqQrError::HttpStatus {
+            phase: "authorization",
+            ..
+        } => "authorization_http",
+        QqQrError::HttpStatus {
+            phase: "credential exchange",
+            ..
+        } => "credential_exchange_http",
+        QqQrError::HttpStatus { .. } => "unexpected_http_phase",
+        QqQrError::MissingPSkey => "check_signature_cookie_missing",
+        QqQrError::MissingRedirect => "authorization_redirect_missing",
+        QqQrError::MissingAuthorizationCode => "authorization_code_missing",
+        QqQrError::Serialize => "credential_request_serialize",
+        QqQrError::Credential(LoginCredentialError::InvalidJson) => {
+            "credential_response_invalid_json"
+        }
+        QqQrError::Credential(LoginCredentialError::MissingGlobalCode) => {
+            "credential_global_code_missing"
+        }
+        QqQrError::Credential(LoginCredentialError::MissingLoginResult) => {
+            "credential_named_result_missing"
+        }
+        QqQrError::Credential(LoginCredentialError::Upstream { .. }) => {
+            "credential_upstream_rejected"
+        }
+        QqQrError::Credential(LoginCredentialError::MissingCredentialData) => {
+            "credential_data_missing"
+        }
+        QqQrError::Credential(LoginCredentialError::InvalidCredential(_)) => {
+            "credential_material_invalid"
+        }
+        QqQrError::Credential(LoginCredentialError::InvalidExpiry(_)) => {
+            "credential_expiry_invalid"
+        }
+        QqQrError::Credential(LoginCredentialError::UnexpectedLoginType(_)) => {
+            "credential_login_type_mismatch"
+        }
+        QqQrError::MissingAuthorization => "authorization_state_missing",
+        QqQrError::InvalidImage
+        | QqQrError::MissingQrsig
+        | QqQrError::InvalidCookie
+        | QqQrError::ClockBeforeUnixEpoch
+        | QqQrError::RandomnessUnavailable
+        | QqQrError::ResponseNotUtf8
+        | QqQrError::InvalidPollResponse
+        | QqQrError::UnrecognizedPollStatus(_) => "unexpected_exchange_state",
+    }
+}
+
 fn classify_verification_error(
     error: &CredentialVerificationError<qqmusic_client::ReqwestTransportError>,
 ) -> GateClassification {
@@ -176,7 +234,11 @@ async fn acquire_disposable_qq_credential(
     match client.exchange_authorized_qq_qr(&mut session).await {
         Ok(credential) => Some(credential),
         Err(error) => {
-            report(classify_qr_error(&error), "qq_login", "failed");
+            report(
+                classify_qr_error(&error),
+                "qq_login",
+                qq_login_failure_detail(&error),
+            );
             None
         }
     }
@@ -189,23 +251,23 @@ async fn refresh_and_verify_once(
     let refreshed = match client.refresh_credential(credential).await {
         Ok(credential) => credential,
         Err(
-            CredentialRefreshError::RateLimited
+            error @ (CredentialRefreshError::RateLimited
             | CredentialRefreshError::RiskControl
             | CredentialRefreshError::SecondaryVerificationRequired
-            | CredentialRefreshError::AccountChanged,
+            | CredentialRefreshError::AccountChanged),
         ) => {
             report(
                 GateClassification::BlockedByRiskControl,
                 "refresh",
-                "risk-control or account boundary",
+                refresh_failure_detail(&error),
             );
             return;
         }
-        Err(_) => {
+        Err(error) => {
             report(
                 GateClassification::BlockedByProtocol,
                 "refresh",
-                "request was not accepted or material was incomplete",
+                refresh_failure_detail(&error),
             );
             return;
         }
@@ -218,6 +280,27 @@ async fn refresh_and_verify_once(
             "account_verification",
             "failed",
         ),
+    }
+}
+
+const fn refresh_failure_detail(error: &CredentialRefreshError) -> &'static str {
+    match error {
+        CredentialRefreshError::NotRefreshable => "not_refreshable",
+        CredentialRefreshError::UnsupportedLoginType => "unsupported_login_type",
+        CredentialRefreshError::Network => "network",
+        CredentialRefreshError::RateLimited => "rate_limited",
+        CredentialRefreshError::CredentialRejected => "credential_rejected",
+        CredentialRefreshError::RiskControl => "risk_control",
+        CredentialRefreshError::SecondaryVerificationRequired => "secondary_verification",
+        CredentialRefreshError::ProtocolUnavailable => "protocol_unavailable",
+        CredentialRefreshError::InvalidResponse => "invalid_response",
+        CredentialRefreshError::MalformedResponse => "malformed_response",
+        CredentialRefreshError::UpstreamRejected => "upstream_rejected",
+        CredentialRefreshError::InvalidCredential => "invalid_credential",
+        CredentialRefreshError::InvalidExpiry => "invalid_expiry",
+        CredentialRefreshError::UnexpectedLoginType => "unexpected_login_type",
+        CredentialRefreshError::IncompleteRotation => "incomplete_rotation",
+        CredentialRefreshError::AccountChanged => "account_changed",
     }
 }
 
@@ -291,10 +374,37 @@ fn classification_labels_are_stable_and_diagnostics_safe() {
         "IMPLEMENTATION_DEFECT"
     );
     assert_eq!(
+        refresh_failure_detail(&CredentialRefreshError::NotRefreshable),
+        "not_refreshable"
+    );
+    assert_eq!(
+        refresh_failure_detail(&CredentialRefreshError::InvalidResponse),
+        "invalid_response"
+    );
+    assert_eq!(
+        refresh_failure_detail(&CredentialRefreshError::UpstreamRejected),
+        "upstream_rejected"
+    );
+    assert_eq!(
+        refresh_failure_detail(&CredentialRefreshError::IncompleteRotation),
+        "incomplete_rotation"
+    );
+    assert_eq!(
+        refresh_failure_detail(&CredentialRefreshError::RiskControl),
+        "risk_control"
+    );
+    assert_eq!(
         classify_qr_error(&QqQrError::Credential(LoginCredentialError::Upstream {
             global_code: 0,
             login_code: Some(20_272),
         })),
         GateClassification::BlockedByRiskControl
+    );
+    assert_eq!(
+        qq_login_failure_detail(&QqQrError::Credential(LoginCredentialError::Upstream {
+            global_code: 123_456,
+            login_code: Some(654_321),
+        },)),
+        "credential_upstream_rejected"
     );
 }

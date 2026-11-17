@@ -21,8 +21,15 @@ extension SettingsSectionPresentation on SettingsSection {
   IconData get icon => switch (this) {
     SettingsSection.appearance => Icons.palette_outlined,
     SettingsSection.musicService => Icons.library_music_outlined,
-    SettingsSection.language => Icons.language_rounded,
+    SettingsSection.language => Icons.language_outlined,
     SettingsSection.playback => Icons.headphones_outlined,
+  };
+
+  IconData get selectedIcon => switch (this) {
+    SettingsSection.appearance => Icons.palette_rounded,
+    SettingsSection.musicService => Icons.library_music_rounded,
+    SettingsSection.language => Icons.language_rounded,
+    SettingsSection.playback => Icons.headphones_rounded,
   };
 
   String description(AppLocalizations l10n) => switch (this) {
@@ -236,7 +243,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 widget.compactHierarchy ? 16 : MusicSpacing.page,
                 widget.compactHierarchy ? 8 : MusicSpacing.contentGap,
                 widget.compactHierarchy ? 16 : MusicSpacing.page,
-                MusicSpacing.page,
+                MusicSpacing.page + MusicViewportClearance.bottomOf(context),
               ),
               children: [
                 if (normalizedQuery.isNotEmpty) ...[
@@ -1490,7 +1497,12 @@ class _CompactSettingsMenu extends StatelessWidget {
     return SafeArea(
       child: ListView(
         key: const ValueKey('settings-compact-menu-list'),
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          8,
+          16,
+          24 + MusicViewportClearance.bottomOf(context),
+        ),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),

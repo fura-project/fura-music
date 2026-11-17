@@ -49,6 +49,7 @@ typedef AlbumFavoriteMutationOperationFactory =
 class RustAlbumFavoriteGateway implements AlbumFavoriteGateway {
   RustAlbumFavoriteGateway({
     CredentialVault? credentialVault,
+    this.qqSessionContinuation,
     AlbumFavoriteMutationOperationFactory? operationFactory,
   }) : _operationFactory = operationFactory ?? _beginRustMutation,
        _credentialVault = SerializedCredentialVault(
@@ -56,6 +57,7 @@ class RustAlbumFavoriteGateway implements AlbumFavoriteGateway {
        );
 
   final CredentialVault _credentialVault;
+  final CredentialRejectionContinuation? qqSessionContinuation;
   final AlbumFavoriteMutationOperationFactory _operationFactory;
 
   @override
@@ -66,6 +68,7 @@ class RustAlbumFavoriteGateway implements AlbumFavoriteGateway {
   }) => _VaultCleaningAlbumFavoriteMutationOperation(
     _operationFactory(providerId, opaqueAlbumId, desiredState),
     _credentialVault,
+    continueSession: providerId == 'qq-music' ? qqSessionContinuation : null,
   );
 }
 
@@ -109,11 +112,13 @@ class _VaultCleaningAlbumFavoriteMutationOperation
     implements AlbumFavoriteMutationOperation {
   const _VaultCleaningAlbumFavoriteMutationOperation(
     this._inner,
-    this._credentialVault,
-  );
+    this._credentialVault, {
+    this.continueSession,
+  });
 
   final AlbumFavoriteMutationOperation _inner;
   final CredentialVault _credentialVault;
+  final CredentialRejectionContinuation? continueSession;
 
   @override
   bool cancel() => _inner.cancel();
@@ -130,6 +135,7 @@ class _VaultCleaningAlbumFavoriteMutationOperation
         failure:
             AlbumFavoriteMutationFailure.credentialRejectedStorageCleanupFailed,
       ),
+      continueSession: continueSession,
     );
   }
 }

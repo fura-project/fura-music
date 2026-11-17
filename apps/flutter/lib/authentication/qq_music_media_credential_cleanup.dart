@@ -21,7 +21,7 @@ class QqMusicCredentialCleaningMediaResolutionGateway
 
   final MediaResolutionGateway _inner;
   final CredentialVault _credentialVault;
-  final QqSessionContinuationCoordinator? sessionContinuation;
+  final SessionContinuationCoordinator? sessionContinuation;
 
   @override
   MediaResolutionOperation beginResolution({
@@ -51,11 +51,16 @@ class ProviderCredentialCleaningMediaResolutionGateway
     this._inner, {
     required Map<String, CredentialVault> credentialVaults,
     this.qqSessionContinuation,
-  }) : _credentialVaults = Map.unmodifiable(credentialVaults);
+    Map<String, SessionContinuationCoordinator>? sessionContinuations,
+  }) : _credentialVaults = Map.unmodifiable(credentialVaults),
+       _sessionContinuations = Map.unmodifiable(
+         sessionContinuations ?? {'qq-music': ?qqSessionContinuation},
+       );
 
   final MediaResolutionGateway _inner;
   final Map<String, CredentialVault> _credentialVaults;
-  final QqSessionContinuationCoordinator? qqSessionContinuation;
+  final SessionContinuationCoordinator? qqSessionContinuation;
+  final Map<String, SessionContinuationCoordinator> _sessionContinuations;
 
   @override
   MediaResolutionOperation beginResolution({
@@ -74,9 +79,7 @@ class ProviderCredentialCleaningMediaResolutionGateway
             operation,
             vault,
             retryFactory: createOperation,
-            continuation: providerId == 'qq-music'
-                ? qqSessionContinuation
-                : null,
+            continuation: _sessionContinuations[providerId],
           );
   }
 }
@@ -93,7 +96,7 @@ class _ProviderCredentialCleaningMediaResolutionOperation
   MediaResolutionOperation _inner;
   final CredentialVault _vault;
   final MediaResolutionOperation Function()? retryFactory;
-  final QqSessionContinuationCoordinator? continuation;
+  final SessionContinuationCoordinator? continuation;
   bool _cancelled = false;
 
   @override

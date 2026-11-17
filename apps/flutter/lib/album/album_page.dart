@@ -20,6 +20,7 @@ import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 class AlbumPage extends StatefulWidget {
   const AlbumPage({
@@ -156,10 +157,8 @@ class _AlbumPageState extends State<AlbumPage> {
             backTooltip: backTooltip,
             onPlayAll: _controller.tracks.isEmpty ? null : _playAll,
           ),
-          bodyBuilder: (context, desktop) => AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: _body(desktop),
-          ),
+          bodyBuilder: (context, desktop) =>
+              MusicStageTransition(child: _body(desktop)),
         ),
       ),
     );
@@ -804,7 +803,11 @@ class _AlbumTracksState extends State<_AlbumTracks> {
                         horizontal,
                         0,
                         horizontal,
-                        24,
+                        24 +
+                            MusicViewportClearance.bottomOf(
+                              context,
+                              fallbackPlayerPresent: widget.current != null,
+                            ),
                       ),
                       itemCount: widget.tracks.length + 1,
                       separatorBuilder: (_, _) => const SizedBox(height: 1),
@@ -841,8 +844,8 @@ class _AlbumTracksState extends State<_AlbumTracks> {
                             track.title,
                           ),
                           onTap: () => widget.onPlay(index),
-                          onContextMenuRequested: (_) =>
-                              unawaited(_showActions(track, index)),
+                          onContextMenuRequested: (position) =>
+                              unawaited(_showActions(track, index, position)),
                           contentBuilder: (context, active, hovered) =>
                               MusicTrackRowContent(
                                 index: index + 1,
@@ -859,7 +862,10 @@ class _AlbumTracksState extends State<_AlbumTracks> {
                                     ? null
                                     : () => _openArtist(track),
                                 onMore: () =>
-                                    unawaited(_showActions(track, index)),
+                                    unawaited(_showActions(track, index, null)),
+                                onMoreAt: (position) => unawaited(
+                                  _showActions(track, index, position),
+                                ),
                                 showInlineQueueAction: hovered,
                                 queueKey: ValueKey('album-queue-$index'),
                                 moreKey: ValueKey('album-context-$index'),
@@ -880,64 +886,54 @@ class _AlbumTracksState extends State<_AlbumTracks> {
     );
   }
 
-  Future<void> _showActions(PlaylistTrackSummary track, int index) async {
+  Future<void> _showActions(
+    PlaylistTrackSummary track,
+    int index,
+    Offset? anchorPosition,
+  ) async {
     final likeAction = await resolveMusicTrackLikeAction(context, track);
     if (!mounted) return;
     final canAddToPlaylist = canAddMusicTrackToPlaylist(context);
-    final action = await showModalBottomSheet<MusicTrackAction>(
+    final action = await showAdaptiveMusicContextMenu<MusicTrackAction>(
       context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.play_arrow_rounded),
-              title: Text(context.l10n.commonPlayFromHere),
-              onTap: () => Navigator.pop(context, MusicTrackAction.play),
-            ),
-            if (canAddToPlaylist)
-              ListTile(
-                leading: const Icon(Icons.playlist_add_rounded),
-                title: Text(context.l10n.libraryAddTrackToPlaylist),
-                onTap: () =>
-                    Navigator.pop(context, MusicTrackAction.addToPlaylist),
-              ),
-            if (likeAction != null)
-              ListTile(
-                leading: Icon(
-                  likeAction == MusicTrackAction.like
-                      ? Icons.favorite_border_rounded
-                      : Icons.favorite_rounded,
-                ),
-                title: Text(
-                  likeAction == MusicTrackAction.like
-                      ? context.l10n.libraryLikeTrack
-                      : context.l10n.libraryUnlikeTrack,
-                ),
-                onTap: () => Navigator.pop(context, likeAction),
-              ),
-            ListTile(
-              leading: const Icon(Icons.playlist_add_rounded),
-              title: Text(context.l10n.commonAddToQueue),
-              onTap: () => Navigator.pop(context, MusicTrackAction.addToQueue),
-            ),
-            if (widget.onOpenArtist != null && track.artists.isNotEmpty)
-              ListTile(
-                leading: const Icon(Icons.person_rounded),
-                title: Text(
-                  track.artists.length > 1
-                      ? context.l10n.commonChooseArtist
-                      : context.l10n.commonOpenArtist,
-                ),
-                onTap: () =>
-                    Navigator.pop(context, MusicTrackAction.openArtist),
-              ),
-            const SizedBox(height: 8),
-          ],
+      desktop: widget.desktop,
+      anchorPosition: anchorPosition,
+      entries: [
+        MusicTrackMenuEntry(
+          value: MusicTrackAction.play,
+          icon: Icons.play_arrow_rounded,
+          label: context.l10n.commonPlayFromHere,
         ),
-      ),
+        if (canAddToPlaylist)
+          MusicTrackMenuEntry(
+            value: MusicTrackAction.addToPlaylist,
+            icon: Icons.playlist_add_rounded,
+            label: context.l10n.libraryAddTrackToPlaylist,
+          ),
+        if (likeAction != null)
+          MusicTrackMenuEntry(
+            value: likeAction,
+            icon: likeAction == MusicTrackAction.like
+                ? Icons.favorite_border_rounded
+                : Icons.favorite_rounded,
+            label: likeAction == MusicTrackAction.like
+                ? context.l10n.libraryLikeTrack
+                : context.l10n.libraryUnlikeTrack,
+          ),
+        MusicTrackMenuEntry(
+          value: MusicTrackAction.addToQueue,
+          icon: Icons.queue_music_rounded,
+          label: context.l10n.commonAddToQueue,
+        ),
+        if (widget.onOpenArtist != null && track.artists.isNotEmpty)
+          MusicTrackMenuEntry(
+            value: MusicTrackAction.openArtist,
+            icon: Icons.person_rounded,
+            label: track.artists.length > 1
+                ? context.l10n.commonChooseArtist
+                : context.l10n.commonOpenArtist,
+          ),
+      ],
     );
     if (!mounted) return;
     switch (action) {
@@ -993,6 +989,8 @@ class _AlbumArtwork extends StatelessWidget {
               uri!,
               headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
+              gaplessPlayback: true,
+              frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );

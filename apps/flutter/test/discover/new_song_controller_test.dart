@@ -105,6 +105,36 @@ void main() {
     );
     await load;
   });
+
+  test(
+    'restores already loaded categories from cache without re-fetching',
+    () async {
+      final gateway = _ScriptedGateway([
+        const _ImmediateOperation(
+          NewSongResult(category: NewSongCategory.latest, tracks: [first]),
+        ),
+        const _ImmediateOperation(
+          NewSongResult(category: NewSongCategory.japan, tracks: [second]),
+        ),
+      ]);
+      final controller = NewSongController(gateway);
+
+      await controller.load();
+      expect(controller.tracks, [first]);
+
+      controller.selectCategory(NewSongCategory.japan);
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.category, NewSongCategory.japan);
+      expect(controller.tracks, [second]);
+
+      controller.selectCategory(NewSongCategory.latest);
+      expect(controller.category, NewSongCategory.latest);
+      expect(controller.stage, NewSongStage.content);
+      expect(controller.tracks, [first]);
+      expect(gateway.requests, [NewSongCategory.latest, NewSongCategory.japan]);
+      controller.dispose();
+    },
+  );
 }
 
 class _ThrowingGateway implements NewSongGateway {

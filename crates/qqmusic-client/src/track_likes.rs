@@ -346,7 +346,8 @@ struct SignedPlaylistTrackComm<'a> {
     platform: &'static str,
     #[serde(rename = "uin")]
     account_id: &'a str,
-    authst: &'a str,
+    #[serde(rename = "authst")]
+    auth_key: &'a str,
     g_tk: u32,
     #[serde(rename = "g_tk_new_20200303")]
     g_tk_new: u32,
@@ -614,16 +615,29 @@ mod tests {
                 .cloned()
                 .collect::<std::collections::BTreeMap<_, _>>();
             assert_eq!(query.get("encoding").map(String::as_str), Some("ag-1"));
-            assert!(query.get("_").is_some_and(|value| value.parse::<u128>().is_ok()));
-            let payload = decode_ag1_request_for_test(
-                request.body_bytes().expect("encrypted request body"),
-            )
-            .expect("ag-1 request decrypts");
+            assert!(
+                query
+                    .get("_")
+                    .is_some_and(|value| value.parse::<u128>().is_ok())
+            );
+            let payload =
+                decode_ag1_request_for_test(request.body_bytes().expect("encrypted request body"))
+                    .expect("ag-1 request decrypts");
             assert_eq!(query.get("sign"), Some(&zzc_sign(&payload)));
-            assert!(request.headers().iter().any(|(name, value)|
-                name.eq_ignore_ascii_case("Content-Type") && value == "text/plain"));
-            assert!(request.headers().iter().any(|(name, value)|
-                name.eq_ignore_ascii_case("Accept") && value == "application/octet-stream"));
+            assert!(
+                request
+                    .headers()
+                    .iter()
+                    .any(|(name, value)| name.eq_ignore_ascii_case("Content-Type")
+                        && value == "text/plain")
+            );
+            assert!(
+                request
+                    .headers()
+                    .iter()
+                    .any(|(name, value)| name.eq_ignore_ascii_case("Accept")
+                        && value == "application/octet-stream")
+            );
             let debug = format!("{request:?}");
             assert!(!debug.contains("W_X_fixture-key"));
             assert!(!debug.contains("41001"));
@@ -631,6 +645,8 @@ mod tests {
             assert_eq!(body["comm"]["ct"], 24);
             assert_eq!(body["comm"]["cv"], 4_747_474);
             assert_eq!(body["comm"]["platform"], "yqq.json");
+            assert_eq!(body["comm"]["uin"], "123456");
+            assert_eq!(body["comm"]["authst"], "W_X_fixture-key");
             assert_eq!(body["comm"]["g_tk"], json!(g_tk("W_X_fixture-key")));
             assert_eq!(
                 body["comm"]["g_tk_new_20200303"],
