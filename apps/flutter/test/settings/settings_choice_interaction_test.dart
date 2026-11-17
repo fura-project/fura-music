@@ -92,9 +92,11 @@ void main() {
           final oldValue = tester
               .widget<Text>(find.byKey(ValueKey('$key-current')))
               .data;
-          final group = tester.getSize(
-            find.byKey(const ValueKey('settings-group')),
+          final rowGroup = find.ancestor(
+            of: row,
+            matching: find.byKey(const ValueKey('settings-group')),
           );
+          final group = tester.getSize(rowGroup);
           expect(tester.widget(row), isA<ListTile>());
           expect(
             find.descendant(
@@ -162,10 +164,7 @@ void main() {
             findsNothing,
           );
           expect(find.byType(TextField), findsNothing);
-          expect(
-            tester.getSize(find.byKey(const ValueKey('settings-group'))),
-            group,
-          );
+          expect(tester.getSize(rowGroup), group);
           final option = find.byKey(ValueKey(optionKey));
           await tester.ensureVisible(option);
           expect(tester.getSize(option).height, greaterThanOrEqualTo(48));

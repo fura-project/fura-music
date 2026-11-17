@@ -76,9 +76,11 @@ void main() {
     await tester.pumpWidget(const SettingsReviewHarness());
     await tester.pumpAndSettle();
     final row = find.byKey(const ValueKey('settings-theme-selector'));
-    final groupSize = tester.getSize(
-      find.byKey(const ValueKey('settings-group')),
+    final rowGroup = find.ancestor(
+      of: row,
+      matching: find.byKey(const ValueKey('settings-group')),
     );
+    final groupSize = tester.getSize(rowGroup);
     await tester.tap(row);
     await tester.pumpAndSettle();
     final option = find.byKey(const ValueKey('settings-theme-light'));
@@ -93,10 +95,7 @@ void main() {
         )
         .first;
     expect(tester.getSize(panel).width, inInclusiveRange(152, 320));
-    expect(
-      tester.getSize(find.byKey(const ValueKey('settings-group'))),
-      groupSize,
-    );
+    expect(tester.getSize(rowGroup), groupSize);
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.byType(TextField), findsNothing);
     expect(nativeCalls, 0);
@@ -440,7 +439,10 @@ void main() {
         final focus = settingsRowInk(tester, row).focusNode!;
         focus.requestFocus();
         await tester.pump();
-        final group = find.byKey(const ValueKey('settings-group'));
+        final group = find.ancestor(
+          of: row,
+          matching: find.byKey(const ValueKey('settings-group')),
+        );
         final collapsed = tester.getSize(group).height;
         await tester.sendKeyEvent(LogicalKeyboardKey.enter);
         await tester.pump();

@@ -22,7 +22,12 @@ void main() {
       final theme = Theme.of(tester.element(availability));
       final foreground = tester.widget<Text>(availability).style!.color!;
       final group = tester
-          .widget<Material>(find.byKey(const ValueKey('settings-group')))
+          .widget<Material>(
+            find.ancestor(
+              of: availability,
+              matching: find.byKey(const ValueKey('settings-group')),
+            ),
+          )
           .color!;
       double contrast(Color a, Color b) {
         final first = a.computeLuminance(), second = b.computeLuminance();
@@ -122,12 +127,70 @@ void main() {
       scheme.surfaceContainerHighest,
     ]);
     expect(tester.getSize(palette).height, 20);
-    for (final material in tester.widgetList<Material>(
-      find.byKey(const ValueKey('settings-group')),
-    )) {
+    final groups = find.byKey(const ValueKey('settings-group'));
+    expect(groups, findsNWidgets(2));
+    for (final material in tester.widgetList<Material>(groups)) {
       expect(material.color, scheme.surfaceContainerLow);
       expect(material.borderRadius, BorderRadius.circular(16));
     }
+    expect(
+      tester.getTopLeft(groups.at(1)).dy -
+          tester.getBottomLeft(groups.at(0)).dy,
+      12,
+    );
+    final systemCard = find.byKey(
+      const ValueKey('settings-color-source-system'),
+    );
+    final brandCard = find.byKey(const ValueKey('settings-color-source-brand'));
+    expect(
+      tester.getTopLeft(brandCard).dy - tester.getBottomLeft(systemCard).dy,
+      8,
+    );
     expect(find.byType(ExpansionTile), findsNothing);
   }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+  testWidgets(
+    'stacked value pills hug content, retain subtitles, and keep 320px zh titles single-line',
+    (tester) async {
+      setSettingsViewport(tester, const Size(320, 900));
+      await tester.pumpWidget(
+        const SettingsReviewHarness(language: 'zh', compact: true),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.text('配色来源')).height, lessThan(30));
+
+      await tester.pumpWidget(
+        const SettingsReviewHarness(language: 'zh', scale: 2, compact: true),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('跟随系统主题'), findsOneWidget);
+      final currentText = find.byKey(
+        const ValueKey('settings-theme-selector-current'),
+      );
+      final themePill = find
+          .ancestor(of: currentText, matching: find.byType(DecoratedBox))
+          .first;
+      final themeRow = find.byKey(const ValueKey('settings-theme-selector'));
+      expect(
+        tester.getSize(themePill).width,
+        lessThan(tester.getSize(themeRow).width - 96),
+      );
+
+      await tester.tap(themeRow);
+      await tester.pumpAndSettle();
+      final menuCard = find
+          .ancestor(
+            of: find.byKey(const ValueKey('settings-theme-light')),
+            matching: find.byWidgetPredicate(
+              (w) => w is Material && w.type == MaterialType.card,
+            ),
+          )
+          .first;
+      expect(
+        tester.getTopLeft(menuCard).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(themePill).dy),
+      );
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
 }

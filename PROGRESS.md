@@ -11,6 +11,16 @@ execution:
 
 # Current State
 
+- **2026-11-17 Human-directed UI / Settings page MD3 card separation, 3-zone row hierarchy, tonal selector pills, and inner selectable color-source cards (`apps/flutter/lib/settings/settings_page.dart`, `apps/flutter/lib/library/user_library_page.dart`, `apps/flutter/test/settings/settings_material_controls_test.dart`):**
+  Addressed the Human visual review directive (`你不觉得现在设置页依然没有md味道吗 像自己拼出来的 也不像常规设置` -> `我觉得这个架构没问题吧 毕竟以后设置多起来就是这样 但是你不觉得各个选项在一起像一大坨吗`):
+  1. **Independent Setting Cards with Breathing Room (`_SettingsGroup`, `_SettingsCard`, `_CompactSettingsMenu` in `apps/flutter/lib/settings/settings_page.dart`):**
+     Replaced the monolithic multi-row block (`0px` gap + hairline `Divider`) with independent `16dp` rounded `surfaceContainerLow` setting cards separated by `12dp` vertical spacing (and `10dp` vertical spacing between category cards in `_CompactSettingsMenu` and `8dp` in `_SettingsSearchDelegate`).
+  2. **3-Zone MD3 Row Hierarchy & Tonal Selector Pill (`_buildSettingsIconBadge`, `_SettingsChoiceTile`, `_SettingsColorDisclosure`, `_buildSettingsSubtitle`):**
+     Added a `40x40` (`12dp` radius) tonal icon badge on the left, a `w600` setting title + supporting description subtitle in the center, and a distinct `12dp` rounded tonal selector pill (`surfaceContainerHigh` at rest, `secondaryContainer` when active, anchored cleanly via `Positioned.fill` `PopupMenuButton` and content-hugging `Align` when stacked at narrow/`2.0x` text scales) on the right.
+  3. **Separated Inner Radio Cards & Recessed Palette Bar in `_SettingsColorDisclosure` + Section Header De-duplication:**
+     Separated `settings-color-source-system` and `settings-color-source-brand` into individual `12dp` rounded selectable cards (`8dp` gap, highlighted `secondaryContainer` fill + `primary` border when selected) above a recessed `surfaceContainer` footer bar pairing availability copy with `settingsPalettePreviewLabel` + `settings-color-palette-preview`. Rendered `.arb` section body descriptions under desktop section titles, fixed Playback section/row title duplication (`播放` / `音频质量` / `歌词辅助内容`), and removed the duplicate `_SidebarSectionLabel` in `_DesktopSettingsSidebar` (`apps/flutter/lib/library/user_library_page.dart`).
+  - **Verification:** `dart format --output=none --set-exit-if-changed lib/ test/`, `dart analyze` (0 issues), `flutter test test/settings/` (105/105), `flutter test test/widget_test.dart` (123/123), and `git diff --check` pass. State: **HUMAN_REVIEW**.
+
 - **2026-11-16 Human-directed UI / Global Material Design 3 alignment and UI/UX polish across Phases 1–3 (`apps/flutter/lib/theme/`, `navigation/`, `library/`, `search/`, `catalog/`, `album/`, `artist/`, `discover/`, `home/`, `playback/`, `lyrics/`, `comments/`, `music_video/`, `settings/`, `app.dart`, `fura_toast.dart`):**
   Executed the approved 6-area, 18-item MD3 optimization roadmap (`可以改成二级 正好不像md` / `随后按方案开始执行`):
   1. **Theme Tokens, Search Capsules, Viewport Clearance & Secondary Tabs (`Phase 1`):**

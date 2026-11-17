@@ -44,9 +44,11 @@ void main() {
                 final row = find.byKey(ValueKey(key));
                 await tester.ensureVisible(row);
                 final detailed = key == 'settings-color-source-selector';
-                final beforeSize = tester.getSize(
-                  find.byKey(const ValueKey('settings-group')),
+                final rowGroup = find.ancestor(
+                  of: row,
+                  matching: find.byKey(const ValueKey('settings-group')),
                 );
+                final beforeSize = tester.getSize(rowGroup);
                 await tester.tap(row);
                 await tester.pumpAndSettle();
                 expect(find.byType(BottomSheet), findsNothing);
@@ -56,12 +58,7 @@ void main() {
                 );
                 expect(find.byType(TextField), findsNothing);
                 if (!detailed) {
-                  expect(
-                    tester.getSize(
-                      find.byKey(const ValueKey('settings-group')),
-                    ),
-                    beforeSize,
-                  );
+                  expect(tester.getSize(rowGroup), beforeSize);
                   for (final menu in tester.widgetList<PopupMenuItem>(
                     find.byWidgetPredicate((w) => w is PopupMenuItem),
                   )) {

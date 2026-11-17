@@ -3155,7 +3155,6 @@ class _DesktopSettingsSidebar extends StatelessWidget {
                 key: const ValueKey('settings-sidebar-options'),
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
                 children: [
-                  _SidebarSectionLabel(context.l10n.navSettingsSection),
                   for (final section in SettingsSection.values)
                     _SidebarDestinationTile(
                       key: ValueKey('settings-nav-${section.name}'),
