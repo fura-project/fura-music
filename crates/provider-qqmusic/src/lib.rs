@@ -1230,6 +1230,10 @@ where
                 validate_credential_refresh_material(&candidate).is_ok(),
             ));
             active.candidate = candidate;
+            session_diagnostic(format_args!(
+                "phase=refresh_request trigger={} outcome=candidate_ready",
+                refresh_trigger_label(trigger)
+            ));
             return Ok(QqMusicRefreshPrepareResult {
                 state: QqMusicRefreshPrepareState::Candidate,
                 preparation: Some(QqMusicRefreshPreparation {

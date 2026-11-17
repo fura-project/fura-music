@@ -213,7 +213,7 @@ impl AuthOwner {
                 )
             {
                 eprintln!(
-                    "FURA_SESSION_DIAGNOSTIC provider=netease-cloud-music phase=read_rejection action=continuation_required"
+                    "FURA_SESSION_DIAGNOSTIC provider=netease-cloud-music phase=read_rejection action=continuation_required reason=credential_rejected"
                 );
             }
             // Only this exact generation may transition its rejected
