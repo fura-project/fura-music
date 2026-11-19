@@ -624,13 +624,19 @@ class PrivacyAuditTests(unittest.TestCase):
             host = next(line.split(": ", 1)[1] for line in subprocess.check_output(["rustc", "-vV"], text=True).splitlines() if line.startswith("host: "))
             flags = privacy_build.encoded_rust_flags("", source, home,
                                                     "windows" if sys.platform == "win32" else "linux")
-            env = dict(os.environ, CARGO_ENCODED_RUSTFLAGS=flags)
+            target_dir = root / "target"
+            release_dir = target_dir / host / "release"
+            env = dict(
+                os.environ,
+                CARGO_ENCODED_RUSTFLAGS=flags,
+                CARGO_BUILD_BUILD_DIR=str(target_dir),
+            )
             subprocess.run(["cargo", "build", "--offline", "--release", "--target", host,
-                            "--target-dir", str(root / "target")], cwd=source, env=env,
+                            "--target-dir", str(target_dir)], cwd=source, env=env,
                            check=True, capture_output=True)
-            fingerprint = next((root / "target" / host).rglob("lib-privacy_probe.json"))
+            fingerprint = next(release_dir.rglob("lib-privacy_probe.json"))
             self.assertEqual(json.loads(fingerprint.read_text())["rustflags"], flags.split("\x1f"))
-            library = next(p for p in fingerprint.parents[2].glob("*privacy_probe*") if p.suffix in (".so", ".dylib", ".dll"))
+            library = next(p for p in release_dir.glob("*privacy_probe*") if p.suffix in (".so", ".dylib", ".dll"))
             self.assertTrue(b"/fura-build" in library.read_bytes(), "mapped Rust source name was not emitted")
             self.assertFalse(artifact_audit.scan_file(library, artifact_audit.forbidden_patterns([str(home), str(source)])))
 
