@@ -347,6 +347,44 @@ void main() {
     },
   );
 
+  test('position-only notifications reuse the queue projection', () async {
+    final audio = _FakeAudioEngine();
+    final controller = _controller(audio: audio);
+    final handler = ProjectSystemAudioHandler(controller);
+    final tracks = List.generate(
+      500,
+      (index) => PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track-$index',
+        title: 'Track $index',
+        artistNames: const ['Artist'],
+        albumTitle: 'Album',
+        durationSeconds: 180,
+      ),
+    );
+    await controller.replaceAndPlay(tracks, 0);
+    final baseline = handler.debugQueueProjectionBuildCount;
+    final watch = Stopwatch()..start();
+    for (var index = 1; index <= 1000; index += 1) {
+      audio.sessions.single.emitPosition(index);
+    }
+    await _waitUntil(() => controller.playback.positionMs == 1000);
+    watch.stop();
+    debugPrint(
+      'FURA_PERF system_queue_projection queueLength=500 positionEvents=1000 '
+      'projectionBuilds=${handler.debugQueueProjectionBuildCount - baseline} '
+      'elapsedMicros=${watch.elapsedMicroseconds}',
+    );
+    expect(handler.debugQueueProjectionBuildCount - baseline, 0);
+
+    await controller.replaceAndPlay(tracks.reversed.toList(), 0);
+    expect(handler.debugQueueProjectionBuildCount - baseline, 1);
+    expect(handler.queue.value.first.title, 'Track 499');
+
+    handler.close();
+    controller.dispose();
+  });
+
   test(
     'system commands delegate to the single queue and playback owner',
     () async {
@@ -1032,6 +1070,8 @@ class _FakeAudioSession implements ForegroundAudioSession {
   }
 
   void emit(ForegroundAudioState state) => _states.add(state);
+
+  void emitPosition(int positionMs) => _positions.add(positionMs);
 }
 
 Future<DBusMethodResponse> _mprisCall(

@@ -444,8 +444,15 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
   final QueuePlaybackController controller;
   String? _lastQueueSignature;
   String? _lastItemSignature;
+  PlaybackQueueSnapshot? _queueProjectionSnapshot;
+  List<MediaItem> _queueProjection = const [];
+  String _queueProjectionSignature = '';
   _PublishedPlayback? _lastPlayback;
+  int _queueProjectionBuildCount = 0;
   bool _closed = false;
+
+  @visibleForTesting
+  int get debugQueueProjectionBuildCount => _queueProjectionBuildCount;
 
   void close({bool clearPlatformState = true}) {
     if (_closed) return;
@@ -453,6 +460,9 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
     controller.removeListener(_synchronize);
     _lastQueueSignature = null;
     _lastItemSignature = null;
+    _queueProjectionSnapshot = null;
+    _queueProjection = const [];
+    _queueProjectionSignature = '';
     _lastPlayback = null;
     if (clearPlatformState) {
       queue.add(const []);
@@ -672,18 +682,28 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
   void _synchronize({bool force = false}) {
     if (_closed) return;
 
-    final queueItems = <MediaItem>[
-      for (var index = 0; index < controller.tracks.length; index += 1)
-        _mediaItem(controller.tracks[index], index),
-    ];
-    final queueSignature = queueItems
-        .map(
-          (item) => '${item.id}\u0000${item.title}\u0000${item.artUri ?? ''}',
-        )
-        .join('\u0001');
+    final snapshot = controller.snapshot;
+    // Queue snapshots and their Track lists are immutable. Position, volume,
+    // lyric and playback-stage notifications retain this identity, while every
+    // accepted Queue mutation installs a new snapshot before notifying.
+    if (!identical(snapshot, _queueProjectionSnapshot)) {
+      _queueProjectionSnapshot = snapshot;
+      _queueProjectionBuildCount += 1;
+      _queueProjection = List.unmodifiable([
+        for (var index = 0; index < snapshot.tracks.length; index += 1)
+          _mediaItem(snapshot.tracks[index], index),
+      ]);
+      _queueProjectionSignature = _queueProjection
+          .map(
+            (item) => '${item.id}\u0000${item.title}\u0000${item.artUri ?? ''}',
+          )
+          .join('\u0001');
+    }
+    final queueItems = _queueProjection;
+    final queueSignature = _queueProjectionSignature;
     if (force || queueSignature != _lastQueueSignature) {
       _lastQueueSignature = queueSignature;
-      queue.add(List.unmodifiable(queueItems));
+      queue.add(queueItems);
     }
 
     final currentIndex = controller.currentIndex;
