@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/scheduler.dart' show SchedulerPhase;
@@ -72,7 +73,7 @@ Widget _wrapModalContent(
   Widget Function(Widget child)? wrapper,
 ) => wrapper?.call(child) ?? child;
 
-class LyricPanel extends StatelessWidget {
+class LyricPanel extends StatefulWidget {
   const LyricPanel({
     required this.controller,
     required this.onClose,
@@ -97,25 +98,61 @@ class LyricPanel extends StatelessWidget {
   final LyricAuxiliaryMode auxiliaryMode;
 
   @override
+  State<LyricPanel> createState() => _LyricPanelState();
+}
+
+class _LyricPanelState extends State<LyricPanel> {
+  late bool _seekEnabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _seekEnabled = widget.canSeek?.call() ?? false;
+    widget.playbackState?.addListener(_handlePlaybackStateChanged);
+  }
+
+  @override
+  void didUpdateWidget(LyricPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.playbackState != widget.playbackState) {
+      oldWidget.playbackState?.removeListener(_handlePlaybackStateChanged);
+      widget.playbackState?.addListener(_handlePlaybackStateChanged);
+    }
+    _seekEnabled = widget.canSeek?.call() ?? false;
+  }
+
+  @override
+  void dispose() {
+    widget.playbackState?.removeListener(_handlePlaybackStateChanged);
+    super.dispose();
+  }
+
+  void _handlePlaybackStateChanged() {
+    if (!mounted) return;
+    final nextSeekEnabled = widget.canSeek?.call() ?? false;
+    if (nextSeekEnabled == _seekEnabled) return;
+    setState(() => _seekEnabled = nextSeekEnabled);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final playbackState = this.playbackState;
     return AnimatedBuilder(
-      animation: playbackState == null
-          ? controller
-          : Listenable.merge([controller, playbackState]),
+      animation: widget.controller.stageListenable,
       builder: (context, _) {
+        final seekEnabled = widget.canSeek?.call() ?? false;
+        _seekEnabled = seekEnabled;
         final theme = Theme.of(context);
-        final track = controller.track;
+        final track = widget.controller.track;
         return SafeArea(
           top: false,
           child: Column(
             children: [
               Padding(
                 padding: EdgeInsets.fromLTRB(
-                  immersive ? 28 : 24,
-                  immersive ? 20 : 8,
-                  immersive ? 20 : 8,
-                  immersive ? 16 : 12,
+                  widget.immersive ? 28 : 24,
+                  widget.immersive ? 20 : 8,
+                  widget.immersive ? 20 : 8,
+                  widget.immersive ? 16 : 12,
                 ),
                 child: Row(
                   children: [
@@ -142,17 +179,17 @@ class LyricPanel extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (showCloseButton)
+                    if (widget.showCloseButton)
                       IconButton(
                         tooltip: context.l10n.lyricsClose,
-                        onPressed: onClose,
+                        onPressed: widget.onClose,
                         icon: const Icon(Icons.close_rounded),
                       ),
                   ],
                 ),
               ),
-              if (!immersive) const Divider(height: 1),
-              Expanded(child: _body(context, canSeek?.call() ?? false)),
+              if (!widget.immersive) const Divider(height: 1),
+              Expanded(child: _body(context, seekEnabled)),
             ],
           ),
         );
@@ -161,7 +198,7 @@ class LyricPanel extends StatelessWidget {
   }
 
   Widget _body(BuildContext context, bool seekEnabled) =>
-      switch (controller.stage) {
+      switch (widget.controller.stage) {
         LyricStage.idle => _LyricMessage(
           key: const ValueKey('lyrics-idle'),
           icon: Icons.lyrics_outlined,
@@ -173,10 +210,10 @@ class LyricPanel extends StatelessWidget {
         ),
         LyricStage.content => _LyricContent(
           key: const ValueKey('lyrics-content'),
-          controller: controller,
-          onSeek: seekEnabled ? onSeek : null,
-          immersive: immersive,
-          auxiliaryMode: auxiliaryMode,
+          controller: widget.controller,
+          onSeek: seekEnabled ? widget.onSeek : null,
+          immersive: widget.immersive,
+          auxiliaryMode: widget.auxiliaryMode,
         ),
         LyricStage.unavailable => _LyricMessage(
           key: const ValueKey('lyrics-unavailable'),
@@ -184,7 +221,7 @@ class LyricPanel extends StatelessWidget {
           title: context.l10n.lyricsUnavailableTitle,
           detail: context.l10n.lyricsUnavailableDetail(
             builtInProviderDisplayName(
-              controller.track?.providerId ?? '',
+              widget.controller.track?.providerId ?? '',
               context.l10n,
             ),
           ),
@@ -195,25 +232,25 @@ class LyricPanel extends StatelessWidget {
           icon: Icons.cloud_off_rounded,
           title: _errorTitle(
             context.l10n,
-            controller.failure,
+            widget.controller.failure,
             builtInProviderDisplayName(
-              controller.track?.providerId ?? '',
+              widget.controller.track?.providerId ?? '',
               context.l10n,
             ),
           ),
           detail: _errorDetail(
             context.l10n,
-            controller.failure,
+            widget.controller.failure,
             builtInProviderDisplayName(
-              controller.track?.providerId ?? '',
+              widget.controller.track?.providerId ?? '',
               context.l10n,
             ),
           ),
           announce: true,
-          action: controller.canRetry
+          action: widget.controller.canRetry
               ? FilledButton.tonal(
                   key: const ValueKey('lyrics-retry'),
-                  onPressed: controller.retry,
+                  onPressed: widget.controller.retry,
                   child: Text(context.l10n.commonRetry),
                 )
               : null,
@@ -224,14 +261,14 @@ class LyricPanel extends StatelessWidget {
           title: context.l10n.lyricsSignInTitle,
           detail: context.l10n.lyricsSignInDetail(
             builtInProviderDisplayName(
-              controller.track?.providerId ?? '',
+              widget.controller.track?.providerId ?? '',
               context.l10n,
             ),
           ),
           announce: true,
           action: TextButton(
             key: const ValueKey('lyrics-sign-in-again'),
-            onPressed: onSignInAgain,
+            onPressed: widget.onSignInAgain,
             child: Text(context.l10n.authSignInAgain),
           ),
         ),
@@ -240,7 +277,7 @@ class LyricPanel extends StatelessWidget {
           icon: Icons.lock_reset_rounded,
           title: context.l10n.lyricsSessionRejectedTitle(
             builtInProviderDisplayName(
-              controller.track?.providerId ?? '',
+              widget.controller.track?.providerId ?? '',
               context.l10n,
             ),
           ),
@@ -248,7 +285,7 @@ class LyricPanel extends StatelessWidget {
           announce: true,
           action: TextButton(
             key: const ValueKey('lyrics-sign-in-again'),
-            onPressed: onSignInAgain,
+            onPressed: widget.onSignInAgain,
             child: Text(context.l10n.authSignInAgain),
           ),
         ),
@@ -286,18 +323,18 @@ class _LyricContentState extends State<_LyricContent> {
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_handleControllerChanged);
+    widget.controller.lineListenable.addListener(_handleControllerChanged);
   }
 
   @override
   void reassemble() {
     super.reassemble();
-    widget.controller.removeListener(_handleControllerChanged);
-    widget.controller.addListener(_handleControllerChanged);
+    widget.controller.lineListenable.removeListener(_handleControllerChanged);
+    widget.controller.lineListenable.addListener(_handleControllerChanged);
     final lyrics = widget.controller.lyrics;
     final activeLineIndex = widget.controller.activeSelection?.lineIndex;
     if (_following && lyrics != null && activeLineIndex != null) {
-      _scheduleFollow(activeLineIndex, lyrics.lines.length);
+      _scheduleFollow(activeLineIndex, lyrics.lines.length, animate: true);
     }
   }
 
@@ -305,8 +342,10 @@ class _LyricContentState extends State<_LyricContent> {
   void didUpdateWidget(_LyricContent oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_handleControllerChanged);
-      widget.controller.addListener(_handleControllerChanged);
+      oldWidget.controller.lineListenable.removeListener(
+        _handleControllerChanged,
+      );
+      widget.controller.lineListenable.addListener(_handleControllerChanged);
     }
     if (oldWidget.auxiliaryMode == widget.auxiliaryMode || !_following) return;
     final activeLineIndex = widget.controller.activeSelection?.lineIndex;
@@ -314,6 +353,7 @@ class _LyricContentState extends State<_LyricContent> {
       _scheduleFollow(
         activeLineIndex,
         widget.controller.lyrics?.lines.length ?? 0,
+        animate: true,
       );
     }
   }
@@ -322,6 +362,7 @@ class _LyricContentState extends State<_LyricContent> {
     if (!mounted) return;
     final lyrics = widget.controller.lyrics;
     if (lyrics == null) return;
+    final initialMount = _lastLyrics == null;
     final lyricsChanged = !identical(lyrics, _lastLyrics);
     if (lyricsChanged) {
       _lastLyrics = lyrics;
@@ -331,14 +372,24 @@ class _LyricContentState extends State<_LyricContent> {
       _following = true;
     }
     final activeLineIndex = widget.controller.activeSelection?.lineIndex;
+    final animate = !initialMount;
     if (activeLineIndex != _lastActiveLineIndex) {
       _lastActiveLineIndex = activeLineIndex;
       if (_following && activeLineIndex != null) {
-        _startOrScheduleFollow(activeLineIndex, lyrics.lines.length);
+        _startOrScheduleFollow(
+          activeLineIndex,
+          lyrics.lines.length,
+          animate: animate,
+        );
       }
     } else if (lyricsChanged && _following && lyrics.lines.isNotEmpty) {
-      _startOrScheduleFollow(0, lyrics.lines.length);
+      final needsResetToTop =
+          _scrollController.hasClients && _scrollController.offset > 0.5;
+      if (needsResetToTop) {
+        _startOrScheduleFollow(0, lyrics.lines.length, animate: animate);
+      }
     }
+    setState(() {});
   }
 
   @override
@@ -346,6 +397,7 @@ class _LyricContentState extends State<_LyricContent> {
     final lyrics = widget.controller.lyrics!;
     final lines = lyrics.lines;
     final activeLineIndex = widget.controller.activeSelection?.lineIndex;
+    final initialMount = _lastLyrics == null;
     final lyricsChanged = !identical(lyrics, _lastLyrics);
     if (lyricsChanged) {
       _lastLyrics = lyrics;
@@ -354,13 +406,18 @@ class _LyricContentState extends State<_LyricContent> {
       _followAttempt += 1;
       _following = true;
     }
+    final animate = !initialMount;
     if (activeLineIndex != _lastActiveLineIndex) {
       _lastActiveLineIndex = activeLineIndex;
       if (_following && activeLineIndex != null) {
-        _scheduleFollow(activeLineIndex, lines.length);
+        _scheduleFollow(activeLineIndex, lines.length, animate: animate);
       }
     } else if (lyricsChanged && _following && lines.isNotEmpty) {
-      _scheduleFollow(0, lines.length);
+      final needsResetToTop =
+          _scrollController.hasClients && _scrollController.offset > 0.5;
+      if (needsResetToTop) {
+        _scheduleFollow(0, lines.length, animate: animate);
+      }
     }
 
     return Column(
@@ -394,16 +451,20 @@ class _LyricContentState extends State<_LyricContent> {
                   ),
                   itemCount: lines.length,
                   itemBuilder: (context, index) {
+                    final active = index == activeLineIndex;
                     return KeyedSubtree(
                       key: _lineKey(index),
                       child: _LyricLine(
                         key: ValueKey('lyrics-line-$index'),
                         line: lines[index],
                         lineIndex: index,
-                        active: index == activeLineIndex,
+                        active: active,
                         immersive: widget.immersive,
                         auxiliaryMode: widget.auxiliaryMode,
-                        positionMs: widget.controller.positionMs,
+                        positionMsListenable:
+                            active && lines[index].segmentsComposeLine
+                            ? widget.controller.positionMsListenable
+                            : null,
                         onSeek: widget.onSeek == null
                             ? null
                             : () => unawaited(
@@ -466,11 +527,19 @@ class _LyricContentState extends State<_LyricContent> {
     final activeLineIndex = widget.controller.activeSelection?.lineIndex;
     setState(() => _following = true);
     if (activeLineIndex != null) {
-      _scheduleFollow(activeLineIndex, widget.controller.lyrics!.lines.length);
+      _scheduleFollow(
+        activeLineIndex,
+        widget.controller.lyrics!.lines.length,
+        animate: true,
+      );
     }
   }
 
-  void _startOrScheduleFollow(int lineIndex, int lineCount) {
+  void _startOrScheduleFollow(
+    int lineIndex,
+    int lineCount, {
+    required bool animate,
+  }) {
     final phase = WidgetsBinding.instance.schedulerPhase;
     final canStartImmediately =
         phase == SchedulerPhase.idle ||
@@ -481,17 +550,17 @@ class _LyricContentState extends State<_LyricContent> {
         targetContext.mounted &&
         _scrollController.hasClients) {
       final attempt = ++_followAttempt;
-      unawaited(_followLine(lineIndex, lineCount, attempt));
+      unawaited(_followLine(lineIndex, lineCount, attempt, animate: animate));
       return;
     }
-    _scheduleFollow(lineIndex, lineCount);
+    _scheduleFollow(lineIndex, lineCount, animate: animate);
   }
 
-  void _scheduleFollow(int lineIndex, int lineCount) {
+  void _scheduleFollow(int lineIndex, int lineCount, {required bool animate}) {
     final attempt = ++_followAttempt;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_following || attempt != _followAttempt) return;
-      unawaited(_followLine(lineIndex, lineCount, attempt));
+      unawaited(_followLine(lineIndex, lineCount, attempt, animate: animate));
     });
   }
 
@@ -502,29 +571,70 @@ class _LyricContentState extends State<_LyricContent> {
   }) {
     int? minMounted;
     int? maxMounted;
+    RenderBox? minBox;
+    RenderBox? maxBox;
+    BuildContext? sampleContext;
+    var measuredHeightSum = 0.0;
+    var measuredCount = 0;
     for (final entry in _lineKeys.entries) {
       final ctx = entry.value.currentContext;
       if (ctx == null || !ctx.mounted) continue;
+      final renderObject = ctx.findRenderObject();
+      if (renderObject is! RenderBox ||
+          !renderObject.hasSize ||
+          !renderObject.attached) {
+        continue;
+      }
+      sampleContext ??= ctx;
       final idx = entry.key;
-      if (minMounted == null || idx < minMounted) minMounted = idx;
-      if (maxMounted == null || idx > maxMounted) maxMounted = idx;
+      measuredHeightSum += renderObject.size.height;
+      measuredCount += 1;
+      if (minMounted == null || idx < minMounted) {
+        minMounted = idx;
+        minBox = renderObject;
+      }
+      if (maxMounted == null || idx > maxMounted) {
+        maxMounted = idx;
+        maxBox = renderObject;
+      }
     }
-    if (minMounted != null && maxMounted != null) {
-      final mountedSpan = (maxMounted - minMounted + 1).clamp(1, lineCount);
-      final avgHeight = (position.viewportDimension / mountedSpan).clamp(
-        48.0,
-        160.0,
-      );
+    if (minMounted != null && maxMounted != null && measuredCount > 0) {
+      final scrollableObject = sampleContext == null
+          ? null
+          : Scrollable.maybeOf(sampleContext)?.context.findRenderObject();
+      final viewport =
+          scrollableObject is RenderBox &&
+              scrollableObject.hasSize &&
+              scrollableObject.attached
+          ? scrollableObject
+          : null;
+      final avgHeight = (measuredHeightSum / measuredCount).clamp(48.0, 240.0);
+      final targetAnchor = position.viewportDimension * 0.38;
       if (lineIndex > maxMounted) {
-        final delta = (lineIndex - maxMounted + 0.5) * avgHeight;
-        return (position.pixels + delta).clamp(
+        final maxBottomInScroll = viewport != null && maxBox != null
+            ? position.pixels +
+                  maxBox
+                      .localToGlobal(
+                        Offset(0, maxBox.size.height),
+                        ancestor: viewport,
+                      )
+                      .dy
+            : position.pixels + position.viewportDimension;
+        final estimatedLineTop =
+            maxBottomInScroll + (lineIndex - maxMounted - 1) * avgHeight;
+        return (estimatedLineTop - targetAnchor).clamp(
           position.minScrollExtent,
           position.maxScrollExtent,
         );
       }
       if (lineIndex < minMounted) {
-        final delta = (minMounted - lineIndex + 0.5) * avgHeight;
-        return (position.pixels - delta).clamp(
+        final minTopInScroll = viewport != null && minBox != null
+            ? position.pixels +
+                  minBox.localToGlobal(Offset.zero, ancestor: viewport).dy
+            : position.pixels;
+        final estimatedLineTop =
+            minTopInScroll - (minMounted - lineIndex) * avgHeight;
+        return (estimatedLineTop - targetAnchor).clamp(
           position.minScrollExtent,
           position.maxScrollExtent,
         );
@@ -537,7 +647,12 @@ class _LyricContentState extends State<_LyricContent> {
     );
   }
 
-  Future<void> _followLine(int lineIndex, int lineCount, int attempt) async {
+  Future<void> _followLine(
+    int lineIndex,
+    int lineCount,
+    int attempt, {
+    required bool animate,
+  }) async {
     var targetContext = _lineKey(lineIndex).currentContext;
     for (
       var step = 0;
@@ -550,14 +665,18 @@ class _LyricContentState extends State<_LyricContent> {
         lineCount: lineCount,
         position: position,
       );
-      if ((estimatedOffset - position.pixels).abs() < 1.0 && step > 0) {
+      if ((estimatedOffset - position.pixels).abs() < 1.0) {
         break;
       }
-      await _scrollController.animateTo(
-        estimatedOffset,
-        duration: Duration(milliseconds: step == 0 ? 180 : 90),
-        curve: Curves.easeOutCubic,
-      );
+      if (animate) {
+        await _scrollController.animateTo(
+          estimatedOffset,
+          duration: Duration(milliseconds: step == 0 ? 180 : 90),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        _scrollController.jumpTo(estimatedOffset);
+      }
       if (!mounted || !_following || attempt != _followAttempt) return;
       await WidgetsBinding.instance.endOfFrame;
       targetContext = _lineKey(lineIndex).currentContext;
@@ -572,7 +691,7 @@ class _LyricContentState extends State<_LyricContent> {
     await Scrollable.ensureVisible(
       targetContext,
       alignment: 0.38,
-      duration: const Duration(milliseconds: 220),
+      duration: animate ? const Duration(milliseconds: 220) : Duration.zero,
       curve: Curves.easeOutCubic,
     );
   }
@@ -580,7 +699,7 @@ class _LyricContentState extends State<_LyricContent> {
   @override
   void dispose() {
     _followAttempt += 1;
-    widget.controller.removeListener(_handleControllerChanged);
+    widget.controller.lineListenable.removeListener(_handleControllerChanged);
     _scrollController.dispose();
     super.dispose();
   }
@@ -593,7 +712,7 @@ class _LyricLine extends StatelessWidget {
     required this.active,
     required this.immersive,
     required this.auxiliaryMode,
-    required this.positionMs,
+    required this.positionMsListenable,
     this.onSeek,
     super.key,
   });
@@ -603,7 +722,7 @@ class _LyricLine extends StatelessWidget {
   final bool active;
   final bool immersive;
   final LyricAuxiliaryMode auxiliaryMode;
-  final int positionMs;
+  final ValueListenable<int>? positionMsListenable;
   final VoidCallback? onSeek;
 
   @override
@@ -621,9 +740,7 @@ class _LyricLine extends StatelessWidget {
           : theme.colorScheme.onSurfaceVariant,
       height: 1.35,
     );
-    final segmentsComposeLine =
-        line.segments.isNotEmpty &&
-        line.segments.map((segment) => segment.text).join() == line.text;
+    final segmentsComposeLine = line.segmentsComposeLine;
     final (auxiliaryText, auxiliaryIsRomanization) = switch (auxiliaryMode) {
       LyricAuxiliaryMode.auto =>
         line.translation != null
@@ -633,6 +750,34 @@ class _LyricLine extends StatelessWidget {
       LyricAuxiliaryMode.romanization => (line.romanization, true),
       LyricAuxiliaryMode.off => (null, false),
     };
+
+    Widget buildSegments(int positionMs) => Wrap(
+      spacing: 0,
+      runSpacing: 4,
+      children: [
+        for (var index = 0; index < line.segments.length; index += 1)
+          _TimedSegment(
+            key: ValueKey('lyrics-word-$lineIndex-$index'),
+            segment: line.segments[index],
+            positionMs: positionMs,
+          ),
+      ],
+    );
+
+    final Widget primaryText;
+    if (segmentsComposeLine) {
+      final listenable = positionMsListenable;
+      if (active && listenable != null) {
+        primaryText = ValueListenableBuilder<int>(
+          valueListenable: listenable,
+          builder: (context, positionMs, _) => buildSegments(positionMs),
+        );
+      } else {
+        primaryText = buildSegments(-1);
+      }
+    } else {
+      primaryText = Text(line.text);
+    }
 
     return Semantics(
       selected: active,
@@ -659,25 +804,7 @@ class _LyricLine extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (segmentsComposeLine)
-                  Wrap(
-                    spacing: 0,
-                    runSpacing: 4,
-                    children: [
-                      for (
-                        var index = 0;
-                        index < line.segments.length;
-                        index += 1
-                      )
-                        _TimedSegment(
-                          key: ValueKey('lyrics-word-$lineIndex-$index'),
-                          segment: line.segments[index],
-                          positionMs: active ? positionMs : -1,
-                        ),
-                    ],
-                  )
-                else
-                  Text(line.text),
+                primaryText,
                 if (auxiliaryText case final auxiliary?) ...[
                   const SizedBox(height: 6),
                   Text(

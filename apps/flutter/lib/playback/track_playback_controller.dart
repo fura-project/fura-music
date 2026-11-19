@@ -17,7 +17,10 @@ enum TrackPlaybackStage {
 }
 
 class TrackPlaybackController extends ChangeNotifier {
-  TrackPlaybackController(this._resolutionGateway, this._playback) {
+  TrackPlaybackController(this._resolutionGateway, this._playback)
+    : _lastPlaybackPositionMs = _playback.positionMs,
+      _lastPlaybackVolume = _playback.volume,
+      _positionMs = ValueNotifier<int>(_playback.positionMs) {
     _playback.addListener(_onPlaybackChanged);
   }
 
@@ -34,8 +37,11 @@ class TrackPlaybackController extends ChangeNotifier {
   int _generation = 0;
   bool _resolving = false;
   bool _disposed = false;
-  int _lastPlaybackPositionMs = 0;
-  double _lastPlaybackVolume = 1;
+  int _lastPlaybackPositionMs;
+  double _lastPlaybackVolume;
+  final _TrackPlaybackSignalNotifier _stateChanges =
+      _TrackPlaybackSignalNotifier();
+  final ValueNotifier<int> _positionMs;
 
   TrackPlaybackStage get stage => _stage;
   PlaylistTrackSummary? get track => _track;
@@ -44,6 +50,14 @@ class TrackPlaybackController extends ChangeNotifier {
   PlaybackAudioQuality? get resolvedQuality => _resolvedQuality;
   int get positionMs => _playback.positionMs;
   double get volume => _playback.volume;
+
+  /// Notifies only on non-position playback state changes (track, stage,
+  /// failures, resolved quality, volume). High-frequency position ticks stay
+  /// on [positionMsListenable] and this controller's broader [Listenable].
+  Listenable get stateListenable => _stateChanges;
+
+  /// Notifies whenever the playback position in milliseconds changes.
+  ValueListenable<int> get positionMsListenable => _positionMs;
   int? get durationMs {
     final durationSeconds = _track?.durationSeconds;
     return durationSeconds == null || durationSeconds <= 0
@@ -123,9 +137,12 @@ class TrackPlaybackController extends ChangeNotifier {
       outcome: 'started',
       provider: safeProvider,
     );
-    _setStage(TrackPlaybackStage.resolving);
+    if (!_setStage(TrackPlaybackStage.resolving)) {
+      _notifyState();
+    }
     await _playback.stop();
     if (!_isCurrent(generation)) return;
+    _syncPositionMs();
 
     final operation = _resolutionGateway.beginResolution(
       providerId: track.providerId,
@@ -149,7 +166,9 @@ class TrackPlaybackController extends ChangeNotifier {
         provider: safeProvider,
         detail: 'failure=${_resolutionFailure!.name}',
       );
-      _setStage(TrackPlaybackStage.resolutionError);
+      if (!_setStage(TrackPlaybackStage.resolutionError)) {
+        _notifyState();
+      }
       return;
     }
 
@@ -206,41 +225,66 @@ class TrackPlaybackController extends ChangeNotifier {
     _resolvedQuality = null;
     _setStage(TrackPlaybackStage.stopped);
     await _playback.stop();
+    if (!_disposed) _syncPositionMs();
   }
 
   void _onPlaybackChanged() {
     if (_disposed || _resolving) return;
-    final positionChanged = _lastPlaybackPositionMs != _playback.positionMs;
-    _lastPlaybackPositionMs = _playback.positionMs;
+    final nextPositionMs = _playback.positionMs;
+    final positionChanged = _lastPlaybackPositionMs != nextPositionMs;
+    _lastPlaybackPositionMs = nextPositionMs;
     final volumeChanged = _lastPlaybackVolume != _playback.volume;
     _lastPlaybackVolume = _playback.volume;
     final playbackFailure = _playback.failure;
+
+    final bool stateChanged;
     if (_playback.stage == ForegroundPlaybackStage.error) {
-      _engineFailure =
+      final nextFailure =
           playbackFailure ?? ForegroundAudioFailure.coreUnavailable;
+      final failureChanged = _engineFailure != nextFailure;
+      _engineFailure = nextFailure;
       _logPlaybackResolution(
         phase: 'engine',
         outcome: 'failure',
         provider: _safeProviderName(_track?.providerId),
         detail: 'failure=${_engineFailure!.name}',
       );
-      if (!_setStage(TrackPlaybackStage.engineError) &&
-          (positionChanged || volumeChanged)) {
-        notifyListeners();
-      }
-      return;
+      final stageChanged = _stage != TrackPlaybackStage.engineError;
+      _stage = TrackPlaybackStage.engineError;
+      stateChanged = stageChanged || volumeChanged || failureChanged;
+    } else {
+      final failureCleared = _engineFailure != null;
+      _engineFailure = null;
+      final nextStage = switch (_playback.stage) {
+        ForegroundPlaybackStage.idle => TrackPlaybackStage.idle,
+        ForegroundPlaybackStage.loading => TrackPlaybackStage.loading,
+        ForegroundPlaybackStage.playing => TrackPlaybackStage.playing,
+        ForegroundPlaybackStage.paused => TrackPlaybackStage.paused,
+        ForegroundPlaybackStage.stopped => TrackPlaybackStage.stopped,
+        ForegroundPlaybackStage.completed => TrackPlaybackStage.completed,
+        ForegroundPlaybackStage.error => TrackPlaybackStage.engineError,
+      };
+      final stageChanged = _stage != nextStage;
+      _stage = nextStage;
+      stateChanged = stageChanged || volumeChanged || failureCleared;
     }
-    _engineFailure = null;
-    final stageChanged = _setStage(switch (_playback.stage) {
-      ForegroundPlaybackStage.idle => TrackPlaybackStage.idle,
-      ForegroundPlaybackStage.loading => TrackPlaybackStage.loading,
-      ForegroundPlaybackStage.playing => TrackPlaybackStage.playing,
-      ForegroundPlaybackStage.paused => TrackPlaybackStage.paused,
-      ForegroundPlaybackStage.stopped => TrackPlaybackStage.stopped,
-      ForegroundPlaybackStage.completed => TrackPlaybackStage.completed,
-      ForegroundPlaybackStage.error => TrackPlaybackStage.engineError,
-    });
-    if (!stageChanged && (positionChanged || volumeChanged)) notifyListeners();
+
+    if (positionChanged && !_disposed) {
+      _positionMs.value = nextPositionMs;
+    }
+    if (stateChanged) {
+      _notifyState();
+    } else if (positionChanged && !_disposed) {
+      notifyListeners();
+    }
+  }
+
+  bool _syncPositionMs() {
+    final nextPositionMs = _playback.positionMs;
+    if (_lastPlaybackPositionMs == nextPositionMs) return false;
+    _lastPlaybackPositionMs = nextPositionMs;
+    if (!_disposed) _positionMs.value = nextPositionMs;
+    return true;
   }
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
@@ -248,8 +292,14 @@ class TrackPlaybackController extends ChangeNotifier {
   bool _setStage(TrackPlaybackStage stage) {
     if (_disposed || _stage == stage) return false;
     _stage = stage;
-    notifyListeners();
+    _notifyState();
     return true;
+  }
+
+  void _notifyState() {
+    if (_disposed) return;
+    _stateChanges.notify();
+    if (!_disposed) notifyListeners();
   }
 
   @override
@@ -261,9 +311,15 @@ class TrackPlaybackController extends ChangeNotifier {
       _resolutionOperation = null;
       _playback.removeListener(_onPlaybackChanged);
       _playback.dispose();
+      _stateChanges.dispose();
+      _positionMs.dispose();
     }
     super.dispose();
   }
+}
+
+class _TrackPlaybackSignalNotifier extends ChangeNotifier {
+  void notify() => notifyListeners();
 }
 
 void _logPlaybackResolution({

@@ -87,7 +87,7 @@ class NowPlayingBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: controller,
+    animation: controller.stateListenable,
     builder: (context, _) {
       final track = controller.current;
       if (track == null) {
@@ -1903,71 +1903,76 @@ class _PlaybackProgressState extends State<_PlaybackProgress> {
   Widget build(BuildContext context) {
     final durationMs = widget.controller.durationMs;
     if (durationMs == null) return const SizedBox.shrink();
-    final rawPosition = _previewMs ?? widget.controller.positionMs.toDouble();
-    final position = rawPosition.clamp(0, durationMs.toDouble()).toDouble();
-    final colors = Theme.of(context).colorScheme;
-    final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: colors.onSurfaceVariant,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
-    final progress = Row(
-      children: [
-        SizedBox(
-          width: 42,
-          child: Text(
-            _playbackTime(position.round()),
-            key: const ValueKey('now-playing-position'),
-            style: textStyle,
-            textAlign: TextAlign.end,
-          ),
-        ),
-        Expanded(
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 2,
-              thumbShape: RoundSliderThumbShape(
-                enabledThumbRadius: widget.dense ? 5 : 6,
-              ),
-              overlayShape: RoundSliderOverlayShape(
-                overlayRadius: widget.dense ? 11 : 14,
+    return ValueListenableBuilder<int>(
+      valueListenable: widget.controller.positionMsListenable,
+      builder: (context, positionMs, _) {
+        final rawPosition = _previewMs ?? positionMs.toDouble();
+        final position = rawPosition.clamp(0, durationMs.toDouble()).toDouble();
+        final colors = Theme.of(context).colorScheme;
+        final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: colors.onSurfaceVariant,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        );
+        final progress = Row(
+          children: [
+            SizedBox(
+              width: 42,
+              child: Text(
+                _playbackTime(position.round()),
+                key: const ValueKey('now-playing-position'),
+                style: textStyle,
+                textAlign: TextAlign.end,
               ),
             ),
-            child: Slider(
-              key: const ValueKey('now-playing-progress'),
-              value: position,
-              max: durationMs.toDouble(),
-              semanticFormatterCallback: (value) =>
-                  context.l10n.playbackProgressSemantics(
-                    _playbackTime(durationMs),
-                    _playbackTime(value.round()),
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 2,
+                  thumbShape: RoundSliderThumbShape(
+                    enabledThumbRadius: widget.dense ? 5 : 6,
                   ),
-              onChangeStart: widget.controller.canSeek
-                  ? (value) => setState(() => _previewMs = value)
-                  : null,
-              onChanged: widget.controller.canSeek
-                  ? (value) => setState(() => _previewMs = value)
-                  : null,
-              onChangeEnd: widget.controller.canSeek ? _commitSeek : null,
+                  overlayShape: RoundSliderOverlayShape(
+                    overlayRadius: widget.dense ? 11 : 14,
+                  ),
+                ),
+                child: Slider(
+                  key: const ValueKey('now-playing-progress'),
+                  value: position,
+                  max: durationMs.toDouble(),
+                  semanticFormatterCallback: (value) =>
+                      context.l10n.playbackProgressSemantics(
+                        _playbackTime(durationMs),
+                        _playbackTime(value.round()),
+                      ),
+                  onChangeStart: widget.controller.canSeek
+                      ? (value) => setState(() => _previewMs = value)
+                      : null,
+                  onChanged: widget.controller.canSeek
+                      ? (value) => setState(() => _previewMs = value)
+                      : null,
+                  onChangeEnd: widget.controller.canSeek ? _commitSeek : null,
+                ),
+              ),
             ),
-          ),
-        ),
-        SizedBox(
-          width: 42,
-          child: Text(
-            _playbackTime(durationMs),
-            key: const ValueKey('now-playing-duration'),
-            style: textStyle,
-          ),
-        ),
-      ],
+            SizedBox(
+              width: 42,
+              child: Text(
+                _playbackTime(durationMs),
+                key: const ValueKey('now-playing-duration'),
+                style: textStyle,
+              ),
+            ),
+          ],
+        );
+        return widget.dense
+            ? SizedBox(
+                key: const ValueKey('now-playing-desktop-progress-row'),
+                height: 24,
+                child: progress,
+              )
+            : progress;
+      },
     );
-    return widget.dense
-        ? SizedBox(
-            key: const ValueKey('now-playing-desktop-progress-row'),
-            height: 24,
-            child: progress,
-          )
-        : progress;
   }
 
   void _commitSeek(double value) {
@@ -2186,7 +2191,7 @@ class _VolumeButtonState extends State<_VolumeButton> {
   Widget build(BuildContext context) {
     _activeVolumeButtonContexts[widget.controller.playback] = context;
     return AnimatedBuilder(
-      animation: widget.controller.playback,
+      animation: widget.controller.playback.stateListenable,
       builder: (context, _) => IconButton(
         key: const ValueKey('now-playing-volume'),
         tooltip: context.l10n.playbackVolume,
@@ -2484,7 +2489,7 @@ class _VolumePanelState extends State<_VolumePanel> {
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: widget.controller,
+    animation: widget.controller.stateListenable,
     builder: (context, _) {
       final theme = Theme.of(context);
       final colors = theme.colorScheme;

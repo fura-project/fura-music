@@ -57,6 +57,9 @@ class LyricController extends ChangeNotifier {
   ActiveLyricSelection? _activeSelection;
   int _generation = 0;
   bool _disposed = false;
+  final _LyricSignalNotifier _stageChanges = _LyricSignalNotifier();
+  final _LyricSignalNotifier _lineChanges = _LyricSignalNotifier();
+  final ValueNotifier<int> _positionMsNotifier = ValueNotifier<int>(0);
 
   LyricStage get stage => _stage;
   PlaylistTrackSummary? get track => _track;
@@ -66,6 +69,17 @@ class LyricController extends ChangeNotifier {
   int get omittedLineCount => _lyrics?.omittedLineCount ?? 0;
   int get partialResultRevision => _partialResultRevision;
   ActiveLyricSelection? get activeSelection => _activeSelection;
+
+  /// Notifies only when lyric loading stage, track, lyrics payload, or failure
+  /// changes (not on active line or word progress ticks).
+  Listenable get stageListenable => _stageChanges;
+
+  /// Notifies when lyrics payload changes or the active line index changes
+  /// (not on word-level progress ticks within the same active line).
+  Listenable get lineListenable => _lineChanges;
+
+  /// Notifies whenever the playback position in milliseconds changes.
+  ValueListenable<int> get positionMsListenable => _positionMsNotifier;
   SynchronizedLyricLine? get activeLine {
     final selection = _activeSelection;
     final lines = _lyrics?.lines;
@@ -102,10 +116,15 @@ class LyricController extends ChangeNotifier {
     _track = track;
     _lyrics = null;
     _activeSelection = null;
-    if (trackChanged) _positionMs = 0;
+    if (trackChanged) {
+      _positionMs = 0;
+    }
     _failure = null;
     _stage = LyricStage.loading;
-    _notify();
+    if (trackChanged && !_disposed) {
+      _positionMsNotifier.value = 0;
+    }
+    _notifyStageChanged();
 
     final result = await operation.run();
     if (identical(_operation, operation)) _operation = null;
@@ -137,7 +156,7 @@ class LyricController extends ChangeNotifier {
         LyricFailure.alreadyRunning => LyricStage.error,
       };
     }
-    _notify();
+    _notifyStageChanged();
   }
 
   void retry() {
@@ -151,8 +170,15 @@ class LyricController extends ChangeNotifier {
     final nextSelection = _lyrics == null
         ? null
         : selectActiveLyrics(_lyrics!, positionMs);
-    if (nextSelection != _activeSelection) {
+    final selectionChanged = nextSelection != _activeSelection;
+    final lineChanged = nextSelection?.lineIndex != _activeSelection?.lineIndex;
+    if (selectionChanged) {
       _activeSelection = nextSelection;
+    }
+    _positionMsNotifier.value = positionMs;
+    if (_disposed) return;
+    if (selectionChanged) {
+      if (lineChanged) _lineChanges.notify();
       _notify();
       return;
     }
@@ -170,10 +196,18 @@ class LyricController extends ChangeNotifier {
     _activeSelection = null;
     _failure = null;
     _stage = LyricStage.idle;
-    _notify();
+    _positionMsNotifier.value = 0;
+    _notifyStageChanged();
   }
 
   bool _isCurrent(int generation) => !_disposed && generation == _generation;
+
+  void _notifyStageChanged() {
+    if (_disposed) return;
+    _stageChanges.notify();
+    if (!_disposed) _lineChanges.notify();
+    _notify();
+  }
 
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -186,9 +220,16 @@ class LyricController extends ChangeNotifier {
       ++_generation;
       _operation?.cancel();
       _operation = null;
+      _stageChanges.dispose();
+      _lineChanges.dispose();
+      _positionMsNotifier.dispose();
     }
     super.dispose();
   }
+}
+
+class _LyricSignalNotifier extends ChangeNotifier {
+  void notify() => notifyListeners();
 }
 
 bool _sameTrack(PlaylistTrackSummary? left, PlaylistTrackSummary right) =>

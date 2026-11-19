@@ -282,7 +282,7 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
           _newSongController,
           _rankingController,
           _radarController,
-          widget.queuePlaybackController,
+          widget.queuePlaybackController.currentTrackListenable,
         ]),
         builder: (context, _) => LayoutBuilder(
           builder: (context, constraints) {

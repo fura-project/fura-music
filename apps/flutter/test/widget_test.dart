@@ -6190,6 +6190,10 @@ void main() {
       );
       final enteringTop = tester.getTopLeft(expandedPage).dy;
       expect(enteringTop, greaterThan(0));
+      // Frame 0 mounts the page offscreen and defers forward() to Frame 1 so
+      // cold layout/rasterization does not consume the slide clock.
+      await tester.pump();
+      expect(tester.getTopLeft(expandedPage).dy, enteringTop);
       await tester.pump(const Duration(milliseconds: 180));
       final enteringMidpoint = tester.getTopLeft(expandedPage).dy;
       expect(enteringMidpoint, lessThan(enteringTop));

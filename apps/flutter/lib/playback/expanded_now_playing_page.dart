@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:isolate';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -162,18 +164,21 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
   ColorScheme? _artworkColorScheme;
   late ArtworkColorSchemeCache _paletteCache;
   int _colorRequestGeneration = 0;
+  bool _animateThemeChanges = false;
 
   @override
   void initState() {
     super.initState();
     _paletteCache = _cacheFor(widget);
-    widget.controller.addListener(_handleControllerChanged);
+    widget.controller.currentTrackListenable.addListener(
+      _handleControllerChanged,
+    );
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _resolveArtworkColors(notify: false);
+    _resolveArtworkColors(notify: false, animateTransition: false);
   }
 
   @override
@@ -183,15 +188,20 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
     _resolvedArtworkUri = null;
     _resolvedBrightness = null;
     _artworkColorScheme = null;
-    _resolveArtworkColors(notify: false);
+    _animateThemeChanges = false;
+    _resolveArtworkColors(notify: false, animateTransition: false);
   }
 
   @override
   void didUpdateWidget(ExpandedNowPlayingPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_handleControllerChanged);
-      widget.controller.addListener(_handleControllerChanged);
+      oldWidget.controller.currentTrackListenable.removeListener(
+        _handleControllerChanged,
+      );
+      widget.controller.currentTrackListenable.addListener(
+        _handleControllerChanged,
+      );
     }
     final paletteSourceChanged =
         oldWidget.artworkColorSchemeCache != widget.artworkColorSchemeCache ||
@@ -202,14 +212,17 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
     if (oldWidget.controller != widget.controller || paletteSourceChanged) {
       _resolvedArtworkUri = null;
       _resolvedBrightness = null;
-      _resolveArtworkColors(notify: false);
+      _animateThemeChanges = false;
+      _resolveArtworkColors(notify: false, animateTransition: false);
     }
   }
 
   @override
   void dispose() {
     _colorRequestGeneration += 1;
-    widget.controller.removeListener(_handleControllerChanged);
+    widget.controller.currentTrackListenable.removeListener(
+      _handleControllerChanged,
+    );
     super.dispose();
   }
 
@@ -245,9 +258,11 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
         circularTrackColor: colors.surfaceContainerHighest,
       ),
     );
+    final animateTheme =
+        _animateThemeChanges && !MediaQuery.disableAnimationsOf(context);
     return AnimatedTheme(
       data: pageTheme,
-      duration: MusicMotion.stateChange,
+      duration: animateTheme ? MusicMotion.stateChange : Duration.zero,
       curve: Curves.easeOutCubic,
       child: Builder(
         builder: (context) => PlaybackShortcuts(
@@ -291,7 +306,8 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
     );
   }
 
-  void _handleControllerChanged() => _resolveArtworkColors();
+  void _handleControllerChanged() =>
+      _resolveArtworkColors(animateTransition: true);
 
   ArtworkColorSchemeCache _cacheFor(ExpandedNowPlayingPage page) =>
       page.artworkColorSchemeCache ??
@@ -300,13 +316,19 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
         artworkColorSchemeLoader: page.artworkColorSchemeLoader,
       );
 
-  void _resolveArtworkColors({bool notify = true}) {
+  void _resolveArtworkColors({
+    bool notify = true,
+    required bool animateTransition,
+  }) {
     if (!mounted) return;
     final brightness = Theme.of(context).brightness;
     final artworkUri = widget.controller.current?.artworkUri;
     if (_resolvedArtworkUri == artworkUri &&
         _resolvedBrightness == brightness) {
       return;
+    }
+    if (animateTransition) {
+      _animateThemeChanges = true;
     }
     final generation = ++_colorRequestGeneration;
     _resolvedArtworkUri = artworkUri;
@@ -674,6 +696,278 @@ Future<ColorScheme> _materialArtworkColorScheme({
   return normalizeArtworkColorScheme(fallbackExtracted);
 }
 
+typedef _OklabTuple = (double l, double a, double b);
+
+typedef _ExtractedOklabRoles = ({
+  _OklabTuple? accent,
+  _OklabTuple primaryAmbient,
+  _OklabTuple? secondaryAmbient,
+});
+
+final Float64List _srgbByteToLinearLut = _buildSrgbByteToLinearLut();
+
+Float64List _buildSrgbByteToLinearLut() {
+  final lut = Float64List(256);
+  for (var i = 0; i < 256; i += 1) {
+    lut[i] = _Oklab._srgbToLinear(i / 255.0);
+  }
+  return lut;
+}
+
+Future<_ExtractedOklabRoles?> _isolateClusterArtworkOklabRoles(
+  Uint8List bytes,
+  int width,
+  int height,
+) => Isolate.run(() => _clusterArtworkOklabRoles(bytes, width, height));
+
+Future<_ExtractedOklabRoles?> _runArtworkOklabClustering(
+  Uint8List bytes,
+  int width,
+  int height,
+) {
+  // Completer.sync() is intentional: when called from a FakeAsync zone and
+  // awaited inside WidgetTester.runAsync, an async Completer queues its
+  // continuation on the paused FakeAsync microtask queue and deadlocks.
+  final completer = Completer<_ExtractedOklabRoles?>.sync();
+  Zone.root.run(() {
+    _isolateClusterArtworkOklabRoles(
+      bytes,
+      width,
+      height,
+    ).then(completer.complete, onError: completer.completeError);
+  });
+  return completer.future;
+}
+
+@visibleForTesting
+Future<
+  ({
+    (double, double, double)? accent,
+    (double, double, double) primaryAmbient,
+    (double, double, double)? secondaryAmbient,
+  })?
+>
+clusterArtworkOklabRolesInIsolateForTest(
+  Uint8List bytes,
+  int width,
+  int height,
+) => _runArtworkOklabClustering(bytes, width, height);
+
+_ExtractedOklabRoles? _clusterArtworkOklabRoles(Uint8List bytes, int w, int h) {
+  final lut = _srgbByteToLinearLut;
+  final buckets = <int, _MutableCluster>{};
+  var totalWeight = 0.0;
+  var chromaticWeight = 0.0;
+
+  for (var y = 0; y < h; y += 1) {
+    final ny = ((y + 0.5) / h) * 2.0 - 1.0;
+    for (var x = 0; x < w; x += 1) {
+      final offset = (y * w + x) * 4;
+      if (offset + 3 >= bytes.length) break;
+      final alpha = bytes[offset + 3];
+      if (alpha < 32) continue;
+
+      final nx = ((x + 0.5) / w) * 2.0 - 1.0;
+      final dist2 = (nx * nx + ny * ny).clamp(0.0, 1.4);
+      final pixelWeight = (alpha / 255.0) * (1.16 - 0.16 * dist2);
+
+      final lr = lut[bytes[offset]];
+      final lg = lut[bytes[offset + 1]];
+      final lb = lut[bytes[offset + 2]];
+      final ok = _Oklab.fromLinearRgb(lr, lg, lb);
+      final c = ok.chroma;
+
+      totalWeight += pixelWeight;
+      if (c >= 0.032 && ok.l >= 0.12 && ok.l <= 0.96) {
+        chromaticWeight += pixelWeight;
+      }
+
+      final int bucketKey;
+      if (c < 0.022) {
+        final lBin = (ok.l * 15.99).floor().clamp(0, 15);
+        final tintBin = c < 0.007
+            ? 0
+            : (((ok.hueRadians + math.pi) / (2 * math.pi)) * 3.99)
+                      .floor()
+                      .clamp(0, 3) +
+                  1;
+        bucketKey = lBin * 8 + tintBin;
+      } else {
+        final lBin = (ok.l * 7.99).floor().clamp(0, 7);
+        final cBin = ((c / 0.28) * 5.99).floor().clamp(0, 5);
+        final hBin = (((ok.hueRadians + math.pi) / (2 * math.pi)) * 23.99)
+            .floor()
+            .clamp(0, 23);
+        bucketKey = 1000 + (hBin * 64) + (cBin * 8) + lBin;
+      }
+
+      final existing = buckets[bucketKey];
+      if (existing == null) {
+        buckets[bucketKey] = _MutableCluster(
+          pixelWeight,
+          ok.l * pixelWeight,
+          ok.a * pixelWeight,
+          ok.b * pixelWeight,
+        );
+      } else {
+        existing.weight += pixelWeight;
+        existing.lSum += ok.l * pixelWeight;
+        existing.aSum += ok.a * pixelWeight;
+        existing.bSum += ok.b * pixelWeight;
+      }
+    }
+  }
+
+  if (totalWeight <= 0 || buckets.isEmpty) return null;
+
+  final sorted = buckets.values.toList()
+    ..sort((a, b) => b.weight.compareTo(a.weight));
+  final merged = <_MutableCluster>[];
+  for (final candidate in sorted.take(56)) {
+    final candidateMean = candidate.mean;
+    _MutableCluster? target;
+    for (final m in merged) {
+      final mMean = m.mean;
+      if (_oklabDistance(mMean, candidateMean) >= 0.056) continue;
+      if (mMean.chroma >= 0.025 &&
+          candidateMean.chroma >= 0.025 &&
+          _angularHueDiffRadians(mMean.hueRadians, candidateMean.hueRadians) >
+              (22.0 * math.pi / 180.0)) {
+        continue;
+      }
+      target = m;
+      break;
+    }
+    if (target != null) {
+      target.absorb(candidate);
+    } else {
+      merged.add(
+        _MutableCluster(
+          candidate.weight,
+          candidate.lSum,
+          candidate.aSum,
+          candidate.bSum,
+        ),
+      );
+    }
+  }
+
+  // Track A: Interactive Accent Selection (captures focal ink/horizon/glow
+  // accents while penalizing muddy yellow/olive-brown hues when cooler or
+  // richer colors exist on the cover, matching MD3's DislikeAnalyzer).
+  _Oklab? accentOk;
+  var bestAccentScore = 0.0;
+  for (final cluster in merged) {
+    final proportion = cluster.weight / totalWeight;
+    if (proportion < 0.006) continue;
+    final mean = cluster.mean;
+    final c = mean.chroma;
+    if (c < 0.032) continue;
+    if (mean.l < 0.11 || mean.l > 0.965) continue;
+
+    final toneSafety = mean.l < 0.22
+        ? ((mean.l - 0.10) / 0.12).clamp(0.25, 1.0)
+        : (mean.l > 0.88 ? ((0.97 - mean.l) / 0.09).clamp(0.30, 1.0) : 1.0);
+    final dislikePenalty = _isOliveYellowHue(mean.hueRadians) ? 0.26 : 1.0;
+    final chromaReward = math
+        .pow((c / 0.14).clamp(0.22, 1.65), 0.78)
+        .toDouble();
+    final areaScore = math.pow(proportion, 0.36).toDouble();
+    final score = areaScore * chromaReward * toneSafety * dislikePenalty;
+    if (score > bestAccentScore) {
+      bestAccentScore = score;
+      accentOk = mean;
+    }
+  }
+
+  // Track B: Primary & Secondary Ambient Canvas Selection (preserves true
+  // area-weighted canvas tones—including silver B&W film, ivory white, or
+  // deep midnight—without letting minor stamps dye the entire page).
+  _Oklab? primaryAmbientRaw;
+  var bestAmbientScore = -1.0;
+  for (final cluster in merged) {
+    final proportion = cluster.weight / totalWeight;
+    final mean = cluster.mean;
+    final visibilityPreference =
+        0.88 + 0.16 * (1.0 - (mean.l - 0.48).abs() * 1.2).clamp(0.0, 1.0);
+    final score = math.pow(proportion, 0.80).toDouble() * visibilityPreference;
+    if (score > bestAmbientScore) {
+      bestAmbientScore = score;
+      primaryAmbientRaw = mean;
+    }
+  }
+  primaryAmbientRaw ??= merged.first.mean;
+
+  final chromaticCoverage = chromaticWeight / totalWeight;
+  var primaryAmbientOk = primaryAmbientRaw;
+  if (primaryAmbientOk.chroma < 0.024 && accentOk != null) {
+    if (primaryAmbientOk.l < 0.20 && chromaticCoverage >= 0.12) {
+      // Dark void cover with substantial glowing color (e.g. Stray - Feint):
+      // infuse the ambient halo with the glowing subject's hue.
+      primaryAmbientOk = _Oklab(
+        primaryAmbientOk.l * 0.65 + accentOk.l * 0.35,
+        accentOk.a * 0.68,
+        accentOk.b * 0.68,
+      );
+    } else {
+      // Predominantly B&W / ivory cover with a small colored accent (e.g.
+      // 季候风 calligraphy): keep the canvas serene silver/ivory with only a
+      // whisper of the accent's temperature.
+      primaryAmbientOk = _Oklab(
+        primaryAmbientOk.l,
+        primaryAmbientOk.a * 0.85 + accentOk.a * 0.15,
+        primaryAmbientOk.b * 0.85 + accentOk.b * 0.15,
+      );
+    }
+  }
+
+  // Secondary Ambient: require genuine hue separation (>= 38 deg) whenever
+  // the primary ambient is chromatic so darker/lighter shades of the same hue
+  // (e.g. dark brown buildings under a yellow sky) are never mistaken for a
+  // second color.
+  _Oklab? secondaryAmbientOk;
+  var bestSecondaryScore = -1.0;
+  for (final cluster in merged) {
+    final proportion = cluster.weight / totalWeight;
+    if (proportion < 0.015) continue;
+    final mean = cluster.mean;
+    final dist = _oklabDistance(mean, primaryAmbientOk);
+    if (dist < 0.075) continue;
+
+    var hueContrastFactor = 1.0;
+    if (primaryAmbientOk.chroma >= 0.024) {
+      if (mean.chroma < 0.028) continue;
+      final hueDiff = _angularHueDiffRadians(
+        primaryAmbientOk.hueRadians,
+        mean.hueRadians,
+      );
+      if (hueDiff < (38.0 * math.pi / 180.0)) {
+        continue;
+      }
+      hueContrastFactor = 0.35 + 0.65 * math.sin(hueDiff * 0.5);
+    }
+    final chromaBonus = 0.45 + mean.chroma.clamp(0.0, 0.18) * 4.2;
+    final score =
+        math.pow(proportion, 0.48).toDouble() * chromaBonus * hueContrastFactor;
+    if (score > bestSecondaryScore) {
+      bestSecondaryScore = score;
+      secondaryAmbientOk = mean;
+    }
+  }
+
+  return (
+    accent: accentOk == null ? null : (accentOk.l, accentOk.a, accentOk.b),
+    primaryAmbient: (
+      primaryAmbientOk.l,
+      primaryAmbientOk.a,
+      primaryAmbientOk.b,
+    ),
+    secondaryAmbient: secondaryAmbientOk == null
+        ? null
+        : (secondaryAmbientOk.l, secondaryAmbientOk.a, secondaryAmbientOk.b),
+  );
+}
+
 Future<ColorScheme?> _extractDualRoleArtworkScheme({
   required ImageProvider<Object> provider,
   required Brightness brightness,
@@ -716,6 +1010,9 @@ Future<ColorScheme?> _extractDualRoleArtworkScheme({
   final imageInfo = await completer.future;
   final image = imageInfo.image;
   ui.Image? scaledImage;
+  Uint8List? bytes;
+  var w = 0;
+  var h = 0;
   try {
     var targetImage = image;
     final srcWidth = image.width;
@@ -750,373 +1047,190 @@ Future<ColorScheme?> _extractDualRoleArtworkScheme({
 
     final byteData = await targetImage.toByteData();
     if (byteData == null) return null;
-    final bytes = byteData.buffer.asUint8List();
-    final w = targetImage.width;
-    final h = targetImage.height;
-
-    final buckets = <int, _MutableCluster>{};
-    var totalWeight = 0.0;
-    var chromaticWeight = 0.0;
-
-    for (var y = 0; y < h; y += 1) {
-      final ny = ((y + 0.5) / h) * 2.0 - 1.0;
-      for (var x = 0; x < w; x += 1) {
-        final offset = (y * w + x) * 4;
-        if (offset + 3 >= bytes.length) break;
-        final alpha = bytes[offset + 3];
-        if (alpha < 32) continue;
-
-        final nx = ((x + 0.5) / w) * 2.0 - 1.0;
-        final dist2 = (nx * nx + ny * ny).clamp(0.0, 1.4);
-        final pixelWeight = (alpha / 255.0) * (1.16 - 0.16 * dist2);
-
-        final lr = _Oklab._srgbToLinear(bytes[offset] / 255.0);
-        final lg = _Oklab._srgbToLinear(bytes[offset + 1] / 255.0);
-        final lb = _Oklab._srgbToLinear(bytes[offset + 2] / 255.0);
-        final ok = _Oklab.fromLinearRgb(lr, lg, lb);
-        final c = ok.chroma;
-
-        totalWeight += pixelWeight;
-        if (c >= 0.032 && ok.l >= 0.12 && ok.l <= 0.96) {
-          chromaticWeight += pixelWeight;
-        }
-
-        final int bucketKey;
-        if (c < 0.022) {
-          final lBin = (ok.l * 15.99).floor().clamp(0, 15);
-          final tintBin = c < 0.007
-              ? 0
-              : (((ok.hueRadians + math.pi) / (2 * math.pi)) * 3.99)
-                        .floor()
-                        .clamp(0, 3) +
-                    1;
-          bucketKey = lBin * 8 + tintBin;
-        } else {
-          final lBin = (ok.l * 7.99).floor().clamp(0, 7);
-          final cBin = ((c / 0.28) * 5.99).floor().clamp(0, 5);
-          final hBin = (((ok.hueRadians + math.pi) / (2 * math.pi)) * 23.99)
-              .floor()
-              .clamp(0, 23);
-          bucketKey = 1000 + (hBin * 64) + (cBin * 8) + lBin;
-        }
-
-        final existing = buckets[bucketKey];
-        if (existing == null) {
-          buckets[bucketKey] = _MutableCluster(
-            pixelWeight,
-            ok.l * pixelWeight,
-            ok.a * pixelWeight,
-            ok.b * pixelWeight,
-          );
-        } else {
-          existing.weight += pixelWeight;
-          existing.lSum += ok.l * pixelWeight;
-          existing.aSum += ok.a * pixelWeight;
-          existing.bSum += ok.b * pixelWeight;
-        }
-      }
-    }
-
-    if (totalWeight <= 0 || buckets.isEmpty) return null;
-
-    final sorted = buckets.values.toList()
-      ..sort((a, b) => b.weight.compareTo(a.weight));
-    final merged = <_MutableCluster>[];
-    for (final candidate in sorted.take(56)) {
-      final candidateMean = candidate.mean;
-      _MutableCluster? target;
-      for (final m in merged) {
-        final mMean = m.mean;
-        if (_oklabDistance(mMean, candidateMean) >= 0.056) continue;
-        if (mMean.chroma >= 0.025 &&
-            candidateMean.chroma >= 0.025 &&
-            _angularHueDiffRadians(mMean.hueRadians, candidateMean.hueRadians) >
-                (22.0 * math.pi / 180.0)) {
-          continue;
-        }
-        target = m;
-        break;
-      }
-      if (target != null) {
-        target.absorb(candidate);
-      } else {
-        merged.add(
-          _MutableCluster(
-            candidate.weight,
-            candidate.lSum,
-            candidate.aSum,
-            candidate.bSum,
-          ),
-        );
-      }
-    }
-
-    // Track A: Interactive Accent Selection (captures focal ink/horizon/glow
-    // accents while penalizing muddy yellow/olive-brown hues when cooler or
-    // richer colors exist on the cover, matching MD3's DislikeAnalyzer).
-    _Oklab? accentOk;
-    var bestAccentScore = 0.0;
-    for (final cluster in merged) {
-      final proportion = cluster.weight / totalWeight;
-      if (proportion < 0.006) continue;
-      final mean = cluster.mean;
-      final c = mean.chroma;
-      if (c < 0.032) continue;
-      if (mean.l < 0.11 || mean.l > 0.965) continue;
-
-      final toneSafety = mean.l < 0.22
-          ? ((mean.l - 0.10) / 0.12).clamp(0.25, 1.0)
-          : (mean.l > 0.88 ? ((0.97 - mean.l) / 0.09).clamp(0.30, 1.0) : 1.0);
-      final dislikePenalty = _isOliveYellowHue(mean.hueRadians) ? 0.26 : 1.0;
-      final chromaReward = math
-          .pow((c / 0.14).clamp(0.22, 1.65), 0.78)
-          .toDouble();
-      final areaScore = math.pow(proportion, 0.36).toDouble();
-      final score = areaScore * chromaReward * toneSafety * dislikePenalty;
-      if (score > bestAccentScore) {
-        bestAccentScore = score;
-        accentOk = mean;
-      }
-    }
-
-    // Track B: Primary & Secondary Ambient Canvas Selection (preserves true
-    // area-weighted canvas tones—including silver B&W film, ivory white, or
-    // deep midnight—without letting minor stamps dye the entire page).
-    _Oklab? primaryAmbientRaw;
-    var bestAmbientScore = -1.0;
-    for (final cluster in merged) {
-      final proportion = cluster.weight / totalWeight;
-      final mean = cluster.mean;
-      final visibilityPreference =
-          0.88 + 0.16 * (1.0 - (mean.l - 0.48).abs() * 1.2).clamp(0.0, 1.0);
-      final score =
-          math.pow(proportion, 0.80).toDouble() * visibilityPreference;
-      if (score > bestAmbientScore) {
-        bestAmbientScore = score;
-        primaryAmbientRaw = mean;
-      }
-    }
-    primaryAmbientRaw ??= merged.first.mean;
-
-    final chromaticCoverage = chromaticWeight / totalWeight;
-    var primaryAmbientOk = primaryAmbientRaw;
-    if (primaryAmbientOk.chroma < 0.024 && accentOk != null) {
-      if (primaryAmbientOk.l < 0.20 && chromaticCoverage >= 0.12) {
-        // Dark void cover with substantial glowing color (e.g. Stray - Feint):
-        // infuse the ambient halo with the glowing subject's hue.
-        primaryAmbientOk = _Oklab(
-          primaryAmbientOk.l * 0.65 + accentOk.l * 0.35,
-          accentOk.a * 0.68,
-          accentOk.b * 0.68,
-        );
-      } else {
-        // Predominantly B&W / ivory cover with a small colored accent (e.g.
-        // 季候风 calligraphy): keep the canvas serene silver/ivory with only a
-        // whisper of the accent's temperature.
-        primaryAmbientOk = _Oklab(
-          primaryAmbientOk.l,
-          primaryAmbientOk.a * 0.85 + accentOk.a * 0.15,
-          primaryAmbientOk.b * 0.85 + accentOk.b * 0.15,
-        );
-      }
-    }
-
-    // Secondary Ambient: require genuine hue separation (>= 38 deg) whenever
-    // the primary ambient is chromatic so darker/lighter shades of the same hue
-    // (e.g. dark brown buildings under a yellow sky) are never mistaken for a
-    // second color.
-    _Oklab? secondaryAmbientOk;
-    var bestSecondaryScore = -1.0;
-    for (final cluster in merged) {
-      final proportion = cluster.weight / totalWeight;
-      if (proportion < 0.015) continue;
-      final mean = cluster.mean;
-      final dist = _oklabDistance(mean, primaryAmbientOk);
-      if (dist < 0.075) continue;
-
-      var hueContrastFactor = 1.0;
-      if (primaryAmbientOk.chroma >= 0.024) {
-        if (mean.chroma < 0.028) continue;
-        final hueDiff = _angularHueDiffRadians(
-          primaryAmbientOk.hueRadians,
-          mean.hueRadians,
-        );
-        if (hueDiff < (38.0 * math.pi / 180.0)) {
-          continue;
-        }
-        hueContrastFactor = 0.35 + 0.65 * math.sin(hueDiff * 0.5);
-      }
-      final chromaBonus = 0.45 + mean.chroma.clamp(0.0, 0.18) * 4.2;
-      final score =
-          math.pow(proportion, 0.48).toDouble() *
-          chromaBonus *
-          hueContrastFactor;
-      if (score > bestSecondaryScore) {
-        bestSecondaryScore = score;
-        secondaryAmbientOk = mean;
-      }
-    }
-
-    final dark = brightness == Brightness.dark;
-    final primaryAmbientColor = _pinAmbientOklab(
-      primaryAmbientOk,
-      dark: dark,
-      secondary: false,
+    bytes = byteData.buffer.asUint8List(
+      byteData.offsetInBytes,
+      byteData.lengthInBytes,
     );
-
-    final Color secondaryAmbientColor;
-    if (secondaryAmbientOk != null) {
-      secondaryAmbientColor = _pinAmbientOklab(
-        secondaryAmbientOk,
-        dark: dark,
-        secondary: true,
-      );
-    } else {
-      // Single-hue or monochrome cover: guarantee a distinct warm/cool
-      // counter-glow hue rather than repeating the primary hue.
-      final shiftedHue = primaryAmbientOk.hueRadians + (math.pi * 0.72);
-      final complementChroma = math
-          .max(primaryAmbientOk.chroma * 0.75, 0.028)
-          .clamp(0.024, 0.095);
-      final complementOk = _Oklab(
-        primaryAmbientOk.l,
-        complementChroma * math.cos(shiftedHue),
-        complementChroma * math.sin(shiftedHue),
-      );
-      secondaryAmbientColor = _pinAmbientOklab(
-        complementOk,
-        dark: dark,
-        secondary: true,
-      );
-    }
-
-    final ColorScheme interactiveScheme;
-    final Color accentGlowColor;
-    if (accentOk != null) {
-      // If the only chromatic accent on the cover is in the olive/yellow-ochre
-      // zone, shift its interactive control hue warmer toward amber-terracotta
-      // so darkened light-mode buttons never turn muddy olive-brown.
-      final effectiveAccentHue = _isOliveYellowHue(accentOk.hueRadians)
-          ? 0.90
-          : accentOk.hueRadians;
-      final coneBoost = (0.46 / accentOk.l.clamp(0.20, 0.46)).clamp(1.0, 2.0);
-      final boostedChroma = (accentOk.chroma * coneBoost).clamp(0.048, 0.22);
-      final accentSeed = _Oklab.toGamutColor(
-        accentOk.l.clamp(0.46, 0.66),
-        boostedChroma,
-        effectiveAccentHue,
-      );
-      final base = ColorScheme.fromSeed(
-        seedColor: accentSeed,
-        brightness: brightness,
-        dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
-      );
-      final pinnedPrimaryContainer = _Oklab.toGamutColor(
-        dark ? 0.35 : 0.89,
-        boostedChroma.clamp(0.038, dark ? 0.115 : 0.068),
-        effectiveAccentHue,
-      );
-      final pinnedOnPrimaryContainer = _Oklab.toGamutColor(
-        dark ? 0.93 : 0.24,
-        boostedChroma.clamp(0.020, 0.065),
-        effectiveAccentHue,
-      );
-      final pOk = _Oklab.fromColor(base.primary);
-      final pinnedPrimary = dark
-          ? (pOk.l < 0.74
-                ? _Oklab.toGamutColor(
-                    0.78,
-                    boostedChroma.clamp(0.05, 0.15),
-                    effectiveAccentHue,
-                  )
-                : base.primary)
-          : (pOk.l < 0.36 ||
-                    pOk.l > 0.58 ||
-                    _isOliveYellowHue(accentOk.hueRadians)
-                ? _Oklab.toGamutColor(
-                    0.48,
-                    boostedChroma.clamp(0.06, 0.17),
-                    effectiveAccentHue,
-                  )
-                : base.primary);
-      final withCleanSurfaces = _withCleanNeutralSurfaces(
-        base,
-        tintHueRadians: effectiveAccentHue,
-        isMonochrome: false,
-      );
-      interactiveScheme = withCleanSurfaces.copyWith(
-        primary: pinnedPrimary,
-        onPrimary: dark ? const Color(0xFF101418) : Colors.white,
-        primaryContainer: pinnedPrimaryContainer,
-        onPrimaryContainer: pinnedOnPrimaryContainer,
-        tertiaryContainer: secondaryAmbientColor,
-      );
-      accentGlowColor = _Oklab.toGamutColor(
-        dark ? 0.44 : 0.80,
-        boostedChroma.clamp(0.040, dark ? 0.135 : 0.105),
-        effectiveAccentHue,
-      );
-    } else {
-      // Pure monochrome cover (no chromatic focal accent): use a refined
-      // cool steel-cyan accent + warm taupe counter-glow rather than flat
-      // cement grey so UI elements and active lyric pills pop with crisp
-      // metallic contrast.
-      final neutralHue = primaryAmbientOk.chroma >= 0.008
-          ? primaryAmbientOk.hueRadians
-          : -2.18;
-      final steelSeed = _Oklab.toGamutColor(0.54, 0.042, neutralHue);
-      final base = ColorScheme.fromSeed(
-        seedColor: steelSeed,
-        brightness: brightness,
-        dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
-      );
-      final withCleanSurfaces = _withCleanNeutralSurfaces(
-        base,
-        tintHueRadians: neutralHue,
-        isMonochrome: true,
-      );
-      interactiveScheme = withCleanSurfaces.copyWith(
-        primary: _Oklab.toGamutColor(
-          dark ? 0.80 : 0.44,
-          dark ? 0.048 : 0.052,
-          neutralHue,
-        ),
-        onPrimary: dark ? const Color(0xFF101418) : Colors.white,
-        primaryContainer: _Oklab.toGamutColor(
-          dark ? 0.36 : 0.89,
-          dark ? 0.032 : 0.012,
-          neutralHue,
-        ),
-        onPrimaryContainer: dark
-            ? const Color(0xFFECEEF2)
-            : const Color(0xFF1B1E24),
-        secondaryContainer: _Oklab.toGamutColor(
-          dark ? 0.30 : 0.90,
-          dark ? 0.028 : 0.014,
-          neutralHue,
-        ),
-        onSecondaryContainer: dark
-            ? const Color(0xFFE4E8EE)
-            : const Color(0xFF1E2229),
-        tertiaryContainer: secondaryAmbientColor,
-      );
-      accentGlowColor = _Oklab.toGamutColor(
-        dark ? 0.46 : 0.80,
-        dark ? 0.052 : 0.032,
-        neutralHue,
-      );
-    }
-
-    _schemeAtmosphere[interactiveScheme] = ArtworkAtmosphere(
-      primaryAmbient: primaryAmbientColor,
-      secondaryAmbient: secondaryAmbientColor,
-      accentGlow: accentGlowColor,
-    );
-    return interactiveScheme;
+    w = targetImage.width;
+    h = targetImage.height;
   } finally {
     scaledImage?.dispose();
     imageInfo.dispose();
   }
+
+  final extracted = await _runArtworkOklabClustering(bytes, w, h);
+  if (extracted == null) return null;
+
+  final accentOk = switch (extracted.accent) {
+    final tuple? => _Oklab(tuple.$1, tuple.$2, tuple.$3),
+    null => null,
+  };
+  final primaryAmbientOk = _Oklab(
+    extracted.primaryAmbient.$1,
+    extracted.primaryAmbient.$2,
+    extracted.primaryAmbient.$3,
+  );
+  final secondaryAmbientOk = switch (extracted.secondaryAmbient) {
+    final tuple? => _Oklab(tuple.$1, tuple.$2, tuple.$3),
+    null => null,
+  };
+
+  final dark = brightness == Brightness.dark;
+  final primaryAmbientColor = _pinAmbientOklab(
+    primaryAmbientOk,
+    dark: dark,
+    secondary: false,
+  );
+
+  final Color secondaryAmbientColor;
+  if (secondaryAmbientOk != null) {
+    secondaryAmbientColor = _pinAmbientOklab(
+      secondaryAmbientOk,
+      dark: dark,
+      secondary: true,
+    );
+  } else {
+    // Single-hue or monochrome cover: guarantee a distinct warm/cool
+    // counter-glow hue rather than repeating the primary hue.
+    final shiftedHue = primaryAmbientOk.hueRadians + (math.pi * 0.72);
+    final complementChroma = math
+        .max(primaryAmbientOk.chroma * 0.75, 0.028)
+        .clamp(0.024, 0.095);
+    final complementOk = _Oklab(
+      primaryAmbientOk.l,
+      complementChroma * math.cos(shiftedHue),
+      complementChroma * math.sin(shiftedHue),
+    );
+    secondaryAmbientColor = _pinAmbientOklab(
+      complementOk,
+      dark: dark,
+      secondary: true,
+    );
+  }
+
+  final ColorScheme interactiveScheme;
+  final Color accentGlowColor;
+  if (accentOk != null) {
+    // If the only chromatic accent on the cover is in the olive/yellow-ochre
+    // zone, shift its interactive control hue warmer toward amber-terracotta
+    // so darkened light-mode buttons never turn muddy olive-brown.
+    final effectiveAccentHue = _isOliveYellowHue(accentOk.hueRadians)
+        ? 0.90
+        : accentOk.hueRadians;
+    final coneBoost = (0.46 / accentOk.l.clamp(0.20, 0.46)).clamp(1.0, 2.0);
+    final boostedChroma = (accentOk.chroma * coneBoost).clamp(0.048, 0.22);
+    final accentSeed = _Oklab.toGamutColor(
+      accentOk.l.clamp(0.46, 0.66),
+      boostedChroma,
+      effectiveAccentHue,
+    );
+    final base = ColorScheme.fromSeed(
+      seedColor: accentSeed,
+      brightness: brightness,
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+    );
+    final pinnedPrimaryContainer = _Oklab.toGamutColor(
+      dark ? 0.35 : 0.89,
+      boostedChroma.clamp(0.038, dark ? 0.115 : 0.068),
+      effectiveAccentHue,
+    );
+    final pinnedOnPrimaryContainer = _Oklab.toGamutColor(
+      dark ? 0.93 : 0.24,
+      boostedChroma.clamp(0.020, 0.065),
+      effectiveAccentHue,
+    );
+    final pOk = _Oklab.fromColor(base.primary);
+    final pinnedPrimary = dark
+        ? (pOk.l < 0.74
+              ? _Oklab.toGamutColor(
+                  0.78,
+                  boostedChroma.clamp(0.05, 0.15),
+                  effectiveAccentHue,
+                )
+              : base.primary)
+        : (pOk.l < 0.36 ||
+                  pOk.l > 0.58 ||
+                  _isOliveYellowHue(accentOk.hueRadians)
+              ? _Oklab.toGamutColor(
+                  0.48,
+                  boostedChroma.clamp(0.06, 0.17),
+                  effectiveAccentHue,
+                )
+              : base.primary);
+    final withCleanSurfaces = _withCleanNeutralSurfaces(
+      base,
+      tintHueRadians: effectiveAccentHue,
+      isMonochrome: false,
+    );
+    interactiveScheme = withCleanSurfaces.copyWith(
+      primary: pinnedPrimary,
+      onPrimary: dark ? const Color(0xFF101418) : Colors.white,
+      primaryContainer: pinnedPrimaryContainer,
+      onPrimaryContainer: pinnedOnPrimaryContainer,
+      tertiaryContainer: secondaryAmbientColor,
+    );
+    accentGlowColor = _Oklab.toGamutColor(
+      dark ? 0.44 : 0.80,
+      boostedChroma.clamp(0.040, dark ? 0.135 : 0.105),
+      effectiveAccentHue,
+    );
+  } else {
+    // Pure monochrome cover (no chromatic focal accent): use a refined
+    // cool steel-cyan accent + warm taupe counter-glow rather than flat
+    // cement grey so UI elements and active lyric pills pop with crisp
+    // metallic contrast.
+    final neutralHue = primaryAmbientOk.chroma >= 0.008
+        ? primaryAmbientOk.hueRadians
+        : -2.18;
+    final steelSeed = _Oklab.toGamutColor(0.54, 0.042, neutralHue);
+    final base = ColorScheme.fromSeed(
+      seedColor: steelSeed,
+      brightness: brightness,
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+    );
+    final withCleanSurfaces = _withCleanNeutralSurfaces(
+      base,
+      tintHueRadians: neutralHue,
+      isMonochrome: true,
+    );
+    interactiveScheme = withCleanSurfaces.copyWith(
+      primary: _Oklab.toGamutColor(
+        dark ? 0.80 : 0.44,
+        dark ? 0.048 : 0.052,
+        neutralHue,
+      ),
+      onPrimary: dark ? const Color(0xFF101418) : Colors.white,
+      primaryContainer: _Oklab.toGamutColor(
+        dark ? 0.36 : 0.89,
+        dark ? 0.032 : 0.012,
+        neutralHue,
+      ),
+      onPrimaryContainer: dark
+          ? const Color(0xFFECEEF2)
+          : const Color(0xFF1B1E24),
+      secondaryContainer: _Oklab.toGamutColor(
+        dark ? 0.30 : 0.90,
+        dark ? 0.028 : 0.014,
+        neutralHue,
+      ),
+      onSecondaryContainer: dark
+          ? const Color(0xFFE4E8EE)
+          : const Color(0xFF1E2229),
+      tertiaryContainer: secondaryAmbientColor,
+    );
+    accentGlowColor = _Oklab.toGamutColor(
+      dark ? 0.46 : 0.80,
+      dark ? 0.052 : 0.032,
+      neutralHue,
+    );
+  }
+
+  _schemeAtmosphere[interactiveScheme] = ArtworkAtmosphere(
+    primaryAmbient: primaryAmbientColor,
+    secondaryAmbient: secondaryAmbientColor,
+    accentGlow: accentGlowColor,
+  );
+  return interactiveScheme;
 }
 
 /// Normalizes externally supplied `ColorScheme`s (e.g. custom loaders or seed
@@ -1269,30 +1383,47 @@ class _ExpandedNowPlayingBackdrop extends StatelessWidget {
         ArtworkAtmosphere.resolve(colors);
     final dark = colors.brightness == Brightness.dark;
     final surface = colors.surface;
-    return DecoratedBox(
-      key: const ValueKey('expanded-now-playing-artwork-backdrop'),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color.alphaBlend(
-              atmosphere.primaryAmbient.withValues(alpha: dark ? 0.50 : 0.54),
-              surface,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: DecoratedBox(
+              key: const ValueKey('expanded-now-playing-artwork-backdrop'),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color.alphaBlend(
+                      atmosphere.primaryAmbient.withValues(
+                        alpha: dark ? 0.50 : 0.54,
+                      ),
+                      surface,
+                    ),
+                    Color.alphaBlend(
+                      atmosphere.secondaryAmbient.withValues(
+                        alpha: dark ? 0.32 : 0.36,
+                      ),
+                      surface,
+                    ),
+                    surface,
+                  ],
+                  stops: const [0, 0.50, 1],
+                ),
+              ),
+              child: CustomPaint(
+                isComplex: true,
+                painter: _ArtworkAmbientGlowPainter(
+                  atmosphere: atmosphere,
+                  dark: dark,
+                ),
+              ),
             ),
-            Color.alphaBlend(
-              atmosphere.secondaryAmbient.withValues(alpha: dark ? 0.32 : 0.36),
-              surface,
-            ),
-            surface,
-          ],
-          stops: const [0, 0.50, 1],
+          ),
         ),
-      ),
-      child: CustomPaint(
-        painter: _ArtworkAmbientGlowPainter(atmosphere: atmosphere, dark: dark),
-        child: child,
-      ),
+        RepaintBoundary(child: child),
+      ],
     );
   }
 }
@@ -1439,21 +1570,23 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
   void initState() {
     super.initState();
     _readCurrent();
-    widget.controller.addListener(_handleControllerChanged);
+    widget.controller.stateListenable.addListener(_handleControllerChanged);
   }
 
   @override
   void didUpdateWidget(_ExpandedNowPlayingBody oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller == widget.controller) return;
-    oldWidget.controller.removeListener(_handleControllerChanged);
+    oldWidget.controller.stateListenable.removeListener(
+      _handleControllerChanged,
+    );
     _readCurrent();
-    widget.controller.addListener(_handleControllerChanged);
+    widget.controller.stateListenable.addListener(_handleControllerChanged);
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_handleControllerChanged);
+    widget.controller.stateListenable.removeListener(_handleControllerChanged);
     super.dispose();
   }
 
@@ -1552,7 +1685,7 @@ class _ExpandedNowPlayingBodyState extends State<_ExpandedNowPlayingBody> {
       controller: lyrics,
       onClose: widget.onBack,
       onSignInAgain: widget.onSignInAgain,
-      playbackState: widget.controller.playback,
+      playbackState: widget.controller.playback.stateListenable,
       canSeek: () => widget.controller.playback.canSeek,
       onSeek: widget.controller.playback.seekToMs,
       showCloseButton: false,
@@ -1903,38 +2036,41 @@ class _ExpandedArtwork extends StatelessWidget {
         provider = null;
       }
     }
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(_compactRadius(dimension) + 2),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.22),
-            blurRadius: 28,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Semantics(
-        image: true,
-        label: context.l10n.playbackArtworkSemantics(track.title),
-        child: SizedBox.square(
-          key: const ValueKey('expanded-now-playing-artwork'),
-          dimension: dimension,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(_compactRadius(dimension)),
-            child: provider == null
-                ? placeholder
-                : Image(
-                    image: provider,
-                    fit: BoxFit.cover,
-                    excludeFromSemantics: true,
-                    gaplessPlayback: true,
-                    frameBuilder: musicArtworkFrameBuilder(placeholder),
-                    errorBuilder: musicArtworkErrorBuilder(
-                      artworkUri!,
-                      placeholder,
+    return RepaintBoundary(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(_compactRadius(dimension) + 2),
+          boxShadow: [
+            BoxShadow(
+              color: Theme.of(context).colorScheme.shadow
+                  .withValues(alpha: 0.22),
+              blurRadius: 28,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Semantics(
+          image: true,
+          label: context.l10n.playbackArtworkSemantics(track.title),
+          child: SizedBox.square(
+            key: const ValueKey('expanded-now-playing-artwork'),
+            dimension: dimension,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(_compactRadius(dimension)),
+              child: provider == null
+                  ? placeholder
+                  : Image(
+                      image: provider,
+                      fit: BoxFit.cover,
+                      excludeFromSemantics: true,
+                      gaplessPlayback: true,
+                      frameBuilder: musicArtworkFrameBuilder(placeholder),
+                      errorBuilder: musicArtworkErrorBuilder(
+                        artworkUri!,
+                        placeholder,
+                      ),
                     ),
-                  ),
+            ),
           ),
         ),
       ),

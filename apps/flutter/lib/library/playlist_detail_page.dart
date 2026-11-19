@@ -61,7 +61,7 @@ class PlaylistDetailPage extends StatefulWidget {
 
 class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   late final PlaylistDetailController _controller;
-  late final Listenable _pageListenable;
+  late Listenable _pageListenable;
 
   @override
   void initState() {
@@ -69,7 +69,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     _controller = PlaylistDetailController(widget.playlist, widget.gateway);
     _pageListenable = Listenable.merge([
       _controller,
-      widget.queuePlaybackController,
+      widget.queuePlaybackController.currentTrackListenable,
     ]);
     _controller.addListener(_scheduleShellActionUpdate);
     unawaited(_controller.load());
@@ -84,6 +84,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   @override
   void didUpdateWidget(PlaylistDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.queuePlaybackController != widget.queuePlaybackController) {
+      _pageListenable = Listenable.merge([
+        _controller,
+        widget.queuePlaybackController.currentTrackListenable,
+      ]);
+    }
     if (oldWidget.onShellActionChanged != widget.onShellActionChanged) {
       _scheduleShellActionUpdate();
     }

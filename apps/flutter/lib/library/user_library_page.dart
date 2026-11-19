@@ -82,6 +82,7 @@ class UserLibraryPage extends StatefulWidget {
     required this.onSignOut,
     this.systemLightColorScheme,
     this.systemDarkColorScheme,
+    this.expandedNowPlayingPaletteCache,
     super.key,
   });
 
@@ -99,6 +100,7 @@ class UserLibraryPage extends StatefulWidget {
   final Future<CredentialSignOutResult> Function() onSignOut;
   final ColorScheme? systemLightColorScheme;
   final ColorScheme? systemDarkColorScheme;
+  final ArtworkColorSchemeCache? expandedNowPlayingPaletteCache;
 
   @override
   State<UserLibraryPage> createState() => _UserLibraryPageState();
@@ -125,6 +127,9 @@ class _ExpandedNowPlayingRouteTransitionState
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _position;
+  late bool _detailVisible;
+  late bool _baseCovered;
+  int _openGeneration = 0;
 
   @override
   void initState() {
@@ -134,7 +139,9 @@ class _ExpandedNowPlayingRouteTransitionState
       value: widget.open ? 1 : 0,
       duration: const Duration(milliseconds: 360),
       reverseDuration: const Duration(milliseconds: 280),
-    );
+    )..addStatusListener(_handleStatusChanged);
+    _detailVisible = widget.open;
+    _baseCovered = widget.open;
     _position = Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
         .animate(
           CurvedAnimation(
@@ -149,32 +156,77 @@ class _ExpandedNowPlayingRouteTransitionState
   void didUpdateWidget(_ExpandedNowPlayingRouteTransition oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.open == widget.open) return;
+    final generation = ++_openGeneration;
+    final disableAnimations =
+        MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     if (widget.open) {
-      unawaited(_controller.forward());
+      if (disableAnimations) {
+        _detailVisible = true;
+        _baseCovered = true;
+        _controller.value = 1;
+      } else if (_controller.isDismissed) {
+        // Mount detail offscreen on Frame 0 so cold layout/rasterization does
+        // not consume the fast initial segment of emphasizedDecelerate.
+        _detailVisible = true;
+        _baseCovered = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !widget.open || generation != _openGeneration) return;
+          unawaited(_controller.forward());
+        });
+      } else {
+        _detailVisible = true;
+        _baseCovered = false;
+        unawaited(_controller.forward());
+      }
     } else {
-      unawaited(_controller.reverse());
+      if (disableAnimations ||
+          _controller.isDismissed ||
+          _controller.value <= _controller.lowerBound) {
+        _detailVisible = false;
+        _baseCovered = false;
+        _controller.value = 0;
+      } else {
+        _baseCovered = false;
+        unawaited(_controller.reverse());
+      }
     }
+  }
+
+  void _handleStatusChanged(AnimationStatus status) {
+    if (!mounted) return;
+    final nextDetailVisible =
+        widget.open || status != AnimationStatus.dismissed;
+    final nextBaseCovered = status == AnimationStatus.completed;
+    if (nextDetailVisible == _detailVisible &&
+        nextBaseCovered == _baseCovered) {
+      return;
+    }
+    setState(() {
+      _detailVisible = nextDetailVisible;
+      _baseCovered = nextBaseCovered;
+    });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _openGeneration += 1;
+    _controller
+      ..removeStatusListener(_handleStatusChanged)
+      ..dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
+  Widget build(BuildContext context) => Stack(
     key: const ValueKey('expanded-now-playing-transition'),
-    animation: _controller,
-    builder: (context, _) {
-      final detailVisible = !_controller.isDismissed;
-      final baseCovered = _controller.isCompleted;
-      return Stack(
-        fit: StackFit.expand,
-        clipBehavior: Clip.hardEdge,
-        children: [
-          Offstage(
-            offstage: baseCovered,
+    fit: StackFit.expand,
+    clipBehavior: Clip.hardEdge,
+    children: [
+      Offstage(
+        offstage: _baseCovered,
+        child: TickerMode(
+          enabled: !_baseCovered,
+          child: RepaintBoundary(
             child: ExcludeSemantics(
               excluding: widget.open,
               child: ExcludeFocus(
@@ -183,24 +235,24 @@ class _ExpandedNowPlayingRouteTransitionState
               ),
             ),
           ),
-          if (detailVisible)
-            ExcludeSemantics(
-              excluding: !widget.open,
-              child: ExcludeFocus(
-                excluding: !widget.open,
-                child: IgnorePointer(
-                  ignoring: !widget.open,
-                  child: SlideTransition(
-                    key: const ValueKey('expanded-now-playing-transition-page'),
-                    position: _position,
-                    child: widget.detail,
-                  ),
-                ),
+        ),
+      ),
+      if (_detailVisible)
+        ExcludeSemantics(
+          excluding: !widget.open,
+          child: ExcludeFocus(
+            excluding: !widget.open,
+            child: IgnorePointer(
+              ignoring: !widget.open,
+              child: SlideTransition(
+                key: const ValueKey('expanded-now-playing-transition-page'),
+                position: _position,
+                child: RepaintBoundary(child: widget.detail),
               ),
             ),
-        ],
-      );
-    },
+          ),
+        ),
+    ],
   );
 }
 
@@ -587,7 +639,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   late SessionRankingGateway _sessionRankingGateway;
   late HomeController _homeController;
   late final QueuePlaybackController _queuePlaybackController;
-  late final ArtworkColorSchemeCache _expandedNowPlayingPalette;
+  late ArtworkColorSchemeCache _expandedNowPlayingPalette;
   late RecommendedPlaylistController _recommendedPlaylistController;
   late OfficialPlaylistController _officialPlaylistController;
   late HomeSpotlightController _homeSpotlightController;
@@ -642,6 +694,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   final Map<String, CollectionDetailActions> _collectionShellActions = {};
   String? _prefetchedArtworkUri;
   Brightness? _prefetchedArtworkBrightness;
+  String? _lastObservedProviderId;
+  String? _lastObservedOpaqueId;
+  bool? _lastObservedPlaying;
+  int? _lastObservedPositionMs;
+  DateTime? _lastObservedAt;
   ScaffoldFeatureController<SnackBar, SnackBarClosedReason>?
   _playbackNoticeController;
   String? _pendingPlaybackNotice;
@@ -657,12 +714,21 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     super.initState();
     _initializeProviderControllers();
     _queuePlaybackController = _playback.playbackHost.controller;
-    _expandedNowPlayingPalette = ArtworkColorSchemeCache();
+    _expandedNowPlayingPalette =
+        widget.expandedNowPlayingPaletteCache ?? ArtworkColorSchemeCache();
+    _queuePlaybackController.stateListenable.addListener(
+      _onQueuePlaybackStateChanged,
+    );
     _queuePlaybackController.addListener(_onQueuePlaybackChanged);
     _loadProviderRoot();
   }
 
   void _initializeProviderControllers() {
+    _lastObservedProviderId = null;
+    _lastObservedOpaqueId = null;
+    _lastObservedPlaying = null;
+    _lastObservedPositionMs = null;
+    _lastObservedAt = null;
     _controller = UserLibraryController(_library.libraryGateway);
     _libraryMutations = LibraryMutationCoordinator(
       providerId: widget.settings.musicProvider.providerId,
@@ -771,6 +837,14 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   @override
   void didUpdateWidget(UserLibraryPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.expandedNowPlayingPaletteCache !=
+        widget.expandedNowPlayingPaletteCache) {
+      _expandedNowPlayingPalette =
+          widget.expandedNowPlayingPaletteCache ?? ArtworkColorSchemeCache();
+      _prefetchedArtworkUri = null;
+      _prefetchedArtworkBrightness = null;
+      _prefetchExpandedNowPlayingPalette();
+    }
     final providerChanged =
         oldWidget.settings.musicProvider != widget.settings.musicProvider;
     final authenticationChanged =
@@ -823,15 +897,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     }
   }
 
-  void _onQueuePlaybackChanged() {
+  void _onQueuePlaybackStateChanged() {
     if (!mounted) return;
     _prefetchExpandedNowPlayingPalette();
-    final playback = _queuePlaybackController.playback;
-    _homeController.observePlayback(
-      playback.track,
-      playback.positionMs,
-      playback.stage == TrackPlaybackStage.playing,
-    );
     if (_queuePlaybackController.lyrics?.stage !=
         LyricStage.credentialRejected) {
       _handledLyricCredentialRejection = false;
@@ -840,6 +908,39 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     if (_handledLyricCredentialRejection) return;
     _handledLyricCredentialRejection = true;
     widget.onSignInAgain();
+  }
+
+  void _onQueuePlaybackChanged() {
+    if (!mounted) return;
+    final playback = _queuePlaybackController.playback;
+    final track = playback.track;
+    final providerId = track?.providerId;
+    final opaqueId = track?.opaqueId;
+    final positionMs = playback.positionMs;
+    final playing = playback.stage == TrackPlaybackStage.playing;
+    final trackChanged =
+        providerId != _lastObservedProviderId ||
+        opaqueId != _lastObservedOpaqueId;
+    final playingChanged = playing != _lastObservedPlaying;
+    final lastPositionMs = _lastObservedPositionMs;
+    final positionDelta = lastPositionMs == null
+        ? 1000
+        : (positionMs - lastPositionMs).abs();
+    DateTime? now;
+    if (!trackChanged && !playingChanged && positionDelta < 1000) {
+      if (!playing) return;
+      now = DateTime.now();
+      final lastAt = _lastObservedAt;
+      if (lastAt != null && now.difference(lastAt).inMilliseconds < 1000) {
+        return;
+      }
+    }
+    _lastObservedProviderId = providerId;
+    _lastObservedOpaqueId = opaqueId;
+    _lastObservedPlaying = playing;
+    _lastObservedPositionMs = positionMs;
+    _lastObservedAt = now ?? DateTime.now();
+    _homeController.observePlayback(track, positionMs, playing);
   }
 
   @override
@@ -864,10 +965,16 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _prefetchedArtworkUri = artworkUri;
     _prefetchedArtworkBrightness = brightness;
     unawaited(
-      _expandedNowPlayingPalette.resolve(
-        artworkUri: artworkUri,
-        brightness: brightness,
-      ),
+      _expandedNowPlayingPalette
+          .resolve(artworkUri: artworkUri, brightness: brightness)
+          .then((scheme) {
+            if (!mounted || scheme != null) return;
+            if (_prefetchedArtworkUri == artworkUri &&
+                _prefetchedArtworkBrightness == brightness) {
+              _prefetchedArtworkUri = null;
+              _prefetchedArtworkBrightness = null;
+            }
+          }),
     );
   }
 
@@ -886,6 +993,9 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   @override
   void dispose() {
     _disposeProviderControllers();
+    _queuePlaybackController.stateListenable.removeListener(
+      _onQueuePlaybackStateChanged,
+    );
     _queuePlaybackController.removeListener(_onQueuePlaybackChanged);
     _playlistReturnFocusNode.dispose();
     _searchReturnFocusNode.dispose();
@@ -2487,7 +2597,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 body: _CompactPlayerOverlay(
                   enabled: constraints.maxWidth < 640,
                   applyBottomSafeArea: settingsOpen,
-                  playbackListenable: _queuePlaybackController,
+                  playbackListenable:
+                      _queuePlaybackController.currentTrackListenable,
                   hasCurrentTrack: () =>
                       _queuePlaybackController.current != null,
                   player: NowPlayingBar(

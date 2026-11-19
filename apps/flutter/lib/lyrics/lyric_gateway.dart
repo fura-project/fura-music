@@ -43,12 +43,14 @@ class SynchronizedLyricLine {
     required List<TimedLyricSegment> segments,
     this.translation,
     this.romanization,
-  }) : segments = List.unmodifiable(segments);
+  }) : segments = List.unmodifiable(segments),
+       segmentsComposeLine = _computeSegmentsComposeLine(text, segments);
 
   final String text;
   final int startMs;
   final int durationMs;
   final List<TimedLyricSegment> segments;
+  final bool segmentsComposeLine;
   final String? translation;
   final String? romanization;
   int get endMs => startMs + durationMs;
@@ -59,6 +61,18 @@ class SynchronizedLyricLine {
       'durationMs: $durationMs, segmentCount: ${segments.length}, '
       'hasTranslation: ${translation != null}, '
       'hasRomanization: ${romanization != null})';
+}
+
+bool _computeSegmentsComposeLine(
+  String text,
+  List<TimedLyricSegment> segments,
+) {
+  if (segments.isEmpty) return false;
+  final buffer = StringBuffer();
+  for (final segment in segments) {
+    buffer.write(segment.text);
+  }
+  return buffer.toString() == text;
 }
 
 class SynchronizedLyrics {

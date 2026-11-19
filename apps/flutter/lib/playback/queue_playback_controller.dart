@@ -21,7 +21,9 @@ class QueuePlaybackController extends ChangeNotifier {
   }) : // The public named parameter cannot use a library-private name.
        // ignore: prefer_initializing_formals
        _relatedTracksGateway = relatedTracksGateway {
+    _playback.stateListenable.addListener(_onPlaybackStateChanged);
     _playback.addListener(_onPlaybackChanged);
+    lyrics?.stageListenable.addListener(_onLyricsStageChanged);
     lyrics?.addListener(_onLyricsChanged);
     _accept(_gateway.snapshot());
     _syncLyricTrack();
@@ -36,6 +38,9 @@ class QueuePlaybackController extends ChangeNotifier {
   final ValueNotifier<PlaylistTrackSummary?> _currentTrack = ValueNotifier(
     null,
   );
+  final _QueueSignalNotifier _stateChanges = _QueueSignalNotifier();
+  bool _suppressingLyricForward = false;
+  bool _pendingPlaybackStateChange = false;
   PlaybackQueueFailure? _failure;
   bool _completionHandled = false;
   bool _disposed = false;
@@ -69,6 +74,12 @@ class QueuePlaybackController extends ChangeNotifier {
   /// controller's broader [Listenable].
   ValueListenable<PlaylistTrackSummary?> get currentTrackListenable =>
       _currentTrack;
+
+  /// Notifies on queue, roam, collection, lyrics-stage, and non-position
+  /// playback state changes (track, stage, volume, quality, mode). Pure
+  /// playback position ticks stay on [TrackPlaybackController.positionMsListenable]
+  /// and this controller's broader [Listenable].
+  Listenable get stateListenable => _stateChanges;
   PlaybackQueueFailure? get failure => _failure;
   TrackPlaybackController get playback => _playback;
   List<PlaylistTrackSummary> get tracks => _snapshot.tracks;
@@ -100,7 +111,7 @@ class QueuePlaybackController extends ChangeNotifier {
     if (_disposed || enabled == _roamEnabled) return;
     _roamEnabled = enabled;
     _invalidateRoam();
-    if (!_disposed) notifyListeners();
+    _notifyStateAndAll();
   }
 
   Future<void> replaceAndPlay(
@@ -139,7 +150,7 @@ class QueuePlaybackController extends ChangeNotifier {
         (source.hasMore && _gateway is! PlaybackQueueBatchGateway)) {
       _collectionStage = CollectionPlaybackStage.failed;
       _collectionFailure = CollectionPlaybackFailure.invalidResponse;
-      notifyListeners();
+      _notifyStateAndAll();
       return;
     }
 
@@ -156,7 +167,7 @@ class QueuePlaybackController extends ChangeNotifier {
         : CollectionPlaybackStage.exhausted;
     _collectionFailure = null;
     _completionHandled = false;
-    notifyListeners();
+    _notifyStateAndAll();
     final current = _snapshot.current;
     if (current != null) await _playback.playTrack(current);
     _maybeDemandCollection();
@@ -258,7 +269,7 @@ class QueuePlaybackController extends ChangeNotifier {
   void invalidateCollectionSource() {
     if (_disposed) return;
     _invalidateCollection();
-    notifyListeners();
+    _notifyStateAndAll();
   }
 
   /// Retries the current bounded page after a typed continuation failure.
@@ -466,7 +477,7 @@ class QueuePlaybackController extends ChangeNotifier {
     _collectionOperation = operation;
     _collectionStage = CollectionPlaybackStage.loading;
     _collectionFailure = null;
-    if (!_disposed) notifyListeners();
+    _notifyStateAndAll();
 
     late final CollectionPlaybackPage page;
     try {
@@ -561,7 +572,7 @@ class QueuePlaybackController extends ChangeNotifier {
         : CollectionPlaybackStage.exhausted;
     _clearCollectionTerminalClaim();
     _collectionLoadFuture = null;
-    if (!_disposed) notifyListeners();
+    _notifyStateAndAll();
     if (_collectionNeedsInitialFill) {
       _maybeDemandCollection();
     }
@@ -606,7 +617,7 @@ class QueuePlaybackController extends ChangeNotifier {
     _collectionFailure = failure;
     _collectionStage = CollectionPlaybackStage.failed;
     _clearCollectionTerminalClaim();
-    notifyListeners();
+    _notifyStateAndAll();
   }
 
   void _clearCollectionTerminalClaim() {
@@ -643,7 +654,7 @@ class QueuePlaybackController extends ChangeNotifier {
     }
     if (!supportsRelatedTracksProvider(seed.providerId)) {
       _roamStage = RoamStage.unsupported;
-      notifyListeners();
+      _notifyStateAndAll();
       return;
     }
 
@@ -656,13 +667,13 @@ class QueuePlaybackController extends ChangeNotifier {
     } on Object {
       if (_roamIsCurrent(generation, terminalToken, seedKey, expectedLength)) {
         _roamStage = RoamStage.failed;
-        notifyListeners();
+        _notifyStateAndAll();
       }
       return;
     }
     _roamOperation = operation;
     _roamStage = RoamStage.loading;
-    notifyListeners();
+    _notifyStateAndAll();
 
     late final RelatedTracksResult result;
     try {
@@ -671,7 +682,7 @@ class QueuePlaybackController extends ChangeNotifier {
       if (identical(_roamOperation, operation)) _roamOperation = null;
       if (_roamIsCurrent(generation, terminalToken, seedKey, expectedLength)) {
         _roamStage = RoamStage.failed;
-        notifyListeners();
+        _notifyStateAndAll();
       }
       return;
     }
@@ -681,12 +692,12 @@ class QueuePlaybackController extends ChangeNotifier {
     }
     if (result.failure != null) {
       _roamStage = RoamStage.failed;
-      notifyListeners();
+      _notifyStateAndAll();
       return;
     }
     if (result.tracks.any((track) => track.providerId != seed.providerId)) {
       _roamStage = RoamStage.failed;
-      notifyListeners();
+      _notifyStateAndAll();
       return;
     }
 
@@ -697,7 +708,7 @@ class QueuePlaybackController extends ChangeNotifier {
     }
     if (additions.isEmpty) {
       _roamStage = RoamStage.empty;
-      notifyListeners();
+      _notifyStateAndAll();
       return;
     }
 
@@ -707,7 +718,7 @@ class QueuePlaybackController extends ChangeNotifier {
     } on Object {
       if (_roamIsCurrent(generation, terminalToken, seedKey, expectedLength)) {
         _roamStage = RoamStage.failed;
-        notifyListeners();
+        _notifyStateAndAll();
       }
       return;
     }
@@ -716,13 +727,13 @@ class QueuePlaybackController extends ChangeNotifier {
         !update.playbackRequested) {
       if (!_disposed && generation == _roamGeneration) {
         _roamStage = RoamStage.failed;
-        notifyListeners();
+        _notifyStateAndAll();
       }
       return;
     }
     _roamStage = RoamStage.continued;
     _completionHandled = false;
-    notifyListeners();
+    _notifyStateAndAll();
     final current = _snapshot.current;
     if (current != null) await _playback.playTrack(current);
   }
@@ -776,7 +787,7 @@ class QueuePlaybackController extends ChangeNotifier {
     final snapshot = result.snapshot;
     if (failure != null || snapshot == null) {
       _failure = failure ?? PlaybackQueueFailure.invalidResponse;
-      if (!_disposed) notifyListeners();
+      _notifyStateAndAll();
       return false;
     }
     _failure = null;
@@ -785,19 +796,39 @@ class QueuePlaybackController extends ChangeNotifier {
     if (!_sameTrack(previousCurrent, _snapshot.current)) {
       _currentTrack.value = _snapshot.current;
     }
-    _syncLyricTrack();
-    if (!_disposed) notifyListeners();
+    _suppressingLyricForward = true;
+    try {
+      _syncLyricTrack();
+    } finally {
+      _suppressingLyricForward = false;
+    }
+    _notifyStateAndAll();
     return true;
+  }
+
+  void _onPlaybackStateChanged() {
+    if (_disposed) return;
+    _pendingPlaybackStateChange = true;
   }
 
   void _onPlaybackChanged() {
     if (_disposed) return;
+    final stateChanged = _pendingPlaybackStateChange;
+    _pendingPlaybackStateChange = false;
     if (_playback.stage != TrackPlaybackStage.completed &&
         _roamOperation != null) {
       _invalidateRoam();
     }
-    lyrics?.updatePositionMs(_playback.positionMs);
-    notifyListeners();
+    _suppressingLyricForward = true;
+    try {
+      lyrics?.updatePositionMs(_playback.positionMs);
+    } finally {
+      _suppressingLyricForward = false;
+    }
+    if (stateChanged && !_disposed) {
+      _stateChanges.notify();
+    }
+    if (!_disposed) notifyListeners();
     if (_playback.stage == TrackPlaybackStage.completed) {
       if (!_completionHandled) {
         _completionHandled = true;
@@ -810,7 +841,19 @@ class QueuePlaybackController extends ChangeNotifier {
     }
   }
 
+  void _onLyricsStageChanged() {
+    if (_disposed || _suppressingLyricForward) return;
+    _stateChanges.notify();
+  }
+
   void _onLyricsChanged() {
+    if (_disposed || _suppressingLyricForward) return;
+    notifyListeners();
+  }
+
+  void _notifyStateAndAll() {
+    if (_disposed) return;
+    _stateChanges.notify();
     if (!_disposed) notifyListeners();
   }
 
@@ -836,14 +879,21 @@ class QueuePlaybackController extends ChangeNotifier {
       _disposed = true;
       _invalidateCollection();
       _invalidateRoam();
+      _playback.stateListenable.removeListener(_onPlaybackStateChanged);
       _playback.removeListener(_onPlaybackChanged);
+      lyrics?.stageListenable.removeListener(_onLyricsStageChanged);
       lyrics?.removeListener(_onLyricsChanged);
       lyrics?.dispose();
       _playback.dispose();
       _currentTrack.dispose();
+      _stateChanges.dispose();
     }
     super.dispose();
   }
+}
+
+class _QueueSignalNotifier extends ChangeNotifier {
+  void notify() => notifyListeners();
 }
 
 bool _sameTrack(PlaylistTrackSummary? first, PlaylistTrackSummary? second) =>
