@@ -29,8 +29,7 @@ make_fixture() {
     librust_lib_flutterustmusic.so \
     libmedia_kit_video_plugin.so \
     libaudioplayers_linux_plugin.so \
-    libflutter_secure_storage_linux_plugin.so \
-    libwebview_all_linux_plugin.so; do
+    libflutter_secure_storage_linux_plugin.so; do
     cp "$bundle/lib/libfixture.so" "$bundle/lib/$library"
   done
   printf '%s\n' 'int dartjni_symbol(void) { return 0; }' | \

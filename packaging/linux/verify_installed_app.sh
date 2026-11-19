@@ -15,7 +15,8 @@ case "$verification_mode" in
 esac
 require_file "$launcher"
 validate_bundle_shape "$app_root"
-for command in dbus-run-session readelf xdotool Xvfb; do
+reject_embedded_webview_files "$app_root"
+for command in dbus-run-session dbus-send readelf xdotool Xvfb; do
   require_command "$command"
 done
 test "$EUID" -ne 0 || die 'installed application verification must run as an ordinary user'
@@ -34,27 +35,21 @@ if test "$verification_mode" = native; then
   gst-inspect-1.0 audioconvert >/dev/null
   gst-inspect-1.0 autoaudiosink >/dev/null
   gst-inspect-1.0 souphttpsrc >/dev/null
-  for helper in gst-plugin-scanner WebKitWebProcess WebKitNetworkProcess; do
-    find /usr/lib /usr/lib64 /usr/libexec -type f -name "$helper" \
-      -print -quit 2>/dev/null | grep -q . || \
-      die "installed runtime is missing $helper"
-  done
+  find /usr/lib /usr/lib64 /usr/libexec -type f -name gst-plugin-scanner \
+    -print -quit 2>/dev/null | grep -q . || \
+    die 'installed runtime is missing gst-plugin-scanner'
 fi
 verify_elf_needed_dependency \
   "$app_root/lib/libmedia_kit_video_plugin.so" libmpv.so.2
-verify_elf_needed_dependency \
-  "$app_root/lib/libwebview_all_linux_plugin.so" libwebkit2gtk-4.1.so.0
 verify_elf_needed_dependency \
   "$app_root/lib/libflutter_secure_storage_linux_plugin.so" libsecret-1.so.0
 if test "$verification_mode" = appimage; then
   # Keep host-side inspection tools on the clean-room runtime. AppRun applies
   # the portable library path only to the application it launches.
   LD_LIBRARY_PATH="$app_runtime_library_path" require_runtime_library libmpv.so.2
-  LD_LIBRARY_PATH="$app_runtime_library_path" require_runtime_library libwebkit2gtk-4.1.so.0
   LD_LIBRARY_PATH="$app_runtime_library_path" require_runtime_library libsecret-1.so.0
 else
   require_runtime_library libmpv.so.2
-  require_runtime_library libwebkit2gtk-4.1.so.0
   require_runtime_library libsecret-1.so.0
 fi
 
@@ -144,7 +139,10 @@ dbus-run-session -- bash -eu -o pipefail -c '
         break
       fi
     done < <(xdotool search --onlyvisible --name ".*" 2>/dev/null || true)
-    test "$found_window" = true && break
+    if test "$found_window" = true &&
+       grep -Fq "FURA_DIAGNOSTIC startup phase=first_frame outcome=success" "$log_file"; then
+      break
+    fi
     sleep 1
   done
   if test "$found_window" != true; then
@@ -154,6 +152,19 @@ dbus-run-session -- bash -eu -o pipefail -c '
     wait "$app_pid" || true
     exit 1
   fi
+  for phase in rust_init audio_engine_construct system_edge_init first_frame; do
+    if ! grep -Fq "FURA_DIAGNOSTIC startup phase=$phase outcome=success" "$log_file"; then
+      printf "application did not complete startup phase: %s\n" "$phase" >&2
+      cat "$log_file" >&2
+      exit 1
+    fi
+  done
+  mpris_destination="org.mpris.MediaPlayer2.com.fura.flutterustmusic.playback.instance$app_pid"
+  dbus-send --session --print-reply --reply-timeout=5000 \
+    --dest="$mpris_destination" /org/mpris/MediaPlayer2 \
+    org.freedesktop.DBus.Properties.Get \
+    string:org.mpris.MediaPlayer2.Player string:PlaybackStatus >/dev/null
+  printf "Verified X11 window, first Flutter frame, media engine, and MPRIS reply\n"
   kill -TERM "$app_pid"
   wait_status=0
   wait "$app_pid" || wait_status=$?

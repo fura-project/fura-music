@@ -1,0 +1,20 @@
+name: fura_webview_all_linux
+description: Fura's Linux registration for unsupported embedded WebViews.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.9.0
+  flutter: ">=3.35.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_platform_interface: 1.4.1
+
+flutter:
+  plugin:
+    implements: webview_all
+    platforms:
+      linux:
+        dartPluginClass: FuraLinuxWebViewPlatform

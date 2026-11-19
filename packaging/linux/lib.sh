@@ -276,10 +276,24 @@ validate_bundle_shape() {
   require_file "$bundle/lib/libmedia_kit_video_plugin.so"
   require_file "$bundle/lib/libaudioplayers_linux_plugin.so"
   require_file "$bundle/lib/libflutter_secure_storage_linux_plugin.so"
-  require_file "$bundle/lib/libwebview_all_linux_plugin.so"
   require_file "$bundle/data/icudtl.dat"
   require_directory "$bundle/data/flutter_assets"
   require_file "$bundle/data/flutter_assets/NativeAssetsManifest.json"
+}
+
+reject_embedded_webview_files() {
+  local forbidden
+  forbidden=$(find "$1" \( -iname 'libwebview*' -o -iname 'libwebkit*' \
+    -o -iname 'libjavascriptcoregtk*' -o -name 'WebKitWebProcess' \
+    -o -name 'WebKitNetworkProcess' \) -print -quit)
+  test -z "$forbidden" || die "unexpected embedded WebView payload: ${forbidden##*/}"
+}
+
+reject_embedded_webview_dependencies() {
+  # Match DT_NEEDED independently of what happens to be installed on the host.
+  if grep -Eqi 'NEEDED.*\[lib(webview|webkit|javascriptcoregtk)' <<< "$1"; then
+    die "unexpected embedded WebView dependency in $2"
+  fi
 }
 
 validate_distribution_assets() {

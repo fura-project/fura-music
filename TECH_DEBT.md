@@ -226,8 +226,9 @@ the playback plugin exposes a safe in-place localized metadata update.
 
 ## TD-013 — NetEase official login inherits Linux WebKitGTK risk
 
-**Status:** Resolved for the Linux login route by HD-029; cross-platform plugin
-packaging and non-Linux WebView evidence remain open
+**Status:** Resolved for the Linux login route by HD-029. The Linux-only
+federated plugin candidate removes the native dependency in local Release builds.
+Hosted package verification and non-Linux runtime acceptance remain separate.
 
 **Problem:** HD-027's pinned `webview_all 1.4.1` candidate provides a common
 visible WebView, native HttpOnly Cookie access and deterministic session close,
@@ -249,10 +250,10 @@ measured fatal path.
 
 **Impact:** The rejected WebKitGTK runtime is no longer selected for Linux
 official login. The `webview_all` dependency remains for non-Linux platforms,
-whose runtime acceptance is independent; its current cross-platform package
-may still retain WebKitGTK build/runtime dependencies in Linux artifacts even
-though Fura does not create that session there. Linux now adds target-scoped
-CDP/process dependencies but no bundled browser runtime.
+whose runtime acceptance is independent. Flutter resolves the direct Dart-only
+implementation on Linux, and the generated native graph and Release ELF audits
+reject the WebKitGTK edge. The Linux Chromium route retains target-scoped
+CDP/process dependencies and uses the browser installed on the system.
 
 **Risk:** Flutter's default transport produces a blank page and continuous
 DMA-BUF import failures. Tauri default did render and complete 12 strict cycles,
@@ -271,9 +272,8 @@ stack renderer flags on the current build.
 **Trigger condition:** Reopen the Linux portion if Human login/cancel/restore
 acceptance fails, browser/CDP policy changes, cleanup leaves an owned profile,
 or a supported Linux package lacks an acceptable native Chrome/Chromium binary.
-Reassess non-Linux WebView behavior separately before claiming those platforms;
-remove the unused Linux plugin edge only when Flutter dependency packaging can
-do so without deleting the retained non-Linux route.
+Reassess non-Linux WebView behavior separately. Recheck plugin resolution and
+the complete Linux ELF closure on any relevant dependency update.
 
 ## TD-014 — Long Roam sessions retain every appended Queue entry
 

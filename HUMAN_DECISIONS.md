@@ -344,6 +344,11 @@ production candidate is rejected and removed; no compositing-disable,
 software/X11 or other renderer workaround may be stacked. Choosing a CEF/non-
 WebKit Linux backend or no embedded Linux login is a new `HUMAN_DECISION`.
 
+**Linux packaging follow-up:** HD-029 remains the official-Web login route.
+Flutter's Linux-only Dart registration replaces the unused embedded native
+plugin in Linux builds. This removes the WebKitGTK packaging prerequisite
+without changing the Chromium login route or the non-Linux implementations.
+
 ## HD-028 — Isolated Tauri/Wry WebKitGTK diagnostic probe
 
 **Status:** Accepted by explicit Human instruction on 2026-09-14; bounded

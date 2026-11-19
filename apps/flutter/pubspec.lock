@@ -343,6 +343,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  fura_webview_all_linux:
+    dependency: "direct main"
+    description:
+      path: "packages/fura_webview_all_linux"
+      relative: true
+    source: path
+    version: "0.1.0"
   hooks:
     dependency: transitive
     description:

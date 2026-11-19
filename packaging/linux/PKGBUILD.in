@@ -16,7 +16,6 @@ depends=(
   'libepoxy'
   'libsecret'
   'mpv'
-  'webkit2gtk-4.1'
 )
 optdepends=('gnome-keyring: Secret Service provider outside a full desktop session')
 options=('!strip')

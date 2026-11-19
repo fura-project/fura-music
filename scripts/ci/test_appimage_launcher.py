@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline AppRun mount-contract regression; not a sandbox/runtime substitute."""
+"""Offline tests of the AppRun environment and launch contract."""
 
 import os
 import shutil
@@ -23,7 +23,7 @@ class AppImageLauncherTests(unittest.TestCase):
             names += ["lib/" + name for name in (
                 "libflutter_linux_gtk.so", "libapp.so", "librust_lib_flutterustmusic.so",
                 "libmedia_kit_video_plugin.so", "libaudioplayers_linux_plugin.so",
-                "libflutter_secure_storage_linux_plugin.so", "libwebview_all_linux_plugin.so")]
+                "libflutter_secure_storage_linux_plugin.so")]
             for name in names:
                 path = bundle / name
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -35,42 +35,52 @@ class AppImageLauncherTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("AppImage MIME cache missing or empty", result.stderr)
 
-    def test_webkit_inner_sandbox_gets_a_real_readonly_helper_mount(self):
+    def test_portable_launcher_executes_directly_with_hooks_and_exact_arguments(self):
         with tempfile.TemporaryDirectory(prefix="fura launcher test ") as directory:
             root = Path(directory)
             appdir = root / "AppDir with spaces"
-            helpers = appdir / "usr/lib/x86_64-linux-gnu/webkit2gtk-4.1"
-            helpers.mkdir(parents=True)
-            for name in ("WebKitWebProcess", "WebKitNetworkProcess"):
-                helper = helpers / name
-                helper.touch()
-                helper.chmod(0o755)
+            multiarch = appdir / "usr/lib/x86_64-linux-gnu"
+            (multiarch / "gstreamer-1.0").mkdir(parents=True)
+            scanner = multiarch / "gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
+            scanner.parent.mkdir(parents=True)
+            scanner.touch()
+            scanner.chmod(0o755)
+            (appdir / "apprun-hooks").mkdir()
+            (appdir / "apprun-hooks/gtk.sh").write_text("export FURA_TEST_HOOK=ran\n")
             launcher = appdir / "AppRun"
             shutil.copyfile(APP_RUN_SOURCE, launcher)
+            executable = appdir / "usr/bin/flutterustmusic"
+            executable.parent.mkdir(parents=True)
+            executable.write_text('''#!/usr/bin/env bash
+set -eu
+test "$PWD" = "$APPDIR"
+test "$FURA_APP_ROOT" = "$APPDIR/usr/lib/flutterustmusic"
+test "$LD_LIBRARY_PATH" = "$FURA_APP_ROOT/lib:$APPDIR/usr/lib/x86_64-linux-gnu:$APPDIR/usr/lib"
+test "$GST_PLUGIN_PATH" = "$APPDIR/usr/lib/x86_64-linux-gnu/gstreamer-1.0"
+test -x "$GST_PLUGIN_SCANNER"
+test "$FURA_TEST_HOOK" = ran
+test "$#" -eq 2
+test "$1" = "first argument with spaces"
+test "$2" = "--literal"
+printf '%s\\n' "$$"
+exit 42
+''')
+            executable.chmod(0o755)
             fake_bin = root / "fake-bin"
             fake_bin.mkdir()
             bwrap = fake_bin / "bwrap"
-            bwrap.write_text('''#!/usr/bin/env python3
-import sys
-from pathlib import Path
-args = sys.argv[1:]
-mounts = [(args[i+1], args[i+2]) for i, arg in enumerate(args) if arg == '--ro-bind']
-target = '/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1'
-assert any(args[i:i+2] == ['--tmpfs', '/usr/lib'] for i in range(len(args)-1)), 'REAL_MOUNT_SKELETON_REQUIRED'
-assert not any(destination == '/usr/lib' for source, destination in mounts), 'NO_TEMPORARY_SYMLINK_VIEW'
-assert any(destination == target and Path(source).name == 'webkit2gtk-4.1'
-           for source, destination in mounts), 'HELPERS_MUST_BE_READONLY_BOUND'
-helper_index = args.index(target)
-remount_index = args.index('--remount-ro')
-assert remount_index > helper_index and args[remount_index+1] == '/usr/lib', 'SKELETON_MUST_FINISH_READONLY'
-print('APPIMAGE_HELPER_MOUNT_CONTRACT_PASS')
-''')
+            bwrap.write_text("#!/bin/sh\nexit 99\n")
             bwrap.chmod(0o755)
-            result = subprocess.run(["bash", str(launcher)], capture_output=True, text=True,
-                                    env=dict(os.environ, PATH=str(fake_bin) + os.pathsep + os.environ["PATH"]),
-                                    timeout=15, check=False)
-            self.assertEqual(result.returncode, 0, "AppRun helper mount contract failed")
-            self.assertIn("APPIMAGE_HELPER_MOUNT_CONTRACT_PASS", result.stdout)
+            env = {**os.environ, "PATH": str(fake_bin) + os.pathsep + os.environ["PATH"]}
+            for key in ("LD_LIBRARY_PATH", "GST_PLUGIN_PATH"):
+                env.pop(key, None)
+            with subprocess.Popen(
+                ["bash", str(launcher), "first argument with spaces", "--literal"],
+                cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            ) as process:
+                stdout, stderr = process.communicate(timeout=15)
+                self.assertEqual(process.returncode, 42, stderr)
+                self.assertEqual(stdout.strip(), str(process.pid))
 
 
 if __name__ == "__main__":

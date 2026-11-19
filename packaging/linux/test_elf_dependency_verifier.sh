@@ -121,4 +121,17 @@ expect_failure 'runtime linker cannot resolve required library' \
     'source "$1"; require_runtime_library libfura_fixture_missing.so.1' \
     bash "$script_dir/lib.sh"
 
+# A renamed foreign payload cannot evade the DT_NEEDED gate, even if
+# WebKitGTK happens to be available on the build host.
+cc -shared -fPIC "$test_root/dependency.c" \
+  -Wl,-soname,libwebkit2gtk-4.1.so.0 -o "$test_root/libwebkit-fixture.so"
+cc -shared -fPIC "$test_root/plugin.c" "$test_root/libwebkit-fixture.so" \
+  -o "$test_root/renamed-plugin.so"
+expect_failure 'unexpected embedded WebView dependency' bash -c \
+  'source "$1"; reject_embedded_webview_dependencies "$(readelf -d "$2")" "fixture"' \
+  bash "$script_dir/lib.sh" "$test_root/renamed-plugin.so"
+expect_failure 'unexpected embedded WebView payload' bash -c \
+  'source "$1"; reject_embedded_webview_files "$2"' \
+  bash "$script_dir/lib.sh" "$test_root"
+
 printf '%s\n' 'non-executable shared-object dependency tests passed'

@@ -13,7 +13,7 @@ These artifacts are not releases. They retain the current generated application 
 | `flutterustmusic-*-ubuntu24.04-amd64.deb` | Ubuntu 24.04 x86_64 | Native package containing the complete private Flutter bundle. APT resolves its Ubuntu runtime dependencies; it is not claimed to support every Debian release. |
 | `flutterustmusic-*.fc43-x86_64.rpm` | Fedora 43 x86_64 | Native RPM with automatic ELF requirements plus the media/plugin runtime requirements that are loaded outside ordinary ELF linkage. It is not a generic package for every RPM distribution. |
 | `flutterustmusic-*-arch-x86_64.pkg.tar.zst` | Current Arch Linux x86_64 | Real pacman package built by non-root `makepkg` in the recorded rolling Arch environment. Rolling-repository ABI drift is outside the seven-day artifact window. |
-| `flutterustmusic-*-ubuntu24.04-x86_64.AppImage` | Portable x86_64 Linux test on Ubuntu 24.04 and Fedora 43 | Carries the application bundle and non-base GTK/media/WebKit libraries. It targets a complete desktop Linux base, including GL/GLES/EGL, Wayland client/cursor/EGL/server, DRM/GBM graphics capabilities, and ALSA/JACK/PipeWire client interfaces, plus the kernel, glibc, fonts/fontconfig, CA certificates, a D-Bus desktop session, and WebKit sandbox helpers supplied by the target system. |
+| `flutterustmusic-*-ubuntu24.04-x86_64.AppImage` | Portable x86_64 Linux test on Ubuntu 24.04 and Fedora 43 | Carries the application bundle and non-base GTK/media libraries. It targets a complete desktop Linux base, including GL/GLES/EGL, Wayland client/cursor/EGL/server, DRM/GBM graphics capabilities, and ALSA/JACK/PipeWire client interfaces, plus the kernel, glibc, fonts/fontconfig, CA certificates, and a D-Bus desktop session. |
 | `flutterustmusic-windows-x64-development.zip` | x64 Windows 10 or 11 | Extract the whole directory before launching `flutterustmusic.exe`; individual DLLs must remain beside the executable. It is not MSIX-signed or Store-packaged. |
 | `flutterustmusic-macos-development.zip` | macOS architecture(s) listed in `MACOS_ARCHITECTURES.txt` | The `.app` is neither Developer ID signed nor notarized. It is a compile/test artifact, not a distributable macOS release. |
 | `flutterustmusic-ios-simulator-development.zip` | Xcode iOS Simulator architecture(s) listed in `IOS_SIMULATOR_ARCHITECTURES.txt` | Debug-mode Simulator package. Flutter does not support mobile Release mode on a simulator. It cannot be installed on a physical iPhone or iPad and does not prove physical-device background audio, lock-screen controls, or Keychain behavior. |
@@ -27,10 +27,10 @@ are documented in [the 2026-10-09 investigation](ci-packaging-2026-10-09.md).
 This does not exempt first-party binaries, entire runner HOME directories,
 personal identifiers, or unverified third-party/debug metadata.
 
-The [2026-10-25 follow-up](ci-packaging-2026-10-25.md) records the current
-Windows remap candidate, classified macOS strip blocker, verified AppRun nested
-sandbox mount fix, and hosted AppImage namespace `ENVIRONMENT_BLOCKED` result.
-Local runtime checks do not close those native CI acceptance gates.
+The [2026-10-25 follow-up](ci-packaging-2026-10-25.md) records the historical
+Windows remap and macOS strip candidates and the former AppImage namespace
+blocker. Runs 35 and 36 built the AppImage, then stopped at the UID-map
+preflight before artifact download, extraction, or startup.
 
 ## What CI proves
 
@@ -38,11 +38,11 @@ Before packaging begins, one Ubuntu job runs the locked Rust workspace format, t
 
 The Android job additionally verifies the default-D selector regression, Internet permission, both retained media-service declarations, the ARM64 MediaKit payload, the Rust bridge, the Android rustls certificate-verifier class, and the process-startup JNI initializer. The artifact includes `PLAYBACK_STACK.txt` with the requested/effective Android stack and exact source commit. That file identifies the build; only the runtime `FURA_DIAGNOSTIC playback_stack` event and physical system inspection can prove which edge initialized and whether a duplicate session or notification exists.
 
-The Linux path is a set of independently failing jobs inside the single `Cross-platform development packages` workflow. It builds separate Release bundles on Ubuntu 24.04, Fedora 43, and Arch rather than relabeling one Ubuntu binary for every package manager. It checks every ELF in each bundle, rejects unresolved libraries and build-machine RPATHs, and records the maximum referenced GLIBC/GLIBCXX symbol versions. Plugin `DT_NEEDED` entries are inspected without requiring a shared object to have an executable bit, and the target runtime linker must also resolve each required SONAME. The AppImage audit applies the same rule to every extracted ELF: each dependency is reported as bundled, supplied by the controlled target base, or missing; it does not execute 0644 shared objects through `ldd`. Ubuntu also runs the existing offline MPRIS/media initialization, local H.264 media, and WebKitGTK lifecycle integrations under temporary D-Bus/X11 sessions.
+The Linux path is a set of independently failing jobs inside the single `Cross-platform development packages` workflow. It builds separate Release bundles on Ubuntu 24.04, Fedora 43, and Arch rather than relabeling one Ubuntu binary for every package manager. It checks every ELF in each bundle, rejects unresolved libraries and build-machine RPATHs, and records the maximum referenced GLIBC/GLIBCXX symbol versions. Plugin `DT_NEEDED` entries are inspected without requiring a shared object to have an executable bit, and the target runtime linker must also resolve each required SONAME. The AppImage audit applies the same rule to every extracted ELF: each dependency is reported as bundled, supplied by the controlled target base, or missing; it does not execute 0644 shared objects through `ldd`. Ubuntu also runs the existing offline MPRIS/media initialization, local H.264 media, and Linux official-Web login routing integrations under temporary D-Bus/X11 sessions.
 
 Some Linux build hosts have a JDK installed and cause the transitive `package:jni` build hook to emit `libdartjni.so` even though Fura declares no Linux JNI native asset. Packaging removes that optional host-JVM helper only when both generated native-asset manifests are empty and no bundled ELF has a `DT_NEEDED` edge to it. The clean installed-package startup is the runtime guard that Fura does not depend on the omitted helper; the Android JNI payload and Android package are unaffected.
 
-Each native package is queried with its package manager, installed with dependency resolution in a clean target container, launched as an ordinary user from an unrelated path containing spaces, reinstalled, and removed. The startup gate waits for an actual X11 window; a process merely surviving until a timeout is not success. The uninstall check confirms that a synthetic user configuration sentinel remains untouched. The AppImage is extracted and audited, then its packaged `AppRun` is started in clean Ubuntu 24.04 and Fedora 43 containers that do not preinstall GTK, GStreamer, libmpv, WebKitGTK, or libsecret. CI extraction proves the supported no-FUSE path only; it does not claim that a real FUSE mount was exercised.
+Each native package is queried with its package manager, installed with dependency resolution in a clean target container, launched as an ordinary user from an unrelated path containing spaces, reinstalled, and removed. The startup gate checks an actual X11 window, the first Flutter frame, Rust and media initialization, and an MPRIS reply on the isolated session bus. The uninstall check confirms that a synthetic user configuration sentinel remains untouched. The AppImage is extracted and audited, then its packaged `AppRun` is started in clean Ubuntu 24.04 and Fedora 43 containers that do not preinstall GTK, GStreamer, libmpv, WebKitGTK, or libsecret. CI extraction proves the supported no-FUSE path only; it does not claim that a real FUSE mount was exercised.
 
 A green workflow does not prove real-account QQ Music behavior, physical Android or Apple behavior, Windows SMTC usability, Linux desktop-shell integration, codecs on another machine, signing, notarization, store acceptance, or release readiness. Those observations remain per-target maintainer tests.
 
@@ -91,9 +91,22 @@ chmod +x flutterustmusic-*-ubuntu24.04-x86_64.AppImage
 ./flutterustmusic-*-ubuntu24.04-x86_64.AppImage
 ```
 
-The image deliberately does not bundle glibc, the ELF dynamic loader, the Linux kernel, GPU drivers, the target graphics stack, the target ALSA/JACK/PipeWire client interfaces, fonts/fontconfig, CA certificates, the D-Bus session, `bubblewrap`, or `xdg-dbus-proxy`. The declared target graphics stack includes GL/GLES/EGL, the Wayland client, Wayland cursor, Wayland EGL, Wayland server, and DRM/GBM as required by that stack. These are ordinary complete-desktop base capabilities, not private AppImage payload or a list that users are expected to assemble manually. The deliberately minimal CI clean rooms install the corresponding target packages explicitly before the strict ELF audit. The bundled WebKitGTK library directly needs `libgstgl-1.0.so.0`; that bundled GStreamer GL library in turn needs the target's Wayland cursor and EGL libraries, while WebKit's bundled `MiniBrowser` helper needs the target's Wayland server library. The bundled `libsndio.so.7` reaches the target ALSA interface through `libasound.so.2`, and bundled libmpv retains direct client-library edges to ALSA, JACK, and PipeWire. `bubblewrap` must be able to create an unprivileged mount namespace. The image does carry the complete Flutter/Rust application bundle, GTK support gathered by the pinned linuxdeploy GTK plugin, the direct HarfBuzz and FriBidi runtime edges required by bundled Pango, libmpv and its selected transitive libraries, GStreamer base/good modules and scanner, libsecret's client library, WebKitGTK, and its auxiliary processes. Its selected media closure also carries `libusb-1.0.so.0`, reached through `libmpv.so.2` → `libavdevice.so.60` → `libdc1394.so.25`; USB userspace is not promoted to a target-system base capability. It does not disable WebKit sandboxing.
+The AppImage uses the target kernel, glibc, dynamic loader, GPU drivers, and
+desktop graphics stack. The clean-room audit checks every ELF against the
+declared graphics and ALSA/JACK/PipeWire client baseline. The image carries
+the Flutter/Rust bundle, GTK support and MIME data, HarfBuzz and FriBidi for
+Pango, libmpv and its selected media closure (including the libavdevice →
+libdc1394 → libusb edge), GStreamer modules and scanner, and the libsecret
+client library.
 
-The Ubuntu WebKitGTK library resolves auxiliary processes through its compiled multiarch path. `AppRun` therefore uses the target's `bubblewrap` to construct a private, read-only `/usr/lib` view that preserves the target libraries while mapping only the packaged WebKit helper directory at that expected path. It executes linuxdeploy's GTK hooks before launch and leaves WebKit's own child-process sandbox enabled. Failure to create that namespace or find both WebKit process helpers is a startup failure, not a signal to fall back to a host WebKit installation.
+On Linux, Flutter resolves `webview_all` to Fura's Dart-only registration.
+The embedded WebView factories are unsupported there. NetEase official-Web
+login continues to use a disposable profile in a compatible installed
+Chromium-family browser. Android, macOS, iOS, and Windows keep their existing
+WebView implementations. Linux build and artifact checks reject the embedded
+WebView plugin and WebKitGTK/JavaScriptCoreGTK ELF edges. AppRun applies the
+portable GTK and media paths and executes the runner directly. There is no
+WebKit helper relocation or outer namespace preflight.
 
 When FUSE is unavailable, use AppImage's supported extraction path:
 
@@ -106,7 +119,7 @@ Running the extracted tree verifies the no-FUSE execution path. It is not eviden
 
 ## Linux verification limits
 
-A green Linux aggregate proves that the four package files were generated from one source commit and app version, their metadata/file lists were queried, declared dependencies resolved in the named clean environments, and the installed or extracted application created a real window with the Flutter engine and Rust bridge loadable. The offline source integrations cover Linux MPRIS ownership, media-kit initialization and local H.264 playback, plus WebKitGTK cookie/data and lifecycle behavior. ELF and payload audits cover the directly linked plugins, GStreamer module/scanner presence, WebKitGTK helper processes, and removal of runner/source paths from delivered RPATHs.
+A green Linux aggregate proves that the four package files were generated from one source commit and app version, their metadata/file lists were queried, declared dependencies resolved in the named clean environments, and the installed or extracted application created a real window with the Flutter engine and Rust bridge loadable. The offline source integrations cover Linux MPRIS ownership, media-kit initialization and local H.264 playback, plus the Linux isolated-browser login route. ELF and payload audits cover the directly linked plugins, GStreamer modules and scanner, absence of the embedded WebView dependency chain, and removal of runner/source paths from delivered RPATHs.
 
 It does not prove every codec, hardware acceleration path, Secret Service implementation, desktop shell, display server, older glibc, other Debian/RPM distribution, real-account login, live media source, FUSE setup, package signing, repository policy, or formal external redistribution approval. Those remain explicit Human/device/distribution follow-ups rather than being inferred from a green container run.
 

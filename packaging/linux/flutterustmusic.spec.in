@@ -23,7 +23,6 @@ Requires:       gtk3
 Requires:       libepoxy
 Requires:       libsecret
 Requires:       mpv-libs
-Requires:       webkit2gtk4.1
 Suggests:       gnome-keyring
 
 %global debug_package %{nil}

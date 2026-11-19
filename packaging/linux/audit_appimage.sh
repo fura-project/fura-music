@@ -12,6 +12,7 @@ require_directory "$appdir"
 require_file "$appdir/AppRun"
 validate_bundle_shape "$appdir/usr/lib/flutterustmusic"
 test -s "$appdir/usr/share/mime/mime.cache" || die 'AppImage MIME cache missing or empty'
+reject_embedded_webview_files "$appdir"
 mkdir -p "$report_directory"
 
 find "$appdir" -printf '%y %P %s bytes\n' | sort \
@@ -20,16 +21,13 @@ find "$appdir" -printf '%y %P %s bytes\n' | sort \
 for required_pattern in \
   'libmpv.so.2*' \
   'libsecret-1.so.0*' \
-  'libwebkit2gtk-4.1.so.0*' \
   'libgstreamer-1.0.so.0*' \
   'libgstapp-1.0.so.0*' \
   'libgstplayback.so' \
   'libgstaudioconvert.so' \
   'libgstautodetect.so' \
   'libgstsoup.so' \
-  'gst-plugin-scanner' \
-  'WebKitWebProcess' \
-  'WebKitNetworkProcess'; do
+  'gst-plugin-scanner'; do
   find "$appdir" -name "$required_pattern" -print -quit | grep -q . || \
     die "AppImage payload is missing $required_pattern"
 done
@@ -77,7 +75,9 @@ while IFS= read -r -d '' candidate; do
   fi
   cat "$candidate_report" >> "$report_directory/APPIMAGE_ELF_DEPENDENCIES.txt"
   unlink -- "$candidate_report"
-  dynamic_paths=$(readelf -d "$candidate" | grep -E 'RPATH|RUNPATH' || true)
+  dynamic_entries=$(readelf -d "$candidate")
+  reject_embedded_webview_dependencies "$dynamic_entries" "$relative"
+  dynamic_paths=$(grep -E 'RPATH|RUNPATH' <<< "$dynamic_entries" || true)
   if printf '%s\n' "$dynamic_paths" | \
     grep -Eq '/home/|/Users/|/__w/|/github/workspace|/runner/work/'; then
     die "build-machine path leaked into AppImage RUNPATH/RPATH for $relative"

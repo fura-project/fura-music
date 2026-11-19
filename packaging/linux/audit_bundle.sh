@@ -17,6 +17,7 @@ if test "$#" -ge 3; then
   use_elf_resolver=true
 fi
 validate_bundle_shape "$bundle"
+reject_embedded_webview_files "$bundle"
 require_directory "$payload_root"
 require_command file
 require_command readelf
@@ -67,7 +68,9 @@ while IFS= read -r -d '' candidate; do
     fi
   fi
 
-  dynamic_paths=$(readelf -d "$candidate" | grep -E 'RPATH|RUNPATH' || true)
+  dynamic_entries=$(readelf -d "$candidate")
+  reject_embedded_webview_dependencies "$dynamic_entries" "$relative"
+  dynamic_paths=$(grep -E 'RPATH|RUNPATH' <<< "$dynamic_entries" || true)
   if printf '%s\n' "$dynamic_paths" | grep -Eq '/home/|/Users/|/__w/|/github/workspace|/runner/work/'; then
     die "build-machine path leaked into RUNPATH/RPATH for $relative"
   fi
@@ -87,8 +90,6 @@ readelf -d "$bundle/lib/libflutter_secure_storage_linux_plugin.so" | grep -q 'li
   die 'secure-storage plugin is not linked to libsecret'
 readelf -d "$bundle/lib/libmedia_kit_video_plugin.so" | grep -q 'libmpv.so.2' || \
   die 'media_kit video plugin is not linked to libmpv.so.2'
-readelf -d "$bundle/lib/libwebview_all_linux_plugin.so" | grep -q 'libwebkit2gtk-4.1.so.0' || \
-  die 'WebView plugin is not linked to WebKitGTK 4.1'
 
 {
   printf 'elf_count=%s\n' "$elf_count"

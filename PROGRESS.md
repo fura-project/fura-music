@@ -21,6 +21,31 @@ execution:
      Updated `_LyricContentState` (`lyric_panel.dart`) to snap initial mount positioning via `jumpTo` / `ensureVisible(duration: Duration.zero)`, fixed `_estimateLineOffset` to exclude offscreen `cacheExtent` rows and hoist `Scrollable` lookup out of the per-item loop, skipped intro scrolling at offset `0`, offloaded `_extractDualRoleArtworkScheme` Oklab clustering to `Isolate.run` with a 256-entry sRGB-to-linear `Float64List` LUT, cleared failed prefetch markers in `_prefetchExpandedNowPlayingPalette` so failed prefetches retry, and avoided 240ms full-subtree `AnimatedTheme` rebuilds on initial cold-cache palette arrival while keeping `AnimatedTheme` for track switches.
   - **Verification:** `dart format --output=none --set-exit-if-changed lib/ test/` (299 files, 0 changed), `dart analyze` (0 issues), full `flutter test` suite (**1,118/1,118 passed**, including 11 dedicated performance regression tests in `test/playback/now_playing_performance_regression_test.dart`), and `git diff --check` pass. State: **HUMAN_REVIEW**.
 
+- **2026-11-19 Human-directed CORE / Linux embedded WebView dependency:**
+  Hosted package runs 35 and 36 on `d10c9565` built the AppImage. Both
+  verification environments failed with `USER_NAMESPACE_UID_MAP_DENIED`
+  before artifact download or launch. The older runner linked
+  `webview_all_linux`, which linked WebKitGTK and JavaScriptCoreGTK.
+  AppRun used an outer mount namespace to relocate WebKit process helpers.
+  Flutter 3.47.1 now selects the direct Linux-only Dart implementation in
+  the local candidate. Its platform interface rejects embedded WebView use.
+  Linux official-Web login still takes the installed Chromium route.
+  Android, Apple, and Windows retain their prior plugin selection. The
+  Linux Release bundle and generated graph exclude the native plugin, and
+  the packaging gates reject a return of its ELF dependency chain.
+  AppRun executes directly with the existing GTK and media paths. Local
+  Ubuntu 24.04, Fedora 43, and Arch native packages passed install, first
+  frame, MPRIS, synthetic playback, reinstall, and removal. The candidate
+  AppImage is 124,238,328 bytes, down from run 36's 168,376,824. Its extracted
+  AppDir is 401,011,199 bytes, down from 539,787,660. The complete AppDir
+  audit checked 416 ELFs. Both default-permission Ubuntu and Fedora clean
+  rooms passed checksum, extraction, ELF and privacy audit, first frame,
+  MPRIS, and local WAV playback through their packaged libmpv. An isolated
+  Ubuntu Secret Service accepted synthetic write/read/clear through both
+  the system and bundled libsecret. The hosted candidate workflow has not
+  been run.
+  See [Linux development packages](docs/development/cross-platform-test-packages.md).
+
 - **2026-11-17 Human-directed CORE / NetEase Desktop EAPI session V1:**
   The previous Official-Web/WEAPI production path had no proven refreshable
   credential family, so a definitive authenticated rejection eventually

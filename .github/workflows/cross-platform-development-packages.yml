@@ -27,7 +27,6 @@ jobs:
       - name: Audit first-party identity and privacy hygiene
         run: |
           python3 scripts/ci/test_privacy_audits.py
-          python3 scripts/ci/test_appimage_sandbox.py
           python3 scripts/ci/test_appimage_launcher.py
           bash packaging/linux/test_appimage_tools.sh
           python3 scripts/ci/audit_privacy_hygiene.py
@@ -67,7 +66,10 @@ jobs:
 
       - name: Check Dart formatting
         working-directory: apps/flutter
-        run: dart format --output=none --set-exit-if-changed lib test integration_test
+        run: dart format --output=none --set-exit-if-changed lib test integration_test packages
+
+      - name: Verify federated WebView platform selection
+        run: python3 scripts/ci/verify_linux_webview_boundary.py
 
       - name: Analyze Flutter application
         working-directory: apps/flutter
@@ -248,7 +250,7 @@ jobs:
             binutils clang cmake dbus-x11 desktop-file-utils dpkg-dev file \
             g++ gstreamer1.0-plugins-base gstreamer1.0-plugins-good jq \
             libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev \
-            libgtk-3-dev libmpv-dev libsecret-1-dev libwebkit2gtk-4.1-dev \
+            libgtk-3-dev libmpv-dev libsecret-1-dev \
             ninja-build patchelf pkg-config xauth xvfb
 
       - name: Install Rust baseline
@@ -294,11 +296,11 @@ jobs:
           if-no-files-found: warn
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
 
-      - name: Verify offline WebKitGTK lifecycle
+      - name: Verify Linux official login routing
         working-directory: apps/flutter
         run: |
           dbus-run-session -- xvfb-run -a \
-            flutter test integration_test/webview_all_linux_stability_test.dart -d linux
+            flutter test integration_test/linux_official_web_routing_test.dart -d linux
 
       - name: Build Ubuntu Linux Release bundle
         working-directory: apps/flutter
@@ -344,7 +346,7 @@ jobs:
             gstreamer1-devel gstreamer1-plugins-base-devel \
             gstreamer1-plugins-base gstreamer1-plugins-good gtk3-devel jq \
             libepoxy-devel libsecret-devel mpv-devel ninja-build \
-            patchelf pkgconf-pkg-config python3 rpm-build tar unzip webkit2gtk4.1-devel which xz
+            patchelf pkgconf-pkg-config python3 rpm-build tar unzip which xz
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -439,7 +441,7 @@ jobs:
           pacman -S --needed --noconfirm \
             clang cmake curl dbus desktop-file-utils file git gst-plugins-base gst-plugins-good \
             gstreamer gtk3 jq libepoxy libsecret mpv ninja patchelf pkgconf \
-            python rustup sudo unzip webkit2gtk-4.1 xz
+            python rustup sudo unzip xz
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -544,7 +546,7 @@ jobs:
             gstreamer1.0-plugins-base gstreamer1.0-plugins-good jq \
             libgirepository1.0-dev libgstreamer-plugins-base1.0-dev \
             libgstreamer1.0-dev libgtk-3-dev libharfbuzz0b libmpv-dev librsvg2-dev \
-            libsecret-1-dev libwebkit2gtk-4.1-dev ninja-build patchelf \
+            libsecret-1-dev ninja-build patchelf \
             pkg-config shared-mime-info squashfs-tools xz-utils
 
       - name: Install Rust baseline
@@ -613,7 +615,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
-            binutils ca-certificates dbus-x11 git gstreamer1.0-tools passwd python3 \
+            binutils ca-certificates dbus-bin dbus-x11 git gstreamer1.0-tools passwd python3 \
             xauth xdotool xvfb
 
       - name: Check out verification scripts
@@ -672,7 +674,7 @@ jobs:
       - name: Install clean-room test harness
         run: |
           dnf install --assumeyes \
-            binutils ca-certificates dbus-daemon git python3 shadow-utils xdotool \
+            binutils ca-certificates dbus-daemon dbus-tools git python3 shadow-utils xdotool \
             xorg-x11-server-Xvfb xorg-x11-xauth
 
       - name: Check out verification scripts
@@ -770,31 +772,17 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ${{ matrix.image }}
-      options: ${{ matrix.container_options }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          # WebKit's bubblewrap runs as an ordinary user inside the clean-room
-          # job container. Docker's default seccomp, AppArmor, and confined
-          # system paths otherwise block the nested user/mount namespace before
-          # the AppImage can be audited or launched. Keep these exceptions on
-          # this verifier only; no host capability or privileged mode is added.
           - name: Ubuntu 24.04
             image: ubuntu:24.04
             family: deb
-            container_options: >-
-              --security-opt seccomp=unconfined
-              --security-opt apparmor=unconfined
-              --security-opt systempaths=unconfined
           - name: Fedora 43
             image: fedora:43
             family: rpm
-            container_options: >-
-              --security-opt seccomp=unconfined
-              --security-opt apparmor=unconfined
-              --security-opt systempaths=unconfined
 
     steps:
       - name: Install declared AppImage base and test harness
@@ -802,21 +790,21 @@ jobs:
           if test "${{ matrix.family }}" = deb; then
             apt-get update
             DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
-              binutils bubblewrap ca-certificates dbus-x11 file fontconfig git \
+              binutils ca-certificates dbus-bin dbus-x11 file fontconfig git \
               libasound2t64 libegl1 libgl1 libgl1-mesa-dri libgles2 \
               libjack-jackd2-0 \
               libpipewire-0.3-0t64 \
               libwayland-cursor0 libwayland-egl1 \
               libwayland-server0 \
-              passwd python3 xauth xdg-dbus-proxy xdotool xvfb
+              passwd python3 xauth xdotool xvfb
           else
             dnf install --assumeyes \
-              binutils bubblewrap ca-certificates dbus-daemon file fontconfig git \
+              binutils ca-certificates dbus-daemon dbus-tools file fontconfig git \
               alsa-lib jack-audio-connection-kit libglvnd-egl libglvnd-gles \
               libglvnd-glx \
               libwayland-cursor libwayland-egl \
               libwayland-server pipewire-libs \
-              mesa-dri-drivers python3 shadow-utils xdg-dbus-proxy xdotool \
+              mesa-dri-drivers python3 shadow-utils xdotool \
               xorg-x11-server-Xvfb xorg-x11-xauth
           fi
           ldconfig -p | grep -F 'libwayland-cursor.so.0'
@@ -829,11 +817,6 @@ jobs:
 
       - name: Check out verification scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Probe AppImage sandbox namespaces
-        run: |
-          useradd --create-home --user-group namespace-tester
-          runuser -u namespace-tester -- python3 scripts/ci/probe_appimage_sandbox.py
 
       - name: Download AppImage artifact
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
