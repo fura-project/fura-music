@@ -162,6 +162,38 @@ void main() {
     controller.dispose();
   });
 
+  test('retry after a terminal inexact snapshot performs a real offset-zero rescan', () async {
+    final refresh = Completer<PlaylistTrackPageResult>();
+    final gateway = _FakePlaylistGateway([
+      const _ImmediateOperation(
+        PlaylistTrackPageResult(
+          nextOffset: 1,
+          total: 1,
+          membershipIsExact: false,
+          omittedTrackCount: 1,
+        ),
+      ),
+      _PendingOperation(refresh),
+    ]);
+    final controller = _controller(gateway)..bindLikedPlaylist(likedPlaylist);
+    await controller.preload();
+
+    expect(controller.stateFor(other), AuthoritativeTrackLikeState.unknown);
+
+    final resolution = controller.resolve(other);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(gateway.requests, [(0, 100), (0, 100)]);
+    expect(gateway.membershipRefreshRequests, [likedPlaylist]);
+    expect(controller.stateFor(other), AuthoritativeTrackLikeState.loading);
+
+    refresh.complete(const PlaylistTrackPageResult(nextOffset: 0));
+
+    expect(await resolution, AuthoritativeTrackLikeState.notLiked);
+    expect(controller.stateFor(other), AuthoritativeTrackLikeState.notLiked);
+    controller.dispose();
+  });
+
   test('page UI and membership preload join the same page future', () async {
     final pending = Completer<PlaylistTrackPageResult>();
     final source = _PendingOperation(pending);

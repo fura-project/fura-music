@@ -320,6 +320,23 @@ fn provider_diagnostic(message: std::fmt::Arguments<'_>) {
     }
 }
 
+fn library_read_phase<T>(
+    phase: &'static str,
+    result: Result<T, UserLibraryError>,
+) -> Result<T, UserLibraryError> {
+    let outcome = match &result {
+        Ok(_) => "accepted",
+        Err(UserLibraryError::AuthenticationRequired) => "authentication_required",
+        Err(UserLibraryError::CredentialRejected) => "rejected",
+        Err(UserLibraryError::Network) => "transport",
+        Err(UserLibraryError::ServiceUnavailable) => "upstream",
+        Err(UserLibraryError::InvalidResponse) => "malformed",
+        Err(UserLibraryError::Replaced) => "replaced",
+    };
+    provider_diagnostic(format_args!("library phase={phase} outcome={outcome}"));
+    result
+}
+
 fn session_diagnostic(message: std::fmt::Arguments<'_>) {
     if cfg!(debug_assertions)
         || matches!(
@@ -1221,19 +1238,16 @@ where
             }
             let candidate_secrets = candidate.session_secrets();
             session_diagnostic(format_args!(
-                "phase=refresh_request trigger={} outcome=candidate_ready candidate_openid_present={} candidate_refresh_token_present={} candidate_unionid_present={} candidate_refresh_key_present={} candidate_next_refreshable={}",
+                "phase=refresh_request trigger={} outcome=candidate_ready candidate_openid_present={} candidate_refresh_token_present={} candidate_unionid_present={} candidate_refresh_key_present={} candidate_encrypted_uin_present={} candidate_next_refreshable={}",
                 refresh_trigger_label(trigger),
                 candidate_secrets.open_id().is_some(),
                 candidate_secrets.refresh_token().is_some(),
                 candidate_secrets.union_id().is_some(),
                 candidate_secrets.refresh_key().is_some(),
+                candidate_secrets.encrypted_uin().is_some(),
                 validate_credential_refresh_material(&candidate).is_ok(),
             ));
             active.candidate = candidate;
-            session_diagnostic(format_args!(
-                "phase=refresh_request trigger={} outcome=candidate_ready",
-                refresh_trigger_label(trigger)
-            ));
             return Ok(QqMusicRefreshPrepareResult {
                 state: QqMusicRefreshPrepareState::Candidate,
                 preparation: Some(QqMusicRefreshPreparation {
@@ -2216,24 +2230,36 @@ where
     type Error = UserLibraryError;
 
     async fn user_playlists(&self) -> Result<UserPlaylistsCollection, Self::Error> {
-        let candidate = self.authenticated_credential()?;
-        if candidate
+        let candidate = library_read_phase("credential_snapshot", self.authenticated_credential())?;
+        let encrypted_uin_present = candidate
             .session_secrets()
             .encrypted_uin()
-            .is_none_or(|value| value.trim().is_empty())
-        {
+            .is_some_and(|value| !value.trim().is_empty());
+        let outcome = if encrypted_uin_present {
+            "accepted"
+        } else {
+            "missing_material"
+        };
+        provider_diagnostic(format_args!(
+            "library phase=credential_preflight login_type={} encrypted_uin_present={encrypted_uin_present} request_sent=false outcome={outcome}",
+            candidate.login_type().value()
+        ));
+        if !encrypted_uin_present {
             return Err(UserLibraryError::InvalidResponse);
         }
 
         let owned_response = self.client().owned_playlists(&candidate).await;
-        self.finish_library_await(
-            &candidate,
-            matches!(
-                owned_response,
-                Err(QqMusicOwnedPlaylistsError::Rejected { .. })
-            ),
+        let owned = library_read_phase(
+            "owned_request",
+            self.finish_library_await(
+                &candidate,
+                matches!(
+                    owned_response,
+                    Err(QqMusicOwnedPlaylistsError::Rejected { .. })
+                ),
+            )
+            .and_then(|()| owned_response.as_ref().map_err(map_owned_playlists_error)),
         )?;
-        let owned = owned_response.as_ref().map_err(map_owned_playlists_error)?;
         let mut omitted = owned.omitted_playlist_count();
         let mut seen = HashSet::with_capacity(owned.playlists().len());
         let mut playlists = Vec::with_capacity(owned.playlists().len());
@@ -2249,6 +2275,7 @@ where
                 Err(error) => return Err(error),
             }
         }
+        let owned_count = playlists.len();
 
         let mut offset = 0_u32;
         for _ in 0..MAX_FAVORITE_PLAYLIST_PAGES {
@@ -2256,16 +2283,21 @@ where
                 .client()
                 .favorite_playlists_page(&candidate, offset, FAVORITE_PLAYLIST_PAGE_SIZE)
                 .await;
-            self.finish_library_await(
-                &candidate,
-                matches!(
-                    favorite_response,
-                    Err(QqMusicFavoritePlaylistsError::Rejected { .. })
-                ),
+            let page = library_read_phase(
+                "favorite_request",
+                self.finish_library_await(
+                    &candidate,
+                    matches!(
+                        favorite_response,
+                        Err(QqMusicFavoritePlaylistsError::Rejected { .. })
+                    ),
+                )
+                .and_then(|()| {
+                    favorite_response
+                        .as_ref()
+                        .map_err(map_favorite_playlists_error)
+                }),
             )?;
-            let page = favorite_response
-                .as_ref()
-                .map_err(map_favorite_playlists_error)?;
             omitted = omitted
                 .checked_add(page.omitted_playlist_count())
                 .ok_or(UserLibraryError::InvalidResponse)?;
@@ -2283,14 +2315,21 @@ where
                 }
             }
             if !page.has_more() {
+                let favorite_count = playlists.len() - owned_count;
+                provider_diagnostic(format_args!(
+                    "library phase=map owned_count={owned_count} favorite_count={favorite_count} omitted_count={omitted}"
+                ));
+                provider_diagnostic(format_args!("library phase=complete outcome=accepted"));
                 return Ok(UserPlaylistsCollection::new(playlists, omitted));
             }
             if page.next_offset() <= offset {
+                provider_diagnostic(format_args!("library phase=complete outcome=pagination"));
                 return Err(UserLibraryError::InvalidResponse);
             }
             offset = page.next_offset();
         }
 
+        provider_diagnostic(format_args!("library phase=complete outcome=pagination"));
         Err(UserLibraryError::InvalidResponse)
     }
 }
@@ -5242,8 +5281,12 @@ mod tests {
                     }
                 }
             });
-            let responses = std::iter::once(owned)
-                .chain(favorite_responses)
+            Self::from_responses(std::iter::once(owned).chain(favorite_responses))
+        }
+
+        fn from_responses(responses: impl IntoIterator<Item = Value>) -> Self {
+            let responses = responses
+                .into_iter()
                 .map(|response| {
                     HttpResponse::new(200, serde_json::to_vec(&response).expect("fixture JSON"))
                 })
@@ -8502,6 +8545,47 @@ mod tests {
         );
         assert!(provider.client().transport().requests().is_empty());
         assert!(provider.has_authenticated_credential());
+
+        let owned = provider
+            .owned_playlists()
+            .await
+            .expect("independent owned read");
+        assert_eq!(provider.client().transport().requests().len(), 1);
+        assert_eq!(owned[0].purpose(), PlaylistPurpose::LikedSongs);
+    }
+
+    #[tokio::test]
+    async fn aggregate_library_preserves_owned_and_favorite_failure_classification() {
+        let cases = [
+            (1000, UserLibraryError::CredentialRejected),
+            (50_006, UserLibraryError::ServiceUnavailable),
+            (0, UserLibraryError::InvalidResponse),
+        ];
+        for (code, expected) in cases {
+            let malformed_or_refused = |key: &str| {
+                json!({
+                    "code": 0,
+                    key: {"code": code, "data": {}}
+                })
+            };
+            let owned_failure =
+                QqMusicProvider::new(QqMusicClient::new(UserPlaylistsTransport::from_responses(
+                    [malformed_or_refused("music.musicasset.PlaylistBaseRead")],
+                )));
+            let favorite_failure =
+                QqMusicProvider::new(QqMusicClient::new(UserPlaylistsTransport::new([
+                    malformed_or_refused("music.musicasset.PlaylistFavRead"),
+                ])));
+            for (provider, requests) in [(owned_failure, 1), (favorite_failure, 2)] {
+                set_authenticated(&provider, "123456");
+                assert_eq!(provider.user_playlists().await, Err(expected));
+                assert_eq!(provider.client().transport().requests().len(), requests);
+                assert_eq!(
+                    provider.has_authenticated_credential(),
+                    expected != UserLibraryError::CredentialRejected
+                );
+            }
+        }
     }
 
     #[tokio::test]
@@ -8517,13 +8601,12 @@ mod tests {
         );
         assert!(non_advancing.has_authenticated_credential());
 
-        let pages = (0..super::MAX_FAVORITE_PLAYLIST_PAGES).map(|index| {
-            favorite_page_json(
-                &json!([{"id": 8100 + index, "title": format!("Page {index}")}]),
-                20,
-                true,
-            )
-        });
+        let repeated_page = favorite_page_json(
+            &json!([{"id": 8100, "title": "Synthetic repeating page"}]),
+            20,
+            true,
+        );
+        let pages = std::iter::repeat_n(repeated_page, super::MAX_FAVORITE_PLAYLIST_PAGES);
         let overlong = QqMusicProvider::new(QqMusicClient::new(UserPlaylistsTransport::new(pages)));
         set_authenticated(&overlong, "123456");
         assert_eq!(
@@ -8879,6 +8962,33 @@ mod tests {
         )
         .expect("request JSON");
         assert!(public_body["comm"].get("authst").is_none());
+    }
+
+    #[tokio::test]
+    async fn playlist_row_without_playback_mid_still_maps_exact_membership() {
+        let mut tracks = playlist_track_fixture();
+        tracks[0]
+            .as_object_mut()
+            .expect("fixture track")
+            .remove("mid");
+        let provider = QqMusicProvider::new(QqMusicClient::new(PlaylistDetailTransport::new([
+            playlist_detail_page_json(&tracks, 1, false),
+        ])));
+        set_authenticated(&provider, "123456");
+
+        let page = provider
+            .playlist_tracks_page(qq_playlist_id("owned:7003:203"), 0, 100)
+            .await
+            .expect("membership identity must not require a playback mid");
+
+        assert!(page.tracks().is_empty());
+        assert_eq!(page.omitted_track_count(), 1);
+        assert_eq!(page.membership_track_opaque_ids().len(), 1);
+        assert!(page.membership_is_exact());
+        assert_eq!(
+            page.membership_track_opaque_ids()[0],
+            "track-membership:41001:0"
+        );
     }
 
     fn recent_response(mids: &[&str]) -> Value {

@@ -12,6 +12,9 @@ use qqmusic_client::{
     WechatQrLoginProgress, validate_credential_refresh_material,
 };
 
+#[path = "support/user_library_gate.rs"]
+mod user_library_gate;
+
 const ENABLE_ENV: &str = "FURA_QQ_WECHAT_REFRESH_PROTOCOL_GATE";
 const QR_PATH_ENV: &str = "FURA_QQ_WECHAT_REFRESH_QR_PATH";
 
@@ -47,6 +50,7 @@ struct RefreshResponsePresence {
     refresh_token: FieldPresence,
     union_id: FieldPresence,
     refresh_key: FieldPresence,
+    encrypted_uin: FieldPresence,
     expiry: FieldPresence,
 }
 
@@ -90,6 +94,7 @@ impl RefreshResponsePresence {
                 "wxunionid",
             ])),
             refresh_key: FieldPresence::from_bool(nonempty(&["refresh_key"])),
+            encrypted_uin: FieldPresence::from_bool(nonempty(&["encryptUin"])),
             expiry: FieldPresence::from_bool(positive(&[
                 "musickeyCreateTime",
                 "keyExpiresIn",
@@ -335,14 +340,15 @@ async fn authenticate_disposable_session(
 async fn refresh_once_and_verify_once(
     coordinator: &WechatQrLoginCoordinator<ObservingTransport>,
     credential: &Credential,
-) {
+) -> Option<Credential> {
     let initial = credential.session_secrets();
     eprintln!(
-        "FURA_QQ_REFRESH_GATE phase=initial_capture initial_openid_present={} initial_refresh_token_present={} initial_unionid_present={} initial_refresh_key_present={} initial_expiry_present={}",
+        "FURA_QQ_REFRESH_GATE phase=initial_capture initial_openid_present={} initial_refresh_token_present={} initial_unionid_present={} initial_refresh_key_present={} initial_encrypted_uin_present={} initial_expiry_present={}",
         initial.open_id().is_some(),
         initial.refresh_token().is_some(),
         initial.union_id().is_some(),
         initial.refresh_key().is_some(),
+        initial.encrypted_uin().is_some(),
         credential.expires_at_unix_seconds().is_some()
             || credential.refresh_expiry_value().is_some(),
     );
@@ -354,12 +360,13 @@ async fn refresh_once_and_verify_once(
         .take_refresh_observation()
         .unwrap_or_default();
     eprintln!(
-        "FURA_QQ_REFRESH_GATE phase=refresh_response returned_musickey_present={} returned_openid_present={} returned_refresh_token_present={} returned_unionid_present={} returned_refresh_key_present={} returned_expiry_present={}",
+        "FURA_QQ_REFRESH_GATE phase=refresh_response returned_musickey_present={} returned_openid_present={} returned_refresh_token_present={} returned_unionid_present={} returned_refresh_key_present={} returned_encrypted_uin_present={} returned_expiry_present={}",
         returned.music_key.is_present(),
         returned.open_id.is_present(),
         returned.refresh_token.is_present(),
         returned.union_id.is_present(),
         returned.refresh_key.is_present(),
+        returned.encrypted_uin.is_present(),
         returned.expiry.is_present(),
     );
     let refreshed = match refresh_result {
@@ -370,7 +377,7 @@ async fn refresh_once_and_verify_once(
                 "refresh",
                 "rate limit or account mismatch",
             );
-            return;
+            return None;
         }
         Err(_) => {
             report(
@@ -378,16 +385,17 @@ async fn refresh_once_and_verify_once(
                 "refresh",
                 "request was not accepted",
             );
-            return;
+            return None;
         }
     };
     let candidate = refreshed.session_secrets();
     eprintln!(
-        "FURA_QQ_REFRESH_GATE phase=candidate_decode candidate_openid_present={} candidate_refresh_token_present={} candidate_unionid_present={} candidate_refresh_key_present={} candidate_next_refreshable={}",
+        "FURA_QQ_REFRESH_GATE phase=candidate_decode candidate_openid_present={} candidate_refresh_token_present={} candidate_unionid_present={} candidate_refresh_key_present={} candidate_encrypted_uin_present={} candidate_next_refreshable={}",
         candidate.open_id().is_some(),
         candidate.refresh_token().is_some(),
         candidate.union_id().is_some(),
         candidate.refresh_key().is_some(),
+        candidate.encrypted_uin().is_some(),
         validate_credential_refresh_material(&refreshed).is_ok(),
     );
 
@@ -403,12 +411,16 @@ async fn refresh_once_and_verify_once(
                 "account_verification",
                 summary_state,
             );
+            Some(refreshed)
         }
-        Err(error) => report(
-            classify_verification_error(&error),
-            "account_verification",
-            "failed",
-        ),
+        Err(error) => {
+            report(
+                classify_verification_error(&error),
+                "account_verification",
+                "failed",
+            );
+            None
+        }
     }
 }
 
@@ -454,7 +466,36 @@ async fn bounded_disposable_wechat_refresh_gate() {
         return;
     };
     // Exactly one refresh and one account verification; no ordinary read.
-    refresh_once_and_verify_once(&coordinator, &credential).await;
+    let _ = refresh_once_and_verify_once(&coordinator, &credential).await;
+}
+
+/// One fresh disposable `WeChat` login, one refresh, then the existing bounded
+/// independent User Library read matrix. No Vault, fallback, retry, mutation,
+/// pagination, or personal response content is used or retained.
+#[tokio::test]
+#[ignore = "Human-operated QQ WeChat refresh to User Library regression"]
+async fn bounded_disposable_wechat_user_library_post_refresh_gate() {
+    const LIBRARY_GATE: &str = "FURA_QQ_USER_LIBRARY_GATE";
+    if !cfg!(debug_assertions) || std::env::var(LIBRARY_GATE).as_deref() != Ok("1") {
+        eprintln!("{LIBRARY_GATE} result=NOT_RUN reason=debug_and_explicit_opt_in_required");
+        return;
+    }
+    let Some(qr_path) = std::env::var_os("FURA_QQ_USER_LIBRARY_QR_PATH")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute() && path.parent().is_some_and(std::path::Path::is_dir))
+    else {
+        eprintln!("{LIBRARY_GATE} result=NOT_RUN reason=private_qr_path_required");
+        return;
+    };
+
+    let Some((coordinator, credential)) = authenticate_disposable_session(qr_path).await else {
+        return;
+    };
+    let Some(refreshed) = refresh_once_and_verify_once(&coordinator, &credential).await else {
+        return;
+    };
+    let transport = coordinator.client().transport().inner.clone();
+    user_library_gate::run_reads(transport, &refreshed).await;
 }
 
 #[test]
@@ -480,7 +521,7 @@ fn risk_classification_is_fail_closed_for_rate_limit_and_account_change() {
 #[test]
 fn refresh_presence_diagnostic_recognizes_aliases_without_values() {
     let observed = RefreshResponsePresence::decode(
-        br#"{"code":0,"music.login.LoginServer.Login":{"code":0,"data":{"musickey":"do-not-echo-key-7x","psrf_wxopenid":"do-not-echo-open-7x","wxrefresh_token":"do-not-echo-token-7x","psrf_wxunionid":"do-not-echo-union-7x","refresh_key":"do-not-echo-refresh-key-7x","keyExpiresIn":123}}}"#,
+        br#"{"code":0,"music.login.LoginServer.Login":{"code":0,"data":{"musickey":"do-not-echo-key-7x","psrf_wxopenid":"do-not-echo-open-7x","wxrefresh_token":"do-not-echo-token-7x","psrf_wxunionid":"do-not-echo-union-7x","refresh_key":"do-not-echo-refresh-key-7x","encryptUin":"do-not-echo-encrypted-uin-7x","keyExpiresIn":123}}}"#,
     );
     assert_eq!(
         observed,
@@ -490,6 +531,7 @@ fn refresh_presence_diagnostic_recognizes_aliases_without_values() {
             refresh_token: FieldPresence::Present,
             union_id: FieldPresence::Present,
             refresh_key: FieldPresence::Present,
+            encrypted_uin: FieldPresence::Present,
             expiry: FieldPresence::Present,
         }
     );

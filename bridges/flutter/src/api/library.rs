@@ -681,18 +681,25 @@ mod tests {
 
     #[test]
     fn maps_each_provider_failure_precisely() {
-        assert_eq!(
-            map_error(UserLibraryError::CredentialRejected),
-            UserPlaylistLoadFailure::CredentialRejected
-        );
-        assert_eq!(
-            map_error(UserLibraryError::ServiceUnavailable),
-            UserPlaylistLoadFailure::ServiceUnavailable
-        );
-        assert_eq!(
-            map_error(UserLibraryError::Replaced),
-            UserPlaylistLoadFailure::Replaced
-        );
+        use UserLibraryError as Provider;
+        use UserPlaylistLoadFailure as Bridge;
+        for (provider, bridge) in [
+            (
+                Provider::AuthenticationRequired,
+                Bridge::AuthenticationRequired,
+            ),
+            (Provider::CredentialRejected, Bridge::CredentialRejected),
+            (Provider::Network, Bridge::Network),
+            (Provider::ServiceUnavailable, Bridge::ServiceUnavailable),
+            (Provider::InvalidResponse, Bridge::InvalidResponse),
+            (Provider::Replaced, Bridge::Replaced),
+        ] {
+            assert_eq!(map_error(provider), bridge);
+            let failure = map_load(Err(provider));
+            assert_eq!(failure.failure, Some(bridge));
+            assert!(failure.playlists.is_empty());
+            assert_eq!(failure.omitted_playlist_count, 0);
+        }
     }
 
     #[tokio::test]

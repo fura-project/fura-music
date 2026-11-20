@@ -93,7 +93,8 @@ class TrackLikePresentationController extends ChangeNotifier {
     if ((_membershipComplete || _complete) && _scanReliable) {
       return AuthoritativeTrackLikeState.notLiked;
     }
-    if (_loading && _requestedTrackIds.contains(membershipIdentity)) {
+    if ((_loading || _refreshing) &&
+        _requestedTrackIds.contains(membershipIdentity)) {
       return AuthoritativeTrackLikeState.loading;
     }
     return AuthoritativeTrackLikeState.unknown;
@@ -149,7 +150,11 @@ class TrackLikePresentationController extends ChangeNotifier {
       _loading = true;
       _notify();
     }
-    await preload();
+    if (_complete && !_scanReliable) {
+      await refreshSnapshot();
+    } else {
+      await preload();
+    }
     return stateFor(track);
   }
 
@@ -219,6 +224,7 @@ class TrackLikePresentationController extends ChangeNotifier {
     _refreshNextOffset = 0;
     _refreshReliable = true;
     _refreshMembershipComplete = false;
+    _notify();
     final generation = _generation;
     _diagnostic(
       ProviderDiagnosticPhase.refresh,

@@ -412,8 +412,6 @@ pub struct QqMusicPlaylistTracksPage {
 #[derive(Clone, Eq, PartialEq)]
 pub struct QqMusicTrackMembershipIdentity {
     track_id: u64,
-    song_mid: String,
-    file_media_mid: Option<String>,
     song_type: u32,
 }
 
@@ -421,16 +419,6 @@ impl QqMusicTrackMembershipIdentity {
     #[must_use]
     pub const fn track_id(&self) -> u64 {
         self.track_id
-    }
-
-    #[must_use]
-    pub fn song_mid(&self) -> &str {
-        &self.song_mid
-    }
-
-    #[must_use]
-    pub fn file_media_mid(&self) -> Option<&str> {
-        self.file_media_mid.as_deref()
     }
 
     #[must_use]
@@ -444,8 +432,6 @@ impl fmt::Debug for QqMusicTrackMembershipIdentity {
         formatter
             .debug_struct("QqMusicTrackMembershipIdentity")
             .field("track_id", &"[REDACTED]")
-            .field("song_mid", &"[REDACTED]")
-            .field("has_file_media_mid", &self.file_media_mid.is_some())
             .field("song_type", &self.song_type)
             .finish()
     }
@@ -972,17 +958,9 @@ fn map_track_rows<E>(
 
 fn map_membership_identity(raw: &RawTrack) -> Option<QqMusicTrackMembershipIdentity> {
     let track_id = raw.id.filter(|value| *value != 0)?;
-    let song_mid = safe_media_mid_ref(raw.mid.as_deref())?.to_owned();
     let song_type = raw.song_type?;
-    let file_media_mid = raw
-        .file
-        .as_ref()
-        .and_then(|file| safe_media_mid_ref(file.media_mid.as_deref()))
-        .map(str::to_owned);
     Some(QqMusicTrackMembershipIdentity {
         track_id,
-        song_mid,
-        file_media_mid,
         song_type,
     })
 }
@@ -1070,12 +1048,6 @@ pub(crate) fn nonblank(value: Option<String>) -> Option<String> {
 
 pub(crate) fn safe_media_mid(value: Option<String>) -> Option<String> {
     nonblank(value)
-        .filter(|value| value.len() <= 64 && value.bytes().all(|byte| byte.is_ascii_alphanumeric()))
-}
-
-fn safe_media_mid_ref(value: Option<&str>) -> Option<&str> {
-    value
-        .filter(|value| !value.trim().is_empty())
         .filter(|value| value.len() <= 64 && value.bytes().all(|byte| byte.is_ascii_alphanumeric()))
 }
 
@@ -1427,7 +1399,6 @@ mod tests {
                         "code": 0,
                         "songlist": [{
                             "id": 1,
-                            "mid": "mustNotLeakMid",
                             "title": "must-not-leak-title",
                             "type": 0,
                             "singer": [{"name": ""}]

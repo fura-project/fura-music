@@ -1,15 +1,89 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use qqmusic_client::{
-    Credential, CredentialRefreshError, CredentialVerificationError, LoginCredentialError,
-    QqMusicClient, QqQrError, QqQrPollResult, QrImageMediaType, ReqwestTransport,
+    Credential, CredentialRefreshError, CredentialVerificationError, HttpRequest, HttpResponse,
+    HttpTransport, LoginCredentialError, QqMusicClient, QqQrError, QqQrPollResult,
+    QrImageMediaType, ReqwestTransport, ReqwestTransportError,
 };
+
+#[path = "support/user_library_gate.rs"]
+mod user_library_gate;
 
 const ENABLE_ENV: &str = "FURA_QQ_TYPE2_REFRESH_PROTOCOL_GATE";
 const QR_PATH_ENV: &str = "FURA_QQ_TYPE2_REFRESH_QR_PATH";
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum EncryptedIdentityPresence {
+    #[default]
+    Unobserved,
+    Missing,
+    Null,
+    Empty,
+    Present,
+    Other,
+}
+
+impl EncryptedIdentityPresence {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Unobserved => "unobserved",
+            Self::Missing => "missing",
+            Self::Null => "null",
+            Self::Empty => "empty",
+            Self::Present => "present",
+            Self::Other => "other",
+        }
+    }
+}
+
+#[derive(Clone)]
+struct RefreshObservingTransport {
+    inner: ReqwestTransport,
+    encrypted_identity: Arc<Mutex<EncryptedIdentityPresence>>,
+}
+
+impl RefreshObservingTransport {
+    fn new(inner: ReqwestTransport) -> Self {
+        Self {
+            inner,
+            encrypted_identity: Arc::new(Mutex::new(EncryptedIdentityPresence::Unobserved)),
+        }
+    }
+
+    fn encrypted_identity(&self) -> EncryptedIdentityPresence {
+        *self.encrypted_identity.lock().expect("refresh observation")
+    }
+}
+
+impl HttpTransport for RefreshObservingTransport {
+    type Error = ReqwestTransportError;
+
+    async fn execute(&self, request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+        let response = self.inner.execute(request).await?;
+        if let Ok(body) = serde_json::from_slice::<serde_json::Value>(response.body())
+            && let Some(data) = body
+                .get("music.login.LoginServer.Login")
+                .and_then(|value| value.get("data"))
+                .and_then(serde_json::Value::as_object)
+        {
+            let presence = match data.get("encryptUin") {
+                None => EncryptedIdentityPresence::Missing,
+                Some(serde_json::Value::Null) => EncryptedIdentityPresence::Null,
+                Some(serde_json::Value::String(value)) if value.is_empty() => {
+                    EncryptedIdentityPresence::Empty
+                }
+                Some(serde_json::Value::String(_)) => EncryptedIdentityPresence::Present,
+                Some(_) => EncryptedIdentityPresence::Other,
+            };
+            *self.encrypted_identity.lock().expect("refresh observation") = presence;
+        }
+        Ok(response)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum GateClassification {
@@ -245,9 +319,11 @@ async fn acquire_disposable_qq_credential(
 }
 
 async fn refresh_and_verify_once(
-    client: &QqMusicClient<ReqwestTransport>,
+    transport: ReqwestTransport,
     credential: &Credential,
-) {
+) -> Option<Credential> {
+    let observed = RefreshObservingTransport::new(transport);
+    let client = QqMusicClient::new(observed.clone());
     let refreshed = match client.refresh_credential(credential).await {
         Ok(credential) => credential,
         Err(
@@ -261,7 +337,7 @@ async fn refresh_and_verify_once(
                 "refresh",
                 refresh_failure_detail(error),
             );
-            return;
+            return None;
         }
         Err(error) => {
             report(
@@ -269,17 +345,30 @@ async fn refresh_and_verify_once(
                 "refresh",
                 refresh_failure_detail(error),
             );
-            return;
+            return None;
         }
     };
 
+    eprintln!(
+        "FURA_QQ_TYPE2_REFRESH_GATE phase=refresh_identity source_encrypted_uin_present={} response_encrypted_uin={} candidate_encrypted_uin_present={}",
+        credential.session_secrets().encrypted_uin().is_some(),
+        observed.encrypted_identity().label(),
+        refreshed.session_secrets().encrypted_uin().is_some(),
+    );
+
     match client.verify_credential(&refreshed).await {
-        Ok(_) => report(GateClassification::Pass, "account_verification", "accepted"),
-        Err(error) => report(
-            classify_verification_error(&error),
-            "account_verification",
-            "failed",
-        ),
+        Ok(_) => {
+            report(GateClassification::Pass, "account_verification", "accepted");
+            Some(refreshed)
+        }
+        Err(error) => {
+            report(
+                classify_verification_error(&error),
+                "account_verification",
+                "failed",
+            );
+            None
+        }
     }
 }
 
@@ -351,11 +440,62 @@ async fn bounded_disposable_qq_type_two_refresh_gate() {
         );
         return;
     };
-    let client = QqMusicClient::new(transport);
+    let client = QqMusicClient::new(transport.clone());
     let Some(credential) = acquire_disposable_qq_credential(&client, qr_path).await else {
         return;
     };
-    refresh_and_verify_once(&client, &credential).await;
+    let _ = refresh_and_verify_once(transport, &credential).await;
+}
+
+async fn disposable_user_library_session() -> Option<(ReqwestTransport, Credential)> {
+    const GATE: &str = "FURA_QQ_USER_LIBRARY_GATE";
+    if !cfg!(debug_assertions) || std::env::var(GATE).as_deref() != Ok("1") {
+        eprintln!("{GATE} result=NOT_RUN reason=debug_and_explicit_opt_in_required");
+        return None;
+    }
+    let Some(qr_path) = std::env::var_os("FURA_QQ_USER_LIBRARY_QR_PATH")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute() && path.parent().is_some_and(std::path::Path::is_dir))
+    else {
+        eprintln!("{GATE} result=NOT_RUN reason=private_qr_path_required");
+        return None;
+    };
+    let Ok(transport) = ReqwestTransport::new() else {
+        eprintln!("{GATE} result=NOT_RUN reason=https_transport_unavailable");
+        return None;
+    };
+    let Some(credential) =
+        acquire_disposable_qq_credential(&QqMusicClient::new(transport.clone()), qr_path).await
+    else {
+        eprintln!("{GATE} result=NOT_RUN reason=disposable_login_not_completed");
+        return None;
+    };
+    Some((transport, credential))
+}
+
+/// One fresh Type 2 login; existing production client requests, one call each.
+/// No application Provider/Vault, fallback, refresh, retries, or pagination.
+#[tokio::test]
+#[ignore = "Human-operated disposable QQ User Library first-page compatibility"]
+async fn bounded_disposable_qq_user_library_gate() {
+    let Some((transport, credential)) = disposable_user_library_session().await else {
+        return;
+    };
+    user_library_gate::run_reads(transport, &credential).await;
+}
+
+/// One fresh Type 2 login, one refresh, then the same bounded independent
+/// library reads against the verified candidate. No Vault or retry is used.
+#[tokio::test]
+#[ignore = "Human-operated QQ Type 2 refresh to User Library regression"]
+async fn bounded_disposable_qq_user_library_post_refresh_gate() {
+    let Some((transport, credential)) = disposable_user_library_session().await else {
+        return;
+    };
+    let Some(refreshed) = refresh_and_verify_once(transport.clone(), &credential).await else {
+        return;
+    };
+    user_library_gate::run_reads(transport, &refreshed).await;
 }
 
 #[test]
@@ -407,4 +547,14 @@ fn classification_labels_are_stable_and_diagnostics_safe() {
         },)),
         "credential_upstream_rejected"
     );
+    for (presence, label) in [
+        (EncryptedIdentityPresence::Unobserved, "unobserved"),
+        (EncryptedIdentityPresence::Missing, "missing"),
+        (EncryptedIdentityPresence::Null, "null"),
+        (EncryptedIdentityPresence::Empty, "empty"),
+        (EncryptedIdentityPresence::Present, "present"),
+        (EncryptedIdentityPresence::Other, "other"),
+    ] {
+        assert_eq!(presence.label(), label);
+    }
 }
