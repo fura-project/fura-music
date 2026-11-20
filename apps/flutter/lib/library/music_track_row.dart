@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/track_like_presentation_controller.dart';
 import 'package:flutterustmusic/library/playlist_track_presentation_controller.dart';
@@ -259,12 +260,22 @@ class _MusicTrackRowSurfaceState extends State<MusicTrackRowSurface> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
     final active = _hovered || _focusNode.hasFocus;
-    final background = widget.current
-        ? colors.surfaceContainerHigh
-        : active
-        ? colors.surfaceContainerLow
-        : Colors.transparent;
+    final background = editorial.isEditorial
+        ? (widget.current
+              ? editorial.inkPrimary.withValues(alpha: 0.05)
+              : active
+              ? editorial.inkPrimary.withValues(alpha: 0.03)
+              : Colors.transparent)
+        : (widget.current
+              ? colors.surfaceContainerHigh
+              : active
+              ? colors.surfaceContainerLow
+              : Colors.transparent);
+    final radius = editorial.isEditorial
+        ? const BorderRadius.all(Radius.circular(2))
+        : BorderRadius.circular(10);
     return CallbackShortcuts(
       bindings: widget.onContextMenuRequested == null
           ? const <ShortcutActivator, VoidCallback>{}
@@ -291,7 +302,7 @@ class _MusicTrackRowSurfaceState extends State<MusicTrackRowSurface> {
           child: InkWell(
             excludeFromSemantics: true,
             focusNode: _focusNode,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: radius,
             onTap: () {
               _focusNode.requestFocus();
               widget.onTap();
@@ -312,7 +323,14 @@ class _MusicTrackRowSurfaceState extends State<MusicTrackRowSurface> {
             child: Ink(
               decoration: BoxDecoration(
                 color: background,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: editorial.isEditorial ? null : radius,
+                border: editorial.isEditorial
+                    ? Border(
+                        bottom: BorderSide(
+                          color: editorial.hairline.withValues(alpha: 0.72),
+                        ),
+                      )
+                    : null,
               ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(
@@ -457,33 +475,96 @@ class MusicTrackTableHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.4,
-    );
+    final editorial = context.editorialTheme;
+    final style = editorial.isEditorial
+        ? editorial.eyebrow(
+            Theme.of(context).textTheme.labelSmall,
+            color: editorial.inkMuted,
+          )
+        : Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.4,
+          );
+    String formatHeader(String text) =>
+        editorial.isEditorial ? text.toUpperCase() : text;
     return Container(
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant,
+            color: editorial.isEditorial
+                ? editorial.hairline
+                : Theme.of(context).colorScheme.outlineVariant,
           ),
         ),
       ),
       child: Row(
         children: [
-          SizedBox(width: 40, child: Text('#', style: style)),
-          Expanded(flex: 3, child: Text(titleLabel, style: style)),
+          SizedBox(
+            width: 40,
+            child: Text(
+              '#',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              formatHeader(titleLabel),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
           const SizedBox(width: 16),
-          Expanded(flex: 2, child: Text(artistLabel, style: style)),
+          Expanded(
+            flex: 2,
+            child: Text(
+              formatHeader(artistLabel),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
           const SizedBox(width: 16),
-          Expanded(flex: 2, child: Text(albumLabel, style: style)),
+          Expanded(
+            flex: 2,
+            child: Text(
+              formatHeader(albumLabel),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
           const SizedBox(width: 16),
           SizedBox(
             width: 52,
-            child: Text(durationLabel, textAlign: TextAlign.end, style: style),
+            child: editorial.isEditorial
+                ? Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: Tooltip(
+                      message: durationLabel,
+                      child: Semantics(
+                        label: durationLabel,
+                        child: Icon(
+                          Icons.schedule_rounded,
+                          size: 15,
+                          color: editorial.inkMuted,
+                        ),
+                      ),
+                    ),
+                  )
+                : Text(
+                    durationLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: style,
+                  ),
           ),
           const SizedBox(width: 36),
         ],
@@ -870,13 +951,13 @@ class MusicTrackArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = ColoredBox(
-      color: colors.surfaceContainerHighest,
-      child: Icon(Icons.music_note_rounded, color: colors.onSurfaceVariant),
-    );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? const BorderRadius.all(Radius.circular(3))
+        : BorderRadius.circular(6);
+    const placeholder = MusicArtworkPlaceholder(kind: MusicArtworkKind.track);
+    final clipped = ClipRRect(
+      borderRadius: radius,
       child: uri == null
           ? placeholder
           : Image.network(
@@ -887,6 +968,15 @@ class MusicTrackArtwork extends StatelessWidget {
               frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
+    );
+    if (!editorial.isEditorial) return clipped;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: editorial.hairline),
+      ),
+      child: clipped,
     );
   }
 }

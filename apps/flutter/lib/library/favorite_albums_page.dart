@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/favorite_album_controller.dart';
 import 'package:flutterustmusic/library/favorite_album_gateway.dart';
@@ -599,20 +600,14 @@ class _AlbumArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final fallback = ColoredBox(
-      color: colors.secondaryContainer,
-      child: Center(
-        child: Icon(
-          Icons.album_rounded,
-          size: 40,
-          color: colors.onSecondaryContainer,
-        ),
-      ),
-    );
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(18);
+    const fallback = MusicArtworkPlaceholder(kind: MusicArtworkKind.album);
     final uri = album.artworkUri;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
+    final clipped = ClipRRect(
+      borderRadius: radius,
       child: uri == null
           ? fallback
           : Image.network(
@@ -625,6 +620,15 @@ class _AlbumArtwork extends StatelessWidget {
               frameBuilder: musicArtworkFrameBuilder(fallback),
               errorBuilder: musicArtworkErrorBuilder(uri, fallback),
             ),
+    );
+    if (!editorial.isEditorial) return clipped;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: editorial.hairline),
+      ),
+      child: clipped,
     );
   }
 }

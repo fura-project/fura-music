@@ -6,6 +6,7 @@ import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_mutation_coordinator.dart';
@@ -850,20 +851,15 @@ class _Artwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-      ),
-      child: Icon(
-        playlist ? Icons.queue_music_rounded : Icons.music_note_rounded,
-        color: colors.onPrimaryContainer,
-      ),
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(playlist ? 22 : 10);
+    final placeholder = MusicArtworkPlaceholder(
+      kind: playlist ? MusicArtworkKind.playlist : MusicArtworkKind.track,
     );
     return ClipRRect(
-      borderRadius: BorderRadius.circular(playlist ? 22 : 10),
+      borderRadius: radius,
       child: uri == null
           ? placeholder
           : Image.network(

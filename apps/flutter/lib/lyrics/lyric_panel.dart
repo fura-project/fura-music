@@ -13,6 +13,7 @@ import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 Future<void> showLyrics(
   BuildContext context,
@@ -142,6 +143,7 @@ class _LyricPanelState extends State<LyricPanel> {
         final seekEnabled = widget.canSeek?.call() ?? false;
         _seekEnabled = seekEnabled;
         final theme = Theme.of(context);
+        final editorial = context.editorialTheme;
         final track = widget.controller.track;
         return SafeArea(
           top: false,
@@ -150,9 +152,9 @@ class _LyricPanelState extends State<LyricPanel> {
               Padding(
                 padding: EdgeInsets.fromLTRB(
                   widget.immersive ? 28 : 24,
+                  widget.immersive ? (editorial.isEditorial ? 8 : 20) : 8,
                   widget.immersive ? 20 : 8,
-                  widget.immersive ? 20 : 8,
-                  widget.immersive ? 16 : 12,
+                  widget.immersive ? (editorial.isEditorial ? 8 : 16) : 12,
                 ),
                 child: Row(
                   children: [
@@ -161,12 +163,26 @@ class _LyricPanelState extends State<LyricPanel> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            context.l10n.lyricsTitle,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                            editorial.isEditorial && widget.immersive
+                                ? context.l10n.lyricsTitle.toUpperCase()
+                                : context.l10n.lyricsTitle,
+                            style: editorial.isEditorial && widget.immersive
+                                ? editorial.eyebrow(
+                                    theme.textTheme.labelSmall,
+                                    color: editorial.inkMuted,
+                                  )
+                                : editorial.isEditorial
+                                ? editorial.serif(
+                                    theme.textTheme.titleLarge,
+                                    fontWeight: FontWeight.w600,
+                                    color: editorial.inkPrimary,
+                                  )
+                                : theme.textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                           ),
-                          if (track != null)
+                          if (track != null &&
+                              !(editorial.isEditorial && widget.immersive))
                             Text(
                               track.title,
                               key: const ValueKey('lyrics-track-title'),
@@ -728,18 +744,30 @@ class _LyricLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final editorial = context.editorialTheme;
     final baseStyle =
         (immersive
             ? theme.textTheme.titleLarge
             : theme.textTheme.titleMedium) ??
         const TextStyle(fontSize: 18);
-    final textStyle = baseStyle.copyWith(
-      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-      color: active
-          ? theme.colorScheme.onSurface
-          : theme.colorScheme.onSurfaceVariant,
-      height: 1.35,
-    );
+    final textStyle = editorial.isEditorial
+        ? editorial.serif(
+            baseStyle,
+            fontSize: immersive ? 27 : 20,
+            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+            color: active
+                ? editorial.inkPrimary
+                : editorial.inkPrimary.withValues(alpha: 0.25),
+            height: 1.38,
+            letterSpacing: immersive ? -0.2 : 0,
+          )
+        : baseStyle.copyWith(
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            color: active
+                ? theme.colorScheme.onSurface
+                : theme.colorScheme.onSurfaceVariant,
+            height: 1.35,
+          );
     final segmentsComposeLine = line.segmentsComposeLine;
     final (auxiliaryText, auxiliaryIsRomanization) = switch (auxiliaryMode) {
       LyricAuxiliaryMode.auto =>
@@ -779,6 +807,9 @@ class _LyricLine extends StatelessWidget {
       primaryText = Text(line.text);
     }
 
+    final borderRadius = editorial.isEditorial
+        ? editorial.controlRadius
+        : BorderRadius.circular(immersive ? 22 : 18);
     return Semantics(
       selected: active,
       button: onSeek != null,
@@ -786,18 +817,30 @@ class _LyricLine extends StatelessWidget {
       child: InkWell(
         onTap: onSeek,
         excludeFromSemantics: true,
-        borderRadius: BorderRadius.circular(immersive ? 22 : 18),
+        borderRadius: borderRadius,
         child: Container(
-          margin: EdgeInsets.symmetric(vertical: immersive ? 6 : 4),
+          margin: EdgeInsets.symmetric(
+            vertical: editorial.isEditorial
+                ? (immersive ? 8 : 4)
+                : (immersive ? 6 : 4),
+          ),
           padding: EdgeInsets.symmetric(
-            horizontal: immersive ? 18 : 16,
-            vertical: immersive ? 16 : 14,
+            horizontal: editorial.isEditorial
+                ? (immersive ? 8 : 12)
+                : (immersive ? 18 : 16),
+            vertical: editorial.isEditorial
+                ? (immersive ? 10 : 10)
+                : (immersive ? 16 : 14),
           ),
           decoration: BoxDecoration(
-            color: active
-                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.56)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(immersive ? 22 : 18),
+            color: editorial.isEditorial
+                ? Colors.transparent
+                : (active
+                      ? theme.colorScheme.primaryContainer.withValues(
+                          alpha: 0.56,
+                        )
+                      : Colors.transparent),
+            borderRadius: borderRadius,
           ),
           child: DefaultTextStyle.merge(
             style: textStyle,
@@ -820,14 +863,26 @@ class _LyricLine extends StatelessWidget {
                     textWidthBasis: TextWidthBasis.parent,
                     style: auxiliaryIsRomanization
                         ? theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                            color: editorial.isEditorial
+                                ? (active
+                                      ? editorial.inkSecondary
+                                      : editorial.inkPrimary.withValues(
+                                          alpha: 0.22,
+                                        ))
+                                : theme.colorScheme.onSurfaceVariant,
                             fontStyle: FontStyle.italic,
                           )
                         : (immersive
                                   ? theme.textTheme.bodyLarge
                                   : theme.textTheme.bodyMedium)
                               ?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                                color: editorial.isEditorial
+                                    ? (active
+                                          ? editorial.inkSecondary
+                                          : editorial.inkPrimary.withValues(
+                                              alpha: 0.22,
+                                            ))
+                                    : theme.colorScheme.onSurfaceVariant,
                                 height: 1.4,
                               ),
                   ),
@@ -855,11 +910,19 @@ class _TimedSegment extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = _progress(segment, positionMs);
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
     final animatedStyle = DefaultTextStyle.of(context).style;
     final activeLine = positionMs >= 0;
-    final unsungColor = activeLine
-        ? Color.lerp(colors.onSurfaceVariant, colors.onSurface, 0.35)!
-        : colors.onSurfaceVariant;
+    final sungColor = editorial.isEditorial
+        ? editorial.inkPrimary
+        : colors.primary;
+    final unsungColor = editorial.isEditorial
+        ? (activeLine
+              ? editorial.inkPrimary.withValues(alpha: 0.36)
+              : editorial.inkPrimary.withValues(alpha: 0.25))
+        : (activeLine
+              ? Color.lerp(colors.onSurfaceVariant, colors.onSurface, 0.35)!
+              : colors.onSurfaceVariant);
     final unsungText = Text(
       segment.text,
       style: animatedStyle.copyWith(color: unsungColor),
@@ -867,19 +930,11 @@ class _TimedSegment extends StatelessWidget {
     final painted = progress <= 0
         ? unsungText
         : progress >= 1
-        ? Text(
-            segment.text,
-            style: animatedStyle.copyWith(color: colors.primary),
-          )
+        ? Text(segment.text, style: animatedStyle.copyWith(color: sungColor))
         : ShaderMask(
             blendMode: BlendMode.srcIn,
             shaderCallback: (bounds) => LinearGradient(
-              colors: [
-                colors.primary,
-                colors.primary,
-                unsungColor,
-                unsungColor,
-              ],
+              colors: [sungColor, sungColor, unsungColor, unsungColor],
               stops: [0, progress, progress, 1],
             ).createShader(bounds),
             child: Text(

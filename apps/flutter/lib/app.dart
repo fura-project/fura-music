@@ -371,10 +371,12 @@ class _MusicAppState extends State<MusicApp> with WidgetsBindingObserver {
         theme: MusicMaterialTheme.light(
           seed: brandSeed,
           colorScheme: useSystemColors ? lightDynamic : null,
+          visualStyle: settings.visualStyle,
         ),
         darkTheme: MusicMaterialTheme.dark(
           seed: brandSeed,
           colorScheme: useSystemColors ? darkDynamic : null,
+          visualStyle: settings.visualStyle,
         ),
         themeMode: settings.theme.materialThemeMode,
         home: LoginPage(

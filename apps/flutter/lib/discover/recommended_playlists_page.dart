@@ -7,6 +7,7 @@ import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/discover/new_album_controller.dart';
 import 'package:flutterustmusic/discover/new_album_gateway.dart';
@@ -1406,9 +1407,13 @@ class _StableSegmentedSelector<T> extends StatelessWidget {
             if (index > 0) const SizedBox(width: 8),
             Builder(
               builder: (context) {
+                final editorial = context.editorialTheme;
                 final value = values[index];
                 final isSelected = value == selected;
                 final text = label(value);
+                final radius = editorial.isEditorial
+                    ? editorial.controlRadius
+                    : BorderRadius.circular(20);
                 return Semantics(
                   button: true,
                   selected: isSelected,
@@ -1418,20 +1423,28 @@ class _StableSegmentedSelector<T> extends StatelessWidget {
                     duration: duration,
                     curve: Easing.standard,
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? colors.secondaryContainer
-                          : colors.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(20),
+                      color: editorial.isEditorial
+                          ? (isSelected
+                                ? editorial.inkPrimary
+                                : editorial.cardSurface)
+                          : (isSelected
+                                ? colors.secondaryContainer
+                                : colors.surfaceContainerLow),
+                      borderRadius: radius,
                       border: Border.all(
-                        color: isSelected
-                            ? colors.secondaryContainer
-                            : colors.outlineVariant,
+                        color: editorial.isEditorial
+                            ? (isSelected
+                                  ? editorial.inkPrimary
+                                  : editorial.hairline)
+                            : (isSelected
+                                  ? colors.secondaryContainer
+                                  : colors.outlineVariant),
                       ),
                     ),
                     child: Material(
                       type: MaterialType.transparency,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: radius,
                         onTap: isSelected ? null : () => onSelected(value),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -1443,9 +1456,13 @@ class _StableSegmentedSelector<T> extends StatelessWidget {
                             maxLines: 1,
                             style: Theme.of(context).textTheme.labelLarge
                                 ?.copyWith(
-                                  color: isSelected
-                                      ? colors.onSecondaryContainer
-                                      : colors.onSurfaceVariant,
+                                  color: editorial.isEditorial
+                                      ? (isSelected
+                                            ? editorial.paperCanvas
+                                            : editorial.inkSecondary)
+                                      : (isSelected
+                                            ? colors.onSecondaryContainer
+                                            : colors.onSurfaceVariant),
                                   fontWeight: FontWeight.w600,
                                 ),
                           ),
@@ -1507,57 +1524,66 @@ class _NewAlbumCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: _newAlbumSemanticLabel(context.l10n, release),
-    excludeSemantics: true,
-    onTap: onTap,
-    child: Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: MusicRadii.content,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              key: artworkKey,
-              aspectRatio: 1,
-              child: _NewAlbumArtwork(uri: release.album.artworkUri),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              release.album.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              _newAlbumArtistLine(context.l10n, release),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    return Semantics(
+      button: true,
+      label: _newAlbumSemanticLabel(context.l10n, release),
+      excludeSemantics: true,
+      onTap: onTap,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: editorial.isEditorial
+              ? editorial.artworkRadius
+              : MusicRadii.content,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                key: artworkKey,
+                aspectRatio: 1,
+                child: _NewAlbumArtwork(uri: release.album.artworkUri),
               ),
-            ),
-            if (release.releaseDate case final date?) ...[
-              const SizedBox(height: 2),
+              const SizedBox(height: 8),
               Text(
-                date,
+                release.album.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: editorial.isEditorial
+                      ? FontWeight.w500
+                      : FontWeight.w600,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                _newAlbumArtistLine(context.l10n, release),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
+              if (release.releaseDate case final date?) ...[
+                const SizedBox(height: 2),
+                Text(
+                  date,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _NewAlbumArtwork extends StatelessWidget {
@@ -1567,17 +1593,13 @@ class _NewAlbumArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors.secondaryContainer, colors.primaryContainer],
-        ),
-      ),
-      child: Icon(Icons.album_rounded, color: colors.onSecondaryContainer),
-    );
-    return ClipRRect(
-      borderRadius: MusicRadii.content,
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : MusicRadii.content;
+    const placeholder = MusicArtworkPlaceholder(kind: MusicArtworkKind.album);
+    final clipped = ClipRRect(
+      borderRadius: radius,
       child: uri == null
           ? placeholder
           : Image.network(
@@ -1588,6 +1610,15 @@ class _NewAlbumArtwork extends StatelessWidget {
               frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
+    );
+    if (!editorial.isEditorial) return clipped;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: editorial.hairline),
+      ),
+      child: clipped,
     );
   }
 }
@@ -2536,48 +2567,57 @@ class _RecommendationGridItem extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: _semanticLabel(context.l10n, playlist),
-    excludeSemantics: true,
-    onTap: onTap,
-    child: Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              key: artworkKey,
-              aspectRatio: 1,
-              child: _RecommendationArtwork(uri: playlist.artworkUri),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              playlist.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              playlist.trackCount != null
-                  ? context.l10n.trackCount(playlist.trackCount!)
-                  : context.l10n.discoverMusicServicePlaylist,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    return Semantics(
+      button: true,
+      label: _semanticLabel(context.l10n, playlist),
+      excludeSemantics: true,
+      onTap: onTap,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: editorial.isEditorial
+              ? editorial.artworkRadius
+              : BorderRadius.circular(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                key: artworkKey,
+                aspectRatio: 1,
+                child: _RecommendationArtwork(uri: playlist.artworkUri),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                playlist.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: editorial.isEditorial
+                      ? FontWeight.w500
+                      : FontWeight.w600,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                playlist.trackCount != null
+                    ? context.l10n.trackCount(playlist.trackCount!)
+                    : context.l10n.discoverMusicServicePlaylist,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _RecommendationArtwork extends StatelessWidget {
@@ -2587,17 +2627,15 @@ class _RecommendationArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-      ),
-      child: Icon(Icons.queue_music_rounded, color: colors.onPrimaryContainer),
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(8);
+    const placeholder = MusicArtworkPlaceholder(
+      kind: MusicArtworkKind.playlist,
     );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
+    final clipped = ClipRRect(
+      borderRadius: radius,
       child: uri == null
           ? placeholder
           : Image.network(
@@ -2608,6 +2646,15 @@ class _RecommendationArtwork extends StatelessWidget {
               frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
+    );
+    if (!editorial.isEditorial) return clipped;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: editorial.hairline),
+      ),
+      child: clipped,
     );
   }
 }

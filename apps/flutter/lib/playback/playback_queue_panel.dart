@@ -8,6 +8,7 @@ import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/adaptive_side_sheet.dart';
 import 'package:flutterustmusic/adaptive_confirmation.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_track_tile.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -824,44 +825,58 @@ class _QueueArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final artworkUri = track.artworkUri;
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? const BorderRadius.all(Radius.circular(3))
+        : BorderRadius.circular(8);
+    final clipped = ClipRRect(
+      borderRadius: radius,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (artworkUri == null)
+            const _QueueArtworkPlaceholder()
+          else
+            Image.network(
+              artworkUri,
+              headers: musicArtworkRequestHeaders(artworkUri),
+              fit: BoxFit.cover,
+              excludeFromSemantics: true,
+              gaplessPlayback: true,
+              frameBuilder: musicArtworkFrameBuilder(
+                const _QueueArtworkPlaceholder(),
+              ),
+              errorBuilder: musicArtworkErrorBuilder(
+                artworkUri,
+                const _QueueArtworkPlaceholder(),
+              ),
+            ),
+          if (current)
+            ColoredBox(
+              key: ValueKey('queue-current-indicator-$index'),
+              color: Colors.black.withValues(alpha: 0.42),
+              child: const Icon(
+                Icons.graphic_eq_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+        ],
+      ),
+    );
     return SizedBox.square(
       key: ValueKey('queue-artwork-$index'),
       dimension: 40,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (artworkUri == null)
-              const _QueueArtworkPlaceholder()
-            else
-              Image.network(
-                artworkUri,
-                headers: musicArtworkRequestHeaders(artworkUri),
-                fit: BoxFit.cover,
-                excludeFromSemantics: true,
-                gaplessPlayback: true,
-                frameBuilder: musicArtworkFrameBuilder(
-                  const _QueueArtworkPlaceholder(),
-                ),
-                errorBuilder: musicArtworkErrorBuilder(
-                  artworkUri,
-                  const _QueueArtworkPlaceholder(),
-                ),
+      child: editorial.isEditorial
+          ? DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: editorial.hairline),
               ),
-            if (current)
-              ColoredBox(
-                key: ValueKey('queue-current-indicator-$index'),
-                color: Colors.black.withValues(alpha: 0.42),
-                child: const Icon(
-                  Icons.graphic_eq_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
-              ),
-          ],
-        ),
-      ),
+              child: clipped,
+            )
+          : clipped,
     );
   }
 }
@@ -870,18 +885,10 @@ class _QueueArtworkPlaceholder extends StatelessWidget {
   const _QueueArtworkPlaceholder();
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return ColoredBox(
-      key: const ValueKey('queue-artwork-placeholder'),
-      color: colors.surfaceContainerHighest,
-      child: Icon(
-        Icons.album_outlined,
-        color: colors.onSurfaceVariant,
-        size: 22,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const MusicArtworkPlaceholder(
+    key: ValueKey('queue-artwork-placeholder'),
+    kind: MusicArtworkKind.track,
+  );
 }
 
 String _failureCopy(AppLocalizations l10n, PlaybackQueueFailure failure) =>

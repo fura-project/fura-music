@@ -5388,7 +5388,7 @@ abstract class AppLocalizations {
   /// Pipe-delimited localized search aliases for Appearance settings; preserve the pipe separator.
   ///
   /// In en, this message translates to:
-  /// **'appearance|theme|system|light|dark|color|palette|Monet|wallpaper|accent|brand'**
+  /// **'appearance|theme|system|light|dark|color|palette|Monet|wallpaper|accent|brand|style|editorial|magazine|serif|paper|literary'**
   String get settingsAppearanceSearchKeywords;
 
   /// No description provided for @settingsThemeSystem.
@@ -5474,6 +5474,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Brand impression colors'**
   String get settingsColorSourceBrandSummary;
+
+  /// No description provided for @settingsVisualStyleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Visual style'**
+  String get settingsVisualStyleLabel;
+
+  /// No description provided for @settingsVisualStyleBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch between standard Material 3 and the Magazine Editorial reading layout.'**
+  String get settingsVisualStyleBody;
+
+  /// No description provided for @settingsVisualStyleMaterial.
+  ///
+  /// In en, this message translates to:
+  /// **'Material 3'**
+  String get settingsVisualStyleMaterial;
+
+  /// No description provided for @settingsVisualStyleMaterialDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Adaptive tonal surfaces, rounded cards, and dynamic color.'**
+  String get settingsVisualStyleMaterialDescription;
+
+  /// No description provided for @settingsVisualStyleMaterialSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Material 3'**
+  String get settingsVisualStyleMaterialSummary;
+
+  /// No description provided for @settingsVisualStyleEditorial.
+  ///
+  /// In en, this message translates to:
+  /// **'Magazine Editorial'**
+  String get settingsVisualStyleEditorial;
+
+  /// No description provided for @settingsVisualStyleEditorialDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Warm archival paper, serif typography, hairline rules, and gallery framing.'**
+  String get settingsVisualStyleEditorialDescription;
+
+  /// No description provided for @settingsVisualStyleEditorialSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Magazine Editorial'**
+  String get settingsVisualStyleEditorialSummary;
+
+  /// No description provided for @settingsVisualStyleEditorialPaletteNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Magazine Editorial uses its curated archival paper and ink palette.'**
+  String get settingsVisualStyleEditorialPaletteNote;
+
+  /// No description provided for @editorialEditionSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'EDITORIAL EDITION'**
+  String get editorialEditionSubtitle;
+
+  /// No description provided for @editorialHomeHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily Editorial'**
+  String get editorialHomeHeading;
+
+  /// No description provided for @editorialNowPlayingEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'01. NOW PLAYING'**
+  String get editorialNowPlayingEyebrow;
 
   /// No description provided for @settingsMusicServiceLabel.
   ///

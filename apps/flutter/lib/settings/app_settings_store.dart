@@ -217,6 +217,13 @@ class AppSettingsStore {
                   )
                   .firstOrNull ??
               LyricAuxiliaryMode.auto;
+    final visualStyleName = decoded['visualStyle'];
+    final visualStyle = version < 7
+        ? AppVisualStyle.material
+        : AppVisualStyle.values
+                  .where((candidate) => candidate.name == visualStyleName)
+                  .firstOrNull ??
+              AppVisualStyle.material;
     final migrated =
         version < AppSettings.currentSchemaVersion ||
         (version >= 3 &&
@@ -234,12 +241,17 @@ class AppSettingsStore {
         (version >= 6 &&
             !LyricAuxiliaryMode.values.any(
               (candidate) => candidate.name == lyricAuxiliaryModeName,
+            )) ||
+        (version >= 7 &&
+            !AppVisualStyle.values.any(
+              (candidate) => candidate.name == visualStyleName,
             ));
 
     return AppSettingsLoadResult(
       settings: AppSettings(
         theme: theme,
         colorSource: colorSource,
+        visualStyle: visualStyle,
         playbackQuality: playbackQuality,
         lyricAuxiliaryMode: lyricAuxiliaryMode,
         musicProvider: musicProvider,
@@ -259,6 +271,7 @@ class AppSettingsStore {
           'schemaVersion': AppSettings.currentSchemaVersion,
           'theme': settings.theme.name,
           'colorSource': settings.colorSource.name,
+          'visualStyle': settings.visualStyle.name,
           'playbackQuality': settings.playbackQuality.name,
           'lyricAuxiliaryMode': settings.lyricAuxiliaryMode.name,
           'musicProvider': settings.musicProvider.name,

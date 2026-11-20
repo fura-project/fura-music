@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 class MusicTrackTile extends StatelessWidget {
   const MusicTrackTile({
@@ -192,29 +194,39 @@ class _TrackArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = ColoredBox(
-      color: colors.secondaryContainer,
-      child: Icon(Icons.music_note_rounded, color: colors.onSecondaryContainer),
-    );
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(10);
+    const placeholder = MusicArtworkPlaceholder(kind: MusicArtworkKind.track);
     final artworkUri = track.artworkUri;
+    final clipped = ClipRRect(
+      borderRadius: radius,
+      child: artworkUri == null
+          ? placeholder
+          : Image.network(
+              artworkUri,
+              headers: musicArtworkRequestHeaders(artworkUri),
+              fit: BoxFit.cover,
+              excludeFromSemantics: true,
+              gaplessPlayback: true,
+              frameBuilder: musicArtworkFrameBuilder(placeholder),
+              errorBuilder: musicArtworkErrorBuilder(artworkUri, placeholder),
+            ),
+    );
     return Semantics(
       label: context.l10n.trackArtworkSemantics(track.title),
       image: true,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: artworkUri == null
-            ? placeholder
-            : Image.network(
-                artworkUri,
-                headers: musicArtworkRequestHeaders(artworkUri),
-                fit: BoxFit.cover,
-                excludeFromSemantics: true,
-                gaplessPlayback: true,
-                frameBuilder: musicArtworkFrameBuilder(placeholder),
-                errorBuilder: musicArtworkErrorBuilder(artworkUri, placeholder),
+      child: editorial.isEditorial
+          ? DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: editorial.hairline),
               ),
-      ),
+              child: clipped,
+            )
+          : clipped,
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/adaptive_side_sheet.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/comments/track_comment_controller.dart';
@@ -451,34 +452,35 @@ class _CommentAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final fallback = ColoredBox(
-      color: colors.secondaryContainer,
-      child: Center(
-        child: Text(
-          authorInitial.toUpperCase(),
-          style: Theme.of(context).textTheme.titleMedium
-              ?.copyWith(color: colors.onSecondaryContainer),
-        ),
-      ),
-    );
+    final editorial = context.editorialTheme;
+    final fallback = MusicArtworkPlaceholder.avatar(initial: authorInitial);
     final uri = artworkUri;
+    final clipped = ClipOval(
+      child: uri == null
+          ? fallback
+          : Image.network(
+              uri,
+              headers: musicArtworkRequestHeaders(uri),
+              fit: BoxFit.cover,
+              excludeFromSemantics: true,
+              gaplessPlayback: true,
+              frameBuilder: musicArtworkFrameBuilder(fallback),
+              errorBuilder: musicArtworkErrorBuilder(uri, fallback),
+            ),
+    );
     return SizedBox.square(
       key: const ValueKey('track-comment-avatar'),
       dimension: 40,
-      child: ClipOval(
-        child: uri == null
-            ? fallback
-            : Image.network(
-                uri,
-                headers: musicArtworkRequestHeaders(uri),
-                fit: BoxFit.cover,
-                excludeFromSemantics: true,
-                gaplessPlayback: true,
-                frameBuilder: musicArtworkFrameBuilder(fallback),
-                errorBuilder: musicArtworkErrorBuilder(uri, fallback),
+      child: editorial.isEditorial
+          ? DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: editorial.hairline),
               ),
-      ),
+              child: clipped,
+            )
+          : clipped,
     );
   }
 }

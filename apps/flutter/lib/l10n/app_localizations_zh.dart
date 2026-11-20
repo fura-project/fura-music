@@ -3081,7 +3081,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsAppearanceSearchKeywords =>
-      '外观|主题|系统|浅色|深色|颜色|配色|色板|莫奈|Monet|壁纸|强调色|品牌|印象色';
+      '外观|主题|系统|浅色|深色|颜色|配色|色板|莫奈|Monet|壁纸|强调色|品牌|印象色|风格|杂志|文艺|衬线|纸墨|排版';
 
   @override
   String get settingsThemeSystem => '跟随系统';
@@ -3127,6 +3127,44 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsColorSourceBrandSummary => '品牌印象色';
+
+  @override
+  String get settingsVisualStyleLabel => '界面风格';
+
+  @override
+  String get settingsVisualStyleBody => '在标准 Material 3 与杂志文艺排版风格之间切换。';
+
+  @override
+  String get settingsVisualStyleMaterial => 'Material 3';
+
+  @override
+  String get settingsVisualStyleMaterialDescription => '自适应色调层次、圆润卡片与动态取色。';
+
+  @override
+  String get settingsVisualStyleMaterialSummary => 'Material 3';
+
+  @override
+  String get settingsVisualStyleEditorial => '杂志文艺';
+
+  @override
+  String get settingsVisualStyleEditorialDescription =>
+      '温润纸感底色、衬线标题与歌词、极细分割线与画廊装帧。';
+
+  @override
+  String get settingsVisualStyleEditorialSummary => '杂志文艺';
+
+  @override
+  String get settingsVisualStyleEditorialPaletteNote =>
+      '杂志文艺风格使用专属纸墨配色，暂不叠加动态取色。';
+
+  @override
+  String get editorialEditionSubtitle => '文艺典藏版';
+
+  @override
+  String get editorialHomeHeading => '今日乐志';
+
+  @override
+  String get editorialNowPlayingEyebrow => '01. 正在播放';
 
   @override
   String get settingsMusicServiceLabel => '音乐服务';

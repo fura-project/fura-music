@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/discover/new_song_controller.dart';
@@ -116,6 +117,8 @@ class HomePage extends StatefulWidget {
     this.lastOpenedRecommendation,
     this.recommendationReturnFocusNode,
     this.spotlightRotationInterval = const Duration(seconds: 12),
+    this.spotlightPreloadTimeout = const Duration(milliseconds: 1500),
+    this.spotlightImageProviderBuilder,
     this.active = true,
     this.refreshInterval = const Duration(minutes: 15),
     this.now,
@@ -141,6 +144,9 @@ class HomePage extends StatefulWidget {
   final RecommendedPlaylistSummary? lastOpenedRecommendation;
   final FocusNode? recommendationReturnFocusNode;
   final Duration spotlightRotationInterval;
+  final Duration spotlightPreloadTimeout;
+  final ImageProvider<Object> Function(String artworkUri)?
+  spotlightImageProviderBuilder;
   final bool active;
   final Duration refreshInterval;
   final DateTime Function()? now;
@@ -150,6 +156,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  static const _maxConcurrentSpotlightPreloads = 2;
+
   Timer? _spotlightTimer;
   Timer? _spotlightProgressTimer;
   Timer? _freshnessTimer;
@@ -164,6 +172,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _spotlightMotionDirection = 1;
   bool _spotlightAutoPlaying = true;
   bool _animationsDisabled = false;
+  ImageConfiguration? _spotlightImageConfiguration;
+  final Map<String, MusicArtworkPreloadHandle> _activeSpotlightPreloads =
+      <String, MusicArtworkPreloadHandle>{};
+  final Set<String> _warmedSpotlightUris = <String>{};
+  final Set<String> _failedSpotlightUris = <String>{};
+  int _spotlightTransitionToken = 0;
+  String? _pendingSpotlightIdentity;
+  bool _pendingSpotlightFromAutoRotation = false;
+  Timer? _pendingSpotlightTimeout;
+  MusicArtworkPreloadHandle? _pendingSpotlightHandle;
   final _libraryShelfNavigation = _HomeShelfNavigationController();
   final _publicShelfNavigation = _HomeShelfNavigationController();
 
@@ -172,6 +190,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.initState();
     _lastRefresh = _now;
     WidgetsBinding.instance.addObserver(this);
+    widget.spotlightController.addListener(_onSpotlightCandidatesChanged);
     final lifecycle = WidgetsBinding.instance.lifecycleState;
     _foreground = lifecycle == null || lifecycle == AppLifecycleState.resumed;
     widget.homeController.setActive(widget.active && _foreground);
@@ -188,6 +207,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void didUpdateWidget(HomePage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.spotlightController != widget.spotlightController) {
+      oldWidget.spotlightController.removeListener(
+        _onSpotlightCandidatesChanged,
+      );
+      widget.spotlightController.addListener(_onSpotlightCandidatesChanged);
+      _clearPendingSpotlightTransition(cancelHandle: true);
+      _disposeSpotlightPreloads();
+      _warmedSpotlightUris.clear();
+      _failedSpotlightUris.clear();
+      _warmSpotlightArtworks();
+    }
+    if (oldWidget.spotlightImageProviderBuilder !=
+        widget.spotlightImageProviderBuilder) {
+      _clearPendingSpotlightTransition(cancelHandle: true);
+      _disposeSpotlightPreloads();
+      _warmedSpotlightUris.clear();
+      _failedSpotlightUris.clear();
+      _warmSpotlightArtworks();
+    }
     if (oldWidget.active != widget.active) {
       widget.homeController.setActive(widget.active && _foreground);
       _restartSpotlightTimer();
@@ -195,6 +233,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _resumeHome();
         });
+        _warmedSpotlightUris.clear();
+        _warmSpotlightArtworks();
+      } else {
+        _clearPendingSpotlightTransition(cancelHandle: true);
+        _disposeSpotlightPreloads();
       }
     }
     if (oldWidget.spotlightRotationInterval !=
@@ -206,6 +249,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _spotlightImageConfiguration = createLocalImageConfiguration(context);
+    _warmSpotlightArtworks();
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
     if (_animationsDisabled == animationsDisabled) return;
     _animationsDisabled = animationsDisabled;
@@ -215,6 +260,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.spotlightController.removeListener(_onSpotlightCandidatesChanged);
+    _clearPendingSpotlightTransition(cancelHandle: true);
+    _disposeSpotlightPreloads();
     _freshnessTimer?.cancel();
     _spotlightTimer?.cancel();
     _spotlightProgressTimer?.cancel();
@@ -229,7 +277,150 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _foreground = state == AppLifecycleState.resumed;
     widget.homeController.setActive(widget.active && _foreground);
     _restartSpotlightTimer();
-    if (_foreground) _resumeHome();
+    if (_foreground) {
+      _warmedSpotlightUris.clear();
+      _resumeHome();
+      _warmSpotlightArtworks();
+    } else {
+      _clearPendingSpotlightTransition(cancelHandle: true);
+      _disposeSpotlightPreloads();
+    }
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    _warmedSpotlightUris.clear();
+    _disposeSpotlightPreloads();
+  }
+
+  ImageProvider<Object> _spotlightImageProvider(String artworkUri) =>
+      (widget.spotlightImageProviderBuilder ?? musicArtworkImageProvider)(
+        artworkUri,
+      );
+
+  void _onSpotlightCandidatesChanged() {
+    if (!mounted) return;
+    final pendingId = _pendingSpotlightIdentity;
+    if (pendingId != null &&
+        !_spotlightCandidates.any(
+          (playlist) => _recommendationIdentity(playlist) == pendingId,
+        )) {
+      final wasAutoRotation = _pendingSpotlightFromAutoRotation;
+      _clearPendingSpotlightTransition(cancelHandle: true);
+      if (wasAutoRotation && _spotlightTimer == null) {
+        _restartSpotlightTimer();
+      }
+    }
+    _warmSpotlightArtworks();
+  }
+
+  void _clearPendingSpotlightTransition({required bool cancelHandle}) {
+    _spotlightTransitionToken++;
+    _pendingSpotlightIdentity = null;
+    _pendingSpotlightFromAutoRotation = false;
+    _pendingSpotlightTimeout?.cancel();
+    _pendingSpotlightTimeout = null;
+    final handle = _pendingSpotlightHandle;
+    _pendingSpotlightHandle = null;
+    if (cancelHandle) {
+      handle?.cancel();
+    }
+  }
+
+  void _disposeSpotlightPreloads() {
+    final handles = _activeSpotlightPreloads.values.toList(growable: false);
+    _activeSpotlightPreloads.clear();
+    for (final handle in handles) {
+      handle.cancel();
+    }
+  }
+
+  void _warmSpotlightArtworks() {
+    if (!mounted || !widget.active || !_foreground) return;
+    final config = _spotlightImageConfiguration;
+    if (config == null) return;
+    final playlists = _spotlightCandidates;
+    if (playlists.isEmpty) {
+      _disposeSpotlightPreloads();
+      return;
+    }
+
+    final current = _resolveSpotlight(playlists);
+    final currentIndex = current == null
+        ? 0
+        : playlists.indexWhere(
+            (playlist) =>
+                _recommendationIdentity(playlist) ==
+                _recommendationIdentity(current),
+          );
+    final safeIndex = currentIndex < 0 ? 0 : currentIndex;
+
+    // Prioritize next and previous candidates so single-step transitions and
+    // timer rotations are already decoded in ImageCache before switching, then
+    // continue warming the remaining candidates in forward rotation order.
+    final prioritizedUris = <String>[];
+    final candidateUris = <String>{};
+    void addCandidate(int index) {
+      final uri = playlists[index].artworkUri?.trim();
+      if (uri == null || uri.isEmpty) return;
+      candidateUris.add(uri);
+      if (!prioritizedUris.contains(uri)) {
+        prioritizedUris.add(uri);
+      }
+    }
+
+    if (playlists.length > 1) {
+      addCandidate((safeIndex + 1) % playlists.length);
+      addCandidate((safeIndex - 1 + playlists.length) % playlists.length);
+      for (var step = 2; step < playlists.length; step++) {
+        addCandidate((safeIndex + step) % playlists.length);
+      }
+    }
+    addCandidate(safeIndex);
+
+    // Drop any in-flight preloads for candidates that left the current window.
+    final staleUris = _activeSpotlightPreloads.keys
+        .where((uri) => !candidateUris.contains(uri))
+        .toList(growable: false);
+    for (final uri in staleUris) {
+      _activeSpotlightPreloads.remove(uri)?.cancel();
+    }
+
+    for (final uri in prioritizedUris) {
+      if (_activeSpotlightPreloads.length >= _maxConcurrentSpotlightPreloads) {
+        break;
+      }
+      if (_activeSpotlightPreloads.containsKey(uri) ||
+          _warmedSpotlightUris.contains(uri) ||
+          _failedSpotlightUris.contains(uri)) {
+        continue;
+      }
+      final handle = startMusicArtworkPreload(
+        _spotlightImageProvider(uri),
+        config,
+      );
+      if (handle.readySynchronously) {
+        _warmedSpotlightUris.add(uri);
+        continue;
+      }
+      _activeSpotlightPreloads[uri] = handle;
+      unawaited(
+        handle.future.then((outcome) {
+          if (_activeSpotlightPreloads[uri] == handle) {
+            _activeSpotlightPreloads.remove(uri);
+          }
+          if (outcome == MusicArtworkPreloadOutcome.loaded) {
+            _warmedSpotlightUris.add(uri);
+            _failedSpotlightUris.remove(uri);
+          } else if (outcome == MusicArtworkPreloadOutcome.failed) {
+            _failedSpotlightUris.add(uri);
+          }
+          if (mounted && outcome != MusicArtworkPreloadOutcome.cancelled) {
+            _warmSpotlightArtworks();
+          }
+        }),
+      );
+    }
   }
 
   void _resumeHome() {
@@ -252,6 +443,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _refresh({bool manual = false}) async {
     if (!mounted || _refreshing) return;
     setState(() => _refreshing = true);
+    _warmedSpotlightUris.clear();
+    _failedSpotlightUris.clear();
     // Re-entry and the timer share one request group, including after failures.
     _lastRefresh = _now;
     try {
@@ -263,6 +456,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           widget.radarController.load(),
       ]);
       if (!mounted) return;
+      _warmSpotlightArtworks();
       if (!widget.authenticated && widget.active && _foreground) {
         widget.homeController.refreshRelatedTracks();
       }
@@ -349,8 +543,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
     _spotlightTimer = Timer.periodic(widget.spotlightRotationInterval, (_) {
-      _moveSpotlight(1);
-      _restartSpotlightProgressTimer();
+      _moveSpotlight(1, fromAutoRotation: true);
     });
     _startSpotlightProgressTimer();
   }
@@ -381,14 +574,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  void _restartSpotlightProgressTimer() {
-    _spotlightProgressTimer?.cancel();
-    _spotlightProgressElapsed = Duration.zero;
-    _spotlightProgress.value = 0;
-    if (_spotlightTimer != null) _startSpotlightProgressTimer();
-  }
-
-  void _moveSpotlight(int offset, {bool restartTimer = false}) {
+  void _moveSpotlight(
+    int offset, {
+    bool restartTimer = false,
+    bool fromAutoRotation = false,
+  }) {
     if (!mounted) return;
     final playlists = _spotlightCandidates;
     if (playlists.length < 2) {
@@ -398,25 +588,132 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // provider summaries may be newly mapped objects on every getter read.
     final current = _resolveSpotlight(playlists);
     if (current == null) return;
-    final currentIndex = playlists.indexWhere(
-      (playlist) =>
-          _recommendationIdentity(playlist) == _recommendationIdentity(current),
+    final currentIdentity = _recommendationIdentity(current);
+    final baseIdentity = _pendingSpotlightIdentity ?? currentIdentity;
+    var baseIndex = playlists.indexWhere(
+      (playlist) => _recommendationIdentity(playlist) == baseIdentity,
     );
-    if (currentIndex < 0) return;
-    final nextIndex = (currentIndex + offset) % playlists.length;
-    setState(() {
-      _spotlightMotionDirection = offset < 0 ? -1 : 1;
-      _spotlightIdentity = _recommendationIdentity(playlists[nextIndex]);
-    });
-    if (restartTimer) {
-      _restartSpotlightTimer();
+    if (baseIndex < 0) {
+      baseIndex = playlists.indexWhere(
+        (playlist) => _recommendationIdentity(playlist) == currentIdentity,
+      );
     }
+    if (baseIndex < 0) return;
+
+    final nextIndex = (baseIndex + offset) % playlists.length;
+    final target = playlists[nextIndex];
+    final targetIdentity = _recommendationIdentity(target);
+    final motionDirection = offset < 0 ? -1 : 1;
+
+    if (targetIdentity == currentIdentity) {
+      _clearPendingSpotlightTransition(cancelHandle: true);
+      if (restartTimer || fromAutoRotation) {
+        _restartSpotlightTimer();
+      }
+      return;
+    }
+
+    void commitSwitch({required bool cancelHandle}) {
+      _clearPendingSpotlightTransition(cancelHandle: cancelHandle);
+      if (!mounted) return;
+      final latest = _spotlightCandidates;
+      if (!latest.any(
+        (playlist) => _recommendationIdentity(playlist) == targetIdentity,
+      )) {
+        if (restartTimer || fromAutoRotation) {
+          _restartSpotlightTimer();
+        }
+        return;
+      }
+      setState(() {
+        _spotlightMotionDirection = motionDirection;
+        _spotlightIdentity = targetIdentity;
+      });
+      if (restartTimer || fromAutoRotation) {
+        _restartSpotlightTimer();
+      }
+      _warmSpotlightArtworks();
+    }
+
+    final uri = target.artworkUri?.trim();
+    final config = _spotlightImageConfiguration;
+    if (uri == null ||
+        uri.isEmpty ||
+        config == null ||
+        _failedSpotlightUris.contains(uri)) {
+      commitSwitch(cancelHandle: true);
+      return;
+    }
+
+    final handle = startMusicArtworkPreload(
+      _spotlightImageProvider(uri),
+      config,
+    );
+    if (handle.readySynchronously) {
+      _warmedSpotlightUris.add(uri);
+      // Cancel any superseded pending handle; `handle` itself already scheduled
+      // its own post-frame detach inside `startMusicArtworkPreload`.
+      commitSwitch(cancelHandle: true);
+      return;
+    }
+
+    // Target cover is not decoded yet: wait for preload (bounded by timeout)
+    // before committing the switch so the Hero transitions directly into the
+    // decoded artwork rather than sliding in an empty placeholder.
+    _clearPendingSpotlightTransition(cancelHandle: true);
+    if (fromAutoRotation) {
+      _spotlightTimer?.cancel();
+      _spotlightTimer = null;
+      _spotlightProgressTimer?.cancel();
+      _spotlightProgressTimer = null;
+    }
+    final token = ++_spotlightTransitionToken;
+    _pendingSpotlightIdentity = targetIdentity;
+    _pendingSpotlightFromAutoRotation = fromAutoRotation;
+    _pendingSpotlightHandle = handle;
+
+    if (widget.spotlightPreloadTimeout > Duration.zero) {
+      _pendingSpotlightTimeout = Timer(widget.spotlightPreloadTimeout, () {
+        if (!mounted || token != _spotlightTransitionToken) return;
+        if (fromAutoRotation &&
+            (!_spotlightAutoPlaying || !widget.active || !_foreground)) {
+          _clearPendingSpotlightTransition(cancelHandle: true);
+          return;
+        }
+        commitSwitch(cancelHandle: true);
+      });
+    }
+
+    unawaited(
+      handle.future.then((outcome) {
+        if (outcome == MusicArtworkPreloadOutcome.loaded) {
+          _warmedSpotlightUris.add(uri);
+          _failedSpotlightUris.remove(uri);
+        } else if (outcome == MusicArtworkPreloadOutcome.failed) {
+          _failedSpotlightUris.add(uri);
+        } else {
+          return;
+        }
+        if (!mounted || token != _spotlightTransitionToken) return;
+        if (fromAutoRotation &&
+            (!_spotlightAutoPlaying || !widget.active || !_foreground)) {
+          _clearPendingSpotlightTransition(cancelHandle: true);
+          return;
+        }
+        commitSwitch(
+          cancelHandle: outcome != MusicArtworkPreloadOutcome.loaded,
+        );
+      }),
+    );
   }
 
   void _toggleSpotlightAutoPlay() {
     setState(() {
       _spotlightAutoPlaying = !_spotlightAutoPlaying;
     });
+    if (!_spotlightAutoPlaying && _pendingSpotlightFromAutoRotation) {
+      _clearPendingSpotlightTransition(cancelHandle: true);
+    }
     _restartSpotlightTimer();
   }
 
@@ -470,6 +767,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     spotlightKind: spotlightKind,
                     spotlightStage: spotlightStage,
                     spotlightIdentities: spotlightIdentities,
+                    spotlightImageProviderBuilder:
+                        widget.spotlightImageProviderBuilder,
                     onRetrySpotlight: widget.spotlightController.retry,
                     onPreviousSpotlight: () =>
                         _moveSpotlight(-1, restartTimer: true),
@@ -518,6 +817,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     spotlightKind: spotlightKind,
                     spotlightStage: spotlightStage,
                     spotlightIdentities: spotlightIdentities,
+                    spotlightImageProviderBuilder:
+                        widget.spotlightImageProviderBuilder,
                     onRetrySpotlight: widget.spotlightController.retry,
                     onPreviousSpotlight: () =>
                         _moveSpotlight(-1, restartTimer: true),
@@ -595,6 +896,7 @@ class _HomeWideLayout extends StatelessWidget {
     required this.spotlightKind,
     required this.spotlightStage,
     required this.spotlightIdentities,
+    this.spotlightImageProviderBuilder,
     required this.onRetrySpotlight,
     required this.onPreviousSpotlight,
     required this.onNextSpotlight,
@@ -634,6 +936,8 @@ class _HomeWideLayout extends StatelessWidget {
   final HomeSpotlightKind spotlightKind;
   final HomeSpotlightStage spotlightStage;
   final Set<String> spotlightIdentities;
+  final ImageProvider<Object> Function(String artworkUri)?
+  spotlightImageProviderBuilder;
   final VoidCallback onRetrySpotlight;
   final VoidCallback onPreviousSpotlight;
   final VoidCallback onNextSpotlight;
@@ -681,6 +985,7 @@ class _HomeWideLayout extends StatelessWidget {
           spotlightKind: spotlightKind,
           spotlightStage: spotlightStage,
           spotlightIdentities: spotlightIdentities,
+          spotlightImageProviderBuilder: spotlightImageProviderBuilder,
           onRetrySpotlight: onRetrySpotlight,
           onPreviousSpotlight: onPreviousSpotlight,
           onNextSpotlight: onNextSpotlight,
@@ -700,6 +1005,7 @@ class _HomeWideLayout extends StatelessWidget {
           title: authenticated
               ? context.l10n.homePlaylistTreasures
               : context.l10n.homePopularPlaylists,
+          editorialIndex: '02',
           actionKey: const ValueKey('home-refresh-recommendations'),
           actionLabel: refreshingPlaylists
               ? context.l10n.homeRefreshing
@@ -744,6 +1050,7 @@ class _HomeWideLayout extends StatelessWidget {
                     ? context.l10n.homePersonalFm
                     : context.l10n.homeSongsPickedForYou
               : context.l10n.homeNewSongs,
+          editorialIndex: '03',
         ),
         const SizedBox(height: _HomeGeometry.itemGap),
         if (authenticated)
@@ -770,6 +1077,7 @@ class _HomeWideLayout extends StatelessWidget {
           _HomeSectionHeader(
             titleKey: const ValueKey('home-new-songs-heading'),
             title: context.l10n.homeFreshReleases,
+            editorialIndex: '04',
           ),
           const SizedBox(height: _HomeGeometry.itemGap),
           _NewSongSection(
@@ -785,6 +1093,7 @@ class _HomeWideLayout extends StatelessWidget {
           _HomeSectionHeader(
             titleKey: const ValueKey('home-recommended-playlists-heading'),
             title: context.l10n.homePublicPlaylists,
+            editorialIndex: '05',
             actionKey: const ValueKey('home-open-more-recommendations'),
             actionLabel: context.l10n.commonSeeAll,
             onAction: onOpenDiscover,
@@ -811,6 +1120,7 @@ class _HomeWideLayout extends StatelessWidget {
         _HomeSectionHeader(
           titleKey: const ValueKey('home-listening-two-heading'),
           title: context.l10n.homeMoreFromListening,
+          editorialIndex: authenticated ? '06' : '04',
           actionKey: const ValueKey('home-refresh-related'),
           actionLabel: context.l10n.homeChangePicks,
           onAction:
@@ -854,6 +1164,7 @@ class _HomeCompactLayout extends StatelessWidget {
     required this.spotlightKind,
     required this.spotlightStage,
     required this.spotlightIdentities,
+    this.spotlightImageProviderBuilder,
     required this.onRetrySpotlight,
     required this.onPreviousSpotlight,
     required this.onNextSpotlight,
@@ -893,6 +1204,8 @@ class _HomeCompactLayout extends StatelessWidget {
   final HomeSpotlightKind spotlightKind;
   final HomeSpotlightStage spotlightStage;
   final Set<String> spotlightIdentities;
+  final ImageProvider<Object> Function(String artworkUri)?
+  spotlightImageProviderBuilder;
   final VoidCallback onRetrySpotlight;
   final VoidCallback onPreviousSpotlight;
   final VoidCallback onNextSpotlight;
@@ -945,6 +1258,7 @@ class _HomeCompactLayout extends StatelessWidget {
                 spotlightKind: spotlightKind,
                 spotlightStage: spotlightStage,
                 spotlightIdentities: spotlightIdentities,
+                spotlightImageProviderBuilder: spotlightImageProviderBuilder,
                 onRetrySpotlight: onRetrySpotlight,
                 onPreviousSpotlight: onPreviousSpotlight,
                 onNextSpotlight: onNextSpotlight,
@@ -964,6 +1278,7 @@ class _HomeCompactLayout extends StatelessWidget {
                 title: authenticated
                     ? context.l10n.homePlaylistTreasures
                     : context.l10n.homePopularPlaylists,
+                editorialIndex: '02',
                 actionKey: const ValueKey('home-refresh-recommendations'),
                 actionLabel: refreshingPlaylists
                     ? context.l10n.homeRefreshing
@@ -1002,6 +1317,7 @@ class _HomeCompactLayout extends StatelessWidget {
                           ? context.l10n.homePersonalFm
                           : context.l10n.homeSongsPickedForYou
                     : context.l10n.homeNewSongs,
+                editorialIndex: '03',
                 compact: true,
               ),
               const SizedBox(height: _HomeGeometry.itemGap),
@@ -1029,6 +1345,7 @@ class _HomeCompactLayout extends StatelessWidget {
                 _HomeSectionHeader(
                   titleKey: const ValueKey('home-new-songs-heading'),
                   title: context.l10n.homeFreshReleases,
+                  editorialIndex: '04',
                   compact: true,
                 ),
                 const SizedBox(height: _HomeGeometry.itemGap),
@@ -1047,6 +1364,7 @@ class _HomeCompactLayout extends StatelessWidget {
                     'home-recommended-playlists-heading',
                   ),
                   title: context.l10n.homePublicPlaylists,
+                  editorialIndex: '05',
                   actionKey: const ValueKey('home-open-more-recommendations'),
                   actionLabel: context.l10n.commonSeeAll,
                   onAction: onOpenDiscover,
@@ -1067,6 +1385,7 @@ class _HomeCompactLayout extends StatelessWidget {
               _HomeSectionHeader(
                 titleKey: const ValueKey('home-listening-two-heading'),
                 title: context.l10n.homeMoreFromListening,
+                editorialIndex: authenticated ? '06' : '04',
                 compact: true,
                 actionKey: const ValueKey('home-refresh-related'),
                 actionLabel: context.l10n.homeChangePicks,
@@ -1097,18 +1416,55 @@ class _HomeSemanticHeading extends StatelessWidget {
   const _HomeSemanticHeading();
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    key: const ValueKey('home-heading'),
-    header: true,
-    label: context.l10n.homeRecommendationsSemantics,
-    child: const SizedBox.shrink(),
-  );
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    if (!editorial.isEditorial) {
+      return Semantics(
+        key: const ValueKey('home-heading'),
+        header: true,
+        label: context.l10n.homeRecommendationsSemantics,
+        child: const SizedBox.shrink(),
+      );
+    }
+    final theme = Theme.of(context);
+    final compact = MediaQuery.sizeOf(context).width < 760;
+    return Padding(
+      padding: EdgeInsets.only(bottom: compact ? 14 : 18),
+      child: Semantics(
+        key: const ValueKey('home-heading'),
+        header: true,
+        label: context.l10n.homeRecommendationsSemantics,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('01', style: editorial.eyebrow(theme.textTheme.labelSmall)),
+            const SizedBox(height: 4),
+            Text(
+              context.l10n.editorialHomeHeading,
+              key: const ValueKey('home-editorial-masthead'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: editorial.serif(
+                compact
+                    ? theme.textTheme.headlineMedium
+                    : theme.textTheme.displaySmall,
+                fontWeight: FontWeight.w500,
+                color: editorial.inkPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _HomeSectionHeader extends StatelessWidget {
   const _HomeSectionHeader({
     required this.titleKey,
     required this.title,
+    this.editorialIndex,
     this.compact = false,
     this.actionKey,
     this.actionLabel,
@@ -1119,6 +1475,7 @@ class _HomeSectionHeader extends StatelessWidget {
 
   final Key titleKey;
   final String title;
+  final String? editorialIndex;
   final bool compact;
   final Key? actionKey;
   final String? actionLabel;
@@ -1127,46 +1484,97 @@ class _HomeSectionHeader extends StatelessWidget {
   final List<Widget> actions;
 
   @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    children: [
-      Expanded(
-        child: Semantics(
-          header: true,
-          child: Text(
-            title,
-            key: titleKey,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: compact
-                ? Theme.of(context).textTheme.titleMedium
-                : Theme.of(context).textTheme.titleLarge,
-          ),
-        ),
-      ),
-      for (final action in actions) ...[const SizedBox(width: 4), action],
-      if (actionLabel != null) ...[
-        const SizedBox(width: MusicSpacing.itemGap),
-        TextButton(
-          key: actionKey,
-          onPressed: onAction,
-          child: Row(
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final editorial = context.editorialTheme;
+    final headerRow = Row(
+      crossAxisAlignment: editorial.isEditorial
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (actionLoading) ...[
-                const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+              if (editorial.isEditorial && editorialIndex != null) ...[
+                Text(
+                  editorialIndex!,
+                  style: editorial.eyebrow(theme.textTheme.labelSmall),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(height: 4),
               ],
-              Text(actionLabel!),
+              Semantics(
+                header: true,
+                child: Text(
+                  title,
+                  key: titleKey,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: editorial.isEditorial
+                      ? editorial.serif(
+                          compact
+                              ? theme.textTheme.titleLarge
+                              : theme.textTheme.headlineSmall,
+                          fontWeight: FontWeight.w500,
+                          color: editorial.inkPrimary,
+                        )
+                      : (compact
+                            ? theme.textTheme.titleMedium
+                            : theme.textTheme.titleLarge),
+                ),
+              ),
             ],
           ),
         ),
+        for (final action in actions) ...[const SizedBox(width: 4), action],
+        if (actionLabel != null) ...[
+          const SizedBox(width: MusicSpacing.itemGap),
+          TextButton(
+            key: actionKey,
+            onPressed: onAction,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (actionLoading) ...[
+                  const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Text(
+                  actionLabel!,
+                  style: editorial.isEditorial
+                      ? theme.textTheme.labelMedium?.copyWith(
+                          color: onAction == null
+                              ? editorial.inkMuted
+                              : editorial.inkPrimary,
+                          decoration: TextDecoration.underline,
+                          decorationColor: onAction == null
+                              ? editorial.inkMuted
+                              : editorial.ruleStrong,
+                          decorationThickness: 1.0,
+                        )
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
-    ],
-  );
+    );
+    if (!editorial.isEditorial) return headerRow;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Divider(height: 1, color: editorial.hairline),
+        const SizedBox(height: 18),
+        headerRow,
+      ],
+    );
+  }
 }
 
 class _HomeShelfHeaderActions extends StatelessWidget {
@@ -1220,6 +1628,7 @@ class _DailyRecommendationSection extends StatelessWidget {
     required this.spotlightKind,
     required this.spotlightStage,
     required this.spotlightIdentities,
+    this.spotlightImageProviderBuilder,
     required this.onRetrySpotlight,
     required this.onPreviousSpotlight,
     required this.onNextSpotlight,
@@ -1248,6 +1657,8 @@ class _DailyRecommendationSection extends StatelessWidget {
   final HomeSpotlightKind spotlightKind;
   final HomeSpotlightStage spotlightStage;
   final Set<String> spotlightIdentities;
+  final ImageProvider<Object> Function(String artworkUri)?
+  spotlightImageProviderBuilder;
   final VoidCallback onRetrySpotlight;
   final VoidCallback onPreviousSpotlight;
   final VoidCallback onNextSpotlight;
@@ -1346,6 +1757,7 @@ class _DailyRecommendationSection extends StatelessWidget {
               HomeSpotlightStage.empty => HomeResourceStage.empty,
               HomeSpotlightStage.error => HomeResourceStage.error,
             },
+            spotlightImageProviderBuilder: spotlightImageProviderBuilder,
             onRetryFeatured: onRetrySpotlight,
             newSongController: newSongController,
             dailyPlaylist: daily,
@@ -1382,6 +1794,7 @@ class _DailyRecommendationContent extends StatelessWidget {
     required this.featuredCount,
     required this.featuredKind,
     required this.featuredStage,
+    this.spotlightImageProviderBuilder,
     required this.onRetryFeatured,
     required this.featuredPlaylist,
     required this.guestPopularPlaylist,
@@ -1416,6 +1829,8 @@ class _DailyRecommendationContent extends StatelessWidget {
   final int featuredCount;
   final HomeSpotlightKind featuredKind;
   final HomeResourceStage featuredStage;
+  final ImageProvider<Object> Function(String artworkUri)?
+  spotlightImageProviderBuilder;
   final VoidCallback onRetryFeatured;
   final RecommendedPlaylistSummary? guestPopularPlaylist;
   final RecommendedPlaylistStage publicStage;
@@ -1467,6 +1882,7 @@ class _DailyRecommendationContent extends StatelessWidget {
         motionDirection: spotlightMotionDirection,
         rotationProgress: spotlightProgress,
         onToggleAutoPlay: onToggleSpotlightAutoPlay,
+        imageProviderBuilder: spotlightImageProviderBuilder,
       );
     }
     return _RecommendationSlotState(
@@ -1554,7 +1970,7 @@ class _DailyRecommendationContent extends StatelessWidget {
         track: dailyTracks.first,
         label: context.l10n.homeDailyTracks,
         itemKey: const ValueKey('home-daily-tracks'),
-        placeholderIcon: Icons.today_rounded,
+        placeholderKind: MusicArtworkKind.daily,
         compact: compact,
         onPlay: () => unawaited(queueController.replaceAndPlay(dailyTracks, 0)),
       );
@@ -1583,7 +1999,7 @@ class _DailyRecommendationContent extends StatelessWidget {
           track: tracks.first,
           label: context.l10n.homeNewSongs,
           itemKey: const ValueKey('home-guest-new-song-recommendation'),
-          placeholderIcon: Icons.new_releases_outlined,
+          placeholderKind: MusicArtworkKind.newRelease,
           compact: compact,
           onPlay: () => unawaited(queueController.replaceAndPlay(tracks, 0)),
         );
@@ -1612,7 +2028,7 @@ class _DailyRecommendationContent extends StatelessWidget {
         track: tracks.first,
         label: context.l10n.homeRadar,
         itemKey: const ValueKey('home-radar-recommendation'),
-        placeholderIcon: Icons.radar_rounded,
+        placeholderKind: MusicArtworkKind.radar,
         compact: compact,
         onPlay: () =>
             unawaited(queueController.replaceAndPlayCollection(source, 0)),
@@ -1707,7 +2123,7 @@ class _TrackRecommendationCard extends StatelessWidget {
     required this.track,
     required this.label,
     required this.itemKey,
-    required this.placeholderIcon,
+    required this.placeholderKind,
     required this.compact,
     required this.onPlay,
   });
@@ -1715,7 +2131,7 @@ class _TrackRecommendationCard extends StatelessWidget {
   final PlaylistTrackSummary track;
   final String label;
   final Key itemKey;
-  final IconData placeholderIcon;
+  final MusicArtworkKind placeholderKind;
   final bool compact;
   final VoidCallback onPlay;
 
@@ -1726,6 +2142,7 @@ class _TrackRecommendationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
     final artists = _artists(context.l10n);
     final semanticsLabel = context.l10n.homeTrackPlaySemantics(
       artists,
@@ -1738,8 +2155,16 @@ class _TrackRecommendationCard extends StatelessWidget {
         label: semanticsLabel,
         onTap: onPlay,
         child: Material(
-          color: colors.surfaceContainerLow,
-          borderRadius: _HomeGeometry.heroRadius,
+          color: editorial.isEditorial
+              ? editorial.cardSurface
+              : colors.surfaceContainerLow,
+          shape: editorial.isEditorial
+              ? RoundedRectangleBorder(
+                  borderRadius: editorial.cardRadius,
+                  side: BorderSide(color: editorial.hairline),
+                )
+              : null,
+          borderRadius: editorial.isEditorial ? null : _HomeGeometry.heroRadius,
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             key: itemKey,
@@ -1756,8 +2181,10 @@ class _TrackRecommendationCard extends StatelessWidget {
                       dimension: 52,
                       child: _HomeArtwork(
                         uri: track.artworkUri,
-                        placeholderIcon: placeholderIcon,
-                        radius: _HomeGeometry.artworkRadius,
+                        placeholderKind: placeholderKind,
+                        radius: editorial.isEditorial
+                            ? editorial.artworkRadius
+                            : _HomeGeometry.artworkRadius,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1767,21 +2194,31 @@ class _TrackRecommendationCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            label,
+                            editorial.isEditorial ? label.toUpperCase() : label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: colors.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            style: editorial.isEditorial
+                                ? editorial.eyebrow(
+                                    Theme.of(context).textTheme.labelSmall,
+                                  )
+                                : Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: colors.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             track.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall,
+                            style: editorial.isEditorial
+                                ? editorial.serif(
+                                    Theme.of(context).textTheme.titleSmall,
+                                    fontWeight: FontWeight.w600,
+                                    color: editorial.inkPrimary,
+                                  )
+                                : Theme.of(context).textTheme.titleSmall,
                           ),
                         ],
                       ),
@@ -1800,8 +2237,16 @@ class _TrackRecommendationCard extends StatelessWidget {
       label: semanticsLabel,
       onTap: onPlay,
       child: Material(
-        color: colors.surfaceContainerLow,
-        borderRadius: _HomeGeometry.heroRadius,
+        color: editorial.isEditorial
+            ? editorial.cardSurface
+            : colors.surfaceContainerLow,
+        shape: editorial.isEditorial
+            ? RoundedRectangleBorder(
+                borderRadius: editorial.cardRadius,
+                side: BorderSide(color: editorial.hairline),
+              )
+            : null,
+        borderRadius: editorial.isEditorial ? null : _HomeGeometry.heroRadius,
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
@@ -1813,8 +2258,10 @@ class _TrackRecommendationCard extends StatelessWidget {
                     dimension: 64,
                     child: _HomeArtwork(
                       uri: track.artworkUri,
-                      placeholderIcon: placeholderIcon,
-                      radius: _HomeGeometry.artworkRadius,
+                      placeholderKind: placeholderKind,
+                      radius: editorial.isEditorial
+                          ? editorial.artworkRadius
+                          : _HomeGeometry.artworkRadius,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -1824,21 +2271,31 @@ class _TrackRecommendationCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          label,
+                          editorial.isEditorial ? label.toUpperCase() : label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                color: colors.primary,
-                                fontWeight: FontWeight.w700,
-                              ),
+                          style: editorial.isEditorial
+                              ? editorial.eyebrow(
+                                  Theme.of(context).textTheme.labelSmall,
+                                )
+                              : Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      color: colors.primary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           track.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium,
+                          style: editorial.isEditorial
+                              ? editorial.serif(
+                                  Theme.of(context).textTheme.titleMedium,
+                                  fontWeight: FontWeight.w600,
+                                  color: editorial.inkPrimary,
+                                )
+                              : Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -1883,6 +2340,7 @@ class _FeaturedRecommendationCard extends StatelessWidget {
     required this.motionDirection,
     required this.rotationProgress,
     required this.onToggleAutoPlay,
+    this.imageProviderBuilder,
     this.height,
   });
 
@@ -1899,11 +2357,13 @@ class _FeaturedRecommendationCard extends StatelessWidget {
   final int motionDirection;
   final ValueListenable<double> rotationProgress;
   final VoidCallback onToggleAutoPlay;
+  final ImageProvider<Object> Function(String artworkUri)? imageProviderBuilder;
   final double? height;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
     final sceneKey = ValueKey(_recommendationIdentity(playlist));
     return SizedBox(
       height: height,
@@ -1912,8 +2372,16 @@ class _FeaturedRecommendationCard extends StatelessWidget {
         label: _recommendationSemanticLabel(context.l10n, playlist),
         onTap: () => onSelected(playlist),
         child: Material(
-          color: colors.surfaceContainerHigh,
-          borderRadius: _HomeGeometry.heroRadius,
+          color: editorial.isEditorial
+              ? editorial.cardSurface
+              : colors.surfaceContainerHigh,
+          shape: editorial.isEditorial
+              ? RoundedRectangleBorder(
+                  borderRadius: editorial.cardRadius,
+                  side: BorderSide(color: editorial.hairline),
+                )
+              : null,
+          borderRadius: editorial.isEditorial ? null : _HomeGeometry.heroRadius,
           clipBehavior: Clip.antiAlias,
           child: Stack(
             fit: StackFit.expand,
@@ -1950,6 +2418,7 @@ class _FeaturedRecommendationCard extends StatelessWidget {
                   key: sceneKey,
                   playlist: playlist,
                   eyebrow: eyebrow,
+                  imageProviderBuilder: imageProviderBuilder,
                 ),
               ),
               Positioned.fill(
@@ -1968,7 +2437,9 @@ class _FeaturedRecommendationCard extends StatelessWidget {
                   right: 12,
                   child: Material(
                     color: colors.scrim.withValues(alpha: 0.56),
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: editorial.isEditorial
+                        ? editorial.controlRadius
+                        : BorderRadius.circular(24),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -2016,8 +2487,10 @@ class _FeaturedRecommendationCard extends StatelessWidget {
                           LinearProgressIndicator(
                             key: const ValueKey('home-spotlight-progress'),
                             value: progress,
-                            minHeight: 3,
-                            color: colors.primary,
+                            minHeight: editorial.isEditorial ? 2 : 3,
+                            color: editorial.isEditorial
+                                ? const Color(0xFFFAF8F4)
+                                : colors.primary,
                             backgroundColor: Colors.white.withValues(
                               alpha: 0.24,
                             ),
@@ -2037,32 +2510,41 @@ class _FeaturedRecommendationScene extends StatelessWidget {
   const _FeaturedRecommendationScene({
     required this.playlist,
     required this.eyebrow,
+    this.imageProviderBuilder,
     super.key,
   });
 
   final RecommendedPlaylistSummary playlist;
   final String eyebrow;
+  final ImageProvider<Object> Function(String artworkUri)? imageProviderBuilder;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
     return Stack(
       fit: StackFit.expand,
       children: [
         _HomeArtwork(
           uri: playlist.artworkUri,
-          placeholderIcon: Icons.auto_awesome_rounded,
+          placeholderKind: MusicArtworkKind.spotlight,
           radius: BorderRadius.zero,
+          imageProviderBuilder: imageProviderBuilder,
         ),
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                colors.scrim.withValues(alpha: 0.04),
-                colors.scrim.withValues(alpha: 0.78),
-              ],
+              colors: editorial.isEditorial
+                  ? [
+                      const Color(0xFF141210).withValues(alpha: 0.08),
+                      const Color(0xFF141210).withValues(alpha: 0.84),
+                    ]
+                  : [
+                      colors.scrim.withValues(alpha: 0.04),
+                      colors.scrim.withValues(alpha: 0.78),
+                    ],
             ),
           ),
         ),
@@ -2079,11 +2561,16 @@ class _FeaturedRecommendationScene extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      eyebrow,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: colors.inversePrimary,
-                        fontWeight: FontWeight.w800,
-                      ),
+                      editorial.isEditorial ? eyebrow.toUpperCase() : eyebrow,
+                      style: editorial.isEditorial
+                          ? editorial.eyebrow(
+                              Theme.of(context).textTheme.labelMedium,
+                              color: const Color(0xFFE7DFD3),
+                            )
+                          : Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: colors.inversePrimary,
+                              fontWeight: FontWeight.w800,
+                            ),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -2091,34 +2578,52 @@ class _FeaturedRecommendationScene extends StatelessWidget {
                       key: const ValueKey('home-spotlight-title'),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
+                      style: editorial.isEditorial
+                          ? editorial.serif(
+                              Theme.of(context).textTheme.headlineMedium,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFFFAF8F4),
+                            )
+                          : Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       _recommendationDetail(context.l10n, playlist),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: Colors.white70),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: editorial.isEditorial
+                            ? const Color(0xFFDAD2C6)
+                            : Colors.white70,
+                      ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 16),
               Container(
-                width: 48,
-                height: 48,
+                width: editorial.isEditorial ? 42 : 48,
+                height: editorial.isEditorial ? 42 : 48,
                 decoration: BoxDecoration(
-                  color: colors.primary,
-                  shape: BoxShape.circle,
+                  color: editorial.isEditorial
+                      ? const Color(0xFFFAF8F4)
+                      : colors.primary,
+                  borderRadius: editorial.isEditorial
+                      ? editorial.controlRadius
+                      : null,
+                  shape: editorial.isEditorial
+                      ? BoxShape.rectangle
+                      : BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.arrow_forward_rounded,
-                  color: colors.onPrimary,
+                  color: editorial.isEditorial
+                      ? const Color(0xFF171513)
+                      : colors.onPrimary,
                 ),
               ),
             ],
@@ -2149,13 +2654,22 @@ class _WideRecommendationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
     return Semantics(
       button: true,
       label: _recommendationSemanticLabel(context.l10n, playlist),
       onTap: () => onSelected(playlist),
       child: Material(
-        color: colors.surfaceContainerLow,
-        borderRadius: _HomeGeometry.heroRadius,
+        color: editorial.isEditorial
+            ? editorial.cardSurface
+            : colors.surfaceContainerLow,
+        shape: editorial.isEditorial
+            ? RoundedRectangleBorder(
+                borderRadius: editorial.cardRadius,
+                side: BorderSide(color: editorial.hairline),
+              )
+            : null,
+        borderRadius: editorial.isEditorial ? null : _HomeGeometry.heroRadius,
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
@@ -2167,8 +2681,10 @@ class _WideRecommendationCard extends StatelessWidget {
                     dimension: 64,
                     child: _HomeArtwork(
                       uri: playlist.artworkUri,
-                      placeholderIcon: Icons.queue_music_rounded,
-                      radius: _HomeGeometry.artworkRadius,
+                      placeholderKind: MusicArtworkKind.playlist,
+                      radius: editorial.isEditorial
+                          ? editorial.artworkRadius
+                          : _HomeGeometry.artworkRadius,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -2179,15 +2695,21 @@ class _WideRecommendationCard extends StatelessWidget {
                       children: [
                         if (eyebrow != null) ...[
                           Text(
-                            eyebrow!,
+                            editorial.isEditorial
+                                ? eyebrow!.toUpperCase()
+                                : eyebrow!,
                             key: eyebrowKey,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: colors.primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            style: editorial.isEditorial
+                                ? editorial.eyebrow(
+                                    Theme.of(context).textTheme.labelSmall,
+                                  )
+                                : Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: colors.primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                           ),
                           const SizedBox(height: 2),
                         ],
@@ -2195,7 +2717,13 @@ class _WideRecommendationCard extends StatelessWidget {
                           playlist.title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium,
+                          style: editorial.isEditorial
+                              ? editorial.serif(
+                                  Theme.of(context).textTheme.titleMedium,
+                                  fontWeight: FontWeight.w600,
+                                  color: editorial.inkPrimary,
+                                )
+                              : Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -2247,70 +2775,97 @@ class _CompactRecommendationCard extends StatelessWidget {
   final Key? eyebrowKey;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: _recommendationSemanticLabel(context.l10n, playlist),
-    onTap: () => onSelected(playlist),
-    child: Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: _HomeGeometry.heroRadius,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: itemKey,
-        focusNode: focusNode,
-        onTap: () => onSelected(playlist),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            minHeight: _compactActionCardHeight(context),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              children: [
-                SizedBox.square(
-                  dimension: 52,
-                  child: _HomeArtwork(
-                    uri: playlist.artworkUri,
-                    placeholderIcon: Icons.queue_music_rounded,
-                    radius: _HomeGeometry.artworkRadius,
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    return Semantics(
+      button: true,
+      label: _recommendationSemanticLabel(context.l10n, playlist),
+      onTap: () => onSelected(playlist),
+      child: Material(
+        color: editorial.isEditorial
+            ? editorial.cardSurface
+            : Theme.of(context).colorScheme.surfaceContainerLow,
+        shape: editorial.isEditorial
+            ? RoundedRectangleBorder(
+                borderRadius: editorial.cardRadius,
+                side: BorderSide(color: editorial.hairline),
+              )
+            : null,
+        borderRadius: editorial.isEditorial ? null : _HomeGeometry.heroRadius,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: itemKey,
+          focusNode: focusNode,
+          onTap: () => onSelected(playlist),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: _compactActionCardHeight(context),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Row(
+                children: [
+                  SizedBox.square(
+                    dimension: 52,
+                    child: _HomeArtwork(
+                      uri: playlist.artworkUri,
+                      placeholderKind: MusicArtworkKind.playlist,
+                      radius: editorial.isEditorial
+                          ? editorial.artworkRadius
+                          : _HomeGeometry.artworkRadius,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (eyebrow != null) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (eyebrow != null) ...[
+                          Text(
+                            editorial.isEditorial
+                                ? eyebrow!.toUpperCase()
+                                : eyebrow!,
+                            key: eyebrowKey,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: editorial.isEditorial
+                                ? editorial.eyebrow(
+                                    Theme.of(context).textTheme.labelSmall,
+                                  )
+                                : Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                          ),
+                          const SizedBox(height: 2),
+                        ],
                         Text(
-                          eyebrow!,
-                          key: eyebrowKey,
-                          maxLines: 1,
+                          playlist.title,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.w700,
-                              ),
+                          style: editorial.isEditorial
+                              ? editorial.serif(
+                                  Theme.of(context).textTheme.titleSmall,
+                                  fontWeight: FontWeight.w600,
+                                  color: editorial.inkPrimary,
+                                )
+                              : Theme.of(context).textTheme.titleSmall,
                         ),
-                        const SizedBox(height: 2),
                       ],
-                      Text(
-                        playlist.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _RecommendationSlotState extends StatelessWidget {
@@ -2340,7 +2895,7 @@ class _RecommendationSlotState extends StatelessWidget {
       loading
           ? Icons.hourglass_top_rounded
           : onRetry == null
-          ? Icons.music_off_outlined
+          ? Icons.music_off_rounded
           : Icons.cloud_off_rounded,
       color: colors.onSurfaceVariant,
     );
@@ -2352,13 +2907,22 @@ class _RecommendationSlotState extends StatelessWidget {
             icon: const Icon(Icons.refresh_rounded),
           );
 
+    final editorial = context.editorialTheme;
     if (compact && !featured) {
       return Semantics(
         label: context.l10n.commonAnnouncement(detail, title),
         liveRegion: onRetry != null,
         child: Material(
-          color: colors.surfaceContainerLow,
-          borderRadius: _HomeGeometry.heroRadius,
+          color: editorial.isEditorial
+              ? editorial.cardSurface
+              : colors.surfaceContainerLow,
+          shape: editorial.isEditorial
+              ? RoundedRectangleBorder(
+                  borderRadius: editorial.cardRadius,
+                  side: BorderSide(color: editorial.hairline),
+                )
+              : null,
+          borderRadius: editorial.isEditorial ? null : _HomeGeometry.heroRadius,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               minHeight: _compactActionCardHeight(context),
@@ -2404,10 +2968,18 @@ class _RecommendationSlotState extends StatelessWidget {
     }
 
     final content = Material(
-      color: featured
-          ? colors.surfaceContainerHigh
-          : colors.surfaceContainerLow,
-      borderRadius: _HomeGeometry.heroRadius,
+      color: editorial.isEditorial
+          ? editorial.cardSurface
+          : (featured
+                ? colors.surfaceContainerHigh
+                : colors.surfaceContainerLow),
+      shape: editorial.isEditorial
+          ? RoundedRectangleBorder(
+              borderRadius: editorial.cardRadius,
+              side: BorderSide(color: editorial.hairline),
+            )
+          : null,
+      borderRadius: editorial.isEditorial ? null : _HomeGeometry.heroRadius,
       child: Padding(
         padding: const EdgeInsets.all(_HomeGeometry.itemGap),
         child: Row(
@@ -2490,13 +3062,13 @@ class _GuestPlaylistSection extends StatelessWidget {
         ),
         RecommendedPlaylistStage.empty => _HomeInlineState(
           key: const ValueKey('home-guest-playlists-empty'),
-          icon: Icons.queue_music_outlined,
+          icon: Icons.queue_music_rounded,
           title: context.l10n.homeNoPublicPlaylists,
           detail: context.l10n.homeNoPublicPlaylistsDetail(providerDisplayName),
         ),
         RecommendedPlaylistStage.error => _HomeInlineState(
           key: const ValueKey('home-guest-playlists-error'),
-          icon: Icons.cloud_off_outlined,
+          icon: Icons.cloud_off_rounded,
           title: context.l10n.homePublicPlaylistsFailure,
           detail: _publicStateDetail(
             context.l10n,
@@ -2535,7 +3107,7 @@ class _GuestPlaylistSection extends StatelessWidget {
     if (items.isEmpty) {
       return _HomeInlineState(
         key: const ValueKey('home-guest-playlists-empty'),
-        icon: Icons.queue_music_outlined,
+        icon: Icons.queue_music_rounded,
         title: context.l10n.homeNoAdditionalPublicPlaylists,
         detail: context.l10n.homeAvailablePublicShown,
       );
@@ -2556,7 +3128,7 @@ class _GuestPlaylistSection extends StatelessWidget {
               lastOpened?.opaqueId == playlist.opaqueId
           ? returnFocusNode
           : null,
-      placeholderIcon: Icons.queue_music_rounded,
+      placeholderKind: MusicArtworkKind.playlist,
       navigation: navigation,
     );
   }
@@ -2601,7 +3173,7 @@ class _NewSongSection extends StatelessWidget {
                 ? 'home-new-songs-empty'
                 : 'home-guest-new-songs-empty',
           ),
-          icon: Icons.new_releases_outlined,
+          icon: Icons.library_music_rounded,
           title: context.l10n.homeNoNewSongs,
           detail: context.l10n.homeNoNewSongsDetail(providerDisplayName),
         ),
@@ -2611,7 +3183,7 @@ class _NewSongSection extends StatelessWidget {
                 ? 'home-new-songs-error'
                 : 'home-guest-new-songs-error',
           ),
-          icon: Icons.cloud_off_outlined,
+          icon: Icons.cloud_off_rounded,
           title: context.l10n.homeNewSongsFailure,
           detail: _newSongFailureDetail(
             context.l10n,
@@ -2684,7 +3256,7 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
         ),
         HomeResourceStage.empty => _HomeInlineState(
           key: const ValueKey('home-library-empty'),
-          icon: Icons.library_music_outlined,
+          icon: Icons.library_music_rounded,
           title: context.l10n.homeNoPersonalizedPlaylists,
           detail: context.l10n.homeNoPersonalizedPlaylistsDetail,
           compactFootprint: true,
@@ -2729,7 +3301,7 @@ class _PersonalizedPlaylistSection extends StatelessWidget {
                     lastOpened?.opaqueId == playlist.opaqueId
                 ? returnFocusNode
                 : null,
-            placeholderIcon: Icons.auto_awesome_rounded,
+            placeholderKind: MusicArtworkKind.playlist,
             navigation: navigation,
           ),
         ),
@@ -2769,7 +3341,7 @@ class _PersonalizedTrackSection extends StatelessWidget {
         ),
         HomeResourceStage.empty => _HomeInlineState(
           key: const ValueKey('home-personalized-tracks-empty'),
-          icon: Icons.music_note_outlined,
+          icon: Icons.music_note_rounded,
           title: personalFm
               ? context.l10n.homePersonalFmEmpty
               : context.l10n.homePersonalizedSongsEmpty,
@@ -2841,14 +3413,14 @@ class _RelatedTrackSection extends StatelessWidget {
         ),
         HomeResourceStage.empty when seed == null => _HomeInlineState(
           key: const ValueKey('home-related-tracks-no-seed'),
-          icon: Icons.music_note_outlined,
+          icon: Icons.music_note_rounded,
           title: context.l10n.homeStartListeningTitle,
           detail: context.l10n.homeStartListeningDetail,
           compactFootprint: true,
         ),
         HomeResourceStage.empty => _HomeInlineState(
           key: const ValueKey('home-related-tracks-empty'),
-          icon: Icons.music_note_outlined,
+          icon: Icons.music_note_rounded,
           title: context.l10n.homeNoRelatedSongs,
           detail: context.l10n.homeNoRelatedSongsDetail(seed!.title),
           compactFootprint: true,
@@ -3024,6 +3596,7 @@ class _HomeTrackTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
     final artists = track.artistNames.isEmpty
         ? context.l10n.trackUnknownArtist
         : track.artistNames.join(' · ');
@@ -3045,104 +3618,127 @@ class _HomeTrackTile extends StatelessWidget {
         button: true,
         label: context.l10n.commonTrackSemantics(artists, track.title),
         onTap: onPlay,
-        child: Material(
-          color: playing ? colors.secondaryContainer : Colors.transparent,
-          borderRadius: _HomeGeometry.artworkRadius,
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            key: itemKey,
-            onTap: onPlay,
-            onLongPress: () => showActions(),
-            onSecondaryTapDown: (details) =>
-                showActions(details.globalPosition),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                children: [
-                  SizedBox.square(
-                    dimension: _HomeGeometry.trackArtworkSize,
-                    child: _HomeArtwork(
-                      uri: track.artworkUri,
-                      placeholderIcon: playing
-                          ? Icons.graphic_eq_rounded
-                          : Icons.music_note_rounded,
-                      radius: const BorderRadius.all(Radius.circular(6)),
+        child: DecoratedBox(
+          position: DecorationPosition.foreground,
+          decoration: BoxDecoration(
+            border: editorial.isEditorial
+                ? Border(
+                    bottom: BorderSide(
+                      color: editorial.hairline.withValues(alpha: 0.72),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          track.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                fontWeight: playing
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                                color: playing
-                                    ? colors.onSecondaryContainer
-                                    : null,
-                              ),
-                        ),
-                        Text(
-                          artists,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: playing
-                                    ? colors.onSecondaryContainer.withValues(
-                                        alpha: 0.78,
-                                      )
-                                    : colors.onSurfaceVariant,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (!compact && track.durationSeconds != null) ...[
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 44,
-                      child: Text(
-                        _durationLabel(track.durationSeconds!),
-                        textAlign: TextAlign.end,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(color: colors.onSurfaceVariant),
+                  )
+                : null,
+          ),
+          child: Material(
+            color: playing
+                ? (editorial.isEditorial
+                      ? editorial.inkPrimary.withValues(alpha: 0.05)
+                      : colors.secondaryContainer)
+                : Colors.transparent,
+            borderRadius: editorial.isEditorial
+                ? const BorderRadius.all(Radius.circular(2))
+                : _HomeGeometry.artworkRadius,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: itemKey,
+              onTap: onPlay,
+              onLongPress: () => showActions(),
+              onSecondaryTapDown: (details) =>
+                  showActions(details.globalPosition),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    SizedBox.square(
+                      dimension: _HomeGeometry.trackArtworkSize,
+                      child: _HomeArtwork(
+                        uri: track.artworkUri,
+                        placeholderKind: playing
+                            ? MusicArtworkKind.playingTrack
+                            : MusicArtworkKind.track,
+                        radius: editorial.isEditorial
+                            ? const BorderRadius.all(Radius.circular(3))
+                            : const BorderRadius.all(Radius.circular(6)),
                       ),
                     ),
-                  ],
-                  IconButton(
-                    key: queueKey,
-                    onPressed: onQueue,
-                    tooltip: context.l10n.homeAddTrackToQueue(track.title),
-                    icon: const Icon(Icons.playlist_add_rounded),
-                    iconSize: 20,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 48,
-                      height: 48,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            track.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  fontWeight: playing
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: playing
+                                      ? (editorial.isEditorial
+                                            ? editorial.inkPrimary
+                                            : colors.onSecondaryContainer)
+                                      : null,
+                                ),
+                          ),
+                          Text(
+                            artists,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: playing
+                                      ? (editorial.isEditorial
+                                            ? editorial.inkSecondary
+                                            : colors.onSecondaryContainer
+                                                  .withValues(alpha: 0.78))
+                                      : colors.onSurfaceVariant,
+                                ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Builder(
-                    builder: (buttonContext) => IconButton(
-                      key: moreKey,
-                      onPressed: () =>
-                          showActions(musicTrackAnchorOffset(buttonContext)),
-                      tooltip: context.l10n.commonMoreActions,
-                      icon: const Icon(Icons.more_horiz_rounded),
+                    if (!compact && track.durationSeconds != null) ...[
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 44,
+                        child: Text(
+                          _durationLabel(track.durationSeconds!),
+                          textAlign: TextAlign.end,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(color: colors.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                    IconButton(
+                      key: queueKey,
+                      onPressed: onQueue,
+                      tooltip: context.l10n.homeAddTrackToQueue(track.title),
+                      icon: const Icon(Icons.playlist_add_rounded),
                       iconSize: 20,
                       constraints: const BoxConstraints.tightFor(
                         width: 48,
                         height: 48,
                       ),
                     ),
-                  ),
-                ],
+                    Builder(
+                      builder: (buttonContext) => IconButton(
+                        key: moreKey,
+                        onPressed: () =>
+                            showActions(musicTrackAnchorOffset(buttonContext)),
+                        tooltip: context.l10n.commonMoreActions,
+                        icon: const Icon(Icons.more_horiz_rounded),
+                        iconSize: 20,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 48,
+                          height: 48,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -3369,7 +3965,7 @@ class _MoreRecommendationsSection extends StatelessWidget {
     if (controller.stage != RecommendedPlaylistStage.content) {
       return _HomeInlineState(
         key: const ValueKey('home-more-recommendations-unavailable'),
-        icon: Icons.queue_music_outlined,
+        icon: Icons.queue_music_rounded,
         title: context.l10n.homeMoreRecommendationsUnavailable,
         detail: context.l10n.homePrimaryRecommendationShown,
       );
@@ -3388,7 +3984,7 @@ class _MoreRecommendationsSection extends StatelessWidget {
         resultRevision: controller.partialResultRevision,
         child: _HomeInlineState(
           key: const ValueKey('home-more-recommendations-empty'),
-          icon: Icons.queue_music_outlined,
+          icon: Icons.queue_music_rounded,
           title: context.l10n.homeNoAdditionalPublicPlaylists,
           detail: context.l10n.homeAvailablePublicShown,
         ),
@@ -3414,7 +4010,7 @@ class _MoreRecommendationsSection extends StatelessWidget {
                 lastOpened?.opaqueId == playlist.opaqueId
             ? returnFocusNode
             : null,
-        placeholderIcon: Icons.queue_music_rounded,
+        placeholderKind: MusicArtworkKind.playlist,
         navigation: navigation,
       ),
     );
@@ -3432,7 +4028,7 @@ class _PlaylistShelf<T> extends StatefulWidget {
     required this.itemKey,
     required this.onSelected,
     required this.focusNode,
-    required this.placeholderIcon,
+    required this.placeholderKind,
     required this.navigation,
     super.key,
   });
@@ -3446,7 +4042,7 @@ class _PlaylistShelf<T> extends StatefulWidget {
   final Key Function(int index) itemKey;
   final ValueChanged<T> onSelected;
   final FocusNode? Function(T item) focusNode;
-  final IconData placeholderIcon;
+  final MusicArtworkKind placeholderKind;
   final _HomeShelfNavigationController navigation;
 
   @override
@@ -3590,7 +4186,7 @@ class _PlaylistShelfState<T> extends State<_PlaylistShelf<T>> {
                   title: widget.title,
                   artworkUri: widget.artworkUri,
                   semanticLabel: widget.semanticLabel,
-                  placeholderIcon: widget.placeholderIcon,
+                  placeholderKind: widget.placeholderKind,
                   onSelected: widget.onSelected,
                   focusNode: widget.focusNode(widget.items[index]),
                 ),
@@ -3610,7 +4206,7 @@ class _PlaylistArtworkCard<T> extends StatelessWidget {
     required this.title,
     required this.artworkUri,
     required this.semanticLabel,
-    required this.placeholderIcon,
+    required this.placeholderKind,
     required this.onSelected,
     required this.focusNode,
     this.width,
@@ -3622,88 +4218,106 @@ class _PlaylistArtworkCard<T> extends StatelessWidget {
   final String Function(T item) title;
   final String? Function(T item) artworkUri;
   final String Function(T item) semanticLabel;
-  final IconData placeholderIcon;
+  final MusicArtworkKind placeholderKind;
   final ValueChanged<T> onSelected;
   final FocusNode? focusNode;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: width,
-    child: Semantics(
-      button: true,
-      label: semanticLabel(item),
-      onTap: () => onSelected(item),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          focusNode: focusNode,
-          borderRadius: _HomeGeometry.artworkRadius,
-          onTap: () => onSelected(item),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AspectRatio(
-                key: itemKey,
-                aspectRatio: 1,
-                child: _HomeArtwork(
-                  uri: artworkUri(item),
-                  placeholderIcon: placeholderIcon,
-                  radius: _HomeGeometry.artworkRadius,
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : _HomeGeometry.artworkRadius;
+    return SizedBox(
+      width: width,
+      child: Semantics(
+        button: true,
+        label: semanticLabel(item),
+        onTap: () => onSelected(item),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            focusNode: focusNode,
+            borderRadius: radius,
+            onTap: () => onSelected(item),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AspectRatio(
+                  key: itemKey,
+                  aspectRatio: 1,
+                  child: _HomeArtwork(
+                    uri: artworkUri(item),
+                    placeholderKind: placeholderKind,
+                    radius: radius,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                title(item),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w600, height: 1.2),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  title(item),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: editorial.isEditorial
+                      ? Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: editorial.inkPrimary,
+                          fontWeight: FontWeight.w500,
+                          height: 1.25,
+                        )
+                      : Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          height: 1.2,
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _HomeArtwork extends StatelessWidget {
   const _HomeArtwork({
     required this.uri,
-    required this.placeholderIcon,
+    required this.placeholderKind,
     this.radius = _HomeGeometry.artworkRadius,
+    this.imageProviderBuilder,
   });
 
   final String? uri;
-  final IconData placeholderIcon;
+  final MusicArtworkKind placeholderKind;
   final BorderRadius radius;
+  final ImageProvider<Object> Function(String artworkUri)? imageProviderBuilder;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.secondaryContainer,
-        borderRadius: radius,
-      ),
-      child: Icon(
-        placeholderIcon,
-        color: colors.onSecondaryContainer,
-        size: 38,
-      ),
-    );
-    return ClipRRect(
+    final editorial = context.editorialTheme;
+    final placeholder = MusicArtworkPlaceholder(kind: placeholderKind);
+    final resolvedUri = uri?.trim();
+    final hasUri = resolvedUri != null && resolvedUri.isNotEmpty;
+    final clipped = ClipRRect(
       borderRadius: radius,
-      child: uri == null
+      child: !hasUri
           ? placeholder
-          : Image.network(
-              uri!,
-              headers: musicArtworkRequestHeaders(uri!),
+          : Image(
+              image: (imageProviderBuilder ?? musicArtworkImageProvider)(
+                resolvedUri,
+              ),
               fit: BoxFit.cover,
               gaplessPlayback: true,
               frameBuilder: musicArtworkFrameBuilder(placeholder),
-              errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
+              errorBuilder: musicArtworkErrorBuilder(resolvedUri, placeholder),
             ),
+    );
+    if (!editorial.isEditorial || radius == BorderRadius.zero) return clipped;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: editorial.hairline),
+      ),
+      child: clipped,
     );
   }
 }
@@ -3721,6 +4335,16 @@ class _HomeLoadingShelf extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
+    final tileColor = editorial.isEditorial
+        ? editorial.cardSurface
+        : colors.surfaceContainerLow;
+    final lineColor = editorial.isEditorial
+        ? editorial.hairline.withValues(alpha: 0.72)
+        : colors.surfaceContainerLow;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : _HomeGeometry.artworkRadius;
     Widget skeletonCard([double? width]) => SizedBox(
       width: width,
       child: Column(
@@ -3730,8 +4354,11 @@ class _HomeLoadingShelf extends StatelessWidget {
             aspectRatio: 1,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: colors.surfaceContainerLow,
-                borderRadius: _HomeGeometry.artworkRadius,
+                color: tileColor,
+                borderRadius: radius,
+                border: editorial.isEditorial
+                    ? Border.all(color: editorial.hairline)
+                    : null,
               ),
             ),
           ),
@@ -3742,7 +4369,7 @@ class _HomeLoadingShelf extends StatelessWidget {
               height: 12,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: colors.surfaceContainerLow,
+                  color: lineColor,
                   borderRadius: const BorderRadius.all(Radius.circular(4)),
                 ),
               ),
@@ -3755,7 +4382,7 @@ class _HomeLoadingShelf extends StatelessWidget {
               height: 10,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: colors.surfaceContainerLow.withValues(alpha: 0.72),
+                  color: lineColor.withValues(alpha: 0.72),
                   borderRadius: const BorderRadius.all(Radius.circular(4)),
                 ),
               ),
@@ -3820,49 +4447,59 @@ class _HomeInlineState extends StatelessWidget {
   final bool compactFootprint;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    liveRegion: liveRegion,
-    child: Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        width: compactFootprint ? null : double.infinity,
-        constraints: compactFootprint
-            ? const BoxConstraints(maxWidth: 680)
-            : null,
-        padding: const EdgeInsets.all(_HomeGeometry.itemGap),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: _HomeGeometry.heroRadius,
-        ),
-        child: Wrap(
-          spacing: _HomeGeometry.itemGap,
-          runSpacing: MusicSpacing.itemGap,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Icon(icon, color: Theme.of(context).colorScheme.primary),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(title, style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 2),
-                  Text(
-                    detail,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    return Semantics(
+      liveRegion: liveRegion,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          width: compactFootprint ? null : double.infinity,
+          constraints: compactFootprint
+              ? const BoxConstraints(maxWidth: 680)
+              : null,
+          padding: const EdgeInsets.all(_HomeGeometry.itemGap),
+          decoration: BoxDecoration(
+            color: editorial.isEditorial
+                ? editorial.cardSurface
+                : Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: editorial.isEditorial
+                ? editorial.cardRadius
+                : _HomeGeometry.heroRadius,
+            border: editorial.isEditorial
+                ? Border.all(color: editorial.hairline)
+                : null,
+          ),
+          child: Wrap(
+            spacing: _HomeGeometry.itemGap,
+            runSpacing: MusicSpacing.itemGap,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Icon(icon, color: Theme.of(context).colorScheme.primary),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(title, style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      detail,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            ?action,
-          ],
+              ?action,
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 String _personalizedPlaylistFailureTitle(

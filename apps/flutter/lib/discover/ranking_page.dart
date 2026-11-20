@@ -6,6 +6,7 @@ import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/discover/ranking_controller.dart';
 import 'package:flutterustmusic/discover/ranking_gateway.dart';
@@ -657,17 +658,13 @@ class RankingArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-      ),
-      child: Icon(Icons.leaderboard_rounded, color: colors.onPrimaryContainer),
-    );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(16);
+    const placeholder = MusicArtworkPlaceholder(kind: MusicArtworkKind.ranking);
+    final clipped = ClipRRect(
+      borderRadius: radius,
       child: uri == null
           ? placeholder
           : Image.network(
@@ -678,6 +675,15 @@ class RankingArtwork extends StatelessWidget {
               frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
+    );
+    if (!editorial.isEditorial) return clipped;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: editorial.hairline),
+      ),
+      child: clipped,
     );
   }
 }

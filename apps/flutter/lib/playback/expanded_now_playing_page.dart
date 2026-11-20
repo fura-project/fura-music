@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/comments/track_comments_surface.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -229,23 +230,33 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
   @override
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
+    final editorial =
+        baseTheme.extension<MusicEditorialTheme>() ??
+        MusicEditorialTheme.standard;
     final rawArtworkColors = _artworkColorScheme;
-    final colors = rawArtworkColors == null
+    final artworkColors = rawArtworkColors == null
         ? baseTheme.colorScheme
         : normalizeArtworkColorScheme(
             rawArtworkColors,
             fallback: baseTheme.colorScheme,
           );
-    final atmosphere = ArtworkAtmosphere.resolve(colors);
+    final colors = editorial.isEditorial
+        ? baseTheme.colorScheme
+        : artworkColors;
+    final atmosphere = ArtworkAtmosphere.resolve(artworkColors);
     final pageTheme = baseTheme.copyWith(
       colorScheme: colors,
       extensions: <ThemeExtension>[
         ...baseTheme.extensions.values.cast<ThemeExtension>(),
         atmosphere,
       ],
-      scaffoldBackgroundColor: colors.surface,
+      scaffoldBackgroundColor: editorial.isEditorial
+          ? editorial.paperCanvas
+          : colors.surface,
       appBarTheme: baseTheme.appBarTheme.copyWith(
-        backgroundColor: colors.surfaceContainerLow,
+        backgroundColor: editorial.isEditorial
+            ? editorial.paperCanvas
+            : colors.surfaceContainerLow,
         foregroundColor: colors.onSurface,
         surfaceTintColor: Colors.transparent,
       ),
@@ -270,6 +281,7 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
           child: Scaffold(
             key: const ValueKey('expanded-now-playing-page'),
             appBar: AppBar(
+              centerTitle: editorial.isEditorial,
               flexibleSpace: const _ExpandedNowPlayingTopBarBackdrop(),
               leading: IconButton(
                 key: const ValueKey('expanded-now-playing-back'),
@@ -277,7 +289,17 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
                 onPressed: widget.onBack,
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
-              title: Text(context.l10n.nowPlayingTitle),
+              title: editorial.isEditorial
+                  ? Text(
+                      context.l10n.editorialNowPlayingEyebrow,
+                      style: editorial
+                          .eyebrow(
+                            pageTheme.textTheme.labelMedium,
+                            color: editorial.inkSecondary,
+                          )
+                          .copyWith(letterSpacing: 2.0),
+                    )
+                  : Text(context.l10n.nowPlayingTitle),
             ),
             body: _ExpandedNowPlayingBackdrop(
               key: const ValueKey('expanded-now-playing-palette-ready'),
@@ -1378,11 +1400,40 @@ class _ExpandedNowPlayingBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final editorial = context.editorialTheme;
     final atmosphere =
         theme.extension<ArtworkAtmosphere>() ??
         ArtworkAtmosphere.resolve(colors);
     final dark = colors.brightness == Brightness.dark;
     final surface = colors.surface;
+    if (editorial.isEditorial) {
+      final paper = editorial.paperCanvas;
+      final warmWhisper = Color.alphaBlend(
+        atmosphere.primaryAmbient.withValues(alpha: dark ? 0.09 : 0.07),
+        paper,
+      );
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: DecoratedBox(
+                key: const ValueKey('expanded-now-playing-artwork-backdrop'),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [warmWhisper, paper, paper],
+                    stops: const [0, 0.45, 1],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          RepaintBoundary(child: child),
+        ],
+      );
+    }
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -1510,10 +1561,29 @@ class _ExpandedNowPlayingTopBarBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final editorial = context.editorialTheme;
     final atmosphere =
         theme.extension<ArtworkAtmosphere>() ??
         ArtworkAtmosphere.resolve(colors);
     final dark = colors.brightness == Brightness.dark;
+    if (editorial.isEditorial) {
+      return DecoratedBox(
+        key: const ValueKey('expanded-now-playing-top-bar-backdrop'),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: AlignmentDirectional.centerStart,
+            end: AlignmentDirectional.centerEnd,
+            colors: [
+              Color.alphaBlend(
+                atmosphere.primaryAmbient.withValues(alpha: dark ? 0.08 : 0.06),
+                editorial.paperCanvas,
+              ),
+              editorial.paperCanvas,
+            ],
+          ),
+        ),
+      );
+    }
     return DecoratedBox(
       key: const ValueKey('expanded-now-playing-top-bar-backdrop'),
       decoration: BoxDecoration(
@@ -1741,6 +1811,14 @@ class _ExpandedLyricsSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
+    if (editorial.isEditorial) {
+      return Material(
+        key: const ValueKey('expanded-now-playing-lyrics-surface'),
+        type: MaterialType.transparency,
+        child: child,
+      );
+    }
     return Material(
       key: const ValueKey('expanded-now-playing-lyrics-surface'),
       color: colors.surfaceContainerLowest.withValues(alpha: 0.7),
@@ -1777,6 +1855,7 @@ class _ExpandedTrackHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final editorial = context.editorialTheme;
     final artists = track.artistNames.isEmpty
         ? context.l10n.trackUnknownArtist
         : track.artistNames.join(' · ');
@@ -1807,9 +1886,15 @@ class _ExpandedTrackHero extends StatelessWidget {
                         key: const ValueKey('expanded-now-playing-title'),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: editorial.isEditorial
+                            ? editorial.serif(
+                                theme.textTheme.titleLarge,
+                                fontWeight: FontWeight.w600,
+                                color: editorial.inkPrimary,
+                              )
+                            : theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
                       ),
                       const SizedBox(height: 4),
                       _artistLink(context, artists, compact: true),
@@ -1826,21 +1911,61 @@ class _ExpandedTrackHero extends StatelessWidget {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          IconButton.filledTonal(
-                            key: const ValueKey('expanded-now-playing-mv'),
-                            tooltip: context.l10n.nowPlayingOpenMusicVideo,
-                            onPressed: onOpenMusicVideo,
-                            icon: const Icon(Icons.music_video_outlined),
-                          ),
+                          editorial.isEditorial
+                              ? IconButton.outlined(
+                                  key: const ValueKey(
+                                    'expanded-now-playing-mv',
+                                  ),
+                                  tooltip:
+                                      context.l10n.nowPlayingOpenMusicVideo,
+                                  onPressed: onOpenMusicVideo,
+                                  style: IconButton.styleFrom(
+                                    side: BorderSide(color: editorial.hairline),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: editorial.controlRadius,
+                                    ),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.music_video_outlined,
+                                    size: 20,
+                                  ),
+                                )
+                              : IconButton.filledTonal(
+                                  key: const ValueKey(
+                                    'expanded-now-playing-mv',
+                                  ),
+                                  tooltip:
+                                      context.l10n.nowPlayingOpenMusicVideo,
+                                  onPressed: onOpenMusicVideo,
+                                  icon: const Icon(Icons.music_video_outlined),
+                                ),
                           const SizedBox(width: 8),
-                          IconButton.filledTonal(
-                            key: const ValueKey(
-                              'expanded-now-playing-comments',
-                            ),
-                            tooltip: context.l10n.nowPlayingOpenComments,
-                            onPressed: onOpenComments,
-                            icon: const Icon(Icons.mode_comment_outlined),
-                          ),
+                          editorial.isEditorial
+                              ? IconButton.outlined(
+                                  key: const ValueKey(
+                                    'expanded-now-playing-comments',
+                                  ),
+                                  tooltip: context.l10n.nowPlayingOpenComments,
+                                  onPressed: onOpenComments,
+                                  style: IconButton.styleFrom(
+                                    side: BorderSide(color: editorial.hairline),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: editorial.controlRadius,
+                                    ),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.mode_comment_outlined,
+                                    size: 20,
+                                  ),
+                                )
+                              : IconButton.filledTonal(
+                                  key: const ValueKey(
+                                    'expanded-now-playing-comments',
+                                  ),
+                                  tooltip: context.l10n.nowPlayingOpenComments,
+                                  onPressed: onOpenComments,
+                                  icon: const Icon(Icons.mode_comment_outlined),
+                                ),
                         ],
                       ),
                     ],
@@ -1902,11 +2027,18 @@ class _ExpandedTrackHero extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style:
-                        (dense
+                    style: editorial.isEditorial
+                        ? editorial.serif(
+                            dense
                                 ? theme.textTheme.headlineSmall
-                                : theme.textTheme.headlineMedium)
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                                : theme.textTheme.headlineMedium,
+                            fontWeight: FontWeight.w500,
+                            color: editorial.inkPrimary,
+                          )
+                        : (dense
+                                  ? theme.textTheme.headlineSmall
+                                  : theme.textTheme.headlineMedium)
+                              ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 4),
                   _artistLink(context, artists, compact: false),
@@ -1927,16 +2059,29 @@ class _ExpandedTrackHero extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      FilledButton.tonalIcon(
-                        key: const ValueKey('expanded-now-playing-mv'),
-                        onPressed: onOpenMusicVideo,
-                        icon: const Icon(Icons.music_video_outlined),
-                        label: const Text('MV'),
-                      ),
+                      editorial.isEditorial
+                          ? OutlinedButton.icon(
+                              key: const ValueKey('expanded-now-playing-mv'),
+                              onPressed: onOpenMusicVideo,
+                              icon: const Icon(
+                                Icons.music_video_outlined,
+                                size: 18,
+                              ),
+                              label: const Text('MV'),
+                            )
+                          : FilledButton.tonalIcon(
+                              key: const ValueKey('expanded-now-playing-mv'),
+                              onPressed: onOpenMusicVideo,
+                              icon: const Icon(Icons.music_video_outlined),
+                              label: const Text('MV'),
+                            ),
                       OutlinedButton.icon(
                         key: const ValueKey('expanded-now-playing-comments'),
                         onPressed: onOpenComments,
-                        icon: const Icon(Icons.mode_comment_outlined),
+                        icon: Icon(
+                          Icons.mode_comment_outlined,
+                          size: editorial.isEditorial ? 18 : 20,
+                        ),
                         label: Text(context.l10n.nowPlayingComments),
                       ),
                     ],
@@ -2010,23 +2155,8 @@ class _ExpandedArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Theme.of(context).colorScheme.primaryContainer,
-            Theme.of(context).colorScheme.tertiaryContainer,
-          ],
-        ),
-      ),
-      child: Icon(
-        Icons.album_rounded,
-        size: dimension * 0.28,
-        color: Theme.of(context).colorScheme.onPrimaryContainer,
-      ),
-    );
+    final editorial = context.editorialTheme;
+    const placeholder = MusicArtworkPlaceholder(kind: MusicArtworkKind.album);
     final artworkUri = track.artworkUri;
     ImageProvider<Object>? provider;
     if (artworkUri != null) {
@@ -2036,18 +2166,26 @@ class _ExpandedArtwork extends StatelessWidget {
         provider = null;
       }
     }
+    final innerRadius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(_compactRadius(dimension));
+    final outerRadius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(_compactRadius(dimension) + 2);
     return RepaintBoundary(
       child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(_compactRadius(dimension) + 2),
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(context).colorScheme.shadow
-                  .withValues(alpha: 0.22),
-              blurRadius: 28,
-              offset: const Offset(0, 14),
-            ),
-          ],
+          borderRadius: outerRadius,
+          boxShadow: editorial.isEditorial
+              ? editorial.galleryShadow
+              : [
+                  BoxShadow(
+                    color: Theme.of(context).colorScheme.shadow
+                        .withValues(alpha: 0.22),
+                    blurRadius: 28,
+                    offset: const Offset(0, 14),
+                  ),
+                ],
         ),
         child: Semantics(
           image: true,
@@ -2055,21 +2193,30 @@ class _ExpandedArtwork extends StatelessWidget {
           child: SizedBox.square(
             key: const ValueKey('expanded-now-playing-artwork'),
             dimension: dimension,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(_compactRadius(dimension)),
-              child: provider == null
-                  ? placeholder
-                  : Image(
-                      image: provider,
-                      fit: BoxFit.cover,
-                      excludeFromSemantics: true,
-                      gaplessPlayback: true,
-                      frameBuilder: musicArtworkFrameBuilder(placeholder),
-                      errorBuilder: musicArtworkErrorBuilder(
-                        artworkUri!,
-                        placeholder,
+            child: DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: innerRadius,
+                border: editorial.isEditorial
+                    ? Border.all(color: editorial.hairline)
+                    : null,
+              ),
+              child: ClipRRect(
+                borderRadius: innerRadius,
+                child: provider == null
+                    ? placeholder
+                    : Image(
+                        image: provider,
+                        fit: BoxFit.cover,
+                        excludeFromSemantics: true,
+                        gaplessPlayback: true,
+                        frameBuilder: musicArtworkFrameBuilder(placeholder),
+                        errorBuilder: musicArtworkErrorBuilder(
+                          artworkUri!,
+                          placeholder,
+                        ),
                       ),
-                    ),
+              ),
             ),
           ),
         ),

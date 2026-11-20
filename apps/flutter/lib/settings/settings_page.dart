@@ -48,8 +48,11 @@ extension SettingsSectionPresentation on SettingsSection {
 
   String summary(AppSettings settings, AppLocalizations l10n) => switch (this) {
     SettingsSection.appearance =>
-      '${_themeSummary(settings.theme, l10n)} · '
-          '${_colorSourceSummary(settings.colorSource, l10n)}',
+      settings.visualStyle == AppVisualStyle.editorial
+          ? '${_themeSummary(settings.theme, l10n)} · '
+                '${_visualStyleSummary(settings.visualStyle, l10n)}'
+          : '${_themeSummary(settings.theme, l10n)} · '
+                '${_colorSourceSummary(settings.colorSource, l10n)}',
     SettingsSection.musicService => _providerLabel(
       settings.musicProvider,
       l10n,
@@ -102,6 +105,12 @@ String _colorSourceSummary(
   AppColorSourcePreference.system => l10n.settingsColorSourceSystemSummary,
   AppColorSourcePreference.brand => l10n.settingsColorSourceBrandSummary,
 };
+
+String _visualStyleSummary(AppVisualStyle style, AppLocalizations l10n) =>
+    switch (style) {
+      AppVisualStyle.material => l10n.settingsVisualStyleMaterialSummary,
+      AppVisualStyle.editorial => l10n.settingsVisualStyleEditorialSummary,
+    };
 
 String _providerLabel(AppMusicProvider provider, AppLocalizations l10n) =>
     switch (provider) {
@@ -431,7 +440,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ],
-            availability: systemScheme == null
+            availability:
+                widget.settings.visualStyle == AppVisualStyle.editorial
+                ? l10n.settingsVisualStyleEditorialPaletteNote
+                : systemScheme == null
                 ? l10n.settingsColorSourceSystemUnavailable
                 : l10n.settingsColorSourceSystemAvailable,
             availabilityKey: ValueKey(
@@ -444,6 +456,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 _save(widget.settings.copyWith(colorSource: source)),
           ),
         ],
+      ),
+      const SizedBox(height: 12),
+      _SettingsVisualStyleCard(
+        current: widget.settings.visualStyle,
+        enabled: !_saving,
+        onSelected: (style) =>
+            _save(widget.settings.copyWith(visualStyle: style)),
       ),
     ];
   }
@@ -724,7 +743,14 @@ class _SettingsSectionHeading extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final editorial = context.editorialTheme;
     final l10n = context.l10n;
+    final editorialIndex = switch (section) {
+      SettingsSection.appearance => '01',
+      SettingsSection.musicService => '02',
+      SettingsSection.language => '03',
+      SettingsSection.playback => '04',
+    };
     if (compact) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(4, 2, 4, 12),
@@ -746,15 +772,28 @@ class _SettingsSectionHeading extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (editorial.isEditorial) ...[
+            Text(
+              editorialIndex,
+              style: editorial.eyebrow(theme.textTheme.labelSmall),
+            ),
+            const SizedBox(height: 4),
+          ],
           Semantics(
             header: true,
             child: Text(
               label,
               key: headingKey,
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: colors.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
+              style: editorial.isEditorial
+                  ? editorial.serif(
+                      theme.textTheme.headlineMedium,
+                      fontWeight: FontWeight.w600,
+                      color: colors.onSurface,
+                    )
+                  : theme.textTheme.titleLarge?.copyWith(
+                      color: colors.onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
             ),
           ),
           const SizedBox(height: 4),
@@ -792,13 +831,28 @@ class _SettingsCard extends StatelessWidget {
   const _SettingsCard({required this.child});
   final Widget child;
   @override
-  Widget build(BuildContext context) => Material(
-    key: const ValueKey('settings-group'),
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    borderRadius: MusicRadii.content,
-    clipBehavior: Clip.antiAlias,
-    child: child,
-  );
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    if (editorial.isEditorial) {
+      return Material(
+        key: const ValueKey('settings-group'),
+        color: editorial.cardSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: editorial.cardRadius,
+          side: BorderSide(color: editorial.hairline),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: child,
+      );
+    }
+    return Material(
+      key: const ValueKey('settings-group'),
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: MusicRadii.content,
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
 }
 
 Widget _buildSettingsIconBadge(
@@ -806,23 +860,36 @@ Widget _buildSettingsIconBadge(
   ColorScheme colors,
   IconData icon, {
   required bool enabled,
-}) => DecoratedBox(
-  decoration: BoxDecoration(
-    color: enabled
-        ? colors.secondaryContainer.withValues(alpha: 0.65)
-        : colors.onSurface.withValues(alpha: 0.08),
-    borderRadius: const BorderRadius.all(Radius.circular(12)),
-  ),
-  child: SizedBox(
-    width: 40,
-    height: 40,
-    child: Icon(
-      icon,
-      size: 22,
-      color: enabled ? colors.onSecondaryContainer : theme.disabledColor,
+}) {
+  final editorial =
+      theme.extension<MusicEditorialTheme>() ?? MusicEditorialTheme.standard;
+  return DecoratedBox(
+    decoration: BoxDecoration(
+      color: editorial.isEditorial
+          ? (enabled
+                ? editorial.paperCanvas
+                : colors.onSurface.withValues(alpha: 0.06))
+          : (enabled
+                ? colors.secondaryContainer.withValues(alpha: 0.65)
+                : colors.onSurface.withValues(alpha: 0.08)),
+      border: editorial.isEditorial
+          ? Border.all(color: editorial.hairline)
+          : null,
+      borderRadius: editorial.isEditorial
+          ? editorial.controlRadius
+          : const BorderRadius.all(Radius.circular(12)),
     ),
-  ),
-);
+    child: SizedBox(
+      width: 40,
+      height: 40,
+      child: Icon(
+        icon,
+        size: editorial.isEditorial ? 20 : 22,
+        color: enabled ? colors.onSecondaryContainer : theme.disabledColor,
+      ),
+    ),
+  );
+}
 
 /// Native Material ListTile + PopupMenuButton; Settings owner saves values.
 class _SettingsChoiceTile<T> extends StatefulWidget {
@@ -1122,17 +1189,31 @@ class _SettingsChoiceTileState<T> extends State<_SettingsChoiceTile<T>>
               ),
             ),
           );
+          final editorial = context.editorialTheme;
           final valuePill = Stack(
             children: [
               Positioned.fill(child: popupButton),
               DecoratedBox(
                 decoration: BoxDecoration(
                   color: widget.enabled
-                      ? (_menuOpen
-                            ? colors.secondaryContainer
-                            : colors.surfaceContainerHigh)
+                      ? (editorial.isEditorial
+                            ? (_menuOpen
+                                  ? editorial.inkPrimary.withValues(alpha: 0.08)
+                                  : editorial.paperCanvas)
+                            : (_menuOpen
+                                  ? colors.secondaryContainer
+                                  : colors.surfaceContainerHigh))
                       : colors.onSurface.withValues(alpha: 0.06),
-                  borderRadius: const BorderRadius.all(Radius.circular(12)),
+                  border: editorial.isEditorial
+                      ? Border.all(
+                          color: _menuOpen
+                              ? editorial.inkPrimary
+                              : editorial.hairline,
+                        )
+                      : null,
+                  borderRadius: editorial.isEditorial
+                      ? editorial.controlRadius
+                      : const BorderRadius.all(Radius.circular(12)),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -1900,6 +1981,413 @@ class _SettingsSearchDelegate extends SearchDelegate<SettingsSection?> {
           ),
         );
       },
+    );
+  }
+}
+
+class _SettingsVisualStyleCard extends StatelessWidget {
+  const _SettingsVisualStyleCard({
+    required this.current,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final AppVisualStyle current;
+  final bool enabled;
+  final Future<void> Function(AppVisualStyle style) onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final editorial = context.editorialTheme;
+    final l10n = context.l10n;
+    final dark = theme.brightness == Brightness.dark;
+    final card = Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        key: const ValueKey('settings-visual-style-selector'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSettingsIconBadge(
+                theme,
+                colors,
+                Icons.auto_stories_outlined,
+                enabled: enabled,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.settingsVisualStyleLabel,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: enabled ? colors.onSurface : theme.disabledColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.settingsVisualStyleBody,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: enabled
+                            ? colors.onSurfaceVariant
+                            : theme.disabledColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+              final sideBySide =
+                  constraints.maxWidth >= 460 && textScale <= 1.35;
+              final materialOption = _VisualStyleOptionCard(
+                key: const ValueKey('settings-visual-style-material'),
+                style: AppVisualStyle.material,
+                title: l10n.settingsVisualStyleMaterial,
+                description: l10n.settingsVisualStyleMaterialDescription,
+                selected: current == AppVisualStyle.material,
+                enabled: enabled,
+                dark: dark,
+                onTap: () => unawaited(onSelected(AppVisualStyle.material)),
+              );
+              final editorialOption = _VisualStyleOptionCard(
+                key: const ValueKey('settings-visual-style-editorial'),
+                style: AppVisualStyle.editorial,
+                title: l10n.settingsVisualStyleEditorial,
+                description: l10n.settingsVisualStyleEditorialDescription,
+                selected: current == AppVisualStyle.editorial,
+                enabled: enabled,
+                dark: dark,
+                onTap: () => unawaited(onSelected(AppVisualStyle.editorial)),
+              );
+              if (sideBySide) {
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: materialOption),
+                      const SizedBox(width: 12),
+                      Expanded(child: editorialOption),
+                    ],
+                  ),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  materialOption,
+                  const SizedBox(height: 10),
+                  editorialOption,
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+    if (editorial.isEditorial) {
+      return Material(
+        key: const ValueKey('settings-visual-style-card'),
+        color: editorial.cardSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: editorial.cardRadius,
+          side: BorderSide(color: editorial.hairline),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: card,
+      );
+    }
+    return Material(
+      key: const ValueKey('settings-visual-style-card'),
+      color: colors.surfaceContainerLow,
+      borderRadius: MusicRadii.content,
+      clipBehavior: Clip.antiAlias,
+      child: card,
+    );
+  }
+}
+
+class _VisualStyleOptionCard extends StatelessWidget {
+  const _VisualStyleOptionCard({
+    required this.style,
+    required this.title,
+    required this.description,
+    required this.selected,
+    required this.enabled,
+    required this.dark,
+    required this.onTap,
+    super.key,
+  });
+
+  final AppVisualStyle style;
+  final String title;
+  final String description;
+  final bool selected;
+  final bool enabled;
+  final bool dark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.controlRadius
+        : const BorderRadius.all(Radius.circular(12));
+    final borderColor = selected
+        ? colors.primary
+        : (editorial.isEditorial
+              ? editorial.hairline
+              : colors.outlineVariant.withValues(alpha: 0.45));
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      label: '$title. $description',
+      child: Material(
+        color: selected
+            ? (editorial.isEditorial
+                  ? editorial.paperCanvas
+                  : colors.secondaryContainer.withValues(alpha: 0.45))
+            : (editorial.isEditorial
+                  ? editorial.paperCanvas.withValues(alpha: 0.55)
+                  : colors.surfaceContainer),
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(color: borderColor, width: selected ? 1.5 : 1),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: radius,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _VisualStyleMiniPreview(style: style, dark: dark),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: style == AppVisualStyle.editorial
+                            ? MusicEditorialTheme.editorialLight.serif(
+                                theme.textTheme.titleSmall,
+                                fontWeight: FontWeight.w600,
+                                color: enabled
+                                    ? colors.onSurface
+                                    : theme.disabledColor,
+                              )
+                            : theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: enabled
+                                    ? colors.onSurface
+                                    : theme.disabledColor,
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ExcludeSemantics(
+                      child: Icon(
+                        selected
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        size: 18,
+                        color: selected
+                            ? colors.primary
+                            : colors.onSurfaceVariant.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: enabled
+                        ? colors.onSurfaceVariant
+                        : theme.disabledColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VisualStyleMiniPreview extends StatelessWidget {
+  const _VisualStyleMiniPreview({required this.style, required this.dark});
+
+  final AppVisualStyle style;
+  final bool dark;
+
+  @override
+  Widget build(BuildContext context) {
+    final isEditorialOption = style == AppVisualStyle.editorial;
+    final bg = isEditorialOption
+        ? (dark ? const Color(0xFF141210) : const Color(0xFFFAF8F4))
+        : (dark ? const Color(0xFF0D0F0E) : const Color(0xFFF6FBF6));
+    final sidebar = isEditorialOption
+        ? (dark ? const Color(0xFF1A1714) : const Color(0xFFF3EFE8))
+        : (dark ? const Color(0xFF171918) : const Color(0xFFEAF3EC));
+    final ink = isEditorialOption
+        ? (dark ? const Color(0xFFF2EDE4) : const Color(0xFF171513))
+        : (dark ? const Color(0xFFE3E4DF) : const Color(0xFF191C1A));
+    final accent = isEditorialOption
+        ? (dark ? const Color(0xFFF2EDE4) : const Color(0xFF171513))
+        : MusicMaterialTheme.seedColor;
+    final rule = isEditorialOption
+        ? (dark ? const Color(0xFF312C26) : const Color(0xFFE3DDD1))
+        : (dark ? const Color(0xFF343A35) : const Color(0xFFD2E2D6));
+
+    return ExcludeSemantics(
+      child: MediaQuery.withNoTextScaling(
+        child: Container(
+          height: 68,
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(isEditorialOption ? 3 : 10),
+            border: Border.all(color: rule),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                decoration: BoxDecoration(
+                  color: sidebar,
+                  border: Border(right: BorderSide(color: rule)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 4,
+                      width: 18,
+                      decoration: BoxDecoration(
+                        color: ink.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (isEditorialOption)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              height: 3,
+                              color: ink.withValues(alpha: 0.8),
+                            ),
+                          ),
+                          const SizedBox(width: 3),
+                          Container(width: 2, height: 10, color: ink),
+                        ],
+                      )
+                    else
+                      Container(
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.28),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    const SizedBox(height: 6),
+                    Container(
+                      height: 3,
+                      width: 14,
+                      color: ink.withValues(alpha: 0.25),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 7, 10, 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            isEditorialOption ? '01  Aa' : 'Fura',
+                            style: isEditorialOption
+                                ? MusicEditorialTheme.editorialLight.serif(
+                                    const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      height: 1.1,
+                                    ),
+                                    color: ink,
+                                  )
+                                : TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.1,
+                                    color: ink,
+                                  ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: accent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      if (isEditorialOption) Container(height: 1, color: rule),
+                      const Spacer(),
+                      Row(
+                        children: [
+                          for (var i = 0; i < 3; i++) ...[
+                            if (i > 0) const SizedBox(width: 6),
+                            Expanded(
+                              child: Container(
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  color: i == 0
+                                      ? ink.withValues(alpha: 0.14)
+                                      : ink.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(
+                                    isEditorialOption ? 2 : 6,
+                                  ),
+                                  border: isEditorialOption
+                                      ? Border.all(color: rule, width: 0.75)
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

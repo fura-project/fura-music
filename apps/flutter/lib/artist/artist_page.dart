@@ -11,6 +11,7 @@ import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
@@ -406,10 +407,7 @@ class _ArtistHeader extends StatelessWidget {
       collapseProgress: collapseProgress,
       desktop: desktop,
       embedded: embedded,
-      artwork: ArtistArtwork(
-        uri: artist.artworkUri,
-        iconSize: desktop ? 68 : 48,
-      ),
+      artwork: ArtistArtwork(uri: artist.artworkUri),
       eyebrow: context.l10n.artistType,
       title: artist.name,
       titleKey: const ValueKey('artist-name'),
@@ -542,18 +540,25 @@ class _ArtistAlbumTile extends StatelessWidget {
   final ValueChanged<AlbumSummary>? onOpen;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    minTileHeight: 78,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-    leading: SizedBox.square(
-      dimension: 56,
-      child: _ArtistAlbumArtwork(uri: album.artworkUri),
-    ),
-    title: Text(album.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-    subtitle: Text(context.l10n.albumType),
-    trailing: const Icon(Icons.chevron_right_rounded),
-    onTap: onOpen == null ? null : () => onOpen!(album),
-  );
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    return ListTile(
+      minTileHeight: 78,
+      shape: RoundedRectangleBorder(
+        borderRadius: editorial.isEditorial
+            ? editorial.controlRadius
+            : BorderRadius.circular(14),
+      ),
+      leading: SizedBox.square(
+        dimension: 56,
+        child: _ArtistAlbumArtwork(uri: album.artworkUri),
+      ),
+      title: Text(album.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text(context.l10n.albumType),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: onOpen == null ? null : () => onOpen!(album),
+    );
+  }
 }
 
 class _ArtistAlbumCard extends StatelessWidget {
@@ -567,39 +572,47 @@ class _ArtistAlbumCard extends StatelessWidget {
   final ValueChanged<AlbumSummary>? onOpen;
 
   @override
-  Widget build(BuildContext context) => InkWell(
-    borderRadius: BorderRadius.circular(20),
-    onTap: onOpen == null ? null : () => onOpen!(album),
-    child: Padding(
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: _ArtistAlbumArtwork(uri: album.artworkUri),
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    return InkWell(
+      borderRadius: editorial.isEditorial
+          ? editorial.cardRadius
+          : BorderRadius.circular(20),
+      onTap: onOpen == null ? null : () => onOpen!(album),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: _ArtistAlbumArtwork(uri: album.artworkUri),
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            album.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            context.l10n.albumType,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            const SizedBox(height: 10),
+            Text(
+              album.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: editorial.isEditorial
+                    ? FontWeight.w500
+                    : FontWeight.w700,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              context.l10n.albumType,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _ArtistAlbumArtwork extends StatelessWidget {
@@ -609,11 +622,11 @@ class _ArtistAlbumArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final fallback = ColoredBox(
-      color: colors.secondaryContainer,
-      child: Icon(Icons.album_rounded, color: colors.onSecondaryContainer),
-    );
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(16);
+    const fallback = MusicArtworkPlaceholder(kind: MusicArtworkKind.album);
     final artwork = uri == null
         ? fallback
         : Image.network(
@@ -624,7 +637,16 @@ class _ArtistAlbumArtwork extends StatelessWidget {
             frameBuilder: musicArtworkFrameBuilder(fallback),
             errorBuilder: musicArtworkErrorBuilder(uri!, fallback),
           );
-    return ClipRRect(borderRadius: BorderRadius.circular(16), child: artwork);
+    final clipped = ClipRRect(borderRadius: radius, child: artwork);
+    if (!editorial.isEditorial) return clipped;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: editorial.hairline),
+      ),
+      child: clipped,
+    );
   }
 }
 

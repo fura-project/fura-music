@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/library/library_controller.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
@@ -12,6 +13,7 @@ import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_track_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 class PlaylistTrackPresentationController extends ChangeNotifier {
   PlaylistTrackPresentationController({
@@ -371,34 +373,38 @@ class _PlaylistPickerArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final fallback = ColoredBox(
-      color: colors.secondaryContainer,
-      child: Center(
-        child: Icon(
-          Icons.queue_music_rounded,
-          size: 22,
-          color: colors.onSecondaryContainer,
-        ),
-      ),
-    );
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(10);
+    const fallback = MusicArtworkPlaceholder(kind: MusicArtworkKind.playlist);
     final resolvedUri = uri;
+    final clipped = ClipRRect(
+      borderRadius: radius,
+      child: resolvedUri == null
+          ? fallback
+          : Image.network(
+              resolvedUri,
+              headers: musicArtworkRequestHeaders(resolvedUri),
+              fit: BoxFit.cover,
+              excludeFromSemantics: true,
+              gaplessPlayback: true,
+              frameBuilder: musicArtworkFrameBuilder(fallback),
+              errorBuilder: musicArtworkErrorBuilder(resolvedUri, fallback),
+            ),
+    );
     return SizedBox.square(
       dimension: 44,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: resolvedUri == null
-            ? fallback
-            : Image.network(
-                resolvedUri,
-                headers: musicArtworkRequestHeaders(resolvedUri),
-                fit: BoxFit.cover,
-                excludeFromSemantics: true,
-                gaplessPlayback: true,
-                frameBuilder: musicArtworkFrameBuilder(fallback),
-                errorBuilder: musicArtworkErrorBuilder(resolvedUri, fallback),
+      child: editorial.isEditorial
+          ? DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: editorial.hairline),
               ),
-      ),
+              child: clipped,
+            )
+          : clipped,
     );
   }
 }

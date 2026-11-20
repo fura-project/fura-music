@@ -18,6 +18,9 @@ Future<T?> showAdaptiveSideSheet<T>({
   final mediaQuery = MediaQuery.of(context);
   final direction = Directionality.of(context);
   final colors = capturedTheme.colorScheme;
+  final editorial =
+      capturedTheme.extension<MusicEditorialTheme>() ??
+      MusicEditorialTheme.standard;
   return showGeneralDialog<T>(
     context: context,
     barrierDismissible: true,
@@ -39,12 +42,19 @@ Future<T?> showAdaptiveSideSheet<T>({
               height: double.infinity,
               child: Material(
                 key: surfaceKey,
-                color: colors.surfaceContainerLow,
+                color: editorial.isEditorial
+                    ? editorial.paperCanvas
+                    : colors.surfaceContainerLow,
                 surfaceTintColor: colors.surfaceTint,
-                elevation: 3,
+                elevation: editorial.isEditorial ? 1 : 3,
                 shadowColor: colors.shadow,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: editorial.isEditorial
+                      ? editorial.cardRadius
+                      : BorderRadius.circular(28),
+                  side: editorial.isEditorial
+                      ? BorderSide(color: editorial.hairline)
+                      : BorderSide.none,
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Builder(builder: builder),

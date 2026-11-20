@@ -247,13 +247,27 @@ class MusicCollectionDetailHeader extends StatelessWidget {
         : MusicSpacing.pageCompact;
     final artworkSize = lerpDouble(desktop ? 156 : 104, 64, progress)!;
     final openHeight = expandedHeight ?? (desktop ? 164 : 120);
-    final titleStyle = TextStyle.lerp(
-      desktop
-          ? Theme.of(context).textTheme.headlineLarge
-          : Theme.of(context).textTheme.headlineSmall,
-      Theme.of(context).textTheme.titleLarge,
-      progress,
-    )?.copyWith(fontWeight: FontWeight.w700, height: 1.08);
+    final editorial = context.editorialTheme;
+    final titleStyle = editorial.isEditorial
+        ? editorial.serif(
+            TextStyle.lerp(
+              desktop
+                  ? Theme.of(context).textTheme.headlineLarge
+                  : Theme.of(context).textTheme.headlineSmall,
+              Theme.of(context).textTheme.titleLarge,
+              progress,
+            ),
+            fontWeight: FontWeight.w600,
+            height: 1.1,
+            color: editorial.inkPrimary,
+          )
+        : TextStyle.lerp(
+            desktop
+                ? Theme.of(context).textTheme.headlineLarge
+                : Theme.of(context).textTheme.headlineSmall,
+            Theme.of(context).textTheme.titleLarge,
+            progress,
+          )?.copyWith(fontWeight: FontWeight.w700, height: 1.08);
     return Column(
       key: const ValueKey('collection-detail-adaptive-header'),
       children: [
@@ -310,7 +324,19 @@ class MusicCollectionDetailHeader extends StatelessWidget {
                     SizedBox.square(
                       key: const ValueKey('collection-detail-artwork'),
                       dimension: artworkSize,
-                      child: artwork,
+                      child: editorial.isEditorial
+                          ? DecoratedBox(
+                              position: DecorationPosition.foreground,
+                              decoration: BoxDecoration(
+                                borderRadius: editorial.artworkRadius,
+                                border: Border.all(color: editorial.hairline),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: editorial.artworkRadius,
+                                child: artwork,
+                              ),
+                            )
+                          : artwork,
                     ),
                     SizedBox(
                       width: lerpDouble(desktop ? 28 : 18, 14, progress),
@@ -330,17 +356,25 @@ class MusicCollectionDetailHeader extends StatelessWidget {
                                   child: Opacity(
                                     opacity: expanded,
                                     child: Text(
-                                      eyebrow,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelMedium
-                                          ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .primary,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 1.1,
-                                          ),
+                                      editorial.isEditorial
+                                          ? '01 · ${eyebrow.toUpperCase()}'
+                                          : eyebrow,
+                                      style: editorial.isEditorial
+                                          ? editorial.eyebrow(
+                                              Theme.of(context)
+                                                  .textTheme
+                                                  .labelSmall,
+                                            )
+                                          : Theme.of(context)
+                                                .textTheme
+                                                .labelMedium
+                                                ?.copyWith(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .primary,
+                                                  fontWeight: FontWeight.w700,
+                                                  letterSpacing: 1.1,
+                                                ),
                                     ),
                                   ),
                                 ),
@@ -421,6 +455,8 @@ class MusicCollectionDetailHeader extends StatelessWidget {
             ),
           ),
         ),
+        if (editorial.isEditorial)
+          Divider(height: 1, color: editorial.hairline),
       ],
     );
   }

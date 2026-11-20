@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
+import 'package:flutterustmusic/theme/editorial_theme.dart';
+
+export 'package:flutterustmusic/theme/editorial_theme.dart';
 
 abstract final class MusicSpacing {
   static const double pageCompact = 20;
@@ -82,6 +85,40 @@ abstract final class MusicMaterialTheme {
     EdgeInsetsGeometry? contentPadding,
   }) {
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
+    if (editorial.isEditorial) {
+      final hairlineBorder = OutlineInputBorder(
+        borderRadius: editorial.controlRadius,
+        borderSide: BorderSide(color: editorial.hairline),
+      );
+      final focusedBorder = OutlineInputBorder(
+        borderRadius: editorial.controlRadius,
+        borderSide: BorderSide(color: editorial.inkPrimary, width: 1.25),
+      );
+      return InputDecoration(
+        hintText: hintText,
+        prefixIcon: Icon(
+          Icons.search_rounded,
+          size: dense ? 18 : 20,
+          color: editorial.inkSecondary,
+        ),
+        suffixIcon: suffixIcon,
+        isDense: dense,
+        filled: true,
+        fillColor: editorial.cardSurface,
+        contentPadding:
+            contentPadding ??
+            (dense
+                ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+                : const EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
+        border: hairlineBorder,
+        enabledBorder: hairlineBorder,
+        focusedBorder: focusedBorder,
+        disabledBorder: hairlineBorder,
+        errorBorder: hairlineBorder,
+        focusedErrorBorder: focusedBorder,
+      );
+    }
     return InputDecoration(
       hintText: hintText,
       prefixIcon: Icon(
@@ -107,11 +144,21 @@ abstract final class MusicMaterialTheme {
     );
   }
 
-  static ThemeData light({Color? seed, ColorScheme? colorScheme}) =>
-      _create(Brightness.light, seed: seed, colorScheme: colorScheme);
+  static ThemeData light({
+    Color? seed,
+    ColorScheme? colorScheme,
+    AppVisualStyle visualStyle = AppVisualStyle.material,
+  }) => visualStyle == AppVisualStyle.editorial
+      ? buildEditorialTheme(Brightness.light)
+      : _create(Brightness.light, seed: seed, colorScheme: colorScheme);
 
-  static ThemeData dark({Color? seed, ColorScheme? colorScheme}) =>
-      _create(Brightness.dark, seed: seed, colorScheme: colorScheme);
+  static ThemeData dark({
+    Color? seed,
+    ColorScheme? colorScheme,
+    AppVisualStyle visualStyle = AppVisualStyle.material,
+  }) => visualStyle == AppVisualStyle.editorial
+      ? buildEditorialTheme(Brightness.dark)
+      : _create(Brightness.dark, seed: seed, colorScheme: colorScheme);
 
   static ThemeData _create(
     Brightness brightness, {

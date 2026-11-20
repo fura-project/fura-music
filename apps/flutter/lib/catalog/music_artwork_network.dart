@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 const _neteaseArtworkHeaders = <String, String>{
   'Referer': 'https://music.163.com/',
@@ -75,6 +77,111 @@ ImageProvider<Object> musicArtworkImageProvider(String artworkUri) {
   return NetworkImage(
     artworkUri,
     headers: musicArtworkRequestHeaders(artworkUri),
+  );
+}
+
+/// Outcome reported by [MusicArtworkPreloadHandle.future].
+enum MusicArtworkPreloadOutcome {
+  /// The image decoded and is ready in [ImageCache].
+  loaded,
+
+  /// Loading or decoding the image failed.
+  failed,
+
+  /// The preload was explicitly cancelled before completing.
+  cancelled,
+}
+
+/// Handle returned by [startMusicArtworkPreload] describing whether the image
+/// was already decoded synchronously in [ImageCache] and providing a [future]
+/// plus safe cancellation/cleanup.
+class MusicArtworkPreloadHandle {
+  const MusicArtworkPreloadHandle._(
+    this._cancel, {
+    required this.readySynchronously,
+    required this.future,
+  });
+
+  /// `true` when [PaintingBinding.instance.imageCache] already held a decoded
+  /// frame and delivered it synchronously during stream subscription.
+  final bool readySynchronously;
+
+  /// Completes with [MusicArtworkPreloadOutcome.loaded] when an image frame is
+  /// decoded and cached, [MusicArtworkPreloadOutcome.failed] if loading failed,
+  /// or [MusicArtworkPreloadOutcome.cancelled] if [cancel] was called first.
+  final Future<MusicArtworkPreloadOutcome> future;
+
+  final VoidCallback _cancel;
+
+  /// Detaches the preload listener and disposes any held [ImageInfo] handle.
+  void cancel() => _cancel();
+}
+
+/// Checks synchronous [ImageCache] readiness for [provider] and, when not yet
+/// decoded, warms the cache without reporting unhandled load exceptions.
+MusicArtworkPreloadHandle startMusicArtworkPreload(
+  ImageProvider<Object> provider,
+  ImageConfiguration configuration,
+) {
+  _ensureMusicArtworkCachePolicy();
+  final stream = provider.resolve(configuration);
+  final completer = Completer<MusicArtworkPreloadOutcome>();
+  var readySynchronously = false;
+  var settled = false;
+  var listenerRemoved = false;
+  ImageInfo? receivedImage;
+  late final ImageStreamListener listener;
+
+  void detach() {
+    if (listenerRemoved) return;
+    listenerRemoved = true;
+    receivedImage?.dispose();
+    receivedImage = null;
+    stream.removeListener(listener);
+  }
+
+  listener = ImageStreamListener(
+    (ImageInfo info, bool synchronousCall) {
+      if (settled) {
+        info.dispose();
+        return;
+      }
+      settled = true;
+      receivedImage = info;
+      if (synchronousCall) {
+        readySynchronously = true;
+      }
+      if (!completer.isCompleted) {
+        completer.complete(MusicArtworkPreloadOutcome.loaded);
+      }
+      // Keep the stream live through the end of the current frame (matching
+      // Flutter's precacheImage) so an immediate widget mount subscribes
+      // synchronously without re-decoding.
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        detach();
+      }, debugLabel: 'musicArtworkPreload.removeListener');
+    },
+    onError: (Object error, StackTrace? stackTrace) {
+      if (settled) return;
+      settled = true;
+      detach();
+      if (!completer.isCompleted) {
+        completer.complete(MusicArtworkPreloadOutcome.failed);
+      }
+    },
+  );
+
+  stream.addListener(listener);
+  return MusicArtworkPreloadHandle._(
+    () {
+      settled = true;
+      detach();
+      if (!completer.isCompleted) {
+        completer.complete(MusicArtworkPreloadOutcome.cancelled);
+      }
+    },
+    readySynchronously: readySynchronously,
+    future: completer.future,
   );
 }
 

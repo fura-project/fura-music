@@ -3374,7 +3374,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsAppearanceSearchKeywords =>
-      'appearance|theme|system|light|dark|color|palette|Monet|wallpaper|accent|brand';
+      'appearance|theme|system|light|dark|color|palette|Monet|wallpaper|accent|brand|style|editorial|magazine|serif|paper|literary';
 
   @override
   String get settingsThemeSystem => 'System';
@@ -3423,6 +3423,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsColorSourceBrandSummary => 'Brand impression colors';
+
+  @override
+  String get settingsVisualStyleLabel => 'Visual style';
+
+  @override
+  String get settingsVisualStyleBody =>
+      'Switch between standard Material 3 and the Magazine Editorial reading layout.';
+
+  @override
+  String get settingsVisualStyleMaterial => 'Material 3';
+
+  @override
+  String get settingsVisualStyleMaterialDescription =>
+      'Adaptive tonal surfaces, rounded cards, and dynamic color.';
+
+  @override
+  String get settingsVisualStyleMaterialSummary => 'Material 3';
+
+  @override
+  String get settingsVisualStyleEditorial => 'Magazine Editorial';
+
+  @override
+  String get settingsVisualStyleEditorialDescription =>
+      'Warm archival paper, serif typography, hairline rules, and gallery framing.';
+
+  @override
+  String get settingsVisualStyleEditorialSummary => 'Magazine Editorial';
+
+  @override
+  String get settingsVisualStyleEditorialPaletteNote =>
+      'Magazine Editorial uses its curated archival paper and ink palette.';
+
+  @override
+  String get editorialEditionSubtitle => 'EDITORIAL EDITION';
+
+  @override
+  String get editorialHomeHeading => 'Daily Editorial';
+
+  @override
+  String get editorialNowPlayingEyebrow => '01. NOW PLAYING';
 
   @override
   String get settingsMusicServiceLabel => 'Music service';

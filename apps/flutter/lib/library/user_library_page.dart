@@ -13,6 +13,7 @@ import 'package:flutterustmusic/catalog/music_collection_detail_layout.dart';
 import 'package:flutterustmusic/authenticated_dependencies.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/catalog/session_catalog_gateways.dart';
@@ -2696,12 +2697,15 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                     : constraints.maxWidth < 640
                     ? settingsOpen
                           ? null
-                          : NavigationBar(
-                              height: 72,
-                              selectedIndex: destination.index,
-                              onDestinationSelected:
-                                  _selectPrimaryDestinationByIndex,
-                              destinations: _navigationBarDestinations(),
+                          : _editorialNavigationBar(
+                              context,
+                              NavigationBar(
+                                height: 72,
+                                selectedIndex: destination.index,
+                                onDestinationSelected:
+                                    _selectPrimaryDestinationByIndex,
+                                destinations: _navigationBarDestinations(),
+                              ),
                             )
                     : Column(
                         mainAxisSize: MainAxisSize.min,
@@ -2717,12 +2721,15 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                                 _changeLyricAuxiliaryMode,
                           ),
                           if (!settingsOpen)
-                            NavigationBar(
-                              height: 72,
-                              selectedIndex: destination.index,
-                              onDestinationSelected:
-                                  _selectPrimaryDestinationByIndex,
-                              destinations: _navigationBarDestinations(),
+                            _editorialNavigationBar(
+                              context,
+                              NavigationBar(
+                                height: 72,
+                                selectedIndex: destination.index,
+                                onDestinationSelected:
+                                    _selectPrimaryDestinationByIndex,
+                                destinations: _navigationBarDestinations(),
+                              ),
                             ),
                         ],
                       ),
@@ -2736,6 +2743,18 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
 
   void _selectPrimaryDestinationByIndex(int index) {
     _selectPrimaryDestination(AuthenticatedPrimaryDestination.values[index]);
+  }
+
+  Widget _editorialNavigationBar(BuildContext context, Widget child) {
+    final editorial = context.editorialTheme;
+    if (!editorial.isEditorial) return child;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: editorial.hairline)),
+      ),
+      child: child,
+    );
   }
 
   List<NavigationRailDestination> _navigationRailDestinations() => [
@@ -3229,60 +3248,73 @@ class _DesktopSettingsSidebar extends StatelessWidget {
   final ValueChanged<SettingsSection> onSectionSelected;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    key: const ValueKey('desktop-settings-sidebar'),
-    width: MusicSizes.desktopSidebar,
-    child: Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-              child: SizedBox(
-                height: 60,
-                child: Row(
-                  children: [
-                    IconButton(
-                      key: const ValueKey('settings-sidebar-back'),
-                      tooltip: context.l10n.shellBackToMusic,
-                      onPressed: onBack,
-                      icon: const Icon(Icons.arrow_back_rounded),
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    return SizedBox(
+      key: const ValueKey('desktop-settings-sidebar'),
+      width: MusicSizes.desktopSidebar,
+      child: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          border: editorial.isEditorial
+              ? BorderDirectional(end: BorderSide(color: editorial.hairline))
+              : null,
+        ),
+        child: Material(
+          color: editorial.isEditorial
+              ? editorial.sidebarSurface
+              : Theme.of(context).colorScheme.surfaceContainerLow,
+          child: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                  child: SizedBox(
+                    height: 60,
+                    child: Row(
+                      children: [
+                        IconButton(
+                          key: const ValueKey('settings-sidebar-back'),
+                          tooltip: context.l10n.shellBackToMusic,
+                          onPressed: onBack,
+                          icon: const Icon(Icons.arrow_back_rounded),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            context.l10n.settingsTitle,
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        context.l10n.settingsTitle,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView(
+                    key: const ValueKey('settings-sidebar-options'),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                    children: [
+                      for (final section in SettingsSection.values)
+                        _SidebarDestinationTile(
+                          key: ValueKey('settings-nav-${section.name}'),
+                          selected: selectedSection == section,
+                          icon: section.icon,
+                          selectedIcon: section.selectedIcon,
+                          label: section.label(context.l10n),
+                          onTap: () => onSectionSelected(section),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView(
-                key: const ValueKey('settings-sidebar-options'),
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-                children: [
-                  for (final section in SettingsSection.values)
-                    _SidebarDestinationTile(
-                      key: ValueKey('settings-nav-${section.name}'),
-                      selected: selectedSection == section,
-                      icon: section.icon,
-                      selectedIcon: section.selectedIcon,
-                      label: section.label(context.l10n),
-                      onTap: () => onSectionSelected(section),
-                    ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _SettingsNavigationRail extends StatelessWidget {
@@ -3378,161 +3410,181 @@ class _DesktopMusicSidebar extends StatelessWidget {
   final ValueChanged<UserPlaylistSummary>? onDeletePlaylist;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    key: const ValueKey('desktop-music-sidebar'),
-    width: MusicSizes.desktopSidebar,
-    child: Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      child: SafeArea(
-        child: Column(
-          children: [
-            AnimatedBuilder(
-              animation: homeController,
-              builder: (context, _) => _SidebarIdentity(
-                authenticated: authenticated,
-                displayName: homeController.account?.displayName,
-                avatarUri: homeController.account?.avatarUri,
-                providerDisplayName: providerDisplayName,
-                onRequestSignIn: onRequestSignIn,
-                onRequestSignOut: onRequestSignOut,
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: Material(
-                key: const ValueKey('sidebar-scroll-clip'),
-                type: MaterialType.transparency,
-                clipBehavior: Clip.hardEdge,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-                  children: [
-                    _SidebarSectionLabel(context.l10n.navOnlineMusicSection),
-                    _SidebarDestinationTile(
-                      key: const ValueKey('primary-home-destination'),
-                      selected:
-                          destination == AuthenticatedPrimaryDestination.home,
-                      icon: Icons.home_outlined,
-                      selectedIcon: Icons.home_rounded,
-                      label: context.l10n.navHome,
-                      onTap: () => onDestinationSelected(
-                        AuthenticatedPrimaryDestination.home,
-                      ),
-                    ),
-                    _SidebarDestinationTile(
-                      key: const ValueKey('open-recommendations'),
-                      selected:
-                          destination ==
-                          AuthenticatedPrimaryDestination.discover,
-                      icon: Icons.explore_outlined,
-                      selectedIcon: Icons.explore_rounded,
-                      label: context.l10n.navDiscover,
-                      focusNode: recommendationsFocusNode,
-                      onTap: () => onDestinationSelected(
-                        AuthenticatedPrimaryDestination.discover,
-                      ),
-                    ),
-                    _SidebarDestinationTile(
-                      key: const ValueKey('open-track-search'),
-                      selected:
-                          destination == AuthenticatedPrimaryDestination.search,
-                      icon: Icons.search_rounded,
-                      selectedIcon: Icons.search_rounded,
-                      label: context.l10n.navSearch,
-                      focusNode: searchFocusNode,
-                      onTap: () => onDestinationSelected(
-                        AuthenticatedPrimaryDestination.search,
-                      ),
-                    ),
-                    if (authenticated) ...[
-                      const SizedBox(height: MusicSpacing.contentGap),
-                      _SidebarSectionLabel(context.l10n.navMyMusicSection),
-                      _SidebarDestinationTile(
-                        key: const ValueKey('open-liked-songs'),
-                        selected:
-                            destination ==
-                                AuthenticatedPrimaryDestination.library &&
-                            librarySection == LibrarySection.likedSongs &&
-                            activePlaylist == null,
-                        icon: Icons.favorite_border_rounded,
-                        selectedIcon: Icons.favorite_rounded,
-                        label: context.l10n.navLiked,
-                        onTap: onOpenLikedSongs,
-                      ),
-                      if (supportsRecentHistory)
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    return SizedBox(
+      key: const ValueKey('desktop-music-sidebar'),
+      width: MusicSizes.desktopSidebar,
+      child: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          border: editorial.isEditorial
+              ? BorderDirectional(end: BorderSide(color: editorial.hairline))
+              : null,
+        ),
+        child: Material(
+          color: editorial.isEditorial
+              ? editorial.sidebarSurface
+              : Theme.of(context).colorScheme.surfaceContainerLow,
+          child: SafeArea(
+            child: Column(
+              children: [
+                AnimatedBuilder(
+                  animation: homeController,
+                  builder: (context, _) => _SidebarIdentity(
+                    authenticated: authenticated,
+                    displayName: homeController.account?.displayName,
+                    avatarUri: homeController.account?.avatarUri,
+                    providerDisplayName: providerDisplayName,
+                    onRequestSignIn: onRequestSignIn,
+                    onRequestSignOut: onRequestSignOut,
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: Material(
+                    key: const ValueKey('sidebar-scroll-clip'),
+                    type: MaterialType.transparency,
+                    clipBehavior: Clip.hardEdge,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                      children: [
+                        _SidebarSectionLabel(
+                          context.l10n.navOnlineMusicSection,
+                        ),
                         _SidebarDestinationTile(
-                          key: const ValueKey('open-recent-plays'),
+                          key: const ValueKey('primary-home-destination'),
                           selected:
                               destination ==
-                              AuthenticatedPrimaryDestination.recentPlays,
-                          icon: Icons.history_rounded,
-                          selectedIcon: Icons.history_rounded,
-                          label: context.l10n.navRecentPlays,
+                              AuthenticatedPrimaryDestination.home,
+                          icon: Icons.home_outlined,
+                          selectedIcon: Icons.home_rounded,
+                          label: context.l10n.navHome,
                           onTap: () => onDestinationSelected(
-                            AuthenticatedPrimaryDestination.recentPlays,
+                            AuthenticatedPrimaryDestination.home,
                           ),
                         ),
-                      if (libraryController.stage == UserLibraryStage.content &&
-                          libraryController.playlists.isNotEmpty) ...[
-                        const SizedBox(height: MusicSpacing.contentGap),
-                        _SidebarSectionLabel(
-                          context.l10n.navYourPlaylistsSection,
-                          action: supportsPlaylistCreate
-                              ? IconButton(
-                                  key: const ValueKey(
-                                    'sidebar-create-playlist',
-                                  ),
-                                  tooltip: context.l10n.libraryCreatePlaylist,
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed: onCreatePlaylist,
-                                  icon: const Icon(
-                                    Icons.playlist_add_rounded,
-                                    size: 20,
-                                  ),
-                                )
-                              : null,
+                        _SidebarDestinationTile(
+                          key: const ValueKey('open-recommendations'),
+                          selected:
+                              destination ==
+                              AuthenticatedPrimaryDestination.discover,
+                          icon: Icons.explore_outlined,
+                          selectedIcon: Icons.explore_rounded,
+                          label: context.l10n.navDiscover,
+                          focusNode: recommendationsFocusNode,
+                          onTap: () => onDestinationSelected(
+                            AuthenticatedPrimaryDestination.discover,
+                          ),
                         ),
-                        for (final playlist
-                            in libraryController.playlists.where(
-                              (playlist) => !playlist.isLikedSongs,
-                            ))
-                          _SidebarPlaylistTile(
-                            playlist: playlist,
+                        _SidebarDestinationTile(
+                          key: const ValueKey('open-track-search'),
+                          selected:
+                              destination ==
+                              AuthenticatedPrimaryDestination.search,
+                          icon: Icons.search_rounded,
+                          selectedIcon: Icons.search_rounded,
+                          label: context.l10n.navSearch,
+                          focusNode: searchFocusNode,
+                          onTap: () => onDestinationSelected(
+                            AuthenticatedPrimaryDestination.search,
+                          ),
+                        ),
+                        if (authenticated) ...[
+                          const SizedBox(height: MusicSpacing.contentGap),
+                          _SidebarSectionLabel(context.l10n.navMyMusicSection),
+                          _SidebarDestinationTile(
+                            key: const ValueKey('open-liked-songs'),
                             selected:
-                                activePlaylist?.providerId ==
-                                    playlist.providerId &&
-                                activePlaylist?.opaqueId == playlist.opaqueId,
-                            onTap: () => onOpenPlaylist(playlist),
-                            onDelete:
-                                playlist.ownership ==
-                                        UserPlaylistOwnership.owned &&
-                                    !playlist.isLikedSongs
-                                ? onDeletePlaylist
-                                : null,
+                                destination ==
+                                    AuthenticatedPrimaryDestination.library &&
+                                librarySection == LibrarySection.likedSongs &&
+                                activePlaylist == null,
+                            icon: Icons.favorite_border_rounded,
+                            selectedIcon: Icons.favorite_rounded,
+                            label: context.l10n.navLiked,
+                            onTap: onOpenLikedSongs,
                           ),
+                          if (supportsRecentHistory)
+                            _SidebarDestinationTile(
+                              key: const ValueKey('open-recent-plays'),
+                              selected:
+                                  destination ==
+                                  AuthenticatedPrimaryDestination.recentPlays,
+                              icon: Icons.history_rounded,
+                              selectedIcon: Icons.history_rounded,
+                              label: context.l10n.navRecentPlays,
+                              onTap: () => onDestinationSelected(
+                                AuthenticatedPrimaryDestination.recentPlays,
+                              ),
+                            ),
+                          if (libraryController.stage ==
+                                  UserLibraryStage.content &&
+                              libraryController.playlists.isNotEmpty) ...[
+                            const SizedBox(height: MusicSpacing.contentGap),
+                            _SidebarSectionLabel(
+                              context.l10n.navYourPlaylistsSection,
+                              action: supportsPlaylistCreate
+                                  ? IconButton(
+                                      key: const ValueKey(
+                                        'sidebar-create-playlist',
+                                      ),
+                                      tooltip:
+                                          context.l10n.libraryCreatePlaylist,
+                                      visualDensity: VisualDensity.compact,
+                                      onPressed: onCreatePlaylist,
+                                      icon: const Icon(
+                                        Icons.playlist_add_rounded,
+                                        size: 20,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            for (final playlist
+                                in libraryController.playlists.where(
+                                  (playlist) => !playlist.isLikedSongs,
+                                ))
+                              _SidebarPlaylistTile(
+                                playlist: playlist,
+                                selected:
+                                    activePlaylist?.providerId ==
+                                        playlist.providerId &&
+                                    activePlaylist?.opaqueId ==
+                                        playlist.opaqueId,
+                                onTap: () => onOpenPlaylist(playlist),
+                                onDelete:
+                                    playlist.ownership ==
+                                            UserPlaylistOwnership.owned &&
+                                        !playlist.isLikedSongs
+                                    ? onDeletePlaylist
+                                    : null,
+                              ),
+                          ],
+                        ],
                       ],
-                    ],
-                  ],
+                    ),
+                  ),
                 ),
-              ),
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  child: _SidebarDestinationTile(
+                    key: const ValueKey('open-settings'),
+                    selected: settingsSelected,
+                    icon: Icons.settings_outlined,
+                    selectedIcon: Icons.settings_rounded,
+                    label: context.l10n.settingsTitle,
+                    focusNode: settingsFocusNode,
+                    onTap: onOpenSettings,
+                  ),
+                ),
+              ],
             ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: _SidebarDestinationTile(
-                key: const ValueKey('open-settings'),
-                selected: settingsSelected,
-                icon: Icons.settings_outlined,
-                selectedIcon: Icons.settings_rounded,
-                label: context.l10n.settingsTitle,
-                focusNode: settingsFocusNode,
-                onTap: onOpenSettings,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _SidebarIdentity extends StatelessWidget {
@@ -3554,15 +3606,26 @@ class _SidebarIdentity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final editorial = context.editorialTheme;
     final brandFallback = ColoredBox(
       key: const ValueKey('music-sidebar-brand'),
-      color: colors.primary,
-      child: Icon(Icons.graphic_eq_rounded, color: colors.onPrimary),
+      color: editorial.isEditorial ? editorial.inkPrimary : colors.primary,
+      child: Icon(
+        Icons.graphic_eq_rounded,
+        size: editorial.isEditorial ? 20 : 24,
+        color: editorial.isEditorial ? editorial.paperCanvas : colors.onPrimary,
+      ),
     );
     final action = authenticated ? onRequestSignOut : onRequestSignIn;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      padding: EdgeInsets.fromLTRB(
+        12,
+        editorial.isEditorial ? 16 : 12,
+        12,
+        editorial.isEditorial ? 14 : 10,
+      ),
       child: Tooltip(
         message: authenticated
             ? context.l10n.shellSignOut
@@ -3570,30 +3633,62 @@ class _SidebarIdentity extends StatelessWidget {
         child: InkWell(
           key: const ValueKey('sidebar-account'),
           onTap: action,
-          borderRadius: MusicRadii.control,
+          borderRadius: editorial.isEditorial
+              ? editorial.controlRadius
+              : MusicRadii.control,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             child: Row(
               children: [
                 SizedBox.square(
-                  dimension: 44,
-                  child: ClipOval(
-                    child: !authenticated || avatarUri == null
-                        ? brandFallback
-                        : Image.network(
-                            avatarUri!,
-                            headers: musicArtworkRequestHeaders(avatarUri!),
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                            frameBuilder: musicArtworkFrameBuilder(
-                              brandFallback,
-                            ),
-                            errorBuilder: musicArtworkErrorBuilder(
-                              avatarUri!,
-                              brandFallback,
-                            ),
+                  dimension: editorial.isEditorial ? 38 : 44,
+                  child: editorial.isEditorial
+                      ? DecoratedBox(
+                          position: DecorationPosition.foreground,
+                          decoration: BoxDecoration(
+                            borderRadius: editorial.controlRadius,
+                            border: Border.all(color: editorial.hairline),
                           ),
-                  ),
+                          child: ClipRRect(
+                            borderRadius: editorial.controlRadius,
+                            child: !authenticated || avatarUri == null
+                                ? brandFallback
+                                : Image.network(
+                                    avatarUri!,
+                                    headers: musicArtworkRequestHeaders(
+                                      avatarUri!,
+                                    ),
+                                    fit: BoxFit.cover,
+                                    gaplessPlayback: true,
+                                    frameBuilder: musicArtworkFrameBuilder(
+                                      brandFallback,
+                                    ),
+                                    errorBuilder: musicArtworkErrorBuilder(
+                                      avatarUri!,
+                                      brandFallback,
+                                    ),
+                                  ),
+                          ),
+                        )
+                      : ClipOval(
+                          child: !authenticated || avatarUri == null
+                              ? brandFallback
+                              : Image.network(
+                                  avatarUri!,
+                                  headers: musicArtworkRequestHeaders(
+                                    avatarUri!,
+                                  ),
+                                  fit: BoxFit.cover,
+                                  gaplessPlayback: true,
+                                  frameBuilder: musicArtworkFrameBuilder(
+                                    brandFallback,
+                                  ),
+                                  errorBuilder: musicArtworkErrorBuilder(
+                                    avatarUri!,
+                                    brandFallback,
+                                  ),
+                                ),
+                        ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -3601,10 +3696,17 @@ class _SidebarIdentity extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'fura music',
+                        editorial.isEditorial ? 'FURA MUSIC' : 'fura music',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall,
+                        style: editorial.isEditorial
+                            ? editorial.serif(
+                                theme.textTheme.titleSmall,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 1.4,
+                                color: editorial.inkPrimary,
+                              )
+                            : theme.textTheme.titleSmall,
                       ),
                       Text(
                         authenticated
@@ -3612,13 +3714,18 @@ class _SidebarIdentity extends StatelessWidget {
                                   context.l10n.shellLoadingProviderAccount(
                                     providerDisplayName,
                                   )
-                            : context.l10n.shellSignInToProvider(
-                                providerDisplayName,
-                              ),
+                            : (editorial.isEditorial
+                                  ? context.l10n.editorialEditionSubtitle
+                                  : context.l10n.shellSignInToProvider(
+                                      providerDisplayName,
+                                    )),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: colors.onSurfaceVariant),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                          fontSize: editorial.isEditorial ? 11 : null,
+                          letterSpacing: editorial.isEditorial ? 0.4 : null,
+                        ),
                       ),
                     ],
                   ),
@@ -3627,9 +3734,12 @@ class _SidebarIdentity extends StatelessWidget {
                 Icon(
                   authenticated ? Icons.logout_rounded : Icons.login_rounded,
                   key: ValueKey(authenticated ? 'sign-out' : 'sign-in'),
+                  size: editorial.isEditorial ? 18 : 24,
                   color: action == null
                       ? colors.onSurfaceVariant
-                      : colors.primary,
+                      : (editorial.isEditorial
+                            ? editorial.inkSecondary
+                            : colors.primary),
                 ),
               ],
             ),
@@ -3647,24 +3757,32 @@ class _SidebarSectionLabel extends StatelessWidget {
   final Widget? action;
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    return Row(
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+            child: Text(
+              editorial.isEditorial ? label.toUpperCase() : label,
+              style: editorial.isEditorial
+                  ? editorial.eyebrow(
+                      Theme.of(context).textTheme.labelSmall,
+                      color: editorial.inkMuted,
+                    )
+                  : Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.8,
+                    ),
             ),
           ),
         ),
-      ),
-      ?action,
-    ],
-  );
+        ?action,
+      ],
+    );
+  }
 }
 
 class _SidebarPlaylistTile extends StatefulWidget {
@@ -3693,6 +3811,50 @@ class _SidebarPlaylistTileState extends State<_SidebarPlaylistTile> {
 
   @override
   Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    final listTile = ListTile(
+      key: ValueKey('sidebar-playlist-${widget.playlist.opaqueId}'),
+      selected: widget.selected,
+      dense: true,
+      minTileHeight: 44,
+      shape: editorial.isEditorial
+          ? RoundedRectangleBorder(borderRadius: editorial.controlRadius)
+          : const StadiumBorder(),
+      selectedTileColor: editorial.isEditorial
+          ? editorial.inkPrimary.withValues(alpha: 0.05)
+          : Theme.of(context).colorScheme.secondaryContainer,
+      selectedColor: editorial.isEditorial
+          ? editorial.inkPrimary
+          : Theme.of(context).colorScheme.onSecondaryContainer,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+      leading: SizedBox.square(
+        dimension: 32,
+        child: _PlaylistArtwork(playlist: widget.playlist),
+      ),
+      title: Tooltip(
+        message: widget.playlist.title,
+        child: Text(
+          widget.playlist.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: editorial.isEditorial
+              ? TextStyle(
+                  fontWeight: widget.selected
+                      ? FontWeight.w600
+                      : FontWeight.w400,
+                  color: widget.selected
+                      ? editorial.inkPrimary
+                      : editorial.inkSecondary,
+                )
+              : null,
+        ),
+      ),
+      trailing: editorial.isEditorial && widget.selected
+          ? Container(width: 2, height: 18, color: editorial.inkPrimary)
+          : null,
+      onTap: widget.onTap,
+      onLongPress: widget.onDelete == null ? null : _openMenu,
+    );
     final tile = CallbackShortcuts(
       bindings: widget.onDelete == null
           ? const <ShortcutActivator, VoidCallback>{}
@@ -3701,30 +3863,7 @@ class _SidebarPlaylistTileState extends State<_SidebarPlaylistTile> {
               const SingleActivator(LogicalKeyboardKey.f10, shift: true):
                   _openMenu,
             },
-      child: ListTile(
-        key: ValueKey('sidebar-playlist-${widget.playlist.opaqueId}'),
-        selected: widget.selected,
-        dense: true,
-        minTileHeight: 44,
-        shape: const StadiumBorder(),
-        selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
-        selectedColor: Theme.of(context).colorScheme.onSecondaryContainer,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-        leading: SizedBox.square(
-          dimension: 32,
-          child: _PlaylistArtwork(playlist: widget.playlist),
-        ),
-        title: Tooltip(
-          message: widget.playlist.title,
-          child: Text(
-            widget.playlist.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        onTap: widget.onTap,
-        onLongPress: widget.onDelete == null ? null : _openMenu,
-      ),
+      child: listTile,
     );
     if (widget.onDelete == null) return tile;
     return MenuAnchor(
@@ -3765,18 +3904,45 @@ class _SidebarDestinationTile extends StatelessWidget {
   final FocusNode? focusNode;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-    selected: selected,
-    dense: true,
-    minTileHeight: 44,
-    shape: const StadiumBorder(),
-    selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
-    selectedColor: Theme.of(context).colorScheme.onSecondaryContainer,
-    leading: Icon(selected ? selectedIcon : icon),
-    title: Text(label),
-    focusNode: focusNode,
-    onTap: onTap,
-  );
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    if (editorial.isEditorial) {
+      return ListTile(
+        selected: selected,
+        dense: true,
+        minTileHeight: 44,
+        shape: RoundedRectangleBorder(borderRadius: editorial.controlRadius),
+        selectedTileColor: editorial.inkPrimary.withValues(alpha: 0.05),
+        selectedColor: editorial.inkPrimary,
+        textColor: editorial.inkSecondary,
+        iconColor: editorial.inkSecondary,
+        leading: Icon(selected ? selectedIcon : icon, size: 20),
+        title: Text(
+          label,
+          style: TextStyle(
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+        trailing: selected
+            ? Container(width: 2, height: 18, color: editorial.inkPrimary)
+            : null,
+        focusNode: focusNode,
+        onTap: onTap,
+      );
+    }
+    return ListTile(
+      selected: selected,
+      dense: true,
+      minTileHeight: 44,
+      shape: const StadiumBorder(),
+      selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
+      selectedColor: Theme.of(context).colorScheme.onSecondaryContainer,
+      leading: Icon(selected ? selectedIcon : icon),
+      title: Text(label),
+      focusNode: focusNode,
+      onTap: onTap,
+    );
+  }
 }
 
 class _MusicSidebarBrand extends StatelessWidget {
@@ -3791,14 +3957,20 @@ class _MusicSidebarBrand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
     final mark = Container(
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: colors.primary,
-        borderRadius: MusicRadii.control,
+        color: editorial.isEditorial ? editorial.inkPrimary : colors.primary,
+        borderRadius: editorial.isEditorial
+            ? editorial.controlRadius
+            : MusicRadii.control,
       ),
-      child: Icon(Icons.graphic_eq_rounded, color: colors.onPrimary),
+      child: Icon(
+        Icons.graphic_eq_rounded,
+        color: editorial.isEditorial ? editorial.paperCanvas : colors.onPrimary,
+      ),
     );
     return SizedBox(
       width: expanded ? MusicSizes.desktopSidebar : MusicSizes.desktopRail,
@@ -3816,8 +3988,15 @@ class _MusicSidebarBrand extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'fura music',
-                          style: Theme.of(context).textTheme.titleMedium,
+                          editorial.isEditorial ? 'FURA MUSIC' : 'fura music',
+                          style: editorial.isEditorial
+                              ? editorial.serif(
+                                  Theme.of(context).textTheme.titleMedium,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 1.4,
+                                  color: editorial.inkPrimary,
+                                )
+                              : Theme.of(context).textTheme.titleMedium,
                         ),
                         Text(
                           context.l10n.shellProviderClient(providerDisplayName),
@@ -4136,6 +4315,7 @@ class _ShellSearchFieldState extends State<_ShellSearchField> {
   Widget build(BuildContext context) {
     final suggestions = widget.suggestions;
     final suggestionsEnabled = suggestions != null && suggestions.enabled;
+    final editorial = context.editorialTheme;
     final search = SearchBar(
       key: widget.searchKey,
       controller: widget.controller,
@@ -4148,14 +4328,28 @@ class _ShellSearchFieldState extends State<_ShellSearchField> {
       },
       textInputAction: TextInputAction.search,
       hintText: widget.hintText,
-      leading: const Icon(Icons.search_rounded),
+      leading: Icon(
+        Icons.search_rounded,
+        size: editorial.isEditorial ? 18 : 22,
+        color: editorial.isEditorial ? editorial.inkSecondary : null,
+      ),
       elevation: const WidgetStatePropertyAll(0),
+      shape: editorial.isEditorial
+          ? WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: editorial.controlRadius),
+            )
+          : null,
+      side: editorial.isEditorial
+          ? WidgetStatePropertyAll(BorderSide(color: editorial.hairline))
+          : null,
       backgroundColor: WidgetStatePropertyAll(
-        Theme.of(context).colorScheme.surfaceContainerHigh,
+        editorial.isEditorial
+            ? editorial.cardSurface
+            : Theme.of(context).colorScheme.surfaceContainerHigh,
       ),
       constraints: const BoxConstraints(minHeight: 40),
       padding: const WidgetStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 16),
+        EdgeInsets.symmetric(horizontal: 14),
       ),
     );
     return LayoutBuilder(
@@ -4567,8 +4761,12 @@ class _PlaylistArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final uri = playlist.artworkUri;
-    return ClipRRect(
-      borderRadius: MusicRadii.content,
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : MusicRadii.content;
+    final content = ClipRRect(
+      borderRadius: radius,
       child: uri == null
           ? const _ArtworkPlaceholder()
           : Image.network(
@@ -4587,6 +4785,15 @@ class _PlaylistArtwork extends StatelessWidget {
               ),
             ),
     );
+    if (!editorial.isEditorial) return content;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: editorial.hairline),
+      ),
+      child: content,
+    );
   }
 }
 
@@ -4594,25 +4801,8 @@ class _ArtworkPlaceholder extends StatelessWidget {
   const _ArtworkPlaceholder();
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.queue_music_rounded,
-          color: colors.onPrimaryContainer,
-          size: 38,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      const MusicArtworkPlaceholder(kind: MusicArtworkKind.playlist);
 }
 
 class _LibraryLoading extends StatelessWidget {

@@ -1,46 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
-/// Provider-neutral Artist artwork with a truthful Material fallback.
+/// Provider-neutral Artist artwork with a unified theme-aware fallback.
 class ArtistArtwork extends StatelessWidget {
-  const ArtistArtwork({required this.uri, this.iconSize = 44, super.key});
+  const ArtistArtwork({required this.uri, this.iconSize, super.key});
 
   final String? uri;
-  final double iconSize;
+  final double? iconSize;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final fallback = DecoratedBox(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-      ),
-      child: Center(
-        child: Icon(
-          Icons.person_rounded,
-          size: iconSize,
-          color: colors.onPrimaryContainer,
-        ),
-      ),
+    final editorial = context.editorialTheme;
+    final fallback = MusicArtworkPlaceholder(
+      kind: MusicArtworkKind.artist,
+      iconSize: iconSize,
+      shape: BoxShape.circle,
     );
-    return ClipOval(
-      child: uri == null
+    final resolvedUri = uri?.trim();
+    final hasUri = resolvedUri != null && resolvedUri.isNotEmpty;
+    final clipped = ClipOval(
+      child: !hasUri
           ? fallback
           : Image.network(
-              uri!,
-              headers: musicArtworkRequestHeaders(uri!),
+              resolvedUri,
+              headers: musicArtworkRequestHeaders(resolvedUri),
               width: double.infinity,
               height: double.infinity,
               fit: BoxFit.cover,
               gaplessPlayback: true,
               frameBuilder: musicArtworkFrameBuilder(fallback),
-              errorBuilder: musicArtworkErrorBuilder(uri!, fallback),
+              errorBuilder: musicArtworkErrorBuilder(resolvedUri, fallback),
             ),
+    );
+    if (!editorial.isEditorial) return clipped;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: editorial.hairline),
+      ),
+      child: clipped,
     );
   }
 }

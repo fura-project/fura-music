@@ -8070,6 +8070,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('invalid library response offers Retry while signed in', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MusicApp(
+        bootstrap: _bootstrap,
+        authenticationGateway: _WidgetGateway(
+          _WaitingSession(),
+          authenticated: true,
+        ),
+        libraryGateway: _WidgetLibraryGateway([
+          const UserLibraryResult(failure: UserLibraryFailure.invalidResponse),
+          const UserLibraryResult(failure: UserLibraryFailure.invalidResponse),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openLibrary(tester);
+
+    final failure = find.byKey(const ValueKey('user-library-error'));
+    expect(failure, findsOneWidget);
+    expect(find.text('Sign in again'), findsNothing);
+    await tester.tap(find.text('Try again'));
+    await tester.pumpAndSettle();
+    expect(failure, findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
+  });
+
   testWidgets('retries a transient library failure', (tester) async {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(

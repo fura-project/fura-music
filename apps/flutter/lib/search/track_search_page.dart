@@ -8,6 +8,7 @@ import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/music_track_row.dart';
@@ -1101,7 +1102,9 @@ class _ArtistSearchResults extends StatelessWidget {
               key: ValueKey('artist-search-result-$artistIndex'),
               minTileHeight: desktop ? 68 : 72,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: context.isEditorialTheme
+                    ? context.editorialTheme.controlRadius
+                    : BorderRadius.circular(14),
               ),
               leading: SizedBox.square(
                 dimension: desktop ? 48 : 52,
@@ -1221,7 +1224,9 @@ class _AlbumSearchResults extends StatelessWidget {
               key: ValueKey('album-search-result-$albumIndex'),
               minTileHeight: desktop ? 68 : 72,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: context.isEditorialTheme
+                    ? context.editorialTheme.controlRadius
+                    : BorderRadius.circular(14),
               ),
               leading: SizedBox.square(
                 dimension: desktop ? 48 : 52,
@@ -1341,7 +1346,9 @@ class _PlaylistSearchResults extends StatelessWidget {
               key: ValueKey('playlist-search-result-$playlistIndex'),
               minTileHeight: desktop ? 68 : 72,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: context.isEditorialTheme
+                    ? context.editorialTheme.controlRadius
+                    : BorderRadius.circular(14),
               ),
               leading: SizedBox.square(
                 dimension: desktop ? 48 : 52,
@@ -1374,20 +1381,15 @@ class _PlaylistArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors.secondaryContainer, colors.primaryContainer],
-        ),
-      ),
-      child: Icon(
-        Icons.queue_music_rounded,
-        color: colors.onSecondaryContainer,
-      ),
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(10);
+    const placeholder = MusicArtworkPlaceholder(
+      kind: MusicArtworkKind.playlist,
     );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
+    final clipped = ClipRRect(
+      borderRadius: radius,
       child: uri == null
           ? placeholder
           : Image.network(
@@ -1398,6 +1400,15 @@ class _PlaylistArtwork extends StatelessWidget {
               frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
+    );
+    if (!editorial.isEditorial) return clipped;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: editorial.hairline),
+      ),
+      child: clipped,
     );
   }
 }
@@ -1569,17 +1580,13 @@ class _TrackArtwork extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final placeholder = DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-      ),
-      child: Icon(Icons.music_note_rounded, color: colors.onPrimaryContainer),
-    );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(10);
+    const placeholder = MusicArtworkPlaceholder(kind: MusicArtworkKind.track);
+    final clipped = ClipRRect(
+      borderRadius: radius,
       child: uri == null
           ? placeholder
           : Image.network(
@@ -1590,6 +1597,15 @@ class _TrackArtwork extends StatelessWidget {
               frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
+    );
+    if (!editorial.isEditorial) return clipped;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        border: Border.all(color: editorial.hairline),
+      ),
+      child: clipped,
     );
   }
 }

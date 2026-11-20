@@ -7,6 +7,7 @@ import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/track_like_presentation_controller.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
@@ -21,6 +22,7 @@ import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 import 'package:flutterustmusic/provider_presentation.dart';
 import 'package:flutterustmusic/settings/app_settings.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 const _desktopNowPlayingHeight = 88.0;
 const _desktopNowPlayingVerticalInset = 8.0;
@@ -125,30 +127,41 @@ class NowPlayingBar extends StatelessWidget {
           onOpenExpanded: expandedNavigation?.onOpen,
         );
       } else {
+        final editorial = context.editorialTheme;
         bar = SafeArea(
           top: false,
-          child: Material(
-            color: Theme.of(context).colorScheme.surfaceContainer,
-            elevation: 3,
-            child: SizedBox(
-              key: const ValueKey('now-playing-desktop-bar'),
-              height: _desktopNowPlayingHeight,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  16,
-                  _desktopNowPlayingVerticalInset,
-                  12,
-                  _desktopNowPlayingVerticalInset,
-                ),
-                child: _DesktopNowPlayingLayout(
-                  controller: controller,
-                  track: track,
-                  authenticationFailure: authenticationFailure,
-                  error: error,
-                  onSignInAgain: onSignInAgain,
-                  onOpenExpanded: expandedNavigation?.onOpen,
-                  qualityPreference: qualityPreference,
-                  onQualityPreferenceChanged: onQualityPreferenceChanged,
+          child: DecoratedBox(
+            position: DecorationPosition.foreground,
+            decoration: BoxDecoration(
+              border: editorial.isEditorial
+                  ? Border(top: BorderSide(color: editorial.hairline))
+                  : null,
+            ),
+            child: Material(
+              color: editorial.isEditorial
+                  ? editorial.paperCanvas
+                  : Theme.of(context).colorScheme.surfaceContainer,
+              elevation: editorial.isEditorial ? 0 : 3,
+              child: SizedBox(
+                key: const ValueKey('now-playing-desktop-bar'),
+                height: _desktopNowPlayingHeight,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    16,
+                    _desktopNowPlayingVerticalInset,
+                    12,
+                    _desktopNowPlayingVerticalInset,
+                  ),
+                  child: _DesktopNowPlayingLayout(
+                    controller: controller,
+                    track: track,
+                    authenticationFailure: authenticationFailure,
+                    error: error,
+                    onSignInAgain: onSignInAgain,
+                    onOpenExpanded: expandedNavigation?.onOpen,
+                    qualityPreference: qualityPreference,
+                    onQualityPreferenceChanged: onQualityPreferenceChanged,
+                  ),
                 ),
               ),
             ),
@@ -338,6 +351,10 @@ class _CompactNowPlayingBar extends StatelessWidget {
         );
       },
     );
+    final editorial = context.editorialTheme;
+    final compactRadius = editorial.isEditorial
+        ? const BorderRadius.all(Radius.circular(6))
+        : BorderRadius.circular(28);
     return SafeArea(
       top: false,
       bottom: false,
@@ -345,10 +362,15 @@ class _CompactNowPlayingBar extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
         child: Material(
           key: const ValueKey('now-playing-compact-layout'),
-          color: colors.surfaceContainerHigh,
+          color: editorial.isEditorial
+              ? editorial.paperCanvas
+              : colors.surfaceContainerHigh,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: compactRadius,
+            side: editorial.isEditorial
+                ? BorderSide(color: editorial.hairline)
+                : BorderSide.none,
           ),
           clipBehavior: Clip.antiAlias,
           child: onOpenExpanded == null
@@ -356,7 +378,7 @@ class _CompactNowPlayingBar extends StatelessWidget {
               : InkWell(
                   onTap: onOpenExpanded,
                   excludeFromSemantics: true,
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: compactRadius,
                   child: row,
                 ),
         ),
@@ -560,7 +582,9 @@ class _DesktopNowPlayingLayout extends StatelessWidget {
               label: context.l10n.playbackOpenNowPlayingFor(track.title),
               onTap: onOpenExpanded,
               child: InkWell(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: context.isEditorialTheme
+                    ? context.editorialTheme.controlRadius
+                    : BorderRadius.circular(12),
                 onTap: onOpenExpanded,
                 excludeFromSemantics: true,
                 child: trackIdentity,
@@ -759,12 +783,18 @@ class _ExpandedPlaybackControls extends StatelessWidget {
         ),
       ),
     );
+    final editorial = context.editorialTheme;
     return SafeArea(
       top: false,
       child: Material(
         key: const ValueKey('expanded-now-playing-controls'),
-        color: theme.colorScheme.surfaceContainer,
-        elevation: 3,
+        color: editorial.isEditorial
+            ? editorial.paperCanvas
+            : theme.colorScheme.surfaceContainer,
+        elevation: editorial.isEditorial ? 0 : 3,
+        shape: editorial.isEditorial
+            ? Border(top: BorderSide(color: editorial.hairline))
+            : null,
         child: Padding(
           padding: const EdgeInsets.only(top: 6, bottom: 8),
           child: Column(
@@ -1568,21 +1598,32 @@ ButtonStyle _toggleControlButtonStyle(
   required bool selected,
 }) {
   final colors = Theme.of(context).colorScheme;
-  const shape = RoundedRectangleBorder(
-    borderRadius: BorderRadius.all(Radius.circular(14)),
+  final editorial = context.editorialTheme;
+  final shape = RoundedRectangleBorder(
+    borderRadius: editorial.isEditorial
+        ? editorial.controlRadius
+        : const BorderRadius.all(Radius.circular(14)),
   );
   if (!selected) {
     return IconButton.styleFrom(
-      foregroundColor: colors.onSurfaceVariant,
+      foregroundColor: editorial.isEditorial
+          ? editorial.inkSecondary
+          : colors.onSurfaceVariant,
       backgroundColor: Colors.transparent,
       side: BorderSide.none,
       shape: shape,
     );
   }
   return IconButton.styleFrom(
-    foregroundColor: colors.primary,
-    backgroundColor: colors.primary.withValues(alpha: 0.16),
-    side: BorderSide.none,
+    foregroundColor: editorial.isEditorial
+        ? editorial.inkPrimary
+        : colors.primary,
+    backgroundColor: editorial.isEditorial
+        ? editorial.inkPrimary.withValues(alpha: 0.08)
+        : colors.primary.withValues(alpha: 0.16),
+    side: editorial.isEditorial
+        ? BorderSide(color: editorial.hairline)
+        : BorderSide.none,
     shape: shape,
   );
 }
@@ -1926,15 +1967,29 @@ class _PlaybackProgressState extends State<_PlaybackProgress> {
             ),
             Expanded(
               child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 2,
-                  thumbShape: RoundSliderThumbShape(
-                    enabledThumbRadius: widget.dense ? 5 : 6,
-                  ),
-                  overlayShape: RoundSliderOverlayShape(
-                    overlayRadius: widget.dense ? 11 : 14,
-                  ),
-                ),
+                data: () {
+                  final editorial = context.editorialTheme;
+                  return SliderTheme.of(context).copyWith(
+                    trackHeight: 2,
+                    activeTrackColor: editorial.isEditorial
+                        ? editorial.inkPrimary
+                        : null,
+                    inactiveTrackColor: editorial.isEditorial
+                        ? editorial.hairline
+                        : null,
+                    thumbColor: editorial.isEditorial
+                        ? editorial.inkPrimary
+                        : null,
+                    thumbShape: RoundSliderThumbShape(
+                      enabledThumbRadius: editorial.isEditorial
+                          ? (widget.dense ? 3.5 : 4.5)
+                          : (widget.dense ? 5 : 6),
+                    ),
+                    overlayShape: RoundSliderOverlayShape(
+                      overlayRadius: widget.dense ? 11 : 14,
+                    ),
+                  );
+                }(),
                 child: Slider(
                   key: const ValueKey('now-playing-progress'),
                   value: position,
@@ -2296,13 +2351,22 @@ Future<void> _showVolumeControl(
       }
       final theme = Theme.of(routeContext);
       final colors = theme.colorScheme;
+      final editorial = routeContext.editorialTheme;
       final surface = Material(
         key: const ValueKey('volume-popover'),
-        color: colors.surfaceContainerHigh,
+        color: editorial.isEditorial
+            ? editorial.paperCanvas
+            : colors.surfaceContainerHigh,
         surfaceTintColor: Colors.transparent,
-        elevation: 3,
+        elevation: editorial.isEditorial ? 2 : 3,
         shadowColor: colors.shadow.withValues(alpha: 0.28),
-        borderRadius: BorderRadius.circular(18),
+        shape: editorial.isEditorial
+            ? RoundedRectangleBorder(
+                borderRadius: editorial.cardRadius,
+                side: BorderSide(color: editorial.hairline),
+              )
+            : null,
+        borderRadius: editorial.isEditorial ? null : BorderRadius.circular(18),
         child: ConstrainedBox(
           constraints: const BoxConstraints.tightFor(width: popoverWidth),
           child: PlaybackShortcuts(
@@ -2578,59 +2642,73 @@ class _NowPlayingArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final artworkUri = track.artworkUri;
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : BorderRadius.circular(12);
     final busy =
         stage == TrackPlaybackStage.resolving ||
         stage == TrackPlaybackStage.loading;
     final error =
         stage == TrackPlaybackStage.resolutionError ||
         stage == TrackPlaybackStage.engineError;
+    final clipped = ClipRRect(
+      borderRadius: radius,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          artworkUri == null
+              ? const _NowPlayingArtworkPlaceholder()
+              : Image.network(
+                  artworkUri,
+                  headers: musicArtworkRequestHeaders(artworkUri),
+                  fit: BoxFit.cover,
+                  excludeFromSemantics: true,
+                  gaplessPlayback: true,
+                  frameBuilder: musicArtworkFrameBuilder(
+                    const _NowPlayingArtworkPlaceholder(),
+                  ),
+                  errorBuilder: musicArtworkErrorBuilder(
+                    artworkUri,
+                    const _NowPlayingArtworkPlaceholder(),
+                  ),
+                ),
+          if (busy || error)
+            ColoredBox(
+              key: const ValueKey('now-playing-artwork-state'),
+              color: Colors.black.withValues(alpha: 0.44),
+              child: Center(
+                child: busy
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Icon(
+                        Icons.error_outline_rounded,
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        size: 24,
+                      ),
+              ),
+            ),
+        ],
+      ),
+    );
     final artwork = SizedBox.square(
       key: const ValueKey('now-playing-artwork'),
       dimension: dimension,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            artworkUri == null
-                ? const _NowPlayingArtworkPlaceholder()
-                : Image.network(
-                    artworkUri,
-                    headers: musicArtworkRequestHeaders(artworkUri),
-                    fit: BoxFit.cover,
-                    excludeFromSemantics: true,
-                    gaplessPlayback: true,
-                    frameBuilder: musicArtworkFrameBuilder(
-                      const _NowPlayingArtworkPlaceholder(),
-                    ),
-                    errorBuilder: musicArtworkErrorBuilder(
-                      artworkUri,
-                      const _NowPlayingArtworkPlaceholder(),
-                    ),
-                  ),
-            if (busy || error)
-              ColoredBox(
-                key: const ValueKey('now-playing-artwork-state'),
-                color: Colors.black.withValues(alpha: 0.44),
-                child: Center(
-                  child: busy
-                      ? const SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Icon(
-                          Icons.error_outline_rounded,
-                          color: Theme.of(context).colorScheme.errorContainer,
-                          size: 24,
-                        ),
-                ),
+      child: editorial.isEditorial
+          ? DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                border: Border.all(color: editorial.hairline),
               ),
-          ],
-        ),
-      ),
+              child: clipped,
+            )
+          : clipped,
     );
     return Semantics(
       container: true,
@@ -2645,24 +2723,10 @@ class _NowPlayingArtworkPlaceholder extends StatelessWidget {
   const _NowPlayingArtworkPlaceholder();
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      key: const ValueKey('now-playing-artwork-placeholder'),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colors.primaryContainer, colors.tertiaryContainer],
-        ),
-      ),
-      child: Icon(
-        Icons.album_rounded,
-        color: colors.onPrimaryContainer,
-        size: 28,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const MusicArtworkPlaceholder(
+    key: ValueKey('now-playing-artwork-placeholder'),
+    kind: MusicArtworkKind.album,
+  );
 }
 
 bool _canStop(TrackPlaybackStage stage) => switch (stage) {

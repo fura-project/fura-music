@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutterustmusic/fura_toast.dart';
 import 'package:flutterustmusic/catalog/catalog_models.dart';
 import 'package:flutterustmusic/catalog/music_artwork_network.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/catalog/music_content_state.dart';
 import 'package:flutterustmusic/catalog/partial_results_notice.dart';
 import 'package:flutterustmusic/library/album_favorite_presentation_controller.dart';
@@ -1071,14 +1072,29 @@ class _LikedPlaylistCardState extends State<_LikedPlaylistCard> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final editorial = context.editorialTheme;
+    final radius = editorial.isEditorial
+        ? editorial.artworkRadius
+        : MusicRadii.artwork;
     final playlist = widget.playlist;
     final compact = MediaQuery.sizeOf(context).width < 760;
-    final artwork = ColoredBox(
-      color: colors.secondaryContainer,
-      child: Icon(
-        Icons.queue_music_rounded,
-        size: 42,
-        color: colors.onSecondaryContainer,
+    const artwork = MusicArtworkPlaceholder(kind: MusicArtworkKind.playlist);
+    final clippedArtwork = ClipRRect(
+      borderRadius: radius,
+      child: SizedBox.expand(
+        child: playlist.artworkUri == null
+            ? artwork
+            : Image.network(
+                playlist.artworkUri!,
+                headers: musicArtworkRequestHeaders(playlist.artworkUri!),
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                frameBuilder: musicArtworkFrameBuilder(artwork),
+                errorBuilder: musicArtworkErrorBuilder(
+                  playlist.artworkUri!,
+                  artwork,
+                ),
+              ),
       ),
     );
     final card = Semantics(
@@ -1108,7 +1124,7 @@ class _LikedPlaylistCardState extends State<_LikedPlaylistCard> {
           onTap: widget.onTap,
           onLongPress: widget.onDelete == null ? null : _openMenu,
           onSecondaryTap: widget.onDelete == null ? null : _openMenu,
-          borderRadius: MusicRadii.artwork,
+          borderRadius: radius,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1116,26 +1132,16 @@ class _LikedPlaylistCardState extends State<_LikedPlaylistCard> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    ClipRRect(
-                      borderRadius: MusicRadii.artwork,
-                      child: SizedBox.expand(
-                        child: playlist.artworkUri == null
-                            ? artwork
-                            : Image.network(
-                                playlist.artworkUri!,
-                                headers: musicArtworkRequestHeaders(
-                                  playlist.artworkUri!,
-                                ),
-                                fit: BoxFit.cover,
-                                gaplessPlayback: true,
-                                frameBuilder: musicArtworkFrameBuilder(artwork),
-                                errorBuilder: musicArtworkErrorBuilder(
-                                  playlist.artworkUri!,
-                                  artwork,
-                                ),
-                              ),
-                      ),
-                    ),
+                    editorial.isEditorial
+                        ? DecoratedBox(
+                            position: DecorationPosition.foreground,
+                            decoration: BoxDecoration(
+                              borderRadius: radius,
+                              border: Border.all(color: editorial.hairline),
+                            ),
+                            child: clippedArtwork,
+                          )
+                        : clippedArtwork,
                     if (compact && widget.onDelete != null)
                       PositionedDirectional(
                         top: 6,
@@ -1157,8 +1163,11 @@ class _LikedPlaylistCardState extends State<_LikedPlaylistCard> {
                 playlist.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.w600),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: editorial.isEditorial
+                      ? FontWeight.w500
+                      : FontWeight.w600,
+                ),
               ),
               if (playlist.trackCount case final count?) ...[
                 const SizedBox(height: 3),
@@ -1262,25 +1271,50 @@ class _RefreshButton extends StatelessWidget {
   final bool compact;
 
   @override
-  Widget build(BuildContext context) => compact
-      ? IconButton.filledTonal(
-          key: const ValueKey('liked-songs-refresh-compact'),
-          tooltip: refreshing
-              ? context.l10n.likedRefreshing
-              : context.l10n.likedRefreshSongs,
-          onPressed: onPressed,
-          icon: const Icon(Icons.refresh_rounded),
-        )
-      : FilledButton.tonalIcon(
-          key: const ValueKey('liked-songs-refresh'),
-          onPressed: onPressed,
-          icon: const Icon(Icons.refresh_rounded),
-          label: Text(
-            refreshing
+  Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
+    final labelText = refreshing
+        ? context.l10n.likedRefreshing
+        : context.l10n.commonRefresh;
+    if (editorial.isEditorial) {
+      return compact
+          ? IconButton.outlined(
+              key: const ValueKey('liked-songs-refresh-compact'),
+              tooltip: refreshing
+                  ? context.l10n.likedRefreshing
+                  : context.l10n.likedRefreshSongs,
+              onPressed: onPressed,
+              style: IconButton.styleFrom(
+                side: BorderSide(color: editorial.ruleStrong),
+                shape: RoundedRectangleBorder(
+                  borderRadius: editorial.controlRadius,
+                ),
+              ),
+              icon: const Icon(Icons.refresh_rounded, size: 20),
+            )
+          : OutlinedButton.icon(
+              key: const ValueKey('liked-songs-refresh'),
+              onPressed: onPressed,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: Text(labelText),
+            );
+    }
+    return compact
+        ? IconButton.filledTonal(
+            key: const ValueKey('liked-songs-refresh-compact'),
+            tooltip: refreshing
                 ? context.l10n.likedRefreshing
-                : context.l10n.commonRefresh,
-          ),
-        );
+                : context.l10n.likedRefreshSongs,
+            onPressed: onPressed,
+            icon: const Icon(Icons.refresh_rounded),
+          )
+        : FilledButton.tonalIcon(
+            key: const ValueKey('liked-songs-refresh'),
+            onPressed: onPressed,
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(labelText),
+          );
+  }
 }
 
 class _LikedCollectionSearch extends StatelessWidget {

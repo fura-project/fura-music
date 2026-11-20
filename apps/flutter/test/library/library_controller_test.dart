@@ -86,6 +86,53 @@ void main() {
     controller.dispose();
   });
 
+  test('maps initial library failures and exposes retry only for its current policy', () async {
+    const cases = [
+      (UserLibraryFailure.network, UserLibraryStage.error, true),
+      (UserLibraryFailure.serviceUnavailable, UserLibraryStage.error, true),
+      (UserLibraryFailure.invalidResponse, UserLibraryStage.error, true),
+      (UserLibraryFailure.coreUnavailable, UserLibraryStage.error, true),
+      (UserLibraryFailure.alreadyRunning, UserLibraryStage.error, false),
+      (
+        UserLibraryFailure.credentialRejected,
+        UserLibraryStage.credentialRejected,
+        false,
+      ),
+      (
+        UserLibraryFailure.credentialRejectedStorageCleanupFailed,
+        UserLibraryStage.credentialRejected,
+        false,
+      ),
+      (
+        UserLibraryFailure.authenticationRequired,
+        UserLibraryStage.authenticationRequired,
+        false,
+      ),
+      (
+        UserLibraryFailure.replaced,
+        UserLibraryStage.authenticationRequired,
+        false,
+      ),
+      (
+        UserLibraryFailure.cancelled,
+        UserLibraryStage.authenticationRequired,
+        false,
+      ),
+    ];
+    for (final (failure, stage, retry) in cases) {
+      final gateway = _FakeGateway();
+      final controller = UserLibraryController(gateway);
+      final load = controller.load();
+      gateway.complete(0, UserLibraryResult(failure: failure));
+      await load;
+      expect(controller.failure, failure);
+      expect(controller.stage, stage);
+      expect(controller.canRetry, retry);
+      expect(controller.playlists, isEmpty);
+      controller.dispose();
+    }
+  });
+
   test('restart cancels and suppresses a late result', () async {
     final gateway = _FakeGateway();
     final controller = UserLibraryController(gateway);

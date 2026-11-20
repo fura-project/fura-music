@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutterustmusic/theme/material_theme.dart';
 
 class MusicCatalogHeader extends StatelessWidget {
   const MusicCatalogHeader({
@@ -20,6 +21,7 @@ class MusicCatalogHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final editorial = context.editorialTheme;
     final alignment = desktop
         ? CrossAxisAlignment.start
         : CrossAxisAlignment.center;
@@ -28,13 +30,15 @@ class MusicCatalogHeader extends StatelessWidget {
       crossAxisAlignment: alignment,
       children: [
         Text(
-          eyebrow,
+          editorial.isEditorial ? '01 · ${eyebrow.toUpperCase()}' : eyebrow,
           textAlign: textAlignment,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.1,
-          ),
+          style: editorial.isEditorial
+              ? editorial.eyebrow(Theme.of(context).textTheme.labelSmall)
+              : Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                ),
         ),
         const SizedBox(height: 6),
         Semantics(
@@ -45,8 +49,16 @@ class MusicCatalogHeader extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             textAlign: textAlignment,
-            style: Theme.of(context).textTheme.headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w800),
+            style: editorial.isEditorial
+                ? editorial.serif(
+                    desktop
+                        ? Theme.of(context).textTheme.headlineMedium
+                        : Theme.of(context).textTheme.headlineSmall,
+                    fontWeight: FontWeight.w600,
+                    color: editorial.inkPrimary,
+                  )
+                : Theme.of(context).textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
         ...children,
