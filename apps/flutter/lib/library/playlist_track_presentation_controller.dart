@@ -388,7 +388,7 @@ class _PlaylistPickerArtwork extends StatelessWidget {
               headers: musicArtworkRequestHeaders(resolvedUri),
               fit: BoxFit.cover,
               excludeFromSemantics: true,
-              gaplessPlayback: true,
+              gaplessPlayback: false,
               frameBuilder: musicArtworkFrameBuilder(fallback),
               errorBuilder: musicArtworkErrorBuilder(resolvedUri, fallback),
             ),

@@ -19,6 +19,7 @@ import 'package:flutterustmusic/discover/ranking_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlist_gateway.dart';
 import 'package:flutterustmusic/discover/recommended_playlists_page.dart';
 import 'package:flutterustmusic/home/daily_recommendation_gateway.dart';
+import 'package:flutterustmusic/home/home_page.dart';
 import 'package:flutterustmusic/home/personalized_playlist_gateway.dart';
 import 'package:flutterustmusic/home/personalized_track_gateway.dart';
 import 'package:flutterustmusic/home/recent_listening_gateway.dart';
@@ -28,6 +29,7 @@ import 'package:flutterustmusic/library/favorite_artist_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
+import 'package:flutterustmusic/library/recent_plays_page.dart';
 import 'package:flutterustmusic/library/user_library_page.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
@@ -1035,6 +1037,387 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets(
+    'HomePage.active and RecentPlaysPage.active toggle synchronously on push and pop of ExpandedNowPlayingPage and embedded routes',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final session = _FakeAudioSession();
+      final queue = _makeQueue(session);
+      final host = _FakePlaybackHost(queue);
+      addTearDown(queue.dispose);
+
+      final paletteCache = ArtworkColorSchemeCache(
+        artworkImageProviderBuilder: (_) => _tinyArtwork(),
+        artworkColorSchemeLoader:
+            ({required provider, required brightness}) async =>
+                ColorScheme.fromSeed(
+                  seedColor: const Color(0xFF336699),
+                  brightness: brightness,
+                ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: MusicMaterialTheme.light(),
+          home: UserLibraryPage(
+            homeDependencies: AuthenticatedHomeDependencies(
+              accountSummaryGateway: RustAccountSummaryGateway(),
+              dailyRecommendationGateway: RustDailyRecommendationGateway(),
+              personalizedPlaylistsGateway: RustPersonalizedPlaylistsGateway(),
+              personalizedTracksGateway: RustPersonalizedTracksGateway(),
+              relatedTracksGateway: const RustRelatedTracksGateway(),
+              recentListeningFactory: _CountingRecentListeningGateway.new,
+            ),
+            libraryDependencies: AuthenticatedLibraryDependencies(
+              libraryGateway: const _IdleLibraryGateway(),
+              playlistDetailGateway: const _SingleTrackPlaylistDetailGateway(),
+              albumTrackGateway: const RustAlbumTrackGateway(),
+              albumDetailsGateway: const RustAlbumDetailsGateway(),
+              artistTrackGateway: const RustArtistTrackGateway(),
+              artistAlbumGateway: const RustArtistAlbumGateway(),
+              favoriteAlbumGateway: RustFavoriteAlbumGateway(),
+              favoriteArtistGateway: RustFavoriteArtistGateway(),
+            ),
+            discoveryDependencies: AuthenticatedDiscoveryDependencies(
+              trackSearchGateway: const RustTrackSearchGateway(),
+              artistSearchGateway: const RustArtistSearchGateway(),
+              albumSearchGateway: const RustAlbumSearchGateway(),
+              playlistSearchGateway: const RustPlaylistSearchGateway(),
+              recommendedPlaylistGateway:
+                  const _EmptyRecommendedPlaylistGateway(),
+              newAlbumGateway: const RustNewAlbumGateway(),
+              newSongGateway: const RustNewSongGateway(),
+              rankingGateway: const RustRankingGateway(),
+              radarGateway: RustRadarGateway(),
+            ),
+            playbackDependencies: AuthenticatedPlaybackDependencies(
+              playbackHost: host,
+              trackCommentGateway: const RustTrackCommentGateway(),
+            ),
+            capabilities: MusicProviderCapabilities.qqMusic,
+            settings: AppSettings.defaults,
+            onSettingsChanged: (_) async => AppSettingsWriteResult.saved,
+            authenticated: true,
+            onRequestSignIn: () {},
+            onSignInAgain: () {},
+            onSignOut: () async => CredentialSignOutResult.signedOut,
+            expandedNowPlayingPaletteCache: paletteCache,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await queue.replaceAndPlay(const [_trackA, _trackB], 0);
+      await tester.pumpAndSettle();
+
+      bool homeActive() => tester
+          .widget<HomePage>(find.byType(HomePage, skipOffstage: false))
+          .active;
+      bool recentActive() => tester
+          .widget<RecentPlaysPage>(
+            find.byType(RecentPlaysPage, skipOffstage: false),
+          )
+          .active;
+
+      expect(homeActive(), isTrue);
+
+      // Push ExpandedNowPlayingPage -> HomePage.active must turn false on the
+      // very first frame (no 1-frame stale lag).
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+      await tester.pump();
+      expect(homeActive(), isFalse);
+      await tester.pumpAndSettle();
+      expect(homeActive(), isFalse);
+
+      // Pop ExpandedNowPlayingPage -> HomePage.active must turn true on the
+      // very first frame.
+      await tester.tap(find.byKey(const ValueKey('expanded-now-playing-back')));
+      await tester.pump();
+      expect(homeActive(), isTrue);
+      await tester.pumpAndSettle();
+      expect(homeActive(), isTrue);
+
+      // Push embedded Settings route -> HomePage.active turns false immediately.
+      await tester.tap(find.byKey(const ValueKey('open-settings')));
+      await tester.pump();
+      expect(homeActive(), isFalse);
+      await tester.pumpAndSettle();
+      expect(homeActive(), isFalse);
+
+      // Pop embedded Settings route -> HomePage.active turns true on the very
+      // first frame (previously stuck false due to stale _overlayPageActive).
+      await tester.tap(find.byKey(const ValueKey('settings-sidebar-back')));
+      await tester.pump();
+      expect(homeActive(), isTrue);
+      await tester.pumpAndSettle();
+      expect(homeActive(), isTrue);
+
+      // Switch to Recent Plays destination.
+      await tester.tap(find.byKey(const ValueKey('open-recent-plays')));
+      await tester.pump();
+      expect(homeActive(), isFalse);
+      expect(recentActive(), isTrue);
+      await tester.pumpAndSettle();
+
+      // Push/pop ExpandedNowPlayingPage from Recent Plays.
+      await tester.tap(find.byKey(const ValueKey('now-playing-open-expanded')));
+      await tester.pump();
+      expect(recentActive(), isFalse);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('expanded-now-playing-back')));
+      await tester.pump();
+      expect(recentActive(), isTrue);
+      await tester.pumpAndSettle();
+
+      // Push/pop embedded Settings route from Recent Plays.
+      await tester.tap(find.byKey(const ValueKey('open-settings')));
+      await tester.pump();
+      expect(recentActive(), isFalse);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('settings-sidebar-back')));
+      await tester.pump();
+      expect(recentActive(), isTrue);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'UserLibraryPage performs bounded 1-track lookahead artwork/palette prefetch',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const trackC = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:perf-c',
+        title: 'Performance Track C',
+        artistNames: ['Artist C'],
+        albumTitle: 'Album C',
+        artworkUri: 'https://example.invalid/perf-c.jpg',
+        durationSeconds: 195,
+      );
+      const trackSameArtAsA = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:perf-a-dup',
+        title: 'Performance Track A Dup',
+        artistNames: ['Artist A'],
+        albumTitle: 'Album A',
+        artworkUri: 'https://example.invalid/perf-a.jpg',
+        durationSeconds: 185,
+      );
+
+      final session = _FakeAudioSession();
+      final queue = _makeQueue(session);
+      final host = _FakePlaybackHost(queue);
+      addTearDown(queue.dispose);
+
+      final requestedUris = <String>[];
+      final paletteCache = ArtworkColorSchemeCache(
+        artworkImageProviderBuilder: (uri) {
+          requestedUris.add(uri);
+          return _tinyArtwork();
+        },
+        artworkColorSchemeLoader:
+            ({required provider, required brightness}) async =>
+                ColorScheme.fromSeed(
+                  seedColor: const Color(0xFF336699),
+                  brightness: brightness,
+                ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: MusicMaterialTheme.light(),
+          home: UserLibraryPage(
+            homeDependencies: AuthenticatedHomeDependencies(
+              accountSummaryGateway: RustAccountSummaryGateway(),
+              dailyRecommendationGateway: RustDailyRecommendationGateway(),
+              personalizedPlaylistsGateway: RustPersonalizedPlaylistsGateway(),
+              personalizedTracksGateway: RustPersonalizedTracksGateway(),
+              relatedTracksGateway: const RustRelatedTracksGateway(),
+              recentListeningFactory: _CountingRecentListeningGateway.new,
+            ),
+            libraryDependencies: AuthenticatedLibraryDependencies(
+              libraryGateway: const _IdleLibraryGateway(),
+              playlistDetailGateway: const _SingleTrackPlaylistDetailGateway(),
+              albumTrackGateway: const RustAlbumTrackGateway(),
+              albumDetailsGateway: const RustAlbumDetailsGateway(),
+              artistTrackGateway: const RustArtistTrackGateway(),
+              artistAlbumGateway: const RustArtistAlbumGateway(),
+              favoriteAlbumGateway: RustFavoriteAlbumGateway(),
+              favoriteArtistGateway: RustFavoriteArtistGateway(),
+            ),
+            discoveryDependencies: AuthenticatedDiscoveryDependencies(
+              trackSearchGateway: const RustTrackSearchGateway(),
+              artistSearchGateway: const RustArtistSearchGateway(),
+              albumSearchGateway: const RustAlbumSearchGateway(),
+              playlistSearchGateway: const RustPlaylistSearchGateway(),
+              recommendedPlaylistGateway:
+                  const _EmptyRecommendedPlaylistGateway(),
+              newAlbumGateway: const RustNewAlbumGateway(),
+              newSongGateway: const RustNewSongGateway(),
+              rankingGateway: const RustRankingGateway(),
+              radarGateway: RustRadarGateway(),
+            ),
+            playbackDependencies: AuthenticatedPlaybackDependencies(
+              playbackHost: host,
+              trackCommentGateway: const RustTrackCommentGateway(),
+            ),
+            capabilities: MusicProviderCapabilities.qqMusic,
+            settings: AppSettings.defaults,
+            onSettingsChanged: (_) async => AppSettingsWriteResult.saved,
+            authenticated: true,
+            onRequestSignIn: () {},
+            onSignInAgain: () {},
+            onSignOut: () async => CredentialSignOutResult.signedOut,
+            expandedNowPlayingPaletteCache: paletteCache,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Queue [A, B, C] at index 0: prefetches A (current) and B (1-track
+      // lookahead), but NOT C.
+      await queue.replaceAndPlay(const [_trackA, _trackB, trackC], 0);
+      await tester.pumpAndSettle();
+
+      expect(requestedUris, [_trackA.artworkUri, _trackB.artworkUri]);
+      expect(
+        paletteCache.lookup(
+          artworkUri: _trackA.artworkUri!,
+          brightness: Brightness.light,
+        ),
+        isNotNull,
+      );
+      expect(
+        paletteCache.lookup(
+          artworkUri: _trackB.artworkUri!,
+          brightness: Brightness.light,
+        ),
+        isNotNull,
+      );
+      expect(
+        paletteCache.lookup(
+          artworkUri: trackC.artworkUri!,
+          brightness: Brightness.light,
+        ),
+        isNull,
+      );
+
+      // Advancing to B hits cache for B and prefetches C as the new lookahead.
+      await queue.advance();
+      await tester.pumpAndSettle();
+      expect(requestedUris, [
+        _trackA.artworkUri,
+        _trackB.artworkUri,
+        trackC.artworkUri,
+      ]);
+      expect(
+        paletteCache.lookup(
+          artworkUri: trackC.artworkUri!,
+          brightness: Brightness.light,
+        ),
+        isNotNull,
+      );
+
+      // Repeat-all at the tail wraps lookahead to index 0 when distinct.
+      paletteCache.clear();
+      requestedUris.clear();
+      await queue.setRepeatMode(PlaybackRepeatMode.all);
+      await queue.select(2); // C at tail -> wraps lookahead to A
+      await tester.pumpAndSettle();
+      expect(requestedUris, [trackC.artworkUri, _trackA.artworkUri]);
+
+      // Distinct-artwork check: same artworkUri on next track does not trigger
+      // a duplicate fetch.
+      paletteCache.clear();
+      requestedUris.clear();
+      await queue.setRepeatMode(PlaybackRepeatMode.off);
+      await queue.replaceAndPlay(const [_trackA, trackSameArtAsA], 0);
+      await tester.pumpAndSettle();
+      expect(requestedUris, [_trackA.artworkUri]);
+
+      // Shuffle mode skips sequential lookahead.
+      paletteCache.clear();
+      requestedUris.clear();
+      await queue.setOrder(PlaybackOrder.shuffle);
+      await queue.replaceAndPlay(const [_trackB, trackC], 0);
+      await tester.pumpAndSettle();
+      expect(requestedUris, [_trackB.artworkUri]);
+
+      // In-place queue mutation while staying on index 0: removing index 1
+      // promotes trackC to index 1 and triggers lookahead for trackC.
+      const trackD = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:perf-d',
+        title: 'Performance Track D',
+        artistNames: ['Artist D'],
+        albumTitle: 'Album D',
+        artworkUri: 'https://example.invalid/perf-d.jpg',
+        durationSeconds: 205,
+      );
+      const trackBlankArt = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:perf-blank',
+        title: 'Performance Track Blank',
+        artistNames: ['Artist Blank'],
+        albumTitle: 'Album Blank',
+        artworkUri: '   ',
+        durationSeconds: 170,
+      );
+      paletteCache.clear();
+      requestedUris.clear();
+      // Switching back from shuffle -> sequential immediately triggers
+      // lookahead for the current next track (trackC).
+      await queue.setOrder(PlaybackOrder.sequential);
+      await tester.pumpAndSettle();
+      expect(requestedUris, [trackC.artworkUri]);
+
+      paletteCache.clear();
+      requestedUris.clear();
+      await queue.replaceAndPlay(const [_trackA, _trackB, trackC], 0);
+      await tester.pumpAndSettle();
+      expect(requestedUris, [_trackA.artworkUri, _trackB.artworkUri]);
+
+      await queue.remove(1);
+      await tester.pumpAndSettle();
+      expect(requestedUris, [
+        _trackA.artworkUri,
+        _trackB.artworkUri,
+        trackC.artworkUri,
+      ]);
+
+      // Pushing a next track onto a single-track queue triggers lookahead for
+      // the newly appended track without re-fetching the already-prefetched
+      // current track.
+      requestedUris.clear();
+      await queue.replaceAndPlay(const [_trackA], 0);
+      await tester.pumpAndSettle();
+      expect(requestedUris, isEmpty);
+
+      await queue.push(trackD);
+      await tester.pumpAndSettle();
+      expect(requestedUris, [trackD.artworkUri]);
+
+      // Blank/whitespace artworkUri on the next track is ignored cleanly.
+      paletteCache.clear();
+      requestedUris.clear();
+      await queue.replaceAndPlay(const [_trackB, trackBlankArt], 0);
+      await tester.pumpAndSettle();
+      expect(requestedUris, [_trackB.artworkUri]);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }
 
 const _trackA = PlaylistTrackSummary(
@@ -1218,8 +1601,24 @@ class _MutableQueueGateway implements PlaybackQueueGateway {
   ) => PlaybackQueueResult(snapshot: _current());
 
   @override
-  PlaybackQueueResult remove(int index) =>
-      PlaybackQueueResult(snapshot: _current());
+  PlaybackQueueResult remove(int index) {
+    if (index < 0 || index >= _tracks.length) {
+      return PlaybackQueueResult(snapshot: _current());
+    }
+    final next = List<PlaylistTrackSummary>.of(_tracks)..removeAt(index);
+    _tracks = List.unmodifiable(next);
+    final current = _index;
+    if (_tracks.isEmpty) {
+      _index = null;
+    } else if (current != null) {
+      if (index < current) {
+        _index = current - 1;
+      } else if (current >= _tracks.length) {
+        _index = _tracks.length - 1;
+      }
+    }
+    return PlaybackQueueResult(snapshot: _current());
+  }
 
   @override
   PlaybackQueueResult clear() {

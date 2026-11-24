@@ -616,7 +616,7 @@ class _AlbumArtwork extends StatelessWidget {
               width: double.infinity,
               height: double.infinity,
               fit: BoxFit.cover,
-              gaplessPlayback: true,
+              gaplessPlayback: false,
               frameBuilder: musicArtworkFrameBuilder(fallback),
               errorBuilder: musicArtworkErrorBuilder(uri, fallback),
             ),

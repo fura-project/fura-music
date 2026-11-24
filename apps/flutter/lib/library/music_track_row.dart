@@ -964,7 +964,7 @@ class MusicTrackArtwork extends StatelessWidget {
               uri!,
               headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
-              gaplessPlayback: true,
+              gaplessPlayback: false,
               frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),

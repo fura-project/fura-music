@@ -17,6 +17,7 @@ import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
+import 'package:flutterustmusic/settings/app_settings.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 void main() {
@@ -1181,6 +1182,504 @@ void main() {
       imageB.dispose();
     },
   );
+
+  testWidgets(
+    'retains previous palette during same-brightness uncached track switch, falls back on null/error or missing artwork, and resets across brightness change',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const trackA = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:pal-a',
+        title: 'Palette Track A',
+        artistNames: ['Artist A'],
+        artworkUri: 'https://example.invalid/pal-a.png',
+        durationSeconds: 180,
+      );
+      const trackB = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:pal-b',
+        title: 'Palette Track B',
+        artistNames: ['Artist B'],
+        artworkUri: 'https://example.invalid/pal-b.png',
+        durationSeconds: 180,
+      );
+      const trackC = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:pal-c',
+        title: 'Palette Track C',
+        artistNames: ['Artist C'],
+        artworkUri: 'https://example.invalid/pal-c.png',
+        durationSeconds: 180,
+      );
+      const trackNoArt = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:pal-none',
+        title: 'Palette Track Without Artwork',
+        artistNames: ['Artist D'],
+        durationSeconds: 180,
+      );
+
+      final controller = QueuePlaybackController(
+        _MutableQueueGateway(const [trackA, trackB, trackC, trackNoArt]),
+        TrackPlaybackController(
+          const _MediaGateway(),
+          ForegroundPlaybackController(const _AudioEngine()),
+        ),
+        lyrics: LyricController(const _LyricGateway()),
+      );
+      addTearDown(controller.dispose);
+
+      final lightBase = MusicMaterialTheme.light();
+      final darkBase = MusicMaterialTheme.dark();
+      final schemeA = ColorScheme.fromSeed(
+        seedColor: const Color(0xFF1D6FA5),
+        brightness: Brightness.light,
+      );
+      final schemeB = ColorScheme.fromSeed(
+        seedColor: const Color(0xFFA53D1D),
+        brightness: Brightness.light,
+      );
+      final normalizedA = normalizeArtworkColorScheme(
+        schemeA,
+        fallback: lightBase.colorScheme,
+      );
+      final normalizedB = normalizeArtworkColorScheme(
+        schemeB,
+        fallback: lightBase.colorScheme,
+      );
+
+      final pendingB = Completer<ColorScheme>();
+      final pendingC = Completer<ColorScheme>();
+      final pendingDarkA = Completer<ColorScheme>();
+
+      final cache = ArtworkColorSchemeCache(
+        artworkImageProviderBuilder: (_) => _artwork(),
+        artworkColorSchemeLoader: ({required provider, required brightness}) {
+          final currentUri = controller.current?.artworkUri;
+          if (brightness == Brightness.dark) {
+            return pendingDarkA.future;
+          }
+          if (currentUri == trackA.artworkUri) {
+            return Future<ColorScheme>.value(schemeA);
+          }
+          if (currentUri == trackB.artworkUri) {
+            return pendingB.future;
+          }
+          if (currentUri == trackC.artworkUri) {
+            return pendingC.future;
+          }
+          return Future<ColorScheme>.error(StateError('unexpected uri'));
+        },
+      );
+
+      var theme = lightBase;
+      late StateSetter updateTheme;
+      await tester.pumpWidget(
+        StatefulBuilder(
+          builder: (context, setState) {
+            updateTheme = setState;
+            return MaterialApp(
+              theme: theme,
+              themeAnimationDuration: Duration.zero,
+              home: ExpandedNowPlayingPage(
+                controller: controller,
+                onBack: () {},
+                onSignInAgain: () {},
+                artworkImageProviderBuilder: (_) => _artwork(),
+                artworkColorSchemeCache: cache,
+              ),
+            );
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      Color backdropPrimary() => Theme.of(
+        tester.element(
+          find.byKey(const ValueKey('expanded-now-playing-artwork-backdrop')),
+        ),
+      ).colorScheme.primary;
+
+      // Track A resolves to schemeA.
+      expect(backdropPrimary(), normalizedA.primary);
+
+      // Advance to uncached Track B: retains schemeA while B is pending.
+      await controller.advance();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(backdropPrimary(), normalizedA.primary);
+      expect(backdropPrimary(), isNot(lightBase.colorScheme.primary));
+
+      // Track B resolves: transitions cleanly to schemeB.
+      pendingB.complete(schemeB);
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), normalizedB.primary);
+
+      // Advance to uncached Track C: retains schemeB while C is pending.
+      await controller.advance();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(backdropPrimary(), normalizedB.primary);
+
+      // Track C fails (resolves to null): must fall back to baseTheme rather
+      // than sticking on Track B's palette.
+      pendingC.completeError(StateError('timeout'));
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), lightBase.colorScheme.primary);
+
+      // Return to cached Track B so brightness flip starts from a resolved light palette.
+      await controller.rewind();
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), normalizedB.primary);
+
+      // Brightness flip light -> dark must NOT retain a light palette while
+      // the dark palette is pending.
+      updateTheme(() => theme = darkBase);
+      await tester.pump();
+      final pageAnimatedTheme = tester.widget<AnimatedTheme>(
+        find
+            .ancestor(
+              of: find.byKey(const ValueKey('expanded-now-playing-page')),
+              matching: find.byType(AnimatedTheme),
+            )
+            .first,
+      );
+      expect(
+        pageAnimatedTheme.data.colorScheme.primary,
+        darkBase.colorScheme.primary,
+      );
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), darkBase.colorScheme.primary);
+
+      // Switch back to light (cached B) and verify switching to a track with
+      // artworkUri == null immediately clears back to light base scheme.
+      updateTheme(() => theme = lightBase);
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), normalizedB.primary);
+
+      await controller.advance(); // C (uncached, will fail)
+      await controller.advance(); // trackNoArt (artworkUri == null)
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), lightBase.colorScheme.primary);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'generation guard ignores stale mid-flight palette responses and blank artworkUri falls back immediately',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const trackA = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:race-a',
+        title: 'Race Track A',
+        artistNames: ['Artist A'],
+        artworkUri: 'https://example.invalid/race-a.png',
+        durationSeconds: 180,
+      );
+      const trackB = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:race-b',
+        title: 'Race Track B',
+        artistNames: ['Artist B'],
+        artworkUri: 'https://example.invalid/race-b.png',
+        durationSeconds: 180,
+      );
+      const trackC = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:race-c',
+        title: 'Race Track C',
+        artistNames: ['Artist C'],
+        artworkUri: 'https://example.invalid/race-c.png',
+        durationSeconds: 180,
+      );
+      const trackD = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:race-d',
+        title: 'Race Track D',
+        artistNames: ['Artist D'],
+        artworkUri: 'https://example.invalid/race-d.png',
+        durationSeconds: 180,
+      );
+      const trackE = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:race-e',
+        title: 'Race Track E',
+        artistNames: ['Artist E'],
+        artworkUri: 'https://example.invalid/race-e.png',
+        durationSeconds: 180,
+      );
+      const trackBlankArt = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:race-blank',
+        title: 'Race Track Blank',
+        artistNames: ['Artist Blank'],
+        artworkUri: '   ',
+        durationSeconds: 180,
+      );
+
+      final controller = QueuePlaybackController(
+        _MutableQueueGateway(const [
+          trackA,
+          trackB,
+          trackC,
+          trackD,
+          trackE,
+          trackBlankArt,
+        ]),
+        TrackPlaybackController(
+          const _MediaGateway(),
+          ForegroundPlaybackController(const _AudioEngine()),
+        ),
+        lyrics: LyricController(const _LyricGateway()),
+      );
+      addTearDown(controller.dispose);
+
+      final lightBase = MusicMaterialTheme.light();
+      final schemeA = ColorScheme.fromSeed(
+        seedColor: const Color(0xFF1D6FA5),
+        brightness: Brightness.light,
+      );
+      final schemeC = ColorScheme.fromSeed(
+        seedColor: const Color(0xFF2D8A4E),
+        brightness: Brightness.light,
+      );
+      final schemeD = ColorScheme.fromSeed(
+        seedColor: const Color(0xFF8A2D6E),
+        brightness: Brightness.light,
+      );
+      final normalizedA = normalizeArtworkColorScheme(
+        schemeA,
+        fallback: lightBase.colorScheme,
+      );
+      final normalizedC = normalizeArtworkColorScheme(
+        schemeC,
+        fallback: lightBase.colorScheme,
+      );
+
+      final pendingB = Completer<ColorScheme>();
+      final pendingC = Completer<ColorScheme>();
+      final pendingD = Completer<ColorScheme>();
+      final pendingE = Completer<ColorScheme>();
+      final requestedUris = <String>[];
+
+      final cache = ArtworkColorSchemeCache(
+        artworkImageProviderBuilder: (uri) {
+          requestedUris.add(uri);
+          return _artwork();
+        },
+        artworkColorSchemeLoader: ({required provider, required brightness}) {
+          final currentUri = requestedUris.last;
+          if (currentUri == trackA.artworkUri) {
+            return Future<ColorScheme>.value(schemeA);
+          }
+          if (currentUri == trackB.artworkUri) return pendingB.future;
+          if (currentUri == trackC.artworkUri) return pendingC.future;
+          if (currentUri == trackD.artworkUri) return pendingD.future;
+          if (currentUri == trackE.artworkUri) return pendingE.future;
+          return Future<ColorScheme>.error(
+            StateError('unexpected $currentUri'),
+          );
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: lightBase,
+          home: ExpandedNowPlayingPage(
+            controller: controller,
+            onBack: () {},
+            onSignInAgain: () {},
+            artworkImageProviderBuilder: (_) => _artwork(),
+            artworkColorSchemeCache: cache,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      Color backdropPrimary() => Theme.of(
+        tester.element(
+          find.byKey(const ValueKey('expanded-now-playing-artwork-backdrop')),
+        ),
+      ).colorScheme.primary;
+
+      expect(backdropPrimary(), normalizedA.primary);
+
+      // A (resolved) -> B (pending) -> C (pending).
+      // Fail stale B first: must NOT clear retained schemeA while C is pending.
+      await controller.advance(); // B
+      await tester.pump();
+      await controller.advance(); // C
+      await tester.pump();
+      pendingB.completeError(StateError('stale B failure'));
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), normalizedA.primary);
+
+      // Now C resolves: updates to schemeC.
+      pendingC.complete(schemeC);
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), normalizedC.primary);
+
+      // C (resolved) -> D (pending) -> E (pending).
+      // Resolve stale D first: must NOT overwrite retained schemeC.
+      await controller.advance(); // D
+      await tester.pump();
+      await controller.advance(); // E
+      await tester.pump();
+      pendingD.complete(schemeD);
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), normalizedC.primary);
+
+      // Now E fails: falls back cleanly to baseTheme.
+      pendingE.completeError(StateError('E timeout'));
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), lightBase.colorScheme.primary);
+
+      // Return to cached C, then switch to blank/whitespace artworkUri:
+      // falls back immediately without invoking the loader.
+      await controller.select(2);
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), normalizedC.primary);
+
+      final requestCountBeforeBlank = requestedUris.length;
+      await controller.select(5); // trackBlankArt ('   ')
+      await tester.pumpAndSettle();
+      expect(backdropPrimary(), lightBase.colorScheme.primary);
+      expect(requestedUris.length, requestCountBeforeBlank);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'editorial theme keeps editorial colorScheme tokens intact while ArtworkAtmosphere retains and falls back cleanly',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const trackA = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:ed-a',
+        title: 'Editorial A',
+        artistNames: ['Artist A'],
+        artworkUri: 'https://example.invalid/ed-a.png',
+        durationSeconds: 180,
+      );
+      const trackB = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:ed-b',
+        title: 'Editorial B',
+        artistNames: ['Artist B'],
+        artworkUri: 'https://example.invalid/ed-b.png',
+        durationSeconds: 180,
+      );
+
+      final controller = QueuePlaybackController(
+        _MutableQueueGateway(const [trackA, trackB]),
+        TrackPlaybackController(
+          const _MediaGateway(),
+          ForegroundPlaybackController(const _AudioEngine()),
+        ),
+        lyrics: LyricController(const _LyricGateway()),
+      );
+      addTearDown(controller.dispose);
+
+      final editorialBase = MusicMaterialTheme.light(
+        visualStyle: AppVisualStyle.editorial,
+      );
+      final schemeA = ColorScheme.fromSeed(
+        seedColor: const Color(0xFF1D6FA5),
+        brightness: Brightness.light,
+      );
+      final normalizedA = normalizeArtworkColorScheme(
+        schemeA,
+        fallback: editorialBase.colorScheme,
+      );
+      final expectedAtmosphereA = ArtworkAtmosphere.resolve(normalizedA);
+      final expectedBaseAtmosphere = ArtworkAtmosphere.resolve(
+        editorialBase.colorScheme,
+      );
+      final pendingB = Completer<ColorScheme>();
+
+      final cache = ArtworkColorSchemeCache(
+        artworkImageProviderBuilder: (_) => _artwork(),
+        artworkColorSchemeLoader: ({required provider, required brightness}) {
+          if (controller.current?.artworkUri == trackA.artworkUri) {
+            return Future<ColorScheme>.value(schemeA);
+          }
+          return pendingB.future;
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: editorialBase,
+          home: ExpandedNowPlayingPage(
+            controller: controller,
+            onBack: () {},
+            onSignInAgain: () {},
+            artworkImageProviderBuilder: (_) => _artwork(),
+            artworkColorSchemeCache: cache,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      ThemeData backdropTheme() => Theme.of(
+        tester.element(
+          find.byKey(const ValueKey('expanded-now-playing-artwork-backdrop')),
+        ),
+      );
+
+      // Editorial colorScheme stays locked to editorialBase while atmosphere tracks A.
+      expect(
+        backdropTheme().colorScheme.primary,
+        editorialBase.colorScheme.primary,
+      );
+      expect(
+        backdropTheme().extension<ArtworkAtmosphere>()!.primaryAmbient,
+        expectedAtmosphereA.primaryAmbient,
+      );
+
+      // Pending uncached B retains A's atmosphere and preserves editorial tokens.
+      await controller.advance();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        backdropTheme().colorScheme.primary,
+        editorialBase.colorScheme.primary,
+      );
+      expect(
+        backdropTheme().extension<ArtworkAtmosphere>()!.primaryAmbient,
+        expectedAtmosphereA.primaryAmbient,
+      );
+
+      // Failing B falls back atmosphere to editorialBase while keeping editorial tokens.
+      pendingB.completeError(StateError('editorial timeout'));
+      await tester.pumpAndSettle();
+      expect(
+        backdropTheme().colorScheme.primary,
+        editorialBase.colorScheme.primary,
+      );
+      expect(
+        backdropTheme().extension<ArtworkAtmosphere>()!.primaryAmbient,
+        expectedBaseAtmosphere.primaryAmbient,
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }
 
 class _PendingCoverProvider extends ImageProvider<_PendingCoverProvider> {
@@ -1515,6 +2014,12 @@ class _MutableQueueGateway extends _QueueGateway {
   @override
   PlaybackQueueResult rewind() {
     if (_index > 0) _index -= 1;
+    return PlaybackQueueResult(snapshot: _current());
+  }
+
+  @override
+  PlaybackQueueResult select(int index) {
+    if (index >= 0 && index < _tracks.length) _index = index;
     return PlaybackQueueResult(snapshot: _current());
   }
 }

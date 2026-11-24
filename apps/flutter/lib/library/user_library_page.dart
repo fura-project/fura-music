@@ -43,6 +43,7 @@ import 'package:flutterustmusic/library/library_mutation_feedback.dart';
 import 'package:flutterustmusic/library/library_refresh_failure_banner.dart';
 import 'package:flutterustmusic/library/liked_songs_page.dart';
 import 'package:flutterustmusic/library/recent_plays_page.dart';
+import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_page.dart';
 import 'package:flutterustmusic/library/track_like_presentation_controller.dart';
 import 'package:flutterustmusic/library/playlist_track_presentation_controller.dart';
@@ -52,6 +53,7 @@ import 'package:flutterustmusic/playback/expanded_now_playing_navigation.dart';
 import 'package:flutterustmusic/playback/expanded_now_playing_page.dart';
 import 'package:flutterustmusic/playback/now_playing_bar.dart';
 import 'package:flutterustmusic/playback/playback_quality.dart';
+import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/playback_shortcuts.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
@@ -695,6 +697,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
   final Map<String, CollectionDetailActions> _collectionShellActions = {};
   String? _prefetchedArtworkUri;
   Brightness? _prefetchedArtworkBrightness;
+  String? _prefetchedNextArtworkUri;
+  Brightness? _prefetchedNextArtworkBrightness;
   String? _lastObservedProviderId;
   String? _lastObservedOpaqueId;
   bool? _lastObservedPlaying;
@@ -844,6 +848,8 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
           widget.expandedNowPlayingPaletteCache ?? ArtworkColorSchemeCache();
       _prefetchedArtworkUri = null;
       _prefetchedArtworkBrightness = null;
+      _prefetchedNextArtworkUri = null;
+      _prefetchedNextArtworkBrightness = null;
       _prefetchExpandedNowPlayingPalette();
     }
     final providerChanged =
@@ -950,32 +956,79 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     _prefetchExpandedNowPlayingPalette();
   }
 
+  String? _nextQueuedArtworkUri(String? currentArtworkUri) {
+    final snapshot = _queuePlaybackController.snapshot;
+    final currentIndex = snapshot.currentIndex;
+    if (currentIndex == null ||
+        currentIndex < 0 ||
+        currentIndex >= snapshot.tracks.length ||
+        snapshot.order != PlaybackOrder.sequential) {
+      return null;
+    }
+    final nextIndex = currentIndex + 1;
+    final PlaylistTrackSummary? nextTrack;
+    if (nextIndex < snapshot.tracks.length) {
+      nextTrack = snapshot.tracks[nextIndex];
+    } else if (snapshot.repeatMode == PlaybackRepeatMode.all &&
+        snapshot.tracks.length > 1) {
+      nextTrack = snapshot.tracks.first;
+    } else {
+      nextTrack = null;
+    }
+    final nextUri = nextTrack?.artworkUri;
+    if (nextUri == null ||
+        nextUri.trim().isEmpty ||
+        nextUri == currentArtworkUri) {
+      return null;
+    }
+    return nextUri;
+  }
+
   void _prefetchExpandedNowPlayingPalette() {
     if (!mounted) return;
-    final artworkUri = _queuePlaybackController.current?.artworkUri;
+    final brightness = Theme.of(context).brightness;
+    final rawArtworkUri = _queuePlaybackController.current?.artworkUri;
+    final artworkUri = rawArtworkUri == null || rawArtworkUri.trim().isEmpty
+        ? null
+        : rawArtworkUri;
     if (artworkUri == null) {
       _prefetchedArtworkUri = null;
       _prefetchedArtworkBrightness = null;
+    } else if (_prefetchedArtworkUri != artworkUri ||
+        _prefetchedArtworkBrightness != brightness) {
+      _prefetchedArtworkUri = artworkUri;
+      _prefetchedArtworkBrightness = brightness;
+      unawaited(
+        _expandedNowPlayingPalette
+            .resolve(artworkUri: artworkUri, brightness: brightness)
+            .then((scheme) {
+              if (!mounted || scheme != null) return;
+              if (_prefetchedArtworkUri == artworkUri &&
+                  _prefetchedArtworkBrightness == brightness) {
+                _prefetchedArtworkUri = null;
+                _prefetchedArtworkBrightness = null;
+              }
+            }),
+      );
+    }
+
+    final nextArtworkUri = _nextQueuedArtworkUri(artworkUri);
+    if (nextArtworkUri == null) {
+      _prefetchedNextArtworkUri = null;
+      _prefetchedNextArtworkBrightness = null;
       return;
     }
-    final brightness = Theme.of(context).brightness;
-    if (_prefetchedArtworkUri == artworkUri &&
-        _prefetchedArtworkBrightness == brightness) {
+    if (_prefetchedNextArtworkUri == nextArtworkUri &&
+        _prefetchedNextArtworkBrightness == brightness) {
       return;
     }
-    _prefetchedArtworkUri = artworkUri;
-    _prefetchedArtworkBrightness = brightness;
+    _prefetchedNextArtworkUri = nextArtworkUri;
+    _prefetchedNextArtworkBrightness = brightness;
     unawaited(
-      _expandedNowPlayingPalette
-          .resolve(artworkUri: artworkUri, brightness: brightness)
-          .then((scheme) {
-            if (!mounted || scheme != null) return;
-            if (_prefetchedArtworkUri == artworkUri &&
-                _prefetchedArtworkBrightness == brightness) {
-              _prefetchedArtworkUri = null;
-              _prefetchedArtworkBrightness = null;
-            }
-          }),
+      _expandedNowPlayingPalette.resolve(
+        artworkUri: nextArtworkUri,
+        brightness: brightness,
+      ),
     );
   }
 
@@ -2166,7 +2219,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
             active:
                 destination == AuthenticatedPrimaryDestination.home &&
                 embeddedShellRoute == null &&
-                !_overlayPageActive,
+                !_hasOverlayPage,
             onOpenDiscover: () {
               _discoverNavigationController.show(DiscoverDestination.playlists);
               _selectPrimaryDestination(
@@ -2276,7 +2329,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               active:
                   destination == AuthenticatedPrimaryDestination.recentPlays &&
                   embeddedShellRoute == null &&
-                  !_overlayPageActive,
+                  !_hasOverlayPage,
             )
           else
             const SizedBox.shrink(),
@@ -3662,6 +3715,7 @@ class _SidebarIdentity extends StatelessWidget {
                                     gaplessPlayback: true,
                                     frameBuilder: musicArtworkFrameBuilder(
                                       brandFallback,
+                                      preservePreviousFrame: true,
                                     ),
                                     errorBuilder: musicArtworkErrorBuilder(
                                       avatarUri!,
@@ -3682,6 +3736,7 @@ class _SidebarIdentity extends StatelessWidget {
                                   gaplessPlayback: true,
                                   frameBuilder: musicArtworkFrameBuilder(
                                     brandFallback,
+                                    preservePreviousFrame: true,
                                   ),
                                   errorBuilder: musicArtworkErrorBuilder(
                                     avatarUri!,
@@ -4775,7 +4830,7 @@ class _PlaylistArtwork extends StatelessWidget {
               fit: BoxFit.cover,
               width: double.infinity,
               height: double.infinity,
-              gaplessPlayback: true,
+              gaplessPlayback: false,
               frameBuilder: musicArtworkFrameBuilder(
                 const _ArtworkPlaceholder(),
               ),

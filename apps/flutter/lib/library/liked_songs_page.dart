@@ -1088,7 +1088,7 @@ class _LikedPlaylistCardState extends State<_LikedPlaylistCard> {
                 playlist.artworkUri!,
                 headers: musicArtworkRequestHeaders(playlist.artworkUri!),
                 fit: BoxFit.cover,
-                gaplessPlayback: true,
+                gaplessPlayback: false,
                 frameBuilder: musicArtworkFrameBuilder(artwork),
                 errorBuilder: musicArtworkErrorBuilder(
                   playlist.artworkUri!,

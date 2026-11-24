@@ -344,7 +344,10 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
   }) {
     if (!mounted) return;
     final brightness = Theme.of(context).brightness;
-    final artworkUri = widget.controller.current?.artworkUri;
+    final rawArtworkUri = widget.controller.current?.artworkUri;
+    final artworkUri = rawArtworkUri == null || rawArtworkUri.trim().isEmpty
+        ? null
+        : rawArtworkUri;
     if (_resolvedArtworkUri == artworkUri &&
         _resolvedBrightness == brightness) {
       return;
@@ -352,21 +355,36 @@ class _ExpandedNowPlayingPageState extends State<ExpandedNowPlayingPage> {
     if (animateTransition) {
       _animateThemeChanges = true;
     }
+    final previousBrightness = _resolvedBrightness;
     final generation = ++_colorRequestGeneration;
     _resolvedArtworkUri = artworkUri;
     _resolvedBrightness = brightness;
-    _artworkColorScheme = artworkUri == null
+    final cached = artworkUri == null
         ? null
         : _paletteCache.lookup(artworkUri: artworkUri, brightness: brightness);
+    if (artworkUri == null) {
+      _artworkColorScheme = null;
+    } else if (cached != null) {
+      _artworkColorScheme = cached;
+    } else {
+      final retainPrevious =
+          _artworkColorScheme != null &&
+          previousBrightness == brightness &&
+          _artworkColorScheme!.brightness == brightness;
+      if (!retainPrevious) {
+        _artworkColorScheme = null;
+      }
+    }
     if (notify) setState(() {});
-    if (artworkUri == null || _artworkColorScheme != null) return;
+    if (artworkUri == null || cached != null) return;
 
     _paletteCache.resolve(artworkUri: artworkUri, brightness: brightness).then((
       scheme,
     ) {
-      if (!mounted || generation != _colorRequestGeneration || scheme == null) {
+      if (!mounted || generation != _colorRequestGeneration) {
         return;
       }
+      if (scheme == _artworkColorScheme) return;
       setState(() => _artworkColorScheme = scheme);
     });
   }

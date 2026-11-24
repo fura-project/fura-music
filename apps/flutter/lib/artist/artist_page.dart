@@ -637,7 +637,7 @@ class _ArtistAlbumArtwork extends StatelessWidget {
             uri!,
             headers: musicArtworkRequestHeaders(uri!),
             fit: BoxFit.cover,
-            gaplessPlayback: true,
+            gaplessPlayback: false,
             frameBuilder: musicArtworkFrameBuilder(fallback),
             errorBuilder: musicArtworkErrorBuilder(uri!, fallback),
           );

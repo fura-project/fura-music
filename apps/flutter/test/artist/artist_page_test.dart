@@ -4,6 +4,7 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_album_gateway.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/artist/artist_page.dart';
+import 'package:flutterustmusic/catalog/artist_artwork.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/l10n/app_locale.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
@@ -250,6 +251,76 @@ void main() {
     }
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'Artist header enables preservePreviousFrame while artist album cards disable gaplessPlayback',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const artist = ArtistSummary(
+        providerId: 'qq-music',
+        opaqueId: 'artist:61003:continuityArtistMid',
+        name: 'Continuity artist',
+        artworkUri: 'https://example.invalid/artist-header.jpg',
+      );
+      const track = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:41003:0:fixtureMid:-',
+        title: 'Synthetic track',
+        artistNames: ['Continuity artist'],
+      );
+      const album = AlbumSummary(
+        providerId: 'qq-music',
+        opaqueId: 'album:51003:fixtureAlbumMid',
+        title: 'Artist album card',
+        artworkUri: 'https://example.invalid/artist-album-card.jpg',
+      );
+      final playback = QueuePlaybackController(
+        TestPlaybackQueueGateway(),
+        TrackPlaybackController(
+          const _UnavailableMediaGateway(),
+          ForegroundPlaybackController(const _NeverAudioEngine()),
+        ),
+      );
+      addTearDown(playback.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ArtistPage(
+            artist: artist,
+            gateway: const _ArtistGateway(track),
+            albumGateway: _ArtistAlbumGateway(album),
+            queuePlaybackController: playback,
+            onBack: () {},
+            onSignInAgain: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final headerArtwork = tester.widget<ArtistArtwork>(
+        find.descendant(
+          of: find.byKey(const ValueKey('collection-detail-artwork')),
+          matching: find.byType(ArtistArtwork),
+        ),
+      );
+      expect(headerArtwork.preservePreviousFrame, isTrue);
+
+      await tester.tap(find.text(_en.artistAlbumsSection));
+      await tester.pumpAndSettle();
+
+      final albumCardImage = tester.widget<Image>(
+        find.descendant(
+          of: find.byKey(const ValueKey('artist-album-0')),
+          matching: find.byType(Image),
+        ),
+      );
+      expect(albumCardImage.gaplessPlayback, isFalse);
+    },
+  );
 }
 
 class _ArtistGateway implements ArtistTrackGateway {

@@ -463,7 +463,7 @@ class _CommentAvatar extends StatelessWidget {
               headers: musicArtworkRequestHeaders(uri),
               fit: BoxFit.cover,
               excludeFromSemantics: true,
-              gaplessPlayback: true,
+              gaplessPlayback: false,
               frameBuilder: musicArtworkFrameBuilder(fallback),
               errorBuilder: musicArtworkErrorBuilder(uri, fallback),
             ),

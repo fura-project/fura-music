@@ -4298,7 +4298,7 @@ class _HomeArtwork extends StatelessWidget {
                 resolvedUri,
               ),
               fit: BoxFit.cover,
-              gaplessPlayback: true,
+              gaplessPlayback: false,
               frameBuilder: musicArtworkFrameBuilder(placeholder),
               errorBuilder: musicArtworkErrorBuilder(resolvedUri, placeholder),
             ),
