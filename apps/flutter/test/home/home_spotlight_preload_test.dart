@@ -137,7 +137,9 @@ class _HomeHarness {
   }
 }
 
-Future<_HomeHarness> _createHarness() async {
+Future<_HomeHarness> _createHarness({
+  RecommendedPlaylistGateway? publicGateway,
+}) async {
   final officialController = OfficialPlaylistController(
     const _OfficialGateway(
       OfficialPlaylistPageResult(
@@ -168,7 +170,7 @@ Future<_HomeHarness> _createHarness() async {
     ),
   );
   final publicController = RecommendedPlaylistController(
-    const _PublicGateway(RecommendedPlaylistPageResult()),
+    publicGateway ?? _PublicGateway(const RecommendedPlaylistPageResult()),
   );
   final spotlightController = HomeSpotlightController(
     officialController,
@@ -300,6 +302,97 @@ void main() {
       );
 
       await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets('refreshing the public shelf keeps its existing cards mounted', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const initial = RecommendedPlaylistPageResult(
+      continuationOffset: 2,
+      playlists: [
+        RecommendedPlaylistSummary(
+          providerId: 'qq-music',
+          opaqueId: 'public:featured',
+          title: 'Public fixture featured',
+        ),
+        RecommendedPlaylistSummary(
+          providerId: 'qq-music',
+          opaqueId: 'public:shelf',
+          title: 'Public fixture card',
+        ),
+      ],
+    );
+    final refresh = Completer<RecommendedPlaylistPageResult>();
+    final gateway = _PublicGateway(initial, refresh: refresh.future);
+    final harness = await _createHarness(publicGateway: gateway);
+    addTearDown(harness.dispose);
+    await tester.pumpWidget(_wrapHome(harness, _ControlledArtworkBank()));
+
+    final shelf = find.byKey(const ValueKey('home-guest-playlists-shelf'));
+    final before = tester.element(shelf);
+    await tester.tap(
+      find.byKey(const ValueKey('home-refresh-recommendations')),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(tester.element(shelf), same(before));
+    expect(find.text('Public fixture card'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('home-guest-playlists-loading')),
+      findsNothing,
+    );
+
+    refresh.complete(initial);
+    await tester.pump();
+    expect(tester.element(shelf), same(before));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'warms an evicted adjacent cover on rotation without leaving Home',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final harness = await _createHarness();
+      addTearDown(harness.dispose);
+      final bank = _ControlledArtworkBank();
+      const next = 'https://example.invalid/hero-b.jpg';
+      const adjacent = 'https://example.invalid/hero-c.jpg';
+      int loadsFor(String uri) =>
+          bank.requestedUris.where((id) => id == uri).length;
+
+      await tester.pumpWidget(_wrapHome(harness, bank));
+      await bank.complete(
+        tester,
+        'https://example.invalid/hero-a.jpg',
+        Colors.indigo,
+      );
+      await bank.complete(tester, next, Colors.teal);
+      await bank.complete(tester, adjacent, Colors.amber);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(loadsFor(adjacent), 1);
+      final key = await bank
+          .providerFor(adjacent)
+          .obtainKey(ImageConfiguration.empty);
+      final cache = PaintingBinding.instance.imageCache;
+      expect(cache.statusForKey(key).keepAlive, isTrue);
+      expect(cache.statusForKey(key).live, isFalse);
+      // Evict only this inactive entry, without a lifecycle or memory event.
+      expect(cache.evict(key, includeLive: false), isTrue);
+      bank.reset();
+
+      await tester.tap(find.byKey(const ValueKey('home-spotlight-next')));
+      await tester.pump();
+      expect(loadsFor(next), 0);
+      expect(loadsFor(adjacent), 1);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
@@ -811,25 +904,31 @@ class _OfficialOperation implements OfficialPlaylistPageLoadOperation {
 }
 
 class _PublicGateway implements RecommendedPlaylistGateway {
-  const _PublicGateway(this.result);
+  _PublicGateway(this.result, {this.refresh});
   final RecommendedPlaylistPageResult result;
+  final Future<RecommendedPlaylistPageResult>? refresh;
+  bool _didLoad = false;
 
   @override
   RecommendedPlaylistPageLoadOperation beginLoad({
     required int offset,
     required int size,
-  }) => _PublicOperation(result);
+  }) {
+    final next = _didLoad ? refresh : null;
+    _didLoad = true;
+    return _PublicOperation(next ?? Future.value(result));
+  }
 }
 
 class _PublicOperation implements RecommendedPlaylistPageLoadOperation {
   const _PublicOperation(this.result);
-  final RecommendedPlaylistPageResult result;
+  final Future<RecommendedPlaylistPageResult> result;
 
   @override
   bool cancel() => true;
 
   @override
-  Future<RecommendedPlaylistPageResult> run() async => result;
+  Future<RecommendedPlaylistPageResult> run() => result;
 }
 
 class _NewSongGateway implements NewSongGateway {

@@ -842,7 +842,7 @@ class _QueueArtwork extends StatelessWidget {
               headers: musicArtworkRequestHeaders(artworkUri),
               fit: BoxFit.cover,
               excludeFromSemantics: true,
-              gaplessPlayback: true,
+              gaplessPlayback: false,
               frameBuilder: musicArtworkFrameBuilder(
                 const _QueueArtworkPlaceholder(),
               ),

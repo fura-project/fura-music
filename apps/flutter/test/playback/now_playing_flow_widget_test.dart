@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'dart:ui' show SemanticsAction, Tristate;
@@ -12,6 +13,7 @@ import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/app.dart';
 import 'package:flutterustmusic/artist/artist_gateway.dart';
 import 'package:flutterustmusic/authentication/login_gateway.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/library/library_gateway.dart';
 import 'package:flutterustmusic/library/library_mutation_coordinator.dart';
@@ -3713,6 +3715,282 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'NowPlayingBar and QueueArtwork keep decoded frames scoped to the track identity',
+    (tester) async {
+      addTearDown(PaintingBinding.instance.imageCache.clear);
+      addTearDown(PaintingBinding.instance.imageCache.clearLiveImages);
+      tester.view.physicalSize = const Size(1100, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // Two distinct valid 1x1 PNG payloads.
+      final pngA = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      );
+      final pngB = base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      );
+      final completerA = Completer<List<int>>();
+      final completerB = Completer<List<int>>();
+
+      const trackA = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:bar-gapless-a',
+        title: 'Bar Gapless A',
+        artistNames: ['Artist A'],
+        artworkUri: 'https://example.invalid/bar-gapless-a.png',
+        durationSeconds: 180,
+      );
+      const trackB = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:bar-gapless-b',
+        title: 'Bar Gapless B',
+        artistNames: ['Artist B'],
+        artworkUri: 'https://example.invalid/bar-gapless-b.png',
+        durationSeconds: 190,
+      );
+
+      final gateway = _AuditQueue();
+      final sessions = [_AuditAudioSession(), _AuditAudioSession()];
+      final media = _FakeMediaGateway([
+        _ImmediateMediaOperation(_success('bar-gapless-a')),
+        _ImmediateMediaOperation(_success('bar-gapless-b')),
+      ]);
+      final queue = QueuePlaybackController(
+        gateway,
+        TrackPlaybackController(
+          media,
+          ForegroundPlaybackController(_FakeAudioEngine(sessions)),
+        ),
+      );
+      addTearDown(queue.dispose);
+
+      final previousHttpClientProvider = debugNetworkImageHttpClientProvider;
+      debugNetworkImageHttpClientProvider = () => _ControlledArtworkHttpClient({
+        trackA.artworkUri!: completerA.future,
+        trackB.artworkUri!: completerB.future,
+      });
+      Future<void> deliverArtwork(
+        String uri,
+        Completer<List<int>> response,
+        List<int> bytes,
+      ) async {
+        await tester.runAsync(() async {
+          final stream = NetworkImage(uri).resolve(ImageConfiguration.empty);
+          final decoded = Completer<void>();
+          final listener = ImageStreamListener((info, _) {
+            info.dispose();
+            if (!decoded.isCompleted) decoded.complete();
+          }, onError: decoded.completeError);
+          stream.addListener(listener);
+          try {
+            response.complete(bytes);
+            await decoded.future.timeout(const Duration(seconds: 5));
+          } finally {
+            stream.removeListener(listener);
+          }
+        });
+        await tester.pump();
+      }
+
+      try {
+        await queue.replaceAndPlay(const [trackA, trackB], 0);
+        await tester.pumpWidget(
+          MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: MusicMaterialTheme.light(),
+            home: Scaffold(
+              body: Column(
+                children: [
+                  Expanded(
+                    child: PlaybackQueuePanel(
+                      controller: queue,
+                      onClose: () {},
+                    ),
+                  ),
+                  NowPlayingBar(controller: queue, onSignInAgain: () {}),
+                ],
+              ),
+            ),
+          ),
+        );
+
+        final barArtwork = find.byKey(const ValueKey('now-playing-artwork'));
+        final barImage = tester.widget<Image>(
+          find.descendant(of: barArtwork, matching: find.byType(Image)),
+        );
+        expect(barImage.gaplessPlayback, isTrue);
+
+        // Queue rows must disable gaplessPlayback so list mutations never show stale artwork.
+        final queueImages = tester.widgetList<Image>(
+          find.descendant(
+            of: find.byType(PlaybackQueuePanel),
+            matching: find.byType(Image),
+          ),
+        );
+        expect(queueImages, isNotEmpty);
+        for (final image in queueImages) {
+          expect(image.gaplessPlayback, isFalse);
+        }
+
+        // Cold mount shows placeholder until A decodes.
+        expect(
+          find.descendant(
+            of: barArtwork,
+            matching: find.byType(MusicArtworkPlaceholder),
+          ),
+          findsOneWidget,
+        );
+
+        // Deliver A and allow native PNG decoding + initial reveal to complete.
+        await deliverArtwork(trackA.artworkUri!, completerA, pngA);
+        await tester.pumpAndSettle();
+
+        expect(
+          find.descendant(
+            of: barArtwork,
+            matching: find.byType(MusicArtworkPlaceholder),
+          ),
+          findsNothing,
+        );
+        final rawA = tester.widget<RawImage>(
+          find.descendant(of: barArtwork, matching: find.byType(RawImage)),
+        );
+        expect(rawA.image, isNotNull);
+
+        await queue.advance();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 40));
+
+        expect(
+          find.descendant(
+            of: barArtwork,
+            matching: find.byType(MusicArtworkPlaceholder),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: barArtwork, matching: find.byType(RawImage)),
+          findsNothing,
+        );
+
+        await deliverArtwork(trackB.artworkUri!, completerB, pngB);
+        await tester.pump(const Duration(milliseconds: 40));
+        expect(
+          find.descendant(
+            of: barArtwork,
+            matching: find.byType(FadeTransition),
+          ),
+          findsOneWidget,
+        );
+
+        await tester.pump(const Duration(milliseconds: 120));
+        expect(
+          find.descendant(
+            of: barArtwork,
+            matching: find.byType(MusicArtworkPlaceholder),
+          ),
+          findsNothing,
+        );
+        final rawB = tester.widget<RawImage>(
+          find.descendant(of: barArtwork, matching: find.byType(RawImage)),
+        );
+        expect(rawB.image, isNotNull);
+        expect(rawB.image, isNot(same(rawA.image)));
+
+        await tester.pumpWidget(const SizedBox.shrink());
+      } finally {
+        debugNetworkImageHttpClientProvider = previousHttpClientProvider;
+      }
+    },
+  );
+}
+
+class _ControlledArtworkHttpClient implements HttpClient {
+  _ControlledArtworkHttpClient(this._responses);
+
+  final Map<String, Future<List<int>>> _responses;
+
+  @override
+  bool autoUncompress = true;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async =>
+      _ControlledArtworkHttpRequest(_responses[url.toString()]);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ControlledArtworkHttpRequest implements HttpClientRequest {
+  _ControlledArtworkHttpRequest(this._bytesFuture);
+
+  final Future<List<int>>? _bytesFuture;
+
+  @override
+  final HttpHeaders headers = _NoopHttpHeaders();
+
+  @override
+  Future<HttpClientResponse> close() async {
+    final future = _bytesFuture;
+    if (future == null) {
+      return _ControlledArtworkHttpResponse(const <int>[], statusCode: 404);
+    }
+    final bytes = await future;
+    return _ControlledArtworkHttpResponse(bytes, statusCode: 200);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ControlledArtworkHttpResponse extends Stream<List<int>>
+    implements HttpClientResponse {
+  _ControlledArtworkHttpResponse(this._bytes, {required this.statusCode});
+
+  final List<int> _bytes;
+
+  @override
+  final int statusCode;
+
+  @override
+  int get contentLength => _bytes.length;
+
+  @override
+  HttpClientResponseCompressionState get compressionState =>
+      HttpClientResponseCompressionState.notCompressed;
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) => Stream<List<int>>.value(_bytes).listen(
+    onData,
+    onError: onError,
+    onDone: onDone,
+    cancelOnError: cancelOnError,
+  );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _NoopHttpHeaders implements HttpHeaders {
+  @override
+  void add(String name, Object value, {bool preserveHeaderCase = false}) {}
+
+  @override
+  void set(String name, Object value, {bool preserveHeaderCase = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 ({

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutterustmusic/catalog/music_artwork_placeholder.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_controller.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
@@ -1031,6 +1032,181 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets(
+    'expanded artwork discards the previous track frame while the new cover loads',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(PaintingBinding.instance.imageCache.clear);
+      addTearDown(PaintingBinding.instance.imageCache.clearLiveImages);
+
+      final imageA = await tester.runAsync(
+        () => _buildRawImage(size: 32, color: const Color(0xFF1F6B99)),
+      );
+      final imageB = await tester.runAsync(
+        () => _buildRawImage(size: 32, color: const Color(0xFFB84C27)),
+      );
+      expect(imageA, isNotNull);
+      expect(imageB, isNotNull);
+
+      final completerA = Completer<ui.Image>();
+      final completerB = Completer<ui.Image>();
+
+      const trackA = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:gapless-a',
+        title: 'Gapless Track A',
+        artistNames: ['Artist A'],
+        artworkUri: 'https://example.invalid/gapless-a.png',
+        durationSeconds: 180,
+      );
+      const trackB = PlaylistTrackSummary(
+        providerId: 'qq-music',
+        opaqueId: 'track:gapless-b',
+        title: 'Gapless Track B',
+        artistNames: ['Artist B'],
+        artworkUri: 'https://example.invalid/gapless-b.png',
+        durationSeconds: 200,
+      );
+
+      final controller = QueuePlaybackController(
+        _MutableQueueGateway(const [trackA, trackB]),
+        TrackPlaybackController(
+          const _MediaGateway(),
+          ForegroundPlaybackController(const _AudioEngine()),
+        ),
+        lyrics: LyricController(const _LyricGateway()),
+      );
+      addTearDown(controller.dispose);
+
+      ImageProvider<Object> providerFor(String uri) => uri == trackA.artworkUri
+          ? _PendingCoverProvider('gapless-a', completerA)
+          : _PendingCoverProvider('gapless-b', completerB);
+
+      final cache = ArtworkColorSchemeCache(
+        artworkImageProviderBuilder: providerFor,
+        artworkColorSchemeLoader:
+            ({required provider, required brightness}) async =>
+                ColorScheme.fromSeed(
+                  seedColor: const Color(0xFF1F6B99),
+                  brightness: brightness,
+                ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: MusicMaterialTheme.light(),
+          home: ExpandedNowPlayingPage(
+            controller: controller,
+            onBack: () {},
+            onSignInAgain: () {},
+            artworkImageProviderBuilder: providerFor,
+            artworkColorSchemeCache: cache,
+          ),
+        ),
+      );
+
+      final artworkSlot = find.byKey(
+        const ValueKey('expanded-now-playing-artwork'),
+      );
+      expect(
+        find.descendant(
+          of: artworkSlot,
+          matching: find.byType(MusicArtworkPlaceholder),
+        ),
+        findsOneWidget,
+      );
+
+      // Decode A and let initial reveal complete.
+      completerA.complete(imageA!.clone());
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: artworkSlot,
+          matching: find.byType(MusicArtworkPlaceholder),
+        ),
+        findsNothing,
+      );
+      final rawA = tester.widget<RawImage>(
+        find.descendant(of: artworkSlot, matching: find.byType(RawImage)),
+      );
+      expect(rawA.image, isNotNull);
+
+      // Uncached B must never display a frame from A.
+      await controller.advance();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+
+      expect(
+        find.descendant(
+          of: artworkSlot,
+          matching: find.byType(MusicArtworkPlaceholder),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: artworkSlot, matching: find.byType(RawImage)),
+        findsNothing,
+      );
+
+      completerB.complete(imageB!.clone());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(
+        find.descendant(of: artworkSlot, matching: find.byType(FadeTransition)),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(
+        find.descendant(
+          of: artworkSlot,
+          matching: find.byType(MusicArtworkPlaceholder),
+        ),
+        findsNothing,
+      );
+      final rawB = tester.widget<RawImage>(
+        find.descendant(of: artworkSlot, matching: find.byType(RawImage)),
+      );
+      expect(rawB.image, isNotNull);
+      expect(rawB.image, isNot(same(rawA.image)));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      imageA.dispose();
+      imageB.dispose();
+    },
+  );
+}
+
+class _PendingCoverProvider extends ImageProvider<_PendingCoverProvider> {
+  const _PendingCoverProvider(this.id, this.completer);
+
+  final String id;
+  final Completer<ui.Image> completer;
+
+  @override
+  Future<_PendingCoverProvider> obtainKey(ImageConfiguration configuration) =>
+      SynchronousFuture<_PendingCoverProvider>(this);
+
+  @override
+  ImageStreamCompleter loadImage(
+    _PendingCoverProvider key,
+    ImageDecoderCallback decode,
+  ) => OneFrameImageStreamCompleter(
+    completer.future.then((image) => ImageInfo(image: image)),
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is _PendingCoverProvider && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 Future<MemoryImage> _buildSyntheticCover({

@@ -414,7 +414,10 @@ class _AlbumHeader extends StatelessWidget {
       collapseProgress: collapseProgress,
       desktop: desktop,
       embedded: embedded,
-      artwork: _AlbumArtwork(uri: album.artworkUri),
+      artwork: _AlbumArtwork(
+        key: ValueKey((album.providerId, album.opaqueId)),
+        uri: album.artworkUri,
+      ),
       eyebrow: context.l10n.albumType,
       title: album.title,
       titleKey: const ValueKey('album-title'),
@@ -967,7 +970,7 @@ class _AlbumTracksState extends State<_AlbumTracks> {
 }
 
 class _AlbumArtwork extends StatelessWidget {
-  const _AlbumArtwork({this.uri});
+  const _AlbumArtwork({this.uri, super.key});
 
   final String? uri;
 
@@ -987,7 +990,10 @@ class _AlbumArtwork extends StatelessWidget {
               headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
               gaplessPlayback: true,
-              frameBuilder: musicArtworkFrameBuilder(placeholder),
+              frameBuilder: musicArtworkFrameBuilder(
+                placeholder,
+                preservePreviousFrame: true,
+              ),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );

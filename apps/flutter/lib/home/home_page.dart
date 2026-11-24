@@ -175,7 +175,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   ImageConfiguration? _spotlightImageConfiguration;
   final Map<String, MusicArtworkPreloadHandle> _activeSpotlightPreloads =
       <String, MusicArtworkPreloadHandle>{};
-  final Set<String> _warmedSpotlightUris = <String>{};
+  final Set<String> _attemptedSpotlightUris = <String>{};
   final Set<String> _failedSpotlightUris = <String>{};
   int _spotlightTransitionToken = 0;
   String? _pendingSpotlightIdentity;
@@ -214,7 +214,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       widget.spotlightController.addListener(_onSpotlightCandidatesChanged);
       _clearPendingSpotlightTransition(cancelHandle: true);
       _disposeSpotlightPreloads();
-      _warmedSpotlightUris.clear();
       _failedSpotlightUris.clear();
       _warmSpotlightArtworks();
     }
@@ -222,7 +221,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         widget.spotlightImageProviderBuilder) {
       _clearPendingSpotlightTransition(cancelHandle: true);
       _disposeSpotlightPreloads();
-      _warmedSpotlightUris.clear();
       _failedSpotlightUris.clear();
       _warmSpotlightArtworks();
     }
@@ -233,7 +231,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _resumeHome();
         });
-        _warmedSpotlightUris.clear();
         _warmSpotlightArtworks();
       } else {
         _clearPendingSpotlightTransition(cancelHandle: true);
@@ -278,7 +275,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     widget.homeController.setActive(widget.active && _foreground);
     _restartSpotlightTimer();
     if (_foreground) {
-      _warmedSpotlightUris.clear();
       _resumeHome();
       _warmSpotlightArtworks();
     } else {
@@ -289,7 +285,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void didHaveMemoryPressure() {
-    _warmedSpotlightUris.clear();
+    _attemptedSpotlightUris.clear();
     _disposeSpotlightPreloads();
   }
 
@@ -335,10 +331,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  void _warmSpotlightArtworks() {
+  void _warmSpotlightArtworks({bool continuePass = false}) {
     if (!mounted || !widget.active || !_foreground) return;
     final config = _spotlightImageConfiguration;
     if (config == null) return;
+    // Each scheduling event checks the real image stream again. Within one
+    // pass, avoid repeatedly decoding a cover too large for ImageCache.
+    if (!continuePass) _attemptedSpotlightUris.clear();
     final playlists = _spotlightCandidates;
     if (playlists.isEmpty) {
       _disposeSpotlightPreloads();
@@ -390,9 +389,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (_activeSpotlightPreloads.length >= _maxConcurrentSpotlightPreloads) {
         break;
       }
-      if (_activeSpotlightPreloads.containsKey(uri) ||
-          _warmedSpotlightUris.contains(uri) ||
-          _failedSpotlightUris.contains(uri)) {
+      if (_failedSpotlightUris.contains(uri) ||
+          !_attemptedSpotlightUris.add(uri) ||
+          _activeSpotlightPreloads.containsKey(uri)) {
         continue;
       }
       final handle = startMusicArtworkPreload(
@@ -400,23 +399,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         config,
       );
       if (handle.readySynchronously) {
-        _warmedSpotlightUris.add(uri);
         continue;
       }
       _activeSpotlightPreloads[uri] = handle;
       unawaited(
         handle.future.then((outcome) {
-          if (_activeSpotlightPreloads[uri] == handle) {
-            _activeSpotlightPreloads.remove(uri);
-          }
+          if (_activeSpotlightPreloads[uri] != handle) return;
+          _activeSpotlightPreloads.remove(uri);
           if (outcome == MusicArtworkPreloadOutcome.loaded) {
-            _warmedSpotlightUris.add(uri);
             _failedSpotlightUris.remove(uri);
           } else if (outcome == MusicArtworkPreloadOutcome.failed) {
             _failedSpotlightUris.add(uri);
           }
           if (mounted && outcome != MusicArtworkPreloadOutcome.cancelled) {
-            _warmSpotlightArtworks();
+            _warmSpotlightArtworks(continuePass: true);
           }
         }),
       );
@@ -443,7 +439,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _refresh({bool manual = false}) async {
     if (!mounted || _refreshing) return;
     setState(() => _refreshing = true);
-    _warmedSpotlightUris.clear();
     _failedSpotlightUris.clear();
     // Re-entry and the timer share one request group, including after failures.
     _lastRefresh = _now;
@@ -650,7 +645,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       config,
     );
     if (handle.readySynchronously) {
-      _warmedSpotlightUris.add(uri);
       // Cancel any superseded pending handle; `handle` itself already scheduled
       // its own post-frame detach inside `startMusicArtworkPreload`.
       commitSwitch(cancelHandle: true);
@@ -686,15 +680,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     unawaited(
       handle.future.then((outcome) {
+        if (!mounted || token != _spotlightTransitionToken) return;
         if (outcome == MusicArtworkPreloadOutcome.loaded) {
-          _warmedSpotlightUris.add(uri);
           _failedSpotlightUris.remove(uri);
         } else if (outcome == MusicArtworkPreloadOutcome.failed) {
           _failedSpotlightUris.add(uri);
         } else {
           return;
         }
-        if (!mounted || token != _spotlightTransitionToken) return;
         if (fromAutoRotation &&
             (!_spotlightAutoPlaying || !widget.active || !_foreground)) {
           _clearPendingSpotlightTransition(cancelHandle: true);

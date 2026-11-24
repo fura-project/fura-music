@@ -386,7 +386,11 @@ class _PlaylistHeader extends StatelessWidget {
       collapseProgress: collapseProgress,
       desktop: desktop,
       embedded: embedded,
-      artwork: _Artwork(uri: playlist.artworkUri, playlist: true),
+      artwork: _Artwork(
+        key: ValueKey((playlist.providerId, playlist.opaqueId)),
+        uri: playlist.artworkUri,
+        playlist: true,
+      ),
       eyebrow: l10n.libraryPlaylistType,
       title: playlist.title,
       titleKey: const ValueKey('playlist-detail-title'),
@@ -845,7 +849,7 @@ enum _TrackAction {
 }
 
 class _Artwork extends StatelessWidget {
-  const _Artwork({this.uri, this.playlist = false});
+  const _Artwork({this.uri, this.playlist = false, super.key});
   final String? uri;
   final bool playlist;
 
@@ -867,7 +871,10 @@ class _Artwork extends StatelessWidget {
               headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
               gaplessPlayback: true,
-              frameBuilder: musicArtworkFrameBuilder(placeholder),
+              frameBuilder: musicArtworkFrameBuilder(
+                placeholder,
+                preservePreviousFrame: true,
+              ),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );

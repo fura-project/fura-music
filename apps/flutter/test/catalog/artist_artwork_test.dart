@@ -24,7 +24,28 @@ void main() {
     expect(image.image, isA<NetworkImage>());
     expect((image.image as NetworkImage).url, uri);
     expect(image.fit, BoxFit.cover);
+    expect(image.gaplessPlayback, isFalse);
   });
+
+  testWidgets(
+    'opts into gaplessPlayback only when preservePreviousFrame is enabled',
+    (tester) async {
+      const uri = 'https://example.invalid/artist-header.jpg';
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Center(
+            child: SizedBox.square(
+              dimension: 100,
+              child: ArtistArtwork(uri: uri, preservePreviousFrame: true),
+            ),
+          ),
+        ),
+      );
+
+      final image = tester.widget<Image>(find.byType(Image));
+      expect(image.gaplessPlayback, isTrue);
+    },
+  );
 
   testWidgets('keeps a Material fallback when Artist artwork is absent', (
     tester,

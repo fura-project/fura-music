@@ -262,7 +262,11 @@ class _RankingHeader extends StatelessWidget {
       collapseProgress: collapseProgress,
       desktop: desktop,
       embedded: embedded,
-      artwork: RankingArtwork(uri: ranking.artworkUri),
+      artwork: RankingArtwork(
+        key: ValueKey((ranking.providerId, ranking.opaqueId)),
+        uri: ranking.artworkUri,
+        preservePreviousFrame: true,
+      ),
       eyebrow: context.l10n.rankingEyebrow,
       title: ranking.title,
       titleKey: const ValueKey('ranking-title'),
@@ -652,9 +656,14 @@ class _RankingFooter extends StatelessWidget {
 }
 
 class RankingArtwork extends StatelessWidget {
-  const RankingArtwork({this.uri, super.key});
+  const RankingArtwork({
+    this.uri,
+    this.preservePreviousFrame = false,
+    super.key,
+  });
 
   final String? uri;
+  final bool preservePreviousFrame;
 
   @override
   Widget build(BuildContext context) {
@@ -671,8 +680,11 @@ class RankingArtwork extends StatelessWidget {
               uri!,
               headers: musicArtworkRequestHeaders(uri!),
               fit: BoxFit.cover,
-              gaplessPlayback: true,
-              frameBuilder: musicArtworkFrameBuilder(placeholder),
+              gaplessPlayback: preservePreviousFrame,
+              frameBuilder: musicArtworkFrameBuilder(
+                placeholder,
+                preservePreviousFrame: preservePreviousFrame,
+              ),
               errorBuilder: musicArtworkErrorBuilder(uri!, placeholder),
             ),
     );

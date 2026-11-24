@@ -2661,12 +2661,14 @@ class _NowPlayingArtwork extends StatelessWidget {
               ? const _NowPlayingArtworkPlaceholder()
               : Image.network(
                   artworkUri,
+                  key: ValueKey((track.providerId, track.opaqueId)),
                   headers: musicArtworkRequestHeaders(artworkUri),
                   fit: BoxFit.cover,
                   excludeFromSemantics: true,
                   gaplessPlayback: true,
                   frameBuilder: musicArtworkFrameBuilder(
                     const _NowPlayingArtworkPlaceholder(),
+                    preservePreviousFrame: true,
                   ),
                   errorBuilder: musicArtworkErrorBuilder(
                     artworkUri,

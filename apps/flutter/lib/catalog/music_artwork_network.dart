@@ -222,24 +222,37 @@ ImageErrorWidgetBuilder musicArtworkErrorBuilder(
   };
 }
 
+bool _childHasDecodedFrame(Widget child) {
+  final leaf = child is Semantics ? child.child : child;
+  return leaf is RawImage && leaf.image != null;
+}
+
 /// Smoothly reveals decoded network artwork over [placeholder] while
 /// bypassing the transition for warm-cache synchronous hits, already-decoded
 /// frames, and reduced-motion accessibility modes.
+///
+/// Use [preservePreviousFrame] with `gaplessPlayback` only in a slot keyed by
+/// the displayed item's identity. It keeps the decoded frame while that item's
+/// source refreshes. A different item must receive a fresh [Image] state.
 ImageFrameBuilder musicArtworkFrameBuilder(
   Widget placeholder, {
   Duration duration = const Duration(milliseconds: 120),
+  bool preservePreviousFrame = false,
 }) {
   _ensureMusicArtworkCachePolicy();
   return (context, child, frame, wasSynchronouslyLoaded) {
+    final hasVisibleFrame =
+        frame != null ||
+        (preservePreviousFrame && _childHasDecodedFrame(child));
     final disableAnimations =
         (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ||
         (MediaQuery.maybeAccessibleNavigationOf(context) ?? false);
     if (disableAnimations || duration <= Duration.zero) {
-      return frame == null ? placeholder : child;
+      return hasVisibleFrame ? child : placeholder;
     }
     return _MusicArtworkFrameReveal(
       placeholder: placeholder,
-      hasFrame: frame != null,
+      hasFrame: hasVisibleFrame,
       wasSynchronouslyLoaded: wasSynchronouslyLoaded,
       duration: duration,
       child: child,

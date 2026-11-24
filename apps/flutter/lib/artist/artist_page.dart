@@ -407,7 +407,11 @@ class _ArtistHeader extends StatelessWidget {
       collapseProgress: collapseProgress,
       desktop: desktop,
       embedded: embedded,
-      artwork: ArtistArtwork(uri: artist.artworkUri),
+      artwork: ArtistArtwork(
+        key: ValueKey((artist.providerId, artist.opaqueId)),
+        uri: artist.artworkUri,
+        preservePreviousFrame: true,
+      ),
       eyebrow: context.l10n.artistType,
       title: artist.name,
       titleKey: const ValueKey('artist-name'),

@@ -5,10 +5,16 @@ import 'package:flutterustmusic/theme/material_theme.dart';
 
 /// Provider-neutral Artist artwork with a unified theme-aware fallback.
 class ArtistArtwork extends StatelessWidget {
-  const ArtistArtwork({required this.uri, this.iconSize, super.key});
+  const ArtistArtwork({
+    required this.uri,
+    this.iconSize,
+    this.preservePreviousFrame = false,
+    super.key,
+  });
 
   final String? uri;
   final double? iconSize;
+  final bool preservePreviousFrame;
 
   @override
   Widget build(BuildContext context) {
@@ -29,8 +35,11 @@ class ArtistArtwork extends StatelessWidget {
               width: double.infinity,
               height: double.infinity,
               fit: BoxFit.cover,
-              gaplessPlayback: true,
-              frameBuilder: musicArtworkFrameBuilder(fallback),
+              gaplessPlayback: preservePreviousFrame,
+              frameBuilder: musicArtworkFrameBuilder(
+                fallback,
+                preservePreviousFrame: preservePreviousFrame,
+              ),
               errorBuilder: musicArtworkErrorBuilder(resolvedUri, fallback),
             ),
     );

@@ -2206,11 +2206,15 @@ class _ExpandedArtwork extends StatelessWidget {
                 child: provider == null
                     ? placeholder
                     : Image(
+                        key: ValueKey((track.providerId, track.opaqueId)),
                         image: provider,
                         fit: BoxFit.cover,
                         excludeFromSemantics: true,
                         gaplessPlayback: true,
-                        frameBuilder: musicArtworkFrameBuilder(placeholder),
+                        frameBuilder: musicArtworkFrameBuilder(
+                          placeholder,
+                          preservePreviousFrame: true,
+                        ),
                         errorBuilder: musicArtworkErrorBuilder(
                           artworkUri!,
                           placeholder,

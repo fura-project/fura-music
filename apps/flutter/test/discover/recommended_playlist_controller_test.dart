@@ -55,6 +55,43 @@ void main() {
     controller.dispose();
   });
 
+  test(
+    'first-page refresh keeps visible content and suspends append',
+    () async {
+      final response = Completer<RecommendedPlaylistPageResult>();
+      final gateway = _ScriptedGateway([
+        const _ImmediateOperation(
+          RecommendedPlaylistPageResult(
+            continuationOffset: 1,
+            hasMore: true,
+            playlists: [first],
+          ),
+        ),
+        _PendingOperation(response.future),
+      ]);
+      final controller = RecommendedPlaylistController(gateway);
+      addTearDown(controller.dispose);
+      await controller.load();
+
+      final refresh = controller.load();
+      expect(controller.stage, RecommendedPlaylistStage.content);
+      expect(controller.playlists, [first]);
+      expect(controller.canLoadMore, isFalse);
+      await controller.loadMore();
+      expect(gateway.requests, [(0, 20), (0, 20)]);
+
+      response.complete(
+        const RecommendedPlaylistPageResult(
+          continuationOffset: 1,
+          playlists: [second],
+        ),
+      );
+      await refresh;
+      expect(controller.stage, RecommendedPlaylistStage.content);
+      expect(controller.playlists, [second]);
+    },
+  );
+
   test('paginates by raw page length and deduplicates display rows', () async {
     final gateway = _ScriptedGateway([
       const _ImmediateOperation(

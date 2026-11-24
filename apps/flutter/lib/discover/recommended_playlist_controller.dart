@@ -37,10 +37,12 @@ class RecommendedPlaylistController extends ChangeNotifier {
   bool get canRetry =>
       _stage == RecommendedPlaylistStage.error && _isRetryable(_failure);
   bool get canLoadMore =>
-      _stage == RecommendedPlaylistStage.content && _hasMore && !_isLoadingMore;
+      _stage == RecommendedPlaylistStage.content &&
+      _hasMore &&
+      _operation == null;
   bool get canRetryMore =>
       _stage == RecommendedPlaylistStage.content &&
-      !_isLoadingMore &&
+      _operation == null &&
       _isRetryable(_appendFailure);
 
   Future<void> load() => _loadFirstPage();
@@ -52,26 +54,19 @@ class RecommendedPlaylistController extends ChangeNotifier {
     try {
       operation = _gateway.beginLoad(offset: 0, size: pageSize);
     } on Object {
-      _playlists = const [];
-      _failure = RecommendedPlaylistFailure.coreUnavailable;
-      _appendFailure = null;
-      _nextOffset = 0;
-      _hasMore = false;
-      _omittedPlaylistCount = 0;
-      _isLoadingMore = false;
-      _stage = RecommendedPlaylistStage.error;
+      _operation = null;
+      _applyFirstPageFailure(RecommendedPlaylistFailure.coreUnavailable);
       _notify();
       return;
     }
     _operation = operation;
-    _playlists = const [];
     _failure = null;
     _appendFailure = null;
-    _nextOffset = 0;
-    _hasMore = false;
-    _omittedPlaylistCount = 0;
     _isLoadingMore = false;
-    _stage = RecommendedPlaylistStage.loading;
+    // Keep the mounted content and its covers while refreshing the same feed.
+    if (_stage != RecommendedPlaylistStage.content) {
+      _stage = RecommendedPlaylistStage.loading;
+    }
     _notify();
 
     final result = await operation.run();
@@ -88,10 +83,22 @@ class RecommendedPlaylistController extends ChangeNotifier {
           ? RecommendedPlaylistStage.empty
           : RecommendedPlaylistStage.content;
     } else {
-      _failure = result.failure ?? RecommendedPlaylistFailure.invalidResponse;
-      _stage = RecommendedPlaylistStage.error;
+      _applyFirstPageFailure(
+        result.failure ?? RecommendedPlaylistFailure.invalidResponse,
+      );
     }
     _notify();
+  }
+
+  void _applyFirstPageFailure(RecommendedPlaylistFailure failure) {
+    _playlists = const [];
+    _failure = failure;
+    _appendFailure = null;
+    _nextOffset = 0;
+    _hasMore = false;
+    _omittedPlaylistCount = 0;
+    _isLoadingMore = false;
+    _stage = RecommendedPlaylistStage.error;
   }
 
   Future<void> loadMore() async {
