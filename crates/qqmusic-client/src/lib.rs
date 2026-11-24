@@ -48,6 +48,8 @@ mod rankings;
 mod recent_plays;
 mod recommendations;
 mod search;
+#[cfg(any(test, feature = "track-like-status-research"))]
+mod track_like_status;
 mod track_likes;
 mod transport;
 mod wechat_exchange;
@@ -153,6 +155,11 @@ pub use recommendations::{
     RecommendedPlaylistField,
 };
 pub use search::{QqMusicSearchError, QqMusicTrackSearchPage, SearchTrackField};
+#[cfg(any(test, feature = "track-like-status-research"))]
+pub use track_like_status::{
+    MAX_TRACK_LIKE_STATUS_BATCH_SIZE, QqMusicTrackLikeStatus, QqMusicTrackLikeStatusBatch,
+    QqMusicTrackLikeStatusError,
+};
 pub use track_likes::{
     QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicTrackLikeError,
     QqMusicTrackLikeState,

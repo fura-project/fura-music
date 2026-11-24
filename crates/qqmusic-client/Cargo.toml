@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+track-like-status-research = []
+
 [dependencies]
 base64 = "0.22.1"
 chacha20poly1305 = { version = "0.11.0", features = ["zeroize"] }

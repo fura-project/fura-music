@@ -12,6 +12,9 @@ use qqmusic_client::{
     WechatQrLoginProgress, validate_credential_refresh_material,
 };
 
+#[cfg(feature = "track-like-status-research")]
+#[path = "support/track_like_status_gate.rs"]
+mod track_like_status_gate;
 #[path = "support/user_library_gate.rs"]
 mod user_library_gate;
 
@@ -496,6 +499,100 @@ async fn bounded_disposable_wechat_user_library_post_refresh_gate() {
     };
     let transport = coordinator.client().transport().inner.clone();
     user_library_gate::run_reads(transport, &refreshed).await;
+}
+
+/// One fresh `WeChat` login, one account verification, one single-MID status
+/// read, one two-MID status read, and one at-most-20-page resolver comparison.
+/// No Vault, refresh, mutation, retry, or Provider integration is used.
+#[tokio::test]
+#[ignore = "Human-operated disposable QQ WeChat Track-like status research gate"]
+#[cfg(feature = "track-like-status-research")]
+async fn bounded_disposable_wechat_track_like_status_gate() {
+    const GATE: &str = "FURA_QQ_TRACK_LIKE_STATUS_GATE";
+    if !cfg!(debug_assertions) || std::env::var(GATE).as_deref() != Ok("1") {
+        eprintln!("{GATE} result=NOT_RUN reason=debug_and_explicit_opt_in_required");
+        return;
+    }
+    let Some(qr_path) = std::env::var_os("FURA_QQ_TRACK_LIKE_STATUS_QR_PATH")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute() && path.parent().is_some_and(std::path::Path::is_dir))
+    else {
+        eprintln!("{GATE} result=NOT_RUN reason=private_qr_path_required");
+        return;
+    };
+    let Some((coordinator, credential)) = authenticate_disposable_session(qr_path).await else {
+        return;
+    };
+    match coordinator.client().verify_credential(&credential).await {
+        Ok(_) => eprintln!(
+            "FURA_QQ_TRACK_LIKE_STATUS_GATE phase=account_verification request_sent=true http_status=2xx global_code=0 subrequest_code=0 failure=none"
+        ),
+        Err(error) => {
+            eprintln!(
+                "FURA_QQ_TRACK_LIKE_STATUS_GATE phase=account_verification request_sent=true http_status=unknown global_code=unknown subrequest_code=unknown failure={}",
+                match classify_verification_error(&error) {
+                    GateClassification::BlockedByRiskControl => "risk_control",
+                    GateClassification::BlockedByProtocol => "protocol",
+                    GateClassification::Pass | GateClassification::ImplementationDefect => {
+                        "implementation"
+                    }
+                }
+            );
+            return;
+        }
+    }
+    let passed = track_like_status_gate::run_queries(coordinator.client(), &credential).await;
+    eprintln!(
+        "FURA_QQ_TRACK_LIKE_STATUS_GATE login_type=1 result={}",
+        if passed { "PASS" } else { "BLOCKED" }
+    );
+}
+
+/// One fresh `WeChat` login, one account verification, a complete exact Liked
+/// snapshot, and exactly one direct read for an existing liked target selected
+/// in memory. No identity is logged and no mutation, retry or refresh occurs.
+#[tokio::test]
+#[ignore = "Human-operated disposable QQ WeChat Track-like true evidence gate"]
+#[cfg(feature = "track-like-status-research")]
+async fn bounded_disposable_wechat_track_like_true_gate() {
+    const GATE: &str = "FURA_QQ_TRACK_LIKE_TRUE_GATE";
+    if !cfg!(debug_assertions) || std::env::var(GATE).as_deref() != Ok("1") {
+        eprintln!("{GATE} result=NOT_RUN reason=debug_and_explicit_opt_in_required");
+        return;
+    }
+    let Some(qr_path) = std::env::var_os("FURA_QQ_TRACK_LIKE_TRUE_QR_PATH")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute() && path.parent().is_some_and(std::path::Path::is_dir))
+    else {
+        eprintln!("{GATE} result=NOT_RUN reason=private_qr_path_required");
+        return;
+    };
+    let Some((coordinator, credential)) = authenticate_disposable_session(qr_path).await else {
+        return;
+    };
+    match coordinator.client().verify_credential(&credential).await {
+        Ok(_) => eprintln!(
+            "FURA_QQ_TRACK_LIKE_TRUE_GATE phase=account_verification request_sent=true http_status=2xx global_code=0 subrequest_code=0 failure=none"
+        ),
+        Err(error) => {
+            eprintln!(
+                "FURA_QQ_TRACK_LIKE_TRUE_GATE phase=account_verification request_sent=true http_status=unknown global_code=unknown subrequest_code=unknown failure={}",
+                match classify_verification_error(&error) {
+                    GateClassification::BlockedByRiskControl => "risk_control",
+                    GateClassification::BlockedByProtocol => "protocol",
+                    GateClassification::Pass | GateClassification::ImplementationDefect => {
+                        "implementation"
+                    }
+                }
+            );
+            return;
+        }
+    }
+    let passed = track_like_status_gate::run_true_query(coordinator.client(), &credential).await;
+    eprintln!(
+        "FURA_QQ_TRACK_LIKE_TRUE_GATE login_type=1 result={}",
+        if passed { "PASS" } else { "BLOCKED" }
+    );
 }
 
 #[test]

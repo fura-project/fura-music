@@ -10,6 +10,9 @@ use qqmusic_client::{
     QrImageMediaType, ReqwestTransport, ReqwestTransportError,
 };
 
+#[cfg(feature = "track-like-status-research")]
+#[path = "support/track_like_status_gate.rs"]
+mod track_like_status_gate;
 #[path = "support/user_library_gate.rs"]
 mod user_library_gate;
 
@@ -447,30 +450,36 @@ async fn bounded_disposable_qq_type_two_refresh_gate() {
     let _ = refresh_and_verify_once(transport, &credential).await;
 }
 
-async fn disposable_user_library_session() -> Option<(ReqwestTransport, Credential)> {
-    const GATE: &str = "FURA_QQ_USER_LIBRARY_GATE";
-    if !cfg!(debug_assertions) || std::env::var(GATE).as_deref() != Ok("1") {
-        eprintln!("{GATE} result=NOT_RUN reason=debug_and_explicit_opt_in_required");
+async fn disposable_qq_session(
+    gate: &str,
+    qr_path_env: &str,
+) -> Option<(ReqwestTransport, Credential)> {
+    if !cfg!(debug_assertions) || std::env::var(gate).as_deref() != Ok("1") {
+        eprintln!("{gate} result=NOT_RUN reason=debug_and_explicit_opt_in_required");
         return None;
     }
-    let Some(qr_path) = std::env::var_os("FURA_QQ_USER_LIBRARY_QR_PATH")
+    let Some(qr_path) = std::env::var_os(qr_path_env)
         .map(PathBuf::from)
         .filter(|path| path.is_absolute() && path.parent().is_some_and(std::path::Path::is_dir))
     else {
-        eprintln!("{GATE} result=NOT_RUN reason=private_qr_path_required");
+        eprintln!("{gate} result=NOT_RUN reason=private_qr_path_required");
         return None;
     };
     let Ok(transport) = ReqwestTransport::new() else {
-        eprintln!("{GATE} result=NOT_RUN reason=https_transport_unavailable");
+        eprintln!("{gate} result=NOT_RUN reason=https_transport_unavailable");
         return None;
     };
     let Some(credential) =
         acquire_disposable_qq_credential(&QqMusicClient::new(transport.clone()), qr_path).await
     else {
-        eprintln!("{GATE} result=NOT_RUN reason=disposable_login_not_completed");
+        eprintln!("{gate} result=NOT_RUN reason=disposable_login_not_completed");
         return None;
     };
     Some((transport, credential))
+}
+
+async fn disposable_user_library_session() -> Option<(ReqwestTransport, Credential)> {
+    disposable_qq_session("FURA_QQ_USER_LIBRARY_GATE", "FURA_QQ_USER_LIBRARY_QR_PATH").await
 }
 
 /// One fresh Type 2 login; existing production client requests, one call each.
@@ -496,6 +505,92 @@ async fn bounded_disposable_qq_user_library_post_refresh_gate() {
         return;
     };
     user_library_gate::run_reads(transport, &refreshed).await;
+}
+
+/// One fresh Type 2 login, one account verification, one single-MID status
+/// read, one two-MID status read, and one at-most-20-page resolver comparison.
+/// No Vault, refresh, mutation, retry, or Provider integration is used.
+#[tokio::test]
+#[ignore = "Human-operated disposable QQ Type 2 Track-like status research gate"]
+#[cfg(feature = "track-like-status-research")]
+async fn bounded_disposable_qq_track_like_status_gate() {
+    const GATE: &str = "FURA_QQ_TRACK_LIKE_STATUS_GATE";
+    if !cfg!(debug_assertions) || std::env::var(GATE).as_deref() != Ok("1") {
+        eprintln!("{GATE} result=NOT_RUN reason=debug_and_explicit_opt_in_required");
+        return;
+    }
+    let Some((transport, credential)) =
+        disposable_qq_session(GATE, "FURA_QQ_TRACK_LIKE_STATUS_QR_PATH").await
+    else {
+        return;
+    };
+    let client = QqMusicClient::new(transport);
+    match client.verify_credential(&credential).await {
+        Ok(_) => eprintln!(
+            "FURA_QQ_TRACK_LIKE_STATUS_GATE phase=account_verification request_sent=true http_status=2xx global_code=0 subrequest_code=0 failure=none"
+        ),
+        Err(error) => {
+            eprintln!(
+                "FURA_QQ_TRACK_LIKE_STATUS_GATE phase=account_verification request_sent=true http_status=unknown global_code=unknown subrequest_code=unknown failure={}",
+                match classify_verification_error(&error) {
+                    GateClassification::BlockedByRiskControl => "risk_control",
+                    GateClassification::BlockedByProtocol => "protocol",
+                    GateClassification::Pass | GateClassification::ImplementationDefect => {
+                        "implementation"
+                    }
+                }
+            );
+            return;
+        }
+    }
+    let passed = track_like_status_gate::run_queries(&client, &credential).await;
+    eprintln!(
+        "FURA_QQ_TRACK_LIKE_STATUS_GATE login_type=2 result={}",
+        if passed { "PASS" } else { "BLOCKED" }
+    );
+}
+
+/// One fresh Type 2 login, one account verification, a complete exact Liked
+/// snapshot, and exactly one direct read for an existing liked target selected
+/// in memory. No identity is logged and no mutation, retry or refresh occurs.
+#[tokio::test]
+#[ignore = "Human-operated disposable QQ Type 2 Track-like true evidence gate"]
+#[cfg(feature = "track-like-status-research")]
+async fn bounded_disposable_qq_track_like_true_gate() {
+    const GATE: &str = "FURA_QQ_TRACK_LIKE_TRUE_GATE";
+    if !cfg!(debug_assertions) || std::env::var(GATE).as_deref() != Ok("1") {
+        eprintln!("{GATE} result=NOT_RUN reason=debug_and_explicit_opt_in_required");
+        return;
+    }
+    let Some((transport, credential)) =
+        disposable_qq_session(GATE, "FURA_QQ_TRACK_LIKE_TRUE_QR_PATH").await
+    else {
+        return;
+    };
+    let client = QqMusicClient::new(transport);
+    match client.verify_credential(&credential).await {
+        Ok(_) => eprintln!(
+            "FURA_QQ_TRACK_LIKE_TRUE_GATE phase=account_verification request_sent=true http_status=2xx global_code=0 subrequest_code=0 failure=none"
+        ),
+        Err(error) => {
+            eprintln!(
+                "FURA_QQ_TRACK_LIKE_TRUE_GATE phase=account_verification request_sent=true http_status=unknown global_code=unknown subrequest_code=unknown failure={}",
+                match classify_verification_error(&error) {
+                    GateClassification::BlockedByRiskControl => "risk_control",
+                    GateClassification::BlockedByProtocol => "protocol",
+                    GateClassification::Pass | GateClassification::ImplementationDefect => {
+                        "implementation"
+                    }
+                }
+            );
+            return;
+        }
+    }
+    let passed = track_like_status_gate::run_true_query(&client, &credential).await;
+    eprintln!(
+        "FURA_QQ_TRACK_LIKE_TRUE_GATE login_type=2 result={}",
+        if passed { "PASS" } else { "BLOCKED" }
+    );
 }
 
 #[test]

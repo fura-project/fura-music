@@ -90,6 +90,40 @@ void main() {
   );
 
   test(
+    'twelve-page snapshot cost is explicit and listener fan-out is bounded',
+    () async {
+      const total = 1151;
+      final results = <PlaylistTrackPageResult>[];
+      for (var offset = 0; offset < total; offset += 100) {
+        final next = (offset + 100).clamp(0, total);
+        results.add(
+          PlaylistTrackPageResult(
+            offset: offset,
+            nextOffset: next,
+            total: total,
+            hasMore: next < total,
+            membershipTrackOpaqueIds: [
+              for (var index = offset; index < next; index++) 'track-$index',
+            ],
+          ),
+        );
+      }
+      final gateway = _FakePlaylistGateway.fromResults(results);
+      final controller = _controller(gateway);
+      var notifications = 0;
+      controller.addListener(() => notifications += 1);
+
+      controller.bindLikedPlaylist(likedPlaylist);
+      await controller.preload();
+
+      expect(gateway.requests.length, 12);
+      expect(notifications, 15);
+      expect(controller.stateFor(other), AuthoritativeTrackLikeState.notLiked);
+      controller.dispose();
+    },
+  );
+
+  test(
     'presentation omission does not poison provider identity membership',
     () async {
       final gateway = _FakePlaylistGateway.fromResults([
