@@ -116,9 +116,9 @@ jobs:
         working-directory: apps/flutter
         run: flutter pub get
 
-      - name: Verify Android default playback-stack selection
+      - name: Verify single Android system-media owner
         working-directory: apps/flutter
-        run: flutter test test/playback/playback_stack_experiment_test.dart
+        run: flutter test test/playback/system_playback_service_test.dart
 
       - name: Build ARM64 development APK
         working-directory: apps/flutter
@@ -147,13 +147,10 @@ jobs:
           "$apkanalyzer" manifest print "$apk" \
             > build/android-arm64-manifest.xml
           ../../scripts/ci/verify_android_media_button_manifest.py \
-            build/android-arm64-manifest.xml \
-            androidx.media3.session.MediaButtonReceiver
+            build/android-arm64-manifest.xml
           grep -q 'com.fura.flutterustmusic.FuraApplication' \
             build/android-arm64-manifest.txt
           grep -q 'dev.wyrin.flutter_media_session.FlutterMediaSessionService' \
-            build/android-arm64-manifest.txt
-          grep -q 'com.ryanheise.audioservice.AudioService' \
             build/android-arm64-manifest.txt
           unzip -l "$apk" | tee build/android-arm64-contents.txt
           grep -q "lib/arm64-v8a/librust_lib_flutterustmusic.so" build/android-arm64-contents.txt
@@ -186,12 +183,10 @@ jobs:
           source_commit=$(git -C ../.. rev-parse --verify HEAD)
           test "$source_commit" = "${{ github.sha }}"
           printf '%s\n' \
-            'requested=D' \
-            'android_effective=D' \
             'audio_engine=media_kit' \
             'system_media=flutter_media_session' \
             "source_commit=$source_commit" \
-            > build/test-packages/PLAYBACK_STACK.txt
+            > build/test-packages/PLAYBACK_RUNTIME.txt
 
       - name: Build x64 emulator APK
         working-directory: apps/flutter
@@ -248,8 +243,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             binutils clang cmake dbus-x11 desktop-file-utils dpkg-dev file \
-            g++ gstreamer1.0-plugins-base gstreamer1.0-plugins-good jq \
-            libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev \
+            g++ jq \
             libgtk-3-dev libmpv-dev libsecret-1-dev \
             ninja-build patchelf pkg-config xauth xvfb
 
@@ -343,8 +337,7 @@ jobs:
         run: |
           dnf install --assumeyes \
             binutils clang cmake curl desktop-file-utils file gcc-c++ git \
-            gstreamer1-devel gstreamer1-plugins-base-devel \
-            gstreamer1-plugins-base gstreamer1-plugins-good gtk3-devel jq \
+            gtk3-devel jq \
             libepoxy-devel libsecret-devel mpv-devel ninja-build \
             patchelf pkgconf-pkg-config python3 rpm-build tar unzip which xz
 
@@ -439,8 +432,8 @@ jobs:
         run: |
           pacman -Syu --noconfirm
           pacman -S --needed --noconfirm \
-            clang cmake curl dbus desktop-file-utils file git gst-plugins-base gst-plugins-good \
-            gstreamer gtk3 jq libepoxy libsecret mpv ninja patchelf pkgconf \
+            clang cmake curl dbus desktop-file-utils file git \
+            gtk3 jq libepoxy libsecret mpv ninja patchelf pkgconf \
             python rustup sudo unzip xz
 
       - name: Check out repository
@@ -543,9 +536,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             binutils clang cmake curl desktop-file-utils file g++ \
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good jq \
-            libgirepository1.0-dev libgstreamer-plugins-base1.0-dev \
-            libgstreamer1.0-dev libgtk-3-dev libharfbuzz0b libmpv-dev librsvg2-dev \
+            jq \
+            libgirepository1.0-dev \
+            libgtk-3-dev libharfbuzz0b libmpv-dev librsvg2-dev \
             libsecret-1-dev ninja-build patchelf \
             pkg-config shared-mime-info squashfs-tools xz-utils
 
@@ -615,7 +608,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
-            binutils ca-certificates dbus-bin dbus-x11 git gstreamer1.0-tools passwd python3 \
+            binutils ca-certificates dbus-bin dbus-x11 git passwd python3 \
             xauth xdotool xvfb
 
       - name: Check out verification scripts

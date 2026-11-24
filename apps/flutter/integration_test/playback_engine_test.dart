@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
@@ -14,33 +13,6 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
 
-  testWidgets('plays and disposes a generated local source', (_) async {
-    final fixtureDirectory = await Directory.systemTemp.createTemp(
-      'flutterustmusic-playback-',
-    );
-    final fixture = File('${fixtureDirectory.path}/probe.mp3');
-    final player = AudioPlayer();
-
-    try {
-      await fixture.writeAsBytes(base64Decode(_silentMp3Base64), flush: true);
-      await player.setReleaseMode(ReleaseMode.stop);
-      await player.setVolume(0);
-      await player.setSourceDeviceFile(fixture.path, mimeType: 'audio/mpeg');
-
-      await player.resume();
-      expect(player.state, PlayerState.playing);
-      await player.pause();
-      expect(player.state, PlayerState.paused);
-      await player.resume();
-      expect(player.state, PlayerState.playing);
-      await player.stop();
-      expect(player.state, PlayerState.stopped);
-    } finally {
-      await player.dispose();
-      await fixtureDirectory.delete(recursive: true);
-    }
-  });
-
   testWidgets('project adapter plays a loopback remote MP3', (tester) async {
     final fixture = base64Decode(_silentMp3Base64);
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -49,7 +21,7 @@ void main() {
         _serveFixture(request, fixture, ContentType('audio', 'mpeg')),
       ),
     );
-    final engine = AudioplayersForegroundAudioEngine();
+    final engine = MediaKitForegroundAudioEngine();
     ForegroundAudioSession? session;
 
     try {
@@ -68,9 +40,6 @@ void main() {
         ForegroundAudioState.playing,
         session.play,
       );
-      // audioplayers uses a frame-driven position updater by default. Pump a
-      // frame after native playback has started so this integration test
-      // observes the same callback path as the running Flutter surface.
       await tester.pump(const Duration(milliseconds: 300));
       expect(
         await progressed.timeout(const Duration(seconds: 5)),
@@ -118,7 +87,7 @@ void main() {
         _serveFixture(request, fixture, ContentType('audio', 'mp4')),
       ),
     );
-    final engine = AudioplayersForegroundAudioEngine();
+    final engine = MediaKitForegroundAudioEngine();
     ForegroundAudioSession? session;
 
     try {
@@ -166,7 +135,7 @@ void main() {
         _serveFixture(request, fixture, ContentType('audio', 'flac')),
       ),
     );
-    final engine = AudioplayersForegroundAudioEngine();
+    final engine = MediaKitForegroundAudioEngine();
     ForegroundAudioSession? session;
 
     try {
@@ -437,10 +406,14 @@ Future<void> _expectStateAfter(
 const _silentM4aBase64 =
     'AAAAHGZ0eXBNNEEgAAACAE00QSBpc29taXNvMgAAAw5tb292AAAAbG12aGQAAAAAAAAAAAAAAAAAAB9AAAAPoAABAAABAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAACOXRyYWsAAABcdGtoZAAAAAMAAAAAAAAAAAAAAAEAAAAAAAAPoAAAAAAAAAAAAAAAAQEAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAACRlZHRzAAAAHGVsc3QAAAAAAAAAAQAAD6AAAAQAAAEAAAAAAbFtZGlhAAAAIG1kaGQAAAAAAAAAAAAAAAAAAB9AAAAToFXEAAAAAAAtaGRscgAAAAAAAAAAc291bgAAAAAAAAAAAAAAAFNvdW5kSGFuZGxlcgAAAAFcbWluZgAAABBzbWhkAAAAAAAAAAAAAAAkZGluZgAAABxkcmVmAAAAAAAAAAEAAAAMdXJsIAAAAAEAAAEgc3RibAAAAGpzdHNkAAAAAAAAAAEAAABabXA0YQAAAAAAAAABAAAAAAAAAAAAAQAQAAAAAB9AAAAAAAA2ZXNkcwAAAAADgICAJQABAASAgIAXQBUAAAAAALuAAAABvQWAgIAFFYhW5QAGgICAAQIAAAAgc3R0cwAAAAAAAAACAAAABAAABAAAAAABAAADoAAAABxzdHNjAAAAAAAAAAEAAAABAAAABQAAAAEAAAAoc3RzegAAAAAAAAAAAAAABQAAABMAAAAEAAAABAAAAAQAAAAEAAAAFHN0Y28AAAAAAAAAAQAAAzoAAAAac2dwZAEAAAByb2xsAAAAAgAAAAH//wAAABxzYmdwAAAAAHJvbGwAAAABAAAABQAAAAEAAABhdWR0YQAAAFltZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAACxpbHN0AAAAJKl0b28AAAAcZGF0YQAAAAEAAAAATGF2ZjYzLjEuMTAxAAAACGZyZWUAAAArbWRhdNwATGF2YzYzLjEuMTAxAAIwQA4BGCAHARggBwEYIAcBGCAH';
 
-// 0.5 seconds of silent 8 kHz mono FLAC generated with libFLAC 1.5.0.
-// It verifies the F000 playback format without network or account data.
+// 1 second of silent 8 kHz mono FLAC, encoded with libFLAC 1.5.0 using
+// 512-sample blocks so native playback publishes progress before EOF.
 const _silentFlacBase64 =
-    'ZkxhQwAAACIQABAAAAANAAANAfQA8AAAD6BYEBJJx2tzW9dM5TArAJMXhAAAKCAAAAByZWZlcmVuY2UgbGliRkxBQyAxLjUuMCAyMDI1MDIxMQAAAAD/+HQIAA+fggAAAFLj';
+    'ZkxhQwAAACICAAIAAAALAAANAfQA8AAAH0Ae4Bk2cWCcfWPP6JuSCtMThAAAKCAAAAByZWZlcmVu'
+    'Y2UgbGliRkxBQyAxLjUuMCAyMDI1MDIxMQAAAAD/+JQIACAAAAD9W//4lAgBJwAAAJEj//iUCAIu'
+    'AAAAJav/+JQIAykAAABJ0//4lAgEPAAAAMy+//iUCAU7AAAAoMb/+JQIBjIAAAAUTv/4lAgHNQAA'
+    'AHg2//iUCAgYAAAAnpH/+JQICR8AAADy6f/4lAgKFgAAAEZh//iUCAsRAAAAKhn/+JQIDAQAAACv'
+    'dP/4lAgNAwAAAMMM//iUCA4KAAAAd4T/+HQIDwE/egAAAF40';
 
 // 0.5 seconds of silent 8 kHz mono MP3 generated with FFmpeg 9.0, no Xing
 // header in the pipe output. Independently decode-checked with -xerror.

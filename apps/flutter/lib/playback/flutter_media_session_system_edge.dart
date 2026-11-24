@@ -12,7 +12,6 @@ abstract interface class FlutterMediaSessionDriver {
   Stream<fms.MediaAction> get actions;
 
   Future<void> setAutoHandleInterruptions(bool enabled);
-  Future<void> setBackgroundKeepAlive(bool enabled);
   Future<void> activate();
   Future<void> deactivate();
   Future<void> updateMetadata(fms.MediaMetadata metadata);
@@ -36,14 +35,10 @@ class PlatformFlutterMediaSessionDriver implements FlutterMediaSessionDriver {
       _session.setAutoHandleInterruptions(enabled);
 
   @override
-  Future<void> setBackgroundKeepAlive(bool enabled) =>
-      _session.setBackgroundKeepAlive(enabled);
+  Future<void> activate() => _platform.activate();
 
   @override
-  Future<void> activate() => _session.activate();
-
-  @override
-  Future<void> deactivate() => _session.deactivate();
+  Future<void> deactivate() => _platform.deactivate();
 
   @override
   Future<void> updateMetadata(fms.MediaMetadata metadata) =>
@@ -83,7 +78,11 @@ class FuraMediaSessionAdapter implements SystemMediaEdge {
   String? _metadataSignature;
   String? _actionsSignature;
   _PublishedFlutterMediaState? _lastPlayback;
+  int _activationGeneration = 0;
+  Future<void>? _platformActivation;
+  Future<void>? _deactivation;
   bool _active = false;
+  bool _teardownFailed = false;
 
   QueuePlaybackController get controller => _controller;
 
@@ -94,8 +93,8 @@ class FuraMediaSessionAdapter implements SystemMediaEdge {
     TargetPlatform.android ||
     TargetPlatform.windows ||
     TargetPlatform.macOS => true,
-    // 3.0.5 unconditionally owns AVAudioSession on iOS and exposes no switch
-    // to disable it; Linux has no plugin implementation.
+    // iOS activation owns AVAudioSession. Linux MPRIS drops Track identity
+    // from SetPosition and cannot replace Fura's current protocol edge.
     TargetPlatform.iOS ||
     TargetPlatform.linux ||
     TargetPlatform.fuchsia => false,
@@ -103,7 +102,9 @@ class FuraMediaSessionAdapter implements SystemMediaEdge {
 
   @override
   Future<void> activate() async {
-    if (_active) throw StateError('System media edge is already active.');
+    if (_active || _deactivation != null || _teardownFailed) {
+      throw StateError('System media edge is unavailable for activation.');
+    }
     if (!supportsPlatform(_platform)) {
       throw UnsupportedError(
         'flutter_media_session is not an admissible Fura system edge on '
@@ -119,66 +120,65 @@ class FuraMediaSessionAdapter implements SystemMediaEdge {
         // A platform command-stream failure must not affect Queue or playback.
       },
     );
-    var androidForegroundStartupPrimed = false;
     try {
-      // Android is the only supported Fura candidate target where 3.0.5 has
-      // an optional focus owner. Disable it before creating the Media3 service.
-      if (_platform == TargetPlatform.android) {
-        await _driver.setAutoHandleInterruptions(false);
-        // flutter_media_session 3.0.5 starts its MediaSessionService with
-        // startForegroundService(), even while the initial Queue state is
-        // idle. Prime its public keep-alive switch before activation so
-        // Media3 posts the required foreground notification inside Android's
-        // deadline, then immediately return to the Queue-owned playback state.
-        // Without this handshake Android reports a foreground-service ANR.
-        await _driver.setBackgroundKeepAlive(true);
-        androidForegroundStartupPrimed = true;
-      }
-      await _driver.activate();
-      if (androidForegroundStartupPrimed) {
-        await _driver.setBackgroundKeepAlive(false);
-        androidForegroundStartupPrimed = false;
-      }
+      await (_platformActivation = _activatePlatform());
+      if (!_active) throw StateError('System media activation was cancelled.');
       await _enqueueSynchronization(force: true, exposeFailure: true);
+      if (!_active) throw StateError('System media activation was cancelled.');
     } on Object {
-      if (androidForegroundStartupPrimed) {
-        try {
-          await _driver.setBackgroundKeepAlive(false);
-        } on Object {
-          // The original activation failure remains the useful diagnostic.
-        }
-      }
-      await _detach(deactivatePlatform: true);
+      await deactivate();
       rethrow;
     }
   }
 
-  @override
-  Future<void> deactivate() => _detach(deactivatePlatform: true);
+  Future<void> _activatePlatform() async {
+    if (_platform == TargetPlatform.android) {
+      // Set before Media3 service creation. audio_session owns focus and
+      // interruption policy while the service handles becoming-noisy.
+      await _driver.setAutoHandleInterruptions(false);
+    }
+    if (_active) await _driver.activate();
+  }
 
-  Future<void> _detach({required bool deactivatePlatform}) async {
-    if (!_active && _actionSubscription == null) return;
+  @override
+  Future<void> deactivate() {
+    if (_deactivation case final pending?) return pending;
+    if (!_active) return Future<void>.value();
+    return _deactivation = _detach().whenComplete(() => _deactivation = null);
+  }
+
+  Future<void> _detach() async {
     _active = false;
+    _activationGeneration++;
     _controller.removeListener(_scheduleSynchronization);
+    try {
+      await _platformActivation;
+    } on Object {
+      // Activation reports its own failure. Clean up partial activation here.
+    }
+    _platformActivation = null;
     await _synchronizationTail;
     await _actionSubscription?.cancel();
     _actionSubscription = null;
     _metadataSignature = null;
     _actionsSignature = null;
     _lastPlayback = null;
-    if (deactivatePlatform) {
-      try {
-        await _driver.deactivate();
-      } on Object {
-        // Deactivation is terminal and must not replace the Queue owner.
-      }
+    try {
+      await _driver.deactivate();
+    } on Object {
+      _teardownFailed = true;
+      debugPrint(
+        'FURA_DIAGNOSTIC system_media phase=deactivate outcome=failed',
+      );
     }
   }
 
   void _onAction(fms.MediaAction action) {
     if (!_active) return;
+    final activationGeneration = _activationGeneration;
+    final sourceGeneration = _controller.playback.sourceGeneration;
     _enqueue(() async {
-      if (!_active) return;
+      if (!_active || activationGeneration != _activationGeneration) return;
       switch (action.name) {
         case 'play':
           final playback = _controller.playback;
@@ -207,7 +207,9 @@ class FuraMediaSessionAdapter implements SystemMediaEdge {
           }
         case 'seekTo':
           final position = action.seekPosition;
-          if (position != null && _controller.playback.canSeek) {
+          if (position != null &&
+              sourceGeneration == _controller.playback.sourceGeneration &&
+              _controller.playback.canSeek) {
             await _controller.playback.seekToMs(position.inMilliseconds);
           }
         case 'shuffle':
@@ -264,37 +266,43 @@ class FuraMediaSessionAdapter implements SystemMediaEdge {
               '${current.albumTitle ?? ''}\u0000${current.durationSeconds ?? -1}\u0000'
               '${current.artworkUri ?? ''}';
     if (force || metadataSignature != _metadataSignature) {
-      _metadataSignature = metadataSignature;
       await _driver.updateMetadata(_metadata(current));
+      _metadataSignature = metadataSignature;
     }
+    if (!_active || !identical(current, _controller.current)) return;
 
     final actions = _availableActions();
     final actionsSignature = actions.map((action) => action.name).toList()
       ..sort();
     final joinedActions = actionsSignature.join(',');
     if (force || joinedActions != _actionsSignature) {
-      _actionsSignature = joinedActions;
       await _driver.updateAvailableActions(actions);
+      _actionsSignature = joinedActions;
     }
+    if (!_active || !identical(current, _controller.current)) return;
 
     final next = _playbackState();
     if (force || _shouldPublish(next)) {
-      _lastPlayback = next;
       await _driver.updatePlaybackState(next.state);
+      _lastPlayback = next;
     }
   }
 
-  fms.MediaMetadata _metadata(PlaylistTrackSummary? track) => fms.MediaMetadata(
-    title: track?.title,
-    artist: track == null || track.artistNames.isEmpty
-        ? null
-        : track.artistNames.join(', '),
-    album: track?.albumTitle,
-    artworkUri: _safeArtworkUri(track?.artworkUri),
-    duration: track?.durationSeconds == null || track!.durationSeconds! <= 0
-        ? null
-        : Duration(seconds: track.durationSeconds!),
-  );
+  fms.MediaMetadata _metadata(PlaylistTrackSummary? track) {
+    // SMTC ignores omitted text fields. An explicit empty string clears them.
+    final missingText = _platform == TargetPlatform.windows ? '' : null;
+    return fms.MediaMetadata(
+      title: track?.title ?? missingText,
+      artist: track == null || track.artistNames.isEmpty
+          ? missingText
+          : track.artistNames.join(', '),
+      album: track?.albumTitle ?? missingText,
+      artworkUri: _safeArtworkUri(track?.artworkUri),
+      duration: track?.durationSeconds == null || track!.durationSeconds! <= 0
+          ? null
+          : Duration(seconds: track.durationSeconds!),
+    );
+  }
 
   Set<fms.MediaAction> _availableActions() => {
     if (_controller.playback.canResume || _controller.playback.canActivate)

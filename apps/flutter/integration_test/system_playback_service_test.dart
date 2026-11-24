@@ -2,12 +2,10 @@ import 'package:dbus/dbus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
-import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/linux_mpris_player.dart';
 import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
-import 'package:flutterustmusic/playback/playback_stack_experiment.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:media_kit/media_kit.dart';
@@ -17,22 +15,15 @@ void main() {
   MediaKit.ensureInitialized();
 
   testWidgets('initializes the host system media session', (tester) async {
-    final selection = PlaybackStackSelection.current();
     final host = await initializeAppPlaybackHost(
       playbackQueueGateway: _MemoryQueueGateway(),
       mediaResolutionGateway: const _NeverMediaGateway(),
       lyricGateway: const _NeverLyricGateway(),
-      audioEngine: switch (selection.effectiveAudioEngine) {
-        MusicAudioEngineKind.audioplayers =>
-          AudioplayersForegroundAudioEngine(),
-        MusicAudioEngineKind.mediaKit => MediaKitForegroundAudioEngine(),
-      },
-      systemMediaEdge: selection.effectiveSystemMediaEdge,
+      audioEngine: MediaKitForegroundAudioEngine(),
     );
 
     expect(host, isA<FuraMprisAppPlaybackHost>());
     expect(host.controller, isNotNull);
-    expect(selection.usesProjectLinuxMpris, isTrue);
 
     final client = DBusClient.session();
     final remote = DBusRemoteObject(
@@ -47,6 +38,14 @@ void main() {
         signature: DBusSignature('s'),
       )).asString(),
       'fura music playback',
+    );
+    expect(
+      (await remote.getProperty(
+        'org.mpris.MediaPlayer2',
+        'DesktopEntry',
+        signature: DBusSignature('s'),
+      )).asString(),
+      'com.fura.flutterustmusic',
     );
     expect(
       (await remote.getProperty(

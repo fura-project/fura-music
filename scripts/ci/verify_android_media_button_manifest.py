@@ -16,12 +16,12 @@ FLUTTER_MEDIA_SESSION_SERVICE = (
     "dev.wyrin.flutter_media_session.FlutterMediaSessionService"
 )
 FLUTTER_MEDIA_SESSION_RECEIVER = "androidx.media3.session.MediaButtonReceiver"
+CONNECTED_DEVICE_PERMISSION = "android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("manifest_xml")
-    parser.add_argument("expected_receiver")
     args = parser.parse_args()
 
     root = ET.parse(args.manifest_xml).getroot()
@@ -44,41 +44,44 @@ def main() -> int:
         enabled = receiver.get(f"{ANDROID}enabled", "true") != "false"
         declared.append((name, enabled))
 
-    enabled_receivers = [name for name, enabled in declared if enabled]
-    if enabled_receivers != [args.expected_receiver]:
+    expected = [(FLUTTER_MEDIA_SESSION_RECEIVER, True)]
+    if declared != expected:
         print(f"declared MEDIA_BUTTON receivers: {declared}", file=sys.stderr)
-        print(f"enabled MEDIA_BUTTON receivers: {enabled_receivers}", file=sys.stderr)
-        print(f"expected exactly: {args.expected_receiver}", file=sys.stderr)
+        print(f"expected exactly: {expected}", file=sys.stderr)
         return 1
 
-    expected_services = {
-        AUDIO_SERVICE_RECEIVER: {
-            AUDIO_SERVICE: True,
-            FLUTTER_MEDIA_SESSION_SERVICE: False,
-        },
-        FLUTTER_MEDIA_SESSION_RECEIVER: {
-            AUDIO_SERVICE: False,
-            FLUTTER_MEDIA_SESSION_SERVICE: True,
-        },
-    }
-    if args.expected_receiver not in expected_services:
-        raise SystemExit(f"unsupported expected receiver: {args.expected_receiver}")
+    services = application.findall("service")
+    playback_services = [
+        service for service in services
+        if service.get(f"{ANDROID}name") == FLUTTER_MEDIA_SESSION_SERVICE
+    ]
+    if (
+        len(playback_services) != 1
+        or any(service.get(f"{ANDROID}name") == AUDIO_SERVICE for service in services)
+        or any(
+            receiver.get(f"{ANDROID}name") == AUDIO_SERVICE_RECEIVER
+            for receiver in application.findall("receiver")
+        )
+    ):
+        print("expected one enabled local playback service and no AudioService registrations", file=sys.stderr)
+        return 1
 
-    declared_services = {
-        service.get(f"{ANDROID}name"): service.get(f"{ANDROID}enabled", "true")
-        != "false"
-        for service in application.findall("service")
-    }
-    expected = expected_services[args.expected_receiver]
-    actual = {name: declared_services.get(name) for name in expected}
-    if actual != expected:
-        print(f"system-edge service states: {actual}", file=sys.stderr)
-        print(f"expected service states: {expected}", file=sys.stderr)
+    service = playback_services[0]
+    # Merged source XML is symbolic; apkanalyzer prints the mediaPlayback bit
+    # from binary XML as 0x2. Additional bits must still fail the gate.
+    if (
+        service.get(f"{ANDROID}enabled", "true") != "true"
+        or service.get(f"{ANDROID}foregroundServiceType") not in ("mediaPlayback", "0x2")
+        or any(
+            permission.get(f"{ANDROID}name") == CONNECTED_DEVICE_PERMISSION
+            for permission in root.findall("uses-permission")
+        )
+    ):
+        print("expected a local mediaPlayback service without connected-device access", file=sys.stderr)
         return 1
 
     print(f"declared MEDIA_BUTTON receivers: {declared}")
-    print(f"enabled MEDIA_BUTTON receiver: {enabled_receivers[0]}")
-    print(f"system-edge service states: {actual}")
+    print(f"enabled MEDIA_BUTTON receiver: {FLUTTER_MEDIA_SESSION_RECEIVER}")
     return 0
 
 

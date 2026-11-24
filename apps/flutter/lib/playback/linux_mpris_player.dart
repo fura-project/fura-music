@@ -289,6 +289,11 @@ class ProjectMprisPlayer extends DBusObject {
           access: DBusPropertyAccess.read,
         ),
         DBusIntrospectProperty(
+          'DesktopEntry',
+          DBusSignature('s'),
+          access: DBusPropertyAccess.read,
+        ),
+        DBusIntrospectProperty(
           'SupportedUriSchemes',
           DBusSignature('as'),
           access: DBusPropertyAccess.read,
@@ -506,6 +511,7 @@ class ProjectMprisPlayer extends DBusObject {
     'CanRaise': const DBusBoolean(false),
     'HasTrackList': const DBusBoolean(false),
     'Identity': DBusString(identity),
+    'DesktopEntry': const DBusString('com.fura.flutterustmusic'),
     'SupportedUriSchemes': DBusArray.string([]),
     'SupportedMimeTypes': DBusArray.string([]),
   };

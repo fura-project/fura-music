@@ -36,19 +36,15 @@ dependencies:
 
   rust_lib_flutterustmusic:
     path: rust_builder
+  # Fixed iOS system-media exception. See HD-037.
   audio_service: 0.18.19
-  audio_service_win: 0.0.3
   audio_session: 0.2.4
-  audioplayers: 6.8.1
   dbus: 0.7.15
   # 2.x returns material_ui.ColorScheme; Fura's Flutter ThemeData requires the
   # native Flutter ColorScheme still provided by 1.9.0.
   dynamic_color: 1.9.0
   flutter_rust_bridge: 2.13.0
-  # HD-033: no-define test builds request D (media_kit + flutter_media_session).
-  # A rollback, iOS audio_service fallback and Linux Fura MPRIS stay supported;
-  # the test default does not imply Human acceptance or dependency retirement.
-  flutter_media_session: 3.0.5
+  flutter_media_session: 3.2.1
   flutter_secure_storage: 10.3.1
   media_kit: 1.2.6
   media_kit_libs_video: 1.0.7

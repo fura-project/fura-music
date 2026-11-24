@@ -4,6 +4,8 @@ import 'package:flutterustmusic/src/rust/api/album.dart';
 import 'package:flutterustmusic/src/rust/api/album_favorites.dart';
 import 'package:flutterustmusic/src/rust/api/artist.dart';
 import 'package:flutterustmusic/app.dart';
+import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
+import 'package:media_kit/media_kit.dart' show MediaKit;
 import 'package:flutterustmusic/src/rust/api/authentication.dart';
 import 'package:flutterustmusic/src/rust/api/bootstrap.dart';
 import 'package:flutterustmusic/src/rust/api/comments.dart';
@@ -469,7 +471,10 @@ void main() {
     expect(queue.snapshot().snapshot?.currentIndex, 1);
     expect(queue.clear().snapshot?.tracks, isEmpty);
 
-    await tester.pumpWidget(MusicApp(bootstrap: status));
+    MediaKit.ensureInitialized();
+    await tester.pumpWidget(
+      MusicApp(bootstrap: status, audioEngine: MediaKitForegroundAudioEngine()),
+    );
     expect(find.byKey(const ValueKey('signed-out-main-page')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-heading')), findsOneWidget);
   });

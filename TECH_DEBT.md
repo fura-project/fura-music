@@ -118,6 +118,14 @@ Technical debt is reviewed after each finite task. States are `Open`, `Triggered
 
 **Status:** Open
 
+**HD-037 update (2026-11-24):** `audio_service_win` has been retired.
+The production Windows edge uses `flutter_media_session` 3.2.1. The
+published C++ implementation has a SMTC timeline and position-request path,
+drops requested repeat/shuffle values before dispatch to Dart, and lacks an
+explicit artwork/duration clear. Native build, identity and command
+acceptance remain open. Earlier entries below
+describe the historical rollback.
+
 **Problem:** The retained Windows `audio_service` rollback uses the directly pinned `audio_service_win` 0.0.3. It implements SMTC registration, metadata, play/pause/stop/previous/next callbacks and coarse playing state, but its platform adapter does not publish a playback timeline, accept seek, or expose the Queue. The current no-define test default instead selects `flutter_media_session` 3.0.5; its native repeat/shuffle callback-value semantics still need Windows runtime acceptance. Neither adapter was built or run on a Windows host during the 2026-10-07 Linux ownership audit. Prior build evidence does not prove those runtime claims.
 
 **Why accepted:** The package preserves the shared `audio_service` handler and single playback owner, provides the bounded transport surface already requested, and avoids inventing a second Windows-only playback architecture. No Windows runtime or release claim is being made.
@@ -143,6 +151,14 @@ default-D selection is not that retirement authority.
 
 **Status:** Open
 
+**HD-037 update (2026-11-24):** The published `flutter_media_session` 3.2.1
+native candidate still drops the Track path from `SetPosition`, returns the
+last position sample without time projection, discards explicit mode values
+and fails writing Volume. Upstream takeover requires preserving those values
+through dispatch, accurate volume and position with Seeked signals, and
+passing the existing real-bus contract. Fura's direct edge remains the one
+Linux owner. See the [convergence audit](docs/research/playback-stack-convergence-2026-11-24.md).
+
 **Problem:** The stable generic MPRIS adapter retained only a static playback-position sample and left relative seek, shuffle, and repeat unavailable despite the application's shared handler supporting them. Fura owns the DBus protocol. On 2026-10-08 its former AudioService message adapter was removed: direct `FuraMprisSystemMediaEdge` now projects the existing controller into the preserved `ProjectMprisPlayer` protocol object.
 
 **Why accepted:** The defect was reproduced by the maintainer and confirmed in the pinned adapter source. Its current prerelease still lacked the complete timestamped position, relative seek, and required Track identity behavior. Adding timers or duplicate mode state to the playback controller would hide the protocol defect and violate the single-owner boundary; a localized adapter with protocol and real session-bus tests fixes the root layer.
@@ -153,7 +169,9 @@ default-D selection is not that retirement authority.
 
 **Suggested solution:** Keep the edge isolated and regression-tested against the current MPRIS contract. Prefer replacing it with an upstream stable implementation when that implementation demonstrably supports timestamp-projected position, required `mpris:trackid`, absolute and relative seek, truthful capabilities, and bidirectional shuffle/repeat without changing Queue ownership.
 
-**Trigger condition:** Reassess when `audio_service_mpris` publishes a stable compatible release, the MPRIS specification changes, or a KDE/GNOME runtime retest exposes behavior not covered by the current protocol/session-bus gates.
+**Trigger condition:** Reassess when a released upstream MPRIS edge implements
+the HD-037 Track identity, timeline, mode and volume contracts, the MPRIS
+specification changes, or KDE/GNOME testing exposes a protocol gap.
 
 ## TD-010 — Authenticated Flutter Shell concentrates unrelated state
 

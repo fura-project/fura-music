@@ -11,7 +11,6 @@ import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/linux_mpris_player.dart';
-import 'package:flutterustmusic/playback/playback_stack_experiment.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
@@ -207,7 +206,6 @@ void main() {
           player: player,
           audioFocusManager: focus,
         ),
-        systemMediaEdge: SystemMediaEdgeKind.furaMpris,
         audioServiceInitializer: (_, _) async =>
             fail('Linux must not initialize AudioService'),
       );
@@ -369,7 +367,6 @@ void main() {
           mediaResolutionGateway: resolver,
           lyricGateway: const _NoLyrics(),
           audioEngine: MediaKitForegroundAudioEngine(),
-          systemMediaEdge: SystemMediaEdgeKind.furaMpris,
           audioServiceInitializer: (_, _) async =>
               fail('Restart AudioService init'),
         );

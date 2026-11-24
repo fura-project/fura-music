@@ -256,7 +256,9 @@ class MusicApp extends StatefulWidget {
               playbackQueueGateway ?? RustPlaybackQueueGateway(),
           mediaResolutionGateway: mediaResolutionGateway,
           lyricGateway: lyricGateway,
-          audioEngine: audioEngine ?? AudioplayersForegroundAudioEngine(),
+          audioEngine:
+              audioEngine ??
+              (throw ArgumentError('Provide a playback host or audio engine.')),
           relatedTracksGateway: resolvedRelatedTracksGateway,
         );
     return MusicApp._(

@@ -1,16 +1,11 @@
 import 'dart:async';
 
-import 'package:audioplayers/audioplayers.dart' as audio;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
 import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
 
 void main() {
-  _runForegroundAudioEngineContract(
-    'AudioplayersForegroundAudioEngine',
-    _AudioplayersHarness.new,
-  );
   _runForegroundAudioEngineContract(
     'MediaKitForegroundAudioEngine',
     _MediaKitHarness.new,
@@ -373,158 +368,6 @@ abstract class _EngineHarness {
   void emitFailure();
   void holdPause(Future<void> gate);
   void holdStop(Future<void> gate);
-}
-
-class _AudioplayersHarness implements _EngineHarness {
-  _AudioplayersHarness() {
-    engine = AudioplayersForegroundAudioEngine(
-      playerFactory: () {
-        final player = _FakeAudioplayersPlayer();
-        player.pauseGate = _pauseGate;
-        player.stopGate = _stopGate;
-        players.add(player);
-        return player;
-      },
-      audioFocusManager: focus,
-      focusTimeout: const Duration(milliseconds: 20),
-    );
-  }
-
-  @override
-  final focus = _ContractFocusManager();
-  final List<_FakeAudioplayersPlayer> players = [];
-
-  @override
-  late final ForegroundAudioEngine engine;
-
-  _FakeAudioplayersPlayer get _current => players.last;
-
-  @override
-  List<Uri> get opened => [for (final player in players) ...player.opened];
-
-  @override
-  int get playCalls =>
-      players.fold(0, (total, player) => total + player.playCalls);
-
-  @override
-  int get pauseCalls =>
-      players.fold(0, (total, player) => total + player.pauseCalls);
-
-  @override
-  int get stopCalls =>
-      players.fold(0, (total, player) => total + player.stopCalls);
-
-  @override
-  List<Duration> get seekPositions => [
-    for (final player in players) ...player.seekPositions,
-  ];
-
-  @override
-  List<Object> get normalizedVolumes => [
-    for (final player in players) ...player.volumes,
-  ];
-
-  @override
-  List<bool> get focusValues => focus.values;
-
-  @override
-  int get resourceDisposeCalls =>
-      players.fold(0, (total, player) => total + player.disposeCalls);
-
-  @override
-  int get backendInstanceCount => players.length;
-
-  @override
-  int get expectedBackendInstances => 2;
-
-  @override
-  void emitPosition(Duration position) =>
-      _current.positionsController.add(position);
-
-  @override
-  void emitCompletion() =>
-      _current.statesController.add(audio.PlayerState.completed);
-
-  @override
-  void emitFailure() =>
-      _current.eventsController.addError(StateError('synthetic'));
-
-  @override
-  void holdPause(Future<void> gate) => _pauseGate = gate;
-
-  Future<void>? _pauseGate;
-  Future<void>? _stopGate;
-
-  @override
-  void holdStop(Future<void> gate) => _stopGate = gate;
-}
-
-class _FakeAudioplayersPlayer implements AudioplayersAudioPlayer {
-  final statesController = StreamController<audio.PlayerState>.broadcast();
-  final eventsController = StreamController<Object?>.broadcast();
-  final positionsController = StreamController<Duration>.broadcast();
-  final List<Uri> opened = [];
-  final List<Duration> seekPositions = [];
-  final List<double> volumes = [];
-  int playCalls = 0;
-  int pauseCalls = 0;
-  int stopCalls = 0;
-  int disposeCalls = 0;
-  Future<void>? pauseGate;
-  Future<void>? stopGate;
-
-  @override
-  Stream<audio.PlayerState> get states => statesController.stream;
-
-  @override
-  Stream<Object?> get events => eventsController.stream;
-
-  @override
-  Stream<Duration> get positions => positionsController.stream;
-
-  @override
-  Future<void> setAudioContext(audio.AudioContext context) async {}
-
-  @override
-  Future<void> setReleaseMode(audio.ReleaseMode mode) async {}
-
-  @override
-  Future<void> setSourceUrl(String source, {required String mimeType}) async =>
-      opened.add(Uri.parse(source));
-
-  @override
-  Future<void> resume() async {
-    playCalls += 1;
-    statesController.add(audio.PlayerState.playing);
-  }
-
-  @override
-  Future<void> pause() async {
-    pauseCalls += 1;
-    statesController.add(audio.PlayerState.paused);
-    await pauseGate;
-  }
-
-  @override
-  Future<void> seek(Duration position) async => seekPositions.add(position);
-
-  @override
-  Future<void> setVolume(double volume) async => volumes.add(volume);
-
-  @override
-  Future<void> stop() async {
-    stopCalls += 1;
-    statesController.add(audio.PlayerState.stopped);
-    await stopGate;
-  }
-
-  @override
-  Future<void> dispose() async {
-    disposeCalls += 1;
-    await statesController.close();
-    await eventsController.close();
-    await positionsController.close();
-  }
 }
 
 class _MediaKitHarness implements _EngineHarness {

@@ -155,6 +155,32 @@ def fake_native_metadata(args) -> bytes:
 
 
 class PrivacyAuditTests(unittest.TestCase):
+    def test_android_media_button_contract_accepts_binary_manifest_flags(self) -> None:
+        script = SCRIPT_DIRECTORY / "verify_android_media_button_manifest.py"
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "AndroidManifest.xml"
+            for service_type, accepted in (
+                ("mediaPlayback", True),
+                ("0x2", True),
+                ("mediaPlayback|connectedDevice", False),
+                ("0x12", False),
+            ):
+                with self.subTest(service_type=service_type):
+                    manifest.write_text(f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <service android:name="dev.wyrin.flutter_media_session.FlutterMediaSessionService"
+        android:foregroundServiceType="{service_type}" />
+    <receiver android:name="androidx.media3.session.MediaButtonReceiver">
+      <intent-filter><action android:name="android.intent.action.MEDIA_BUTTON" /></intent-filter>
+    </receiver>
+  </application>
+</manifest>''', encoding="utf-8")
+                    result = subprocess.run(
+                        [sys.executable, str(script), str(manifest)],
+                        capture_output=True, text=True, check=False,
+                    )
+                    self.assertEqual(result.returncode, 0 if accepted else 1, result.stderr)
+
     def test_apple_strip_compatibility_marker_is_not_source_debug_metadata(self) -> None:
         # Apple's cctools strip synthesizes this exact N_OPT record when an
         # indirect table needs a nonzero first external-symbol index.
@@ -1108,7 +1134,7 @@ class PrivacyAuditTests(unittest.TestCase):
                         patch.object(privacy_build.shutil, "which", return_value="flutter"),
                         patch.object(sys, "argv", [
                             "wrapper", target, "--debug",
-                            "--dart-define=FURA_AUDIO_ENGINE=audioplayers",
+                            "--dart-define=FURA_TEST_WRAPPER_PROBE=synthetic",
                         ]),
                     ):
                         with self.assertRaises(RuntimeError):
@@ -1119,7 +1145,7 @@ class PrivacyAuditTests(unittest.TestCase):
                         self.assertEqual(command[2], target)
                         self.assertIn(privacy_build.PRIVATE_REGISTRANT_DEFINE, command)
                         self.assertIn(
-                            "--dart-define=FURA_AUDIO_ENGINE=audioplayers", command
+                            "--dart-define=FURA_TEST_WRAPPER_PROBE=synthetic", command
                         )
 
 if __name__ == "__main__":

@@ -1,15 +1,26 @@
 ---
 execution:
   mode: HUMAN_DIRECTED
-  work_domain: UI
-  state: HUMAN_REVIEW
-  acceptance_milestone: GLOBAL_UI_AND_ARTWORK_LOADING_V1
-  active_workstream: GLOBAL_UI_AND_ARTWORK_LOADING_ARCHITECTURE
-  current_task: UNIFY_ARTWORK_FRAME_REVEAL_STAGE_TRANSITIONS_AND_SKELETONS
-  next_action: AWAIT_HUMAN_VISUAL_REVIEW
+  work_domain: CORE
+  state: DEVICE_REQUIRED
+  acceptance_milestone: HD_037_PRODUCTION_PLAYBACK_CONVERGENCE
+  active_workstream: PRODUCTION_PLAYBACK_STACK_CONVERGENCE
+  current_task: RETIRE_PLAYBACK_EXPERIMENTS_AND_VERIFY_PLATFORM_OWNERSHIP
+  next_action: VALIDATE_ANDROID_DEVICE_AND_APPLE_WINDOWS_NATIVE_RUNTIMES
 ---
 
 # Current State
+
+- **2026-11-24 HD-037 playback stack convergence:** MediaKit is the sole
+  production music engine. Android, Windows and macOS use
+  `flutter_media_session` 3.2.1. The Linux D-Bus probe confirmed Track-path
+  loss, static progress and a Volume-write failure in the upstream candidate.
+  Linux retains direct Fura MPRIS and iOS retains AudioService for its existing
+  controls pending projection-only AVAudioSession support. Local Linux
+  playback, MPRIS and package launch checks and ARM64 Android Debug/Release
+  builds passed. Physical Android and Apple and native Windows acceptance
+  remain open.
+  [Convergence audit](docs/research/playback-stack-convergence-2026-11-24.md).
 
 - **2026-11-20 Human-directed UI / Unified modern artwork placeholder system & Home Hero preload-before-switch fix (`apps/flutter/lib/catalog/music_artwork_placeholder.dart`, `music_artwork_network.dart`, `artist_artwork.dart`, `music_track_tile.dart`, `apps/flutter/lib/home/home_page.dart`, and all artwork/avatar placeholder call sites across `lib/`):**
   1. **Unified Responsive Artwork Placeholder System (`MusicArtworkKind`, `MusicArtworkPlaceholder`, `MusicArtworkPlaceholder.avatar`):**

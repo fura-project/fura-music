@@ -274,7 +274,9 @@ validate_bundle_shape() {
   require_file "$bundle/lib/libapp.so"
   require_file "$bundle/lib/librust_lib_flutterustmusic.so"
   require_file "$bundle/lib/libmedia_kit_video_plugin.so"
-  require_file "$bundle/lib/libaudioplayers_linux_plugin.so"
+  require_file "$bundle/lib/libflutter_media_session_plugin.so"
+  test ! -e "$bundle/lib/libaudioplayers_linux_plugin.so" || \
+    die 'obsolete audioplayers plugin in Linux bundle'
   require_file "$bundle/lib/libflutter_secure_storage_linux_plugin.so"
   require_file "$bundle/data/icudtl.dat"
   require_directory "$bundle/data/flutter_assets"

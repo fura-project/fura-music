@@ -63,17 +63,12 @@ add_subdirectory("runner")
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
-# Both plugins use Microsoft's WIL error macros. Its documented level 2 keeps
-# line numbers/return addresses/error handling but does not embed __FILE__.
-# This is build-time avoidance, not an artifact-audit DLL exemption. MSVC's
-# C# /pathmap option is not a supported C++ compiler switch.
+# WIL diagnostic level 2 keeps error handling without embedding __FILE__.
 if(DEFINED ENV{FURA_PRIVATE_BUILD} AND "$ENV{FURA_PRIVATE_BUILD}" STREQUAL "1")
-  foreach(FURA_WIL_TARGET audioplayers_windows_plugin webview_all_windows_plugin)
-    if(TARGET ${FURA_WIL_TARGET})
-      target_compile_definitions(${FURA_WIL_TARGET} PRIVATE
-        "$<$<NOT:$<CONFIG:Debug>>:RESULT_DIAGNOSTICS_LEVEL=2>")
-    endif()
-  endforeach()
+  if(TARGET webview_all_windows_plugin)
+    target_compile_definitions(webview_all_windows_plugin PRIVATE
+      "$<$<NOT:$<CONFIG:Debug>>:RESULT_DIAGNOSTICS_LEVEL=2>")
+  endif()
 endif()
 
 

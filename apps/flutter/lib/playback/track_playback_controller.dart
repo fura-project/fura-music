@@ -45,6 +45,7 @@ class TrackPlaybackController extends ChangeNotifier {
 
   TrackPlaybackStage get stage => _stage;
   PlaylistTrackSummary? get track => _track;
+  int get sourceGeneration => _generation;
   MediaResolutionFailure? get resolutionFailure => _resolutionFailure;
   ForegroundAudioFailure? get engineFailure => _engineFailure;
   PlaybackAudioQuality? get resolvedQuality => _resolvedQuality;

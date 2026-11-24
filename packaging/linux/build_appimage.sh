@@ -52,10 +52,6 @@ copy_package_runtime_paths() {
   done
 }
 
-copy_package_runtime_paths libgstreamer1.0-0 \
-  '/gstreamer-1\.0/.*\.so(\.|$)|/gstreamer1\.0/.*/gst-plugin-scanner$'
-copy_package_runtime_paths gstreamer1.0-plugins-base '/gstreamer-1\.0/.*\.so$'
-copy_package_runtime_paths gstreamer1.0-plugins-good '/gstreamer-1\.0/.*\.so$'
 # linuxdeploy's system-library exclusion list omits HarfBuzz even though the
 # bundled Ubuntu libpangoft2 has a direct DT_NEEDED edge to libharfbuzz.so.0.
 # Carry that exact runtime edge so clean-room targets do not need a desktop

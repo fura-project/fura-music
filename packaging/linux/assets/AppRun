@@ -22,17 +22,5 @@ for hook in "${app_dir}"/apprun-hooks/*.sh; do
 done
 shopt -u nullglob
 
-if [ -d "${multiarch_lib}/gstreamer-1.0" ]; then
-  export GST_PLUGIN_PATH="${multiarch_lib}/gstreamer-1.0${GST_PLUGIN_PATH:+:${GST_PLUGIN_PATH}}"
-elif [ -d "${system_lib}/gstreamer-1.0" ]; then
-  export GST_PLUGIN_PATH="${system_lib}/gstreamer-1.0${GST_PLUGIN_PATH:+:${GST_PLUGIN_PATH}}"
-fi
-
-if [ -x "${multiarch_lib}/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner" ]; then
-  export GST_PLUGIN_SCANNER="${multiarch_lib}/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
-elif [ -x "${system_lib}/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner" ]; then
-  export GST_PLUGIN_SCANNER="${system_lib}/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
-fi
-
 cd -- "$app_dir"
 exec "${app_dir}/usr/bin/flutterustmusic" "${app_arguments[@]}"

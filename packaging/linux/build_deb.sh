@@ -72,7 +72,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: Fura maintainers <noreply@example.invalid>
 Installed-Size: $installed_size
-Depends: $auto_dependencies, ca-certificates, dbus-user-session, fonts-dejavu-core, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good
+Depends: $auto_dependencies, ca-certificates, dbus-user-session, fonts-dejavu-core
 Suggests: gnome-keyring
 Homepage: https://github.com/fura-project/fura-music
 Description: Desktop music client development package

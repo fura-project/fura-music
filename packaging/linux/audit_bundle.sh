@@ -84,8 +84,8 @@ done < <(find "$bundle" -type f -print0)
 
 test "$elf_count" -gt 0 || die 'bundle contains no ELF files'
 
-readelf -d "$bundle/lib/libaudioplayers_linux_plugin.so" | grep -q 'libgstreamer-1.0.so.0' || \
-  die 'audioplayers plugin is not linked to GStreamer'
+readelf -d "$bundle/lib/libflutter_media_session_plugin.so" | grep -q 'libgio-2.0.so.0' || \
+  die 'flutter_media_session plugin is not linked to GIO'
 readelf -d "$bundle/lib/libflutter_secure_storage_linux_plugin.so" | grep -q 'libsecret-1.so.0' || \
   die 'secure-storage plugin is not linked to libsecret'
 readelf -d "$bundle/lib/libmedia_kit_video_plugin.so" | grep -q 'libmpv.so.2' || \

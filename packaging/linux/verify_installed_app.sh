@@ -29,16 +29,6 @@ if test "$verification_mode" = appimage; then
   app_runtime_library_path="${app_lib}:${multiarch_lib}:${portable_lib}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 fi
 
-if test "$verification_mode" = native; then
-  require_command gst-inspect-1.0
-  gst-inspect-1.0 playbin >/dev/null
-  gst-inspect-1.0 audioconvert >/dev/null
-  gst-inspect-1.0 autoaudiosink >/dev/null
-  gst-inspect-1.0 souphttpsrc >/dev/null
-  find /usr/lib /usr/lib64 /usr/libexec -type f -name gst-plugin-scanner \
-    -print -quit 2>/dev/null | grep -q . || \
-    die 'installed runtime is missing gst-plugin-scanner'
-fi
 verify_elf_needed_dependency \
   "$app_root/lib/libmedia_kit_video_plugin.so" libmpv.so.2
 verify_elf_needed_dependency \
@@ -164,6 +154,11 @@ dbus-run-session -- bash -eu -o pipefail -c '
     --dest="$mpris_destination" /org/mpris/MediaPlayer2 \
     org.freedesktop.DBus.Properties.Get \
     string:org.mpris.MediaPlayer2.Player string:PlaybackStatus >/dev/null
+  dbus-send --session --print-reply --reply-timeout=5000 \
+    --dest="$mpris_destination" /org/mpris/MediaPlayer2 \
+    org.freedesktop.DBus.Properties.Get \
+    string:org.mpris.MediaPlayer2 string:DesktopEntry | \
+    grep -Fq "\"com.fura.flutterustmusic\""
   printf "Verified X11 window, first Flutter frame, media engine, and MPRIS reply\n"
   kill -TERM "$app_pid"
   wait_status=0

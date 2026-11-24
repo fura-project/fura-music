@@ -274,6 +274,7 @@ void main() {
       );
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(_WaitingSession()),
           officialPlaylistGateway: official,
@@ -361,6 +362,7 @@ void main() {
       );
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(_WaitingSession()),
           officialPlaylistGateway: official,
@@ -432,6 +434,7 @@ void main() {
         );
         await tester.pumpWidget(
           MusicApp(
+            audioEngine: const _UnusedWidgetAudioEngine(),
             bootstrap: _bootstrap,
             authenticationGateway: _WidgetGateway(_WaitingSession()),
             officialPlaylistGateway: official,
@@ -501,6 +504,7 @@ void main() {
         );
         await tester.pumpWidget(
           MusicApp(
+            audioEngine: const _UnusedWidgetAudioEngine(),
             bootstrap: _bootstrap,
             authenticationGateway: _WidgetGateway(_WaitingSession()),
             officialPlaylistGateway: official,
@@ -548,6 +552,7 @@ void main() {
       ]);
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -590,6 +595,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -659,6 +665,7 @@ void main() {
         );
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -939,6 +946,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -1003,6 +1011,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -1112,7 +1121,7 @@ void main() {
         _WidgetRadarGateway(const RadarTrackPageResult(page: 1)),
       );
       final engine = ForegroundPlaybackController(
-        AudioplayersForegroundAudioEngine(),
+        const _UnusedWidgetAudioEngine(),
       );
       final playback = TrackPlaybackController(
         const _UnavailableMediaGateway(),
@@ -1252,7 +1261,7 @@ void main() {
       );
       final playback = TrackPlaybackController(
         const _UnavailableMediaGateway(),
-        ForegroundPlaybackController(AudioplayersForegroundAudioEngine()),
+        ForegroundPlaybackController(const _UnusedWidgetAudioEngine()),
       );
       final queue = QueuePlaybackController(
         _WidgetPlaybackQueueGateway(),
@@ -1348,6 +1357,7 @@ void main() {
     final session = _WaitingSession();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: bootstrap,
         authenticationGateway: _WidgetGateway(session),
         recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
@@ -1498,6 +1508,7 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pumpWidget(
           MusicApp(
+            audioEngine: const _UnusedWidgetAudioEngine(),
             bootstrap: _bootstrap,
             authenticationGateway: _WidgetGateway(_WaitingSession()),
             recommendedPlaylistGateway: _WidgetRecommendedPlaylistGateway(
@@ -1594,6 +1605,7 @@ void main() {
     final session = _WaitingSession();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: const BootstrapStatus(
           coreVersion: '0.1.0-test',
           providers: [
@@ -1624,6 +1636,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(_WaitingSession()),
         libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
@@ -1669,6 +1682,7 @@ void main() {
     );
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: authenticationGateway,
         libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
@@ -1729,6 +1743,7 @@ void main() {
         tester.view.physicalSize = Size(width, 900);
         await tester.pumpWidget(
           MusicApp(
+            audioEngine: const _UnusedWidgetAudioEngine(),
             key: ValueKey('guest-navigation-$width'),
             bootstrap: _bootstrap,
             authenticationGateway: _WidgetGateway(_WaitingSession()),
@@ -1782,6 +1797,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         key: const ValueKey('dark-auth-app'),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(_WaitingSession()),
@@ -1795,6 +1811,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         key: const ValueKey('dark-library-app'),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
@@ -1839,6 +1856,7 @@ void main() {
     final verification = _PendingWidgetVerification();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           session,
@@ -1879,6 +1897,7 @@ void main() {
     final session = _WaitingSession();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(session),
       ),
@@ -1916,6 +1935,7 @@ void main() {
     final session = _WaitingSession();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(session),
       ),
@@ -1951,6 +1971,7 @@ void main() {
     final session = _WaitingSession();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           session,
@@ -1976,6 +1997,7 @@ void main() {
     final session = _WaitingSession();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(session),
         initialCredentialRestore: CredentialRestoreResult.locallyExpired,
@@ -2017,6 +2039,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -2265,6 +2288,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -2408,6 +2432,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -2648,6 +2673,7 @@ void main() {
       final queue = _WidgetPlaybackQueueGateway()
         ..replace(tracks: tracks, currentIndex: 0);
       return MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -3052,6 +3078,7 @@ void main() {
     final session = _WaitingSession();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(session),
         libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
@@ -3124,6 +3151,7 @@ void main() {
     ]);
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -3184,6 +3212,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -3265,6 +3294,7 @@ void main() {
       final relatedSeeds = <PlaylistTrackSummary>[];
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -3486,6 +3516,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -3533,6 +3564,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -3606,6 +3638,7 @@ void main() {
     final newSongs = _TransitionWidgetNewSongGateway();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -3654,6 +3687,7 @@ void main() {
       final newSongs = _TransitionWidgetNewSongGateway();
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -3717,6 +3751,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -3770,6 +3805,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -3834,6 +3870,7 @@ void main() {
       ]);
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -3944,6 +3981,7 @@ void main() {
     tester.view.physicalSize = const Size(320, 900);
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -4147,6 +4185,7 @@ void main() {
         final queue = _WidgetPlaybackQueueGateway()
           ..replace(tracks: const [currentTrack], currentIndex: 0);
         return MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -4521,6 +4560,7 @@ void main() {
       );
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -4667,6 +4707,7 @@ void main() {
       final queue = _WidgetPlaybackQueueGateway();
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -4768,6 +4809,7 @@ void main() {
     ]);
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -4825,6 +4867,7 @@ void main() {
     ]);
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -4867,6 +4910,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -4930,6 +4974,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -5004,6 +5049,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -5115,6 +5161,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -5200,6 +5247,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -5346,6 +5394,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -5452,6 +5501,7 @@ void main() {
     );
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -5529,6 +5579,7 @@ void main() {
     );
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -5635,6 +5686,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -5768,6 +5820,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -5889,6 +5942,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -5987,6 +6041,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -6131,6 +6186,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -6290,6 +6346,7 @@ void main() {
     );
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -6381,6 +6438,7 @@ void main() {
     );
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -6507,6 +6565,7 @@ void main() {
       ]);
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -6621,6 +6680,7 @@ void main() {
     );
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -6685,6 +6745,7 @@ void main() {
   testWidgets('routes verified startup restore into Home', (tester) async {
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -6715,6 +6776,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -6755,6 +6817,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -6844,6 +6907,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -6969,6 +7033,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -7084,6 +7149,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -7189,6 +7255,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -7269,6 +7336,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -7573,6 +7641,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -7734,6 +7803,7 @@ void main() {
     ]);
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -7819,6 +7889,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -7882,6 +7953,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -7959,6 +8031,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -8027,6 +8100,7 @@ void main() {
     );
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -8075,6 +8149,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -8102,6 +8177,7 @@ void main() {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -8142,6 +8218,7 @@ void main() {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -8197,6 +8274,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -8243,6 +8321,7 @@ void main() {
     );
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: authentication,
         libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
@@ -8294,6 +8373,7 @@ void main() {
     );
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: authentication,
         libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
@@ -8340,6 +8420,7 @@ void main() {
     );
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: authentication,
         libraryGateway: _WidgetLibraryGateway([const UserLibraryResult()]),
@@ -8399,6 +8480,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -8443,6 +8525,7 @@ void main() {
     );
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -8517,6 +8600,7 @@ void main() {
       ]);
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -8589,6 +8673,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -8651,6 +8736,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -8770,6 +8856,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -8925,6 +9012,7 @@ void main() {
       final queue = reviewQueue = _WidgetPlaybackQueueGateway()
         ..replace(tracks: tracks, currentIndex: 1);
       return MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -9634,6 +9722,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(_WaitingSession()),
         initialSettings: const AppSettings(
@@ -9653,6 +9742,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(_WaitingSession()),
         initialSettings: const AppSettings(
@@ -9779,6 +9869,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -9939,6 +10030,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(
             _WaitingSession(),
@@ -10340,6 +10432,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _bootstrap,
           authenticationGateway: _WidgetGateway(_WaitingSession()),
           settingsStore: AppSettingsStore(storage: settingsStorage),
@@ -10549,6 +10642,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(_WaitingSession()),
       ),
@@ -10587,6 +10681,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(_WaitingSession()),
       ),
@@ -10635,6 +10730,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(_WaitingSession()),
       ),
@@ -10727,6 +10823,7 @@ void main() {
 
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(_WaitingSession()),
       ),
@@ -10762,6 +10859,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MusicApp(
+        audioEngine: const _UnusedWidgetAudioEngine(),
         bootstrap: _bootstrap,
         authenticationGateway: _WidgetGateway(
           _WaitingSession(),
@@ -10876,6 +10974,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _dualProviderBootstrap,
           providerDependencies: BuiltInProviderDependencies(
             qqMusic: _providerFixture(
@@ -11014,6 +11113,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _dualProviderBootstrap,
           initialSettings: const AppSettings(
             theme: AppThemePreference.system,
@@ -11118,6 +11218,7 @@ void main() {
 
       await tester.pumpWidget(
         MusicApp(
+          audioEngine: const _UnusedWidgetAudioEngine(),
           bootstrap: _dualProviderBootstrap,
           initialSettings: const AppSettings(
             theme: AppThemePreference.light,
@@ -11306,7 +11407,7 @@ void main() {
         playbackQueueGateway: queue,
         mediaResolutionGateway: const _UnavailableMediaGateway(),
         lyricGateway: const _WidgetLyricGateway(),
-        audioEngine: AudioplayersForegroundAudioEngine(),
+        audioEngine: const _UnusedWidgetAudioEngine(),
       );
       final qqAuth = _ProviderWidgetGateway(
         providerId: 'qq-music',
@@ -11456,7 +11557,7 @@ void main() {
         playbackQueueGateway: queue,
         mediaResolutionGateway: const _UnavailableMediaGateway(),
         lyricGateway: const _WidgetLyricGateway(),
-        audioEngine: AudioplayersForegroundAudioEngine(),
+        audioEngine: const _UnusedWidgetAudioEngine(),
       );
       final netEaseAuth = _ProviderWidgetGateway(
         providerId: 'netease-cloud-music',
@@ -11627,6 +11728,7 @@ void main() {
 
           await tester.pumpWidget(
             MusicApp(
+              audioEngine: const _UnusedWidgetAudioEngine(),
               key: ValueKey(
                 'locale-matrix-$providerSlug-$localeSlug-signed-in',
               ),
@@ -11789,6 +11891,7 @@ void main() {
 
           await tester.pumpWidget(
             MusicApp(
+              audioEngine: const _UnusedWidgetAudioEngine(),
               key: ValueKey(
                 'locale-matrix-$providerSlug-$localeSlug-signed-out',
               ),
@@ -11856,6 +11959,7 @@ void main() {
 
         await tester.pumpWidget(
           MusicApp(
+            audioEngine: const _UnusedWidgetAudioEngine(),
             bootstrap: _bootstrap,
             initialSettings: AppSettings(
               theme: AppThemePreference.light,
@@ -12105,7 +12209,7 @@ class _LoginProviderHarnessState extends State<_LoginProviderHarness> {
           mediaResolutionGateway: const _UnavailableMediaGateway(),
           lyricGateway: const _WidgetLyricGateway(),
           playbackQueueGateway: _WidgetPlaybackQueueGateway(),
-          audioEngine: AudioplayersForegroundAudioEngine(),
+          audioEngine: const _UnusedWidgetAudioEngine(),
         ),
         trackCommentGateway: const RustTrackCommentGateway(),
       );
@@ -13525,6 +13629,21 @@ class _SuccessfulWidgetMediaOperation implements MediaResolutionOperation {
       quality: PlaybackAudioQuality.standard,
       validForSeconds: 300,
     ),
+  );
+}
+
+class _UnusedWidgetAudioEngine implements ForegroundAudioEngine {
+  const _UnusedWidgetAudioEngine();
+
+  @override
+  Future<void> dispose() async {}
+
+  @override
+  Future<ForegroundAudioSession> loadRemote(
+    Uri source, {
+    ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
+  }) async => throw const ForegroundAudioException(
+    ForegroundAudioFailure.coreUnavailable,
   );
 }
 

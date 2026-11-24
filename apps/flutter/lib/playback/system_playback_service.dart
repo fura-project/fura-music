@@ -15,7 +15,6 @@ import 'package:flutterustmusic/playback/foreground_playback_controller.dart';
 import 'package:flutterustmusic/playback/flutter_media_session_system_edge.dart';
 import 'package:flutterustmusic/playback/fura_mpris_system_media_edge.dart';
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
-import 'package:flutterustmusic/playback/playback_stack_experiment.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
 import 'package:flutterustmusic/playback/system_media_edge.dart';
@@ -23,7 +22,7 @@ import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 /// App-lifetime playback owner shared by Flutter UI and operating-system media
 /// controls. A page may observe [controller], but must never dispose or replace
-/// it. This keeps Android's AudioService lifecycle independent from navigation.
+/// it. System-media and playback lifecycle are independent of navigation.
 abstract interface class AppPlaybackHost {
   bool get systemControlsAvailable;
 
@@ -131,8 +130,6 @@ class FuraMprisAppPlaybackHost implements AppPlaybackHost {
     }
   }
 }
-
-const projectMprisVolumeAction = 'projectMprisVolume';
 
 typedef ProjectAudioServiceInitializer = Future<void> Function(
   ProjectSystemAudioHandler handler,
@@ -257,30 +254,13 @@ AppPlaybackHost createForegroundAppPlaybackHost({
   ),
 );
 
-/// One cross-platform media-session configuration. Android keeps the playback
-/// foreground service alive while paused so notification, lock-screen and
-/// headset resume do not need to start a new foreground service from the
-/// background on Android 12+.
+/// Retained for the fixed iOS exception while AVAudioSession ownership is
+/// unresolved in flutter_media_session.
 @visibleForTesting
-const projectAudioServiceConfig = AudioServiceConfig(
-  androidNotificationChannelId: 'com.fura.flutterustmusic.playback',
-  androidNotificationChannelName: 'fura music playback',
-  androidNotificationChannelDescription: 'Playback controls for fura music',
-  androidNotificationIcon: 'drawable/ic_stat_fura_music',
-  androidNotificationOngoing: false,
-  androidShowNotificationBadge: false,
-  androidResumeOnClick: true,
-  androidStopForegroundOnPause: false,
-);
+const projectAudioServiceConfig = AudioServiceConfig();
 
-/// Creates the single app-lifetime playback owner and gives that same owner to
-/// exactly one effective system-media edge. Compile-time requested/effective
-/// selection happens in [PlaybackStackSelection]; this lower-level factory
-/// retains audio_service as its direct-call rollback default.
-///
-/// A platform media-session failure is deliberately non-fatal: the returned
-/// foreground host still owns the exact same controller, so in-app playback
-/// remains available without creating a fallback player or queue.
+/// Creates one app-lifetime playback owner and installs its platform edge.
+/// Edge activation failure preserves the same controller for in-app playback.
 Future<AppPlaybackHost> initializeAppPlaybackHost({
   required PlaybackQueueGateway playbackQueueGateway,
   required MediaResolutionGateway mediaResolutionGateway,
@@ -293,7 +273,6 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
   @visibleForTesting
   ProjectAudioSessionFactory audioSessionFactory =
       PlatformProjectAudioSession.create,
-  SystemMediaEdgeKind systemMediaEdge = SystemMediaEdgeKind.audioService,
   @visibleForTesting FlutterMediaSessionDriver? flutterMediaSessionDriver,
   @visibleForTesting DBusClient Function()? mprisClientFactory,
   @visibleForTesting TargetPlatform? platform,
@@ -307,11 +286,7 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
   );
   final effectivePlatform = platform ?? defaultTargetPlatform;
 
-  if (effectivePlatform == TargetPlatform.linux ||
-      systemMediaEdge == SystemMediaEdgeKind.furaMpris) {
-    if (effectivePlatform != TargetPlatform.linux) {
-      return ForegroundAppPlaybackHost(controller);
-    }
+  if (effectivePlatform == TargetPlatform.linux) {
     final edge = FuraMprisSystemMediaEdge(
       controller: controller,
       clientFactory: mprisClientFactory,
@@ -330,7 +305,7 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
     return FuraMprisAppPlaybackHost._(edge, bindings);
   }
 
-  if (systemMediaEdge == SystemMediaEdgeKind.flutterMediaSession) {
+  if (FuraMediaSessionAdapter.supportsPlatform(effectivePlatform)) {
     final edge = FuraMediaSessionAdapter(
       controller: controller,
       driver: flutterMediaSessionDriver,
@@ -353,6 +328,8 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
     final bindings = await _configureProjectAudioSession(
       controller,
       audioSessionFactory,
+      // The Android Media3 service already sends one pause on route loss.
+      observeBecomingNoisy: effectivePlatform != TargetPlatform.android,
     );
     _logSystemPlayback(
       phase: 'host_selected',
@@ -365,6 +342,11 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
     );
   }
 
+  // Fixed iOS exception: flutter_media_session 3.2.1 configures and
+  // activates AVAudioSession. Keep the existing audio_session lease owner.
+  if (effectivePlatform != TargetPlatform.iOS) {
+    return ForegroundAppPlaybackHost(controller);
+  }
   final edge = AudioServiceSystemMediaEdge(
     controller: controller,
     initializer: audioServiceInitializer,
@@ -389,8 +371,9 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
 
 Future<_AudioSessionBindings> _configureProjectAudioSession(
   QueuePlaybackController controller,
-  ProjectAudioSessionFactory audioSessionFactory,
-) async {
+  ProjectAudioSessionFactory audioSessionFactory, {
+  bool observeBecomingNoisy = true,
+}) async {
   StreamSubscription<AudioInterruptionEvent>? interruptionSubscription;
   StreamSubscription<void>? becomingNoisySubscription;
   _logSystemPlayback(phase: 'audio_session_configure', outcome: 'started');
@@ -403,10 +386,12 @@ Future<_AudioSessionBindings> _configureProjectAudioSession(
         if (playback.canPause) unawaited(playback.pause());
       }
     });
-    becomingNoisySubscription = audioSession.becomingNoisyEvents.listen((_) {
-      final playback = controller.playback;
-      if (playback.canPause) unawaited(playback.pause());
-    });
+    if (observeBecomingNoisy) {
+      becomingNoisySubscription = audioSession.becomingNoisyEvents.listen((_) {
+        final playback = controller.playback;
+        if (playback.canPause) unawaited(playback.pause());
+      });
+    }
     _logSystemPlayback(phase: 'audio_session_configure', outcome: 'success');
   } on Object catch (error) {
     _logSystemPlayback(
@@ -623,21 +608,6 @@ class ProjectSystemAudioHandler extends BaseAudioHandler {
           ? PlaybackOrder.sequential
           : PlaybackOrder.shuffle,
     );
-  }
-
-  @override
-  Future<dynamic> customAction(
-    String name, [
-    Map<String, dynamic>? extras,
-  ]) async {
-    if (name != projectMprisVolumeAction) {
-      return super.customAction(name, extras);
-    }
-    final rawValue = extras?['value'];
-    if (_closed || rawValue is! num || !rawValue.isFinite) return null;
-    await controller.playback.setVolume(rawValue.toDouble().clamp(0, 1));
-    _synchronize(force: true);
-    return null;
   }
 
   @override

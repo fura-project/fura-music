@@ -708,3 +708,27 @@ official-Web Stage 1 capture showed an encoded-ID-only identity shape that the
 current canonical Track context cannot prove. No further KuGou live gate or
 production integration is authorized until the Human explicitly resumes that
 direction.
+
+## HD-037 — Production playback stack convergence
+
+**Status:** Accepted scope, 2026-11-24.
+
+**Decision:** MediaKit is Fura's sole production music engine. Retire the
+HD-033 A/B/C/D selectors, Audioplayers, alternate-engine rollback and the
+AudioService paths that have no platform consumer. Use the stable
+`flutter_media_session` package for system media where it satisfies the
+platform contract. Keep static Linux and iOS exceptions where an upstream
+gap would otherwise regress existing behavior.
+
+**Ownership:** Preserve the canonical positional Rust Queue, the application
+playback command owner, Provider resolution, MediaKit's existing bounded
+native recovery, the sole focus lease and independent MV sessions. Preserve
+HD-033's useful lifecycle and verification requirements and HD-035's
+continuation and Roam precedence.
+
+**Exit conditions:** Linux requires real D-Bus contract parity including
+Track-bound stale-seek rejection, projected progress and bidirectional
+volume and modes. iOS requires projection without a second AVAudioSession
+owner, then Apple native and device validation before retiring AudioService.
+Pre-cutover experiment evidence remains in the
+[HD-033 bake-off](docs/research/playback-stack-bakeoff.md).

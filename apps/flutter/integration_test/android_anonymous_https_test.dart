@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/playback/foreground_audio_player.dart';
+import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart';
+import 'package:media_kit/media_kit.dart' show MediaKit;
 import 'package:flutterustmusic/src/rust/api/media.dart' as media;
 import 'package:flutterustmusic/src/rust/api/search.dart';
 import 'package:flutterustmusic/src/rust/frb_generated.dart';
@@ -83,7 +85,8 @@ void main() {
         reason: 'QQ playback must not expose a cleartext or malformed source.',
       );
 
-      final engine = AudioplayersForegroundAudioEngine();
+      MediaKit.ensureInitialized();
+      final engine = MediaKitForegroundAudioEngine();
       ForegroundAudioSession? session;
       try {
         session = await engine.loadRemote(
@@ -107,6 +110,7 @@ void main() {
       } finally {
         await session?.stop();
         await session?.dispose();
+        await engine.dispose();
       }
     },
     skip: !Platform.isAndroid || !_playbackLiveTestsEnabled,

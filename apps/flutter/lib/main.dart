@@ -40,7 +40,6 @@ import 'package:flutterustmusic/playback/media_kit_foreground_audio_engine.dart'
 import 'package:flutterustmusic/playback/media_resolution_gateway.dart';
 import 'package:flutterustmusic/playback/playback_quality.dart';
 import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
-import 'package:flutterustmusic/playback/playback_stack_experiment.dart';
 import 'package:flutterustmusic/playback/system_playback_service.dart';
 import 'package:flutterustmusic/search/album_search_gateway.dart';
 import 'package:flutterustmusic/search/artist_search_gateway.dart';
@@ -76,12 +75,6 @@ Future<void> main(List<String> arguments) async {
     Error.throwWithStackTrace(error, stackTrace);
   }
   final bootstrap = bootstrapStatus();
-
-  final playbackStack = PlaybackStackSelection.current();
-  logPlaybackStackSelected(
-    selection: playbackStack,
-    platform: defaultTargetPlatform,
-  );
 
   final qqCredentialVault = SerializedCredentialVault(
     PlatformCredentialVault(),
@@ -145,10 +138,7 @@ Future<void> main(List<String> arguments) async {
   logStartupPhase(phase: 'audio_engine_construct', outcome: 'started');
   late final ForegroundAudioEngine audioEngine;
   try {
-    audioEngine = switch (playbackStack.effectiveAudioEngine) {
-      MusicAudioEngineKind.audioplayers => AudioplayersForegroundAudioEngine(),
-      MusicAudioEngineKind.mediaKit => MediaKitForegroundAudioEngine(),
-    };
+    audioEngine = MediaKitForegroundAudioEngine();
     logStartupPhase(phase: 'audio_engine_construct', outcome: 'success');
   } on Object catch (error, stackTrace) {
     logStartupPhase(phase: 'audio_engine_construct', outcome: 'failed');
@@ -163,7 +153,6 @@ Future<void> main(List<String> arguments) async {
       mediaResolutionGateway: mediaResolutionGateway,
       lyricGateway: lyricGateway,
       audioEngine: audioEngine,
-      systemMediaEdge: playbackStack.effectiveSystemMediaEdge,
       relatedTracksGateway: const RustRelatedTracksGateway(),
     );
     logStartupPhase(
@@ -174,15 +163,9 @@ Future<void> main(List<String> arguments) async {
     logStartupPhase(phase: 'system_edge_init', outcome: 'failed');
     Error.throwWithStackTrace(error, stackTrace);
   }
-  debugPrint(
-    'FURA_DIAGNOSTIC playback_stack '
-    '${playbackStack.diagnosticLine(platform: defaultTargetPlatform, systemControlsAvailable: playbackHost.systemControlsAvailable)}',
-  );
 
-  // Keep the selected system-media edge initialization ahead of account
-  // restoration. Android can launch the shared Flutter engine from a media
-  // control while no Activity is attached, so the app-lifetime playback owner
-  // must exist before any potentially slow credential verification.
+  // Establish the app-lifetime playback owner before credential verification
+  // so navigation and account restoration do not own system media.
   var qqRestore = CredentialRestoreResult.signedOut;
   var netEaseRestore = CredentialRestoreResult.signedOut;
   switch (settingsLoad.settings.musicProvider) {

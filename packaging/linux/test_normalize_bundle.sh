@@ -28,7 +28,7 @@ make_fixture() {
     libapp.so \
     librust_lib_flutterustmusic.so \
     libmedia_kit_video_plugin.so \
-    libaudioplayers_linux_plugin.so \
+    libflutter_media_session_plugin.so \
     libflutter_secure_storage_linux_plugin.so; do
     cp "$bundle/lib/libfixture.so" "$bundle/lib/$library"
   done

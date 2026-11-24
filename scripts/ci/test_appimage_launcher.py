@@ -22,7 +22,7 @@ class AppImageLauncherTests(unittest.TestCase):
                      "data/flutter_assets/NativeAssetsManifest.json"]
             names += ["lib/" + name for name in (
                 "libflutter_linux_gtk.so", "libapp.so", "librust_lib_flutterustmusic.so",
-                "libmedia_kit_video_plugin.so", "libaudioplayers_linux_plugin.so",
+                "libmedia_kit_video_plugin.so", "libflutter_media_session_plugin.so",
                 "libflutter_secure_storage_linux_plugin.so")]
             for name in names:
                 path = bundle / name
@@ -39,13 +39,7 @@ class AppImageLauncherTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="fura launcher test ") as directory:
             root = Path(directory)
             appdir = root / "AppDir with spaces"
-            multiarch = appdir / "usr/lib/x86_64-linux-gnu"
-            (multiarch / "gstreamer-1.0").mkdir(parents=True)
-            scanner = multiarch / "gstreamer1.0/gstreamer-1.0/gst-plugin-scanner"
-            scanner.parent.mkdir(parents=True)
-            scanner.touch()
-            scanner.chmod(0o755)
-            (appdir / "apprun-hooks").mkdir()
+            (appdir / "apprun-hooks").mkdir(parents=True)
             (appdir / "apprun-hooks/gtk.sh").write_text("export FURA_TEST_HOOK=ran\n")
             launcher = appdir / "AppRun"
             shutil.copyfile(APP_RUN_SOURCE, launcher)
@@ -56,8 +50,6 @@ set -eu
 test "$PWD" = "$APPDIR"
 test "$FURA_APP_ROOT" = "$APPDIR/usr/lib/flutterustmusic"
 test "$LD_LIBRARY_PATH" = "$FURA_APP_ROOT/lib:$APPDIR/usr/lib/x86_64-linux-gnu:$APPDIR/usr/lib"
-test "$GST_PLUGIN_PATH" = "$APPDIR/usr/lib/x86_64-linux-gnu/gstreamer-1.0"
-test -x "$GST_PLUGIN_SCANNER"
 test "$FURA_TEST_HOOK" = ran
 test "$#" -eq 2
 test "$1" = "first argument with spaces"
@@ -72,8 +64,7 @@ exit 42
             bwrap.write_text("#!/bin/sh\nexit 99\n")
             bwrap.chmod(0o755)
             env = {**os.environ, "PATH": str(fake_bin) + os.pathsep + os.environ["PATH"]}
-            for key in ("LD_LIBRARY_PATH", "GST_PLUGIN_PATH"):
-                env.pop(key, None)
+            env.pop("LD_LIBRARY_PATH", None)
             with subprocess.Popen(
                 ["bash", str(launcher), "first argument with spaces", "--literal"],
                 cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,

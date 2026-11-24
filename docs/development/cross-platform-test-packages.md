@@ -34,15 +34,21 @@ preflight before artifact download, extraction, or startup.
 
 ## What CI proves
 
-Before packaging begins, one Ubuntu job runs the locked Rust workspace format, test, and strict Clippy gates plus Dart formatting, `dart analyze`, and all Flutter tests. Platform jobs then prove that the named source revision compiles into the named package. The no-define test request is D: MediaKit plus Flutter Media Session. Android, Windows and macOS resolve that request directly; Linux deliberately resolves it to MediaKit plus Fura MPRIS; iOS deliberately resolves it to MediaKit plus AudioService. These effective-platform rules do not imply native runtime acceptance.
+Before packaging begins, one Ubuntu job runs the locked Rust workspace format, test, and strict Clippy gates plus Dart formatting, `dart analyze`, and all Flutter tests. Platform jobs prove the named revision compiles into each package. HD-037 fixes all music builds to MediaKit. Android, Windows and macOS use Flutter Media Session. Linux uses Fura MPRIS and iOS uses AudioService until their upstream gaps are addressed. Platform runtime checks remain separate.
 
-The Android job additionally verifies the default-D selector regression, Internet permission, both retained media-service declarations, the ARM64 MediaKit payload, the Rust bridge, the Android rustls certificate-verifier class, and the process-startup JNI initializer. The artifact includes `PLAYBACK_STACK.txt` with the requested/effective Android stack and exact source commit. That file identifies the build; only the runtime `FURA_DIAGNOSTIC playback_stack` event and physical system inspection can prove which edge initialized and whether a duplicate session or notification exists.
+The Android job verifies platform media-session ownership, a single Media3
+receiver and the `mediaPlayback` service in the merged APK, Internet
+permission, the ARM64 MediaKit and Rust payloads, the rustls certificate
+verifier and its startup JNI initializer. `PLAYBACK_RUNTIME.txt` records
+the fixed composition and source commit. The app's system-media diagnostics
+and physical device inspection verify activation, notification behavior and
+the live session count.
 
 The Linux path is a set of independently failing jobs inside the single `Cross-platform development packages` workflow. It builds separate Release bundles on Ubuntu 24.04, Fedora 43, and Arch rather than relabeling one Ubuntu binary for every package manager. It checks every ELF in each bundle, rejects unresolved libraries and build-machine RPATHs, and records the maximum referenced GLIBC/GLIBCXX symbol versions. Plugin `DT_NEEDED` entries are inspected without requiring a shared object to have an executable bit, and the target runtime linker must also resolve each required SONAME. The AppImage audit applies the same rule to every extracted ELF: each dependency is reported as bundled, supplied by the controlled target base, or missing; it does not execute 0644 shared objects through `ldd`. Ubuntu also runs the existing offline MPRIS/media initialization, local H.264 media, and Linux official-Web login routing integrations under temporary D-Bus/X11 sessions.
 
 Some Linux build hosts have a JDK installed and cause the transitive `package:jni` build hook to emit `libdartjni.so` even though Fura declares no Linux JNI native asset. Packaging removes that optional host-JVM helper only when both generated native-asset manifests are empty and no bundled ELF has a `DT_NEEDED` edge to it. The clean installed-package startup is the runtime guard that Fura does not depend on the omitted helper; the Android JNI payload and Android package are unaffected.
 
-Each native package is queried with its package manager, installed with dependency resolution in a clean target container, launched as an ordinary user from an unrelated path containing spaces, reinstalled, and removed. The startup gate checks an actual X11 window, the first Flutter frame, Rust and media initialization, and an MPRIS reply on the isolated session bus. The uninstall check confirms that a synthetic user configuration sentinel remains untouched. The AppImage is extracted and audited, then its packaged `AppRun` is started in clean Ubuntu 24.04 and Fedora 43 containers that do not preinstall GTK, GStreamer, libmpv, WebKitGTK, or libsecret. CI extraction proves the supported no-FUSE path only; it does not claim that a real FUSE mount was exercised.
+Each native package is queried with its package manager, installed with dependency resolution in a clean target container, launched as an ordinary user from an unrelated path containing spaces, reinstalled, and removed. The startup gate checks an actual X11 window, the first Flutter frame, Rust and media initialization, and an MPRIS reply on the isolated session bus. The uninstall check confirms that a synthetic user configuration sentinel remains untouched. The AppImage is extracted and audited, then its packaged `AppRun` is started in clean Ubuntu 24.04 and Fedora 43 containers that do not preinstall GTK, libmpv, WebKitGTK, or libsecret. CI extraction proves the supported no-FUSE path only; it does not claim that a real FUSE mount was exercised.
 
 A green workflow does not prove real-account QQ Music behavior, physical Android or Apple behavior, Windows SMTC usability, Linux desktop-shell integration, codecs on another machine, signing, notarization, store acceptance, or release readiness. Those observations remain per-target maintainer tests.
 
@@ -70,7 +76,7 @@ flutterustmusic
 sudo dnf remove flutterustmusic
 ```
 
-Fedora 43 supplies `mpv-libs`, including the required `libmpv.so.2`, in the Fedora repositories used by the package job. The spec retains RPM's ELF dependency generator and supplements it with GStreamer plugin sets, certificate/font resources, and other runtime-loaded components.
+Fedora 43 supplies `mpv-libs`, including the required `libmpv.so.2`, in the Fedora repositories used by the package job. The spec retains RPM's ELF dependency generator and supplements it with certificate/font resources, and other runtime-loaded components.
 
 ### Arch Linux package
 
@@ -96,7 +102,7 @@ desktop graphics stack. The clean-room audit checks every ELF against the
 declared graphics and ALSA/JACK/PipeWire client baseline. The image carries
 the Flutter/Rust bundle, GTK support and MIME data, HarfBuzz and FriBidi for
 Pango, libmpv and its selected media closure (including the libavdevice →
-libdc1394 → libusb edge), GStreamer modules and scanner, and the libsecret
+libdc1394 → libusb edge) and the libsecret
 client library.
 
 On Linux, Flutter resolves `webview_all` to Fura's Dart-only registration.
@@ -119,7 +125,7 @@ Running the extracted tree verifies the no-FUSE execution path. It is not eviden
 
 ## Linux verification limits
 
-A green Linux aggregate proves that the four package files were generated from one source commit and app version, their metadata/file lists were queried, declared dependencies resolved in the named clean environments, and the installed or extracted application created a real window with the Flutter engine and Rust bridge loadable. The offline source integrations cover Linux MPRIS ownership, media-kit initialization and local H.264 playback, plus the Linux isolated-browser login route. ELF and payload audits cover the directly linked plugins, GStreamer modules and scanner, absence of the embedded WebView dependency chain, and removal of runner/source paths from delivered RPATHs.
+A green Linux aggregate proves that the four package files were generated from one source commit and app version, their metadata/file lists were queried, declared dependencies resolved in the named clean environments, and the installed or extracted application created a real window with the Flutter engine and Rust bridge loadable. The offline source integrations cover Linux MPRIS ownership, media-kit initialization and local H.264 playback, plus the Linux isolated-browser login route. ELF and payload audits cover the directly linked plugins, absence of the embedded WebView dependency chain, and removal of runner/source paths from delivered RPATHs.
 
 It does not prove every codec, hardware acceleration path, Secret Service implementation, desktop shell, display server, older glibc, other Debian/RPM distribution, real-account login, live media source, FUSE setup, package signing, repository policy, or formal external redistribution approval. Those remain explicit Human/device/distribution follow-ups rather than being inferred from a green container run.
 

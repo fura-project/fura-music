@@ -16,9 +16,6 @@ Requires:       ca-certificates
 Requires:       dbus-libs
 Requires:       dejavu-sans-fonts
 Requires:       fontconfig
-Requires:       gstreamer1
-Requires:       gstreamer1-plugins-base
-Requires:       gstreamer1-plugins-good
 Requires:       gtk3
 Requires:       libepoxy
 Requires:       libsecret

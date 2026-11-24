@@ -20,14 +20,7 @@ find "$appdir" -printf '%y %P %s bytes\n' | sort \
 
 for required_pattern in \
   'libmpv.so.2*' \
-  'libsecret-1.so.0*' \
-  'libgstreamer-1.0.so.0*' \
-  'libgstapp-1.0.so.0*' \
-  'libgstplayback.so' \
-  'libgstaudioconvert.so' \
-  'libgstautodetect.so' \
-  'libgstsoup.so' \
-  'gst-plugin-scanner'; do
+  'libsecret-1.so.0*'; do
   find "$appdir" -name "$required_pattern" -print -quit | grep -q . || \
     die "AppImage payload is missing $required_pattern"
 done

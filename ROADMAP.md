@@ -2,6 +2,15 @@
 
 The Roadmap authorizes meaningful product and maintenance direction. It is not an implementation diary: detailed history belongs in Git, while exact milestone evidence belongs in the linked checkpoint reviews.
 
+## Core workstream — production playback stack convergence (HD-037)
+
+Use MediaKit for all music playback and Flutter Media Session where its
+native contract is sufficient. HD-037 retires the HD-033 selector and
+rollback requirements. Linux upstream needs Track-safe seeks, position and
+volume parity before taking over Fura MPRIS. iOS needs a projection-only
+session lifecycle before retiring AudioService.
+[Implementation and acceptance evidence](docs/research/playback-stack-convergence-2026-11-24.md).
+
 ## Active Core workstream — playback/cache, Client profiles and session continuation (2026-10-06)
 
 **Goal:** source-retaining completion/repeat, bounded playback/resolution caches,
@@ -163,7 +172,10 @@ known small delta, and one NetEase Track with translation/romanization. Only
 content-free counts, availability and delta buckets may be retained. No
 autonomous implementation work remains and no push is authorized.
 
-## Human Decision Workstream — playback-stack bake-off (HD-033)
+## Historical Workstream — playback-stack bake-off (HD-033)
+
+HD-037 supersedes the old experiment-retention and backend-selection rules.
+The checkpoints below describe their original evidence.
 
 **Goal:** compare `audioplayers` with `media_kit` and `audio_service` with
 `flutter_media_session` through a reversible A/B/C/D experiment without
@@ -186,8 +198,8 @@ before activation. Human must decide whether to retain AudioService on iOS,
 accept a platform split, change/wait for the dependency, or revise sole focus
 ownership. Separately, one physical Android device must run the labeled A/B/C/D
 notification, lock-screen, headset, task/background, focus/noisy, replacement,
-single-live-session and RSS matrix. Until both gates are resolved, A remains
-production and no migration cleanup is authorized. See
+single-live-session and RSS matrix. At that checkpoint, A remained production
+and migration cleanup was held. See
 [Playback stack bake-off](docs/research/playback-stack-bakeoff.md).
 
 **Boundaries:** no MediaKit canonical playlist, second player fallback, dual
@@ -326,7 +338,8 @@ and root `AppPlaybackHost`. Locked plugin-source audit found that
 disables plugin-owned focus before source load and activates/releases the
 single `audio_session` with playback lifecycle. Initialization, state,
 commands, resolution and engine phases have secret-safe diagnostics and a
-tested AudioService success/failure seam.
+tested AudioService success/failure seam. HD-037 subsequently selected Media3
+on Android and preserved the `audio_session` focus owner.
 
 `NETEASE_ANDROID_MEDIA_PLAYBACK` independently observed an upstream HTTP
 source at exact first-party host `m701.music.126.net`, M4A format and 1200-second

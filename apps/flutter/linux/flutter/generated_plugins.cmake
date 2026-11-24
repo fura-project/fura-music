@@ -3,8 +3,8 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  audioplayers_linux
   dynamic_color
+  flutter_media_session
   flutter_secure_storage_linux
   media_kit_libs_linux
   media_kit_video
