@@ -2,6 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 
 use crate::credential::is_credential_rejection_code;
 use crate::protocol_strategy::is_musicu_rate_limited_code;
@@ -767,7 +768,7 @@ struct PlaylistDetailResult {
 struct PlaylistDetailData {
     code: Option<i64>,
     #[serde(rename = "songlist")]
-    tracks: Option<Vec<RawTrack>>,
+    tracks: Option<Vec<Box<RawValue>>>,
     #[serde(rename = "total_song_num")]
     total: Option<u32>,
     hasmore: Option<RawHasMore>,
@@ -927,19 +928,38 @@ type MappedTrackRows = (
 );
 
 fn map_track_rows<E>(
-    raw_tracks: Vec<RawTrack>,
+    raw_tracks: Vec<Box<RawValue>>,
 ) -> Result<MappedTrackRows, QqMusicPlaylistDetailError<E>> {
     let mut tracks = Vec::with_capacity(raw_tracks.len());
     let mut membership_identities = Vec::with_capacity(raw_tracks.len());
     let mut membership_is_exact = true;
     let mut omitted_track_count = 0_u32;
-    for (index, raw) in raw_tracks.into_iter().enumerate() {
-        if let Some(identity) = map_membership_identity(&raw) {
+    for (index, row) in raw_tracks.into_iter().enumerate() {
+        let json = row.get();
+        // Each entry must be an object, even if serde could read a positional
+        // sequence as the same struct. Raw JSON also preserves duplicate keys.
+        if !json.starts_with('{') {
+            membership_is_exact = false;
+            omitted_track_count += 1;
+            continue;
+        }
+        let track = serde_json::from_str::<RawTrack>(json);
+        let identity = match &track {
+            Ok(raw) => map_membership_identity(raw.id, raw.song_type),
+            Err(_) => serde_json::from_str::<RawMembershipIdentity>(json)
+                .ok()
+                .and_then(|raw| map_membership_identity(raw.id, raw.song_type)),
+        };
+        if let Some(identity) = identity {
             membership_identities.push(identity);
         } else {
             membership_is_exact = false;
         }
-        match map_track(raw, index) {
+        let Ok(track) = track else {
+            omitted_track_count += 1;
+            continue;
+        };
+        match map_track(track, index) {
             Ok(track) => tracks.push(track),
             Err(
                 QqMusicPlaylistDetailError::InvalidTrack { .. }
@@ -956,9 +976,19 @@ fn map_track_rows<E>(
     ))
 }
 
-fn map_membership_identity(raw: &RawTrack) -> Option<QqMusicTrackMembershipIdentity> {
-    let track_id = raw.id.filter(|value| *value != 0)?;
-    let song_type = raw.song_type?;
+#[derive(Deserialize)]
+struct RawMembershipIdentity {
+    id: Option<u64>,
+    #[serde(rename = "type")]
+    song_type: Option<u32>,
+}
+
+fn map_membership_identity(
+    id: Option<u64>,
+    song_type: Option<u32>,
+) -> Option<QqMusicTrackMembershipIdentity> {
+    let track_id = id.filter(|value| *value != 0)?;
+    let song_type = song_type?;
     Some(QqMusicTrackMembershipIdentity {
         track_id,
         song_type,
@@ -1155,6 +1185,56 @@ mod tests {
                 }
             }
         })
+    }
+
+    #[tokio::test]
+    async fn liked_page_keeps_good_rows_and_numeric_membership_on_row_decode_failure() {
+        let mut fixture = page_fixture();
+        let data = &mut fixture["music.srfDissInfo.DissInfo"]["data"];
+        let good = data["songlist"][0].clone();
+        let mut wrong_type = good.clone();
+        wrong_type["id"] = json!(41002);
+        wrong_type["album"] = json!("unusable album container");
+        let mut last = good.clone();
+        last["id"] = json!(41003);
+        last["mid"] = json!("fixtureTrackMid3");
+        data["songlist"] = json!([good, wrong_type, last]);
+        data["total_song_num"] = json!(4);
+
+        let client = QqMusicClient::new(FakeTransport::new([fixture]));
+        let page = client
+            .liked_songs_page(&credential(), 0, 3)
+            .await
+            .expect("valid collection with a malformed row");
+        assert_eq!(page.next_offset(), 3);
+        assert_eq!(page.omitted_track_count(), 1);
+        assert_eq!(page.tracks().len(), 2);
+        assert_eq!(page.membership_identities().len(), 3);
+        assert!(page.membership_is_exact());
+    }
+
+    #[tokio::test]
+    async fn liked_page_marks_malformed_membership_inexact_at_the_terminal_offset() {
+        let mut fixture = page_fixture();
+        let data = &mut fixture["music.srfDissInfo.DissInfo"]["data"];
+        let good = data["songlist"][0].clone();
+        let mut invalid_identity = good.clone();
+        invalid_identity["type"] = json!("0");
+        data["songlist"] = json!([good, invalid_identity, [41003, 0]]);
+        data["total_song_num"] = json!(103);
+        data["hasmore"] = json!(false);
+
+        let client = QqMusicClient::new(FakeTransport::new([fixture]));
+        let page = client
+            .liked_songs_page(&credential(), 100, 3)
+            .await
+            .unwrap();
+        assert_eq!(page.next_offset(), 103);
+        assert!(!page.has_more());
+        assert_eq!(page.omitted_track_count(), 2);
+        assert_eq!(page.tracks().len(), 1);
+        assert_eq!(page.membership_identities().len(), 1);
+        assert!(!page.membership_is_exact());
     }
 
     #[tokio::test]

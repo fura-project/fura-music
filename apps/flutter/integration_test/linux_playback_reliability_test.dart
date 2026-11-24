@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dbus/dbus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/lyrics/lyric_gateway.dart';
@@ -208,6 +209,9 @@ void main() {
         ),
         audioServiceInitializer: (_, _) async =>
             fail('Linux must not initialize AudioService'),
+        onLinuxWindowRaise: () =>
+            const MethodChannel('com.fura.flutterustmusic/window')
+                .invokeMethod<void>('raise'),
       );
       final client = DBusClient.session();
       final name = projectMprisServiceName('com.fura.flutterustmusic.playback');
@@ -230,6 +234,20 @@ void main() {
         );
       }
 
+      final seeked = <int>[];
+      final seekSignals = DBusRemoteObjectSignalStream(
+        object: remote,
+        interface: projectMprisPlayerInterface,
+        name: 'Seeked',
+        signature: DBusSignature('x'),
+      ).listen((signal) => seeked.add(signal.values.single.asInt64()));
+      final canPlay = <bool>[];
+      final propertySignals = remote.propertiesChanged.listen((signal) {
+        if (signal.changedProperties['CanPlay'] case final value?) {
+          canPlay.add(value.asBoolean());
+        }
+      });
+
       try {
         await tester.pumpWidget(
           const MaterialApp(
@@ -251,8 +269,35 @@ void main() {
             'org.mpris.MediaPlayer2',
             'Identity',
           )).asString(),
-          'fura music playback',
+          'fura music',
         );
+        const root = 'org.mpris.MediaPlayer2';
+        expect(
+          (await remote.getProperty(root, 'DesktopEntry')).asString(),
+          'com.fura.flutterustmusic',
+        );
+        expect(
+          (await remote.getProperty(root, 'CanRaise')).asBoolean(),
+          isTrue,
+        );
+        expect(
+          (await remote.getProperty(root, 'CanQuit')).asBoolean(),
+          isFalse,
+        );
+        await remote.callMethod(
+          root,
+          'Raise',
+          [],
+          replySignature: DBusSignature(''),
+        );
+        await remote.callMethod(
+          root,
+          'Quit',
+          [],
+          replySignature: DBusSignature(''),
+        );
+        expect(await client.nameHasOwner(name), isTrue);
+
         final controller = host.controller;
         void pageListener() {}
         controller.addListener(pageListener);
@@ -277,6 +322,10 @@ void main() {
           () => controller.playback.stage == TrackPlaybackStage.paused,
         );
         expect((await property('PlaybackStatus')).asString(), 'Paused');
+        final pausedPosition = (await property('Position')).asInt64();
+        await tester.pump(const Duration(milliseconds: 150));
+        expect((await property('Position')).asInt64(), pausedPosition);
+        expect(seeked, isEmpty);
         await command('Play');
         await _until(
           tester,
@@ -293,7 +342,11 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
         expect(player.seeks, 1);
         await command('SetPosition', [trackId, const DBusInt64(300000)]);
-        await _until(tester, () => player.seeks == 2);
+        await _until(tester, () => player.seeks == 2 && seeked.length == 2);
+        expect(seeked.last, 300000);
+        await controller.playback.seekToMs(450);
+        await _until(tester, () => seeked.length == 3);
+        expect(seeked.last, 450000);
         await command('Next');
         await _until(
           tester,
@@ -308,6 +361,7 @@ void main() {
               controller.current?.opaqueId == 'synthetic-mpris-one' &&
               controller.playback.canPause,
         );
+        expect(canPlay, [true]);
         expect(resolver.count, 3);
         expect(player.opens, 3);
         await remote.setProperty(
@@ -359,6 +413,14 @@ void main() {
           () => controller.playback.stage == TrackPlaybackStage.stopped,
         );
         expect((await property('PlaybackStatus')).asString(), 'Stopped');
+        await command('Next');
+        await _until(
+          tester,
+          () => controller.current?.opaqueId == 'synthetic-mpris-two',
+        );
+        expect((await property('PlaybackStatus')).asString(), 'Stopped');
+        expect(resolver.count, 3);
+        expect(player.opens, 3);
         await host.dispose();
         expect(await client.nameHasOwner(name), isFalse);
         // A new app-lifetime owner can reacquire the exact service name.
@@ -382,6 +444,8 @@ void main() {
           'FURA_DIAGNOSTIC direct_mpris_gate resolve=${resolver.count} open=${player.opens} seek=${player.seeks} play=${player.plays} stop=${player.stops} focusActivate=${focus.values.where((v) => v).length} focusRelease=${focus.values.where((v) => !v).length} ownership=direct commands=passed restart=passed',
         );
       } finally {
+        await seekSignals.cancel();
+        await propertySignals.cancel();
         await host.dispose();
         await client.close();
         await requests.cancel();

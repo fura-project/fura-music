@@ -2,7 +2,7 @@ use std::fmt;
 use std::time::Duration;
 
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, value::RawValue};
 
 use crate::{HttpRequest, HttpTransport, QqMusicClient, normalized_https_image_uri};
 
@@ -344,7 +344,7 @@ where
 struct LegacyCommentResponse {
     code: Option<i64>,
     subcode: Option<i64>,
-    hot_comment: Option<RawCommentGroup>,
+    hot_comment: Option<Box<RawValue>>,
     comment: Option<RawCommentGroup>,
 }
 
@@ -441,6 +441,9 @@ fn map_response<E>(
     let raw_hot = if offset == 0 {
         envelope
             .hot_comment
+            .map(|raw| serde_json::from_str::<RawCommentGroup>(raw.get()))
+            .transpose()
+            .map_err(|_| QqMusicTrackCommentsError::InvalidJson)?
             .and_then(|group| group.commentlist)
             .unwrap_or_default()
     } else {
@@ -454,6 +457,12 @@ fn map_response<E>(
         map_comment_rows(raw_latest, CommentSection::Latest)?;
     let (total, has_more) =
         normalize_pagination(reported_total, offset, requested_size, raw_latest_count)?;
+    // This endpoint accepts only whole page boundaries. A nonterminal short
+    // response cannot prove the next raw offset, so never publish a cursor
+    // that the next request would reject or guess how many positions to skip.
+    if has_more && raw_latest_count != requested_size {
+        return Err(QqMusicTrackCommentsError::InvalidPagination);
+    }
     let next_offset = offset
         .checked_add(raw_latest_count)
         .ok_or(QqMusicTrackCommentsError::InvalidPagination)?;
@@ -658,7 +667,7 @@ mod tests {
         })));
 
         let page = client
-            .track_comments(41001, 0, 20)
+            .track_comments(41001, 0, 1)
             .await
             .expect("comment page");
         assert_eq!(page.offset(), 0);
@@ -698,7 +707,7 @@ mod tests {
             ("topid", "41001"),
             ("cmd", "8"),
             ("pagenum", "0"),
-            ("pagesize", "20"),
+            ("pagesize", "1"),
         ] {
             assert!(
                 query
@@ -960,6 +969,49 @@ mod tests {
             .expect("short page with stale total");
         assert_eq!(page.total(), 21);
         assert!(!page.has_more());
+    }
+
+    #[tokio::test]
+    async fn ignores_unused_hot_container_only_on_continuation() {
+        let client = QqMusicClient::new(CommentsTransport::from_json(&json!({
+            "code": 0,
+            "hot_comment": "unusable hot container",
+            "comment": {
+                "commenttotal": 23,
+                "commentlist": [
+                    comment(&json!(92001), "Latest", "Unicode 演奏 🎵", &json!(1_700_000_002), &json!(2)),
+                    null
+                ]
+            }
+        })));
+        let page = client.track_comments(41001, 20, 20).await.unwrap();
+        assert_eq!(page.latest_comments()[0].content(), "Unicode 演奏 🎵");
+        assert_eq!(page.omitted_latest_comment_count(), 1);
+        assert_eq!(page.next_offset(), 22);
+        assert_eq!(page.total(), 23);
+        assert!(!page.has_more());
+        assert!(page.hot_comments().is_empty());
+        assert!(matches!(
+            client.track_comments(41001, 0, 20).await,
+            Err(QqMusicTrackCommentsError::InvalidJson)
+        ));
+    }
+
+    #[tokio::test]
+    async fn rejects_nonterminal_short_page_with_unrequestable_raw_offset() {
+        let client = QqMusicClient::new(CommentsTransport::from_json(&json!({
+            "code": 0,
+            "comment": {
+                "commenttotal": 100,
+                "commentlist": [
+                    comment(&json!(92001), "Latest", "Latest text", &json!(1_700_000_002), &json!(2))
+                ]
+            }
+        })));
+        assert!(matches!(
+            client.track_comments(41001, 20, 20).await,
+            Err(QqMusicTrackCommentsError::InvalidPagination)
+        ));
     }
 
     #[tokio::test]

@@ -250,42 +250,251 @@ void main() {
     },
   );
 
-  test('queued MPRIS SetPosition cannot seek a Track replaced by UI', () async {
+  test(
+    'MPRIS navigation preserves Paused and Stopped without opening audio',
+    () async {
+      final client = _MprisClient();
+      final audio = _FakeAudioEngine();
+      final controller = _controller(audio: audio);
+      final edge = FuraMprisSystemMediaEdge(
+        controller: controller,
+        clientFactory: () => client,
+      );
+      addTearDown(controller.dispose);
+      addTearDown(edge.deactivate);
+      await edge.activate();
+      await controller.replaceAndPlay(const [first, second], 0);
+      final player = client.player!;
+      await _mprisCall(player, 'Pause');
+      await _waitUntil(() => player.playbackStatus == 'Paused');
+      await _mprisCall(player, 'Next');
+      await _waitUntil(() => controller.playback.track == second);
+      expect(player.playbackStatus, 'Paused');
+      expect(audio.sessions, hasLength(1));
+      expect(
+        (await player.getProperty(
+          projectMprisPlayerInterface,
+          'CanSeek',
+        )).returnValues.single.asVariant().asBoolean(),
+        isFalse,
+      );
+      await _mprisCall(player, 'Play');
+      await _waitUntil(() => player.playbackStatus == 'Playing');
+      expect(audio.sessions, hasLength(2));
+      await _mprisCall(player, 'Stop');
+      await _waitUntil(() => player.playbackStatus == 'Stopped');
+      await _mprisCall(player, 'Previous');
+      await _waitUntil(() => controller.playback.track == first);
+      expect(player.playbackStatus, 'Stopped');
+      expect(audio.sessions, hasLength(2));
+    },
+  );
+
+  test(
+    'queued PlayPause commands toggle when dispatched and Play is idempotent',
+    () async {
+      final client = _MprisClient();
+      final audio = _FakeAudioEngine();
+      final controller = _controller(audio: audio);
+      final edge = FuraMprisSystemMediaEdge(
+        controller: controller,
+        clientFactory: () => client,
+      );
+      final pause = Completer<void>();
+      addTearDown(controller.dispose);
+      addTearDown(edge.deactivate);
+      addTearDown(() {
+        if (!pause.isCompleted) pause.complete();
+      });
+      await edge.activate();
+      await controller.replaceAndPlay(const [first], 0);
+      final player = client.player!;
+      final session = audio.sessions.single..pauseGate = pause.future;
+      await _mprisCall(player, 'Play');
+      await _mprisCall(player, 'PlayPause');
+      await _waitUntil(() => session.pauseCalls == 1);
+      await _mprisCall(player, 'PlayPause');
+      pause.complete();
+      await _waitUntil(() => session.playCalls == 2);
+      expect(player.playbackStatus, 'Playing');
+      expect(session.pauseCalls, 1);
+      expect(audio.sessions, hasLength(1));
+    },
+  );
+
+  test('MPRIS CanPlay stays present in resolving and loading, but not on auth failure', () async {
     final client = _MprisClient();
+    final resolver = _ControlledMediaGateway();
     final audio = _FakeAudioEngine();
-    final controller = _controller(audio: audio);
+    final controller = _controller(audio: audio, media: resolver);
     final edge = FuraMprisSystemMediaEdge(
       controller: controller,
       clientFactory: () => client,
     );
-    final gate = Completer<void>();
-    try {
-      await edge.activate();
-      await controller.replaceAndPlay(const [first, second], 0);
-      final player = client.player!;
-      final oldTrack = player.trackId;
-      audio.sessions.first.pauseGate = gate.future;
-      await _mprisCall(player, 'Pause');
-      await _waitUntil(() => audio.sessions.first.pauseCalls == 1);
-      await _mprisCall(player, 'SetPosition', [
-        oldTrack,
-        const DBusInt64(1000000),
-      ]);
-      // Existing app UI changes the same Queue while the first system command
-      // is settling. The seek was valid at receipt, no longer at dispatch.
-      await controller.advance();
-      expect(player.trackId, isNot(oldTrack));
-      gate.complete();
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      expect(audio.sessions.last.seekPositions, isEmpty);
-      expect(controller.current, same(second));
-    } finally {
-      if (!gate.isCompleted) gate.complete();
-      await edge.deactivate();
-      controller.dispose();
-    }
+    addTearDown(controller.dispose);
+    addTearDown(edge.deactivate);
+    await edge.activate();
+    final player = client.player!;
+    Future<bool> capability(String name) async => (await player.getProperty(
+      projectMprisPlayerInterface,
+      name,
+    )).returnValues.single.asVariant().asBoolean();
+    expect(await capability('CanPlay'), isFalse);
+    final firstPlay = controller.replaceAndPlay(const [first, second], 0);
+    await _waitUntil(() => resolver.gates.isNotEmpty);
+    expect(controller.playback.stage, TrackPlaybackStage.resolving);
+    expect(await capability('CanPlay'), isTrue);
+    expect(await capability('CanPause'), isFalse);
+    final opening = Completer<void>();
+    audio.loadGate = opening.future;
+    resolver.gates.first.complete(
+      await const _ResolutionOperation('first').run(),
+    );
+    await _waitUntil(
+      () => controller.playback.stage == TrackPlaybackStage.loading,
+    );
+    expect(await capability('CanPlay'), isTrue);
+    opening.complete();
+    await firstPlay;
+    expect(await capability('CanPause'), isTrue);
+    await controller.playback.pause();
+    expect(await capability('CanPause'), isTrue);
+    final switchTrack = controller.advance();
+    await _waitUntil(() => resolver.gates.length == 2);
+    expect(await capability('CanPlay'), isTrue);
+    resolver.gates.last.complete(
+      const MediaResolutionResult(
+        failure: MediaResolutionFailure.authenticationRequired,
+      ),
+    );
+    await switchTrack;
+    expect(await capability('CanPlay'), isFalse);
+    expect(await capability('CanPause'), isFalse);
   });
+
+  test('MPRIS Play opens a queued selection with no active source', () async {
+    final client = _MprisClient();
+    final audio = _FakeAudioEngine();
+    final queue = _MemoryQueueGateway()
+      ..replace(tracks: const [first], currentIndex: 0);
+    final controller = _controller(audio: audio, queue: queue);
+    final edge = FuraMprisSystemMediaEdge(
+      controller: controller,
+      clientFactory: () => client,
+    );
+    addTearDown(controller.dispose);
+    addTearDown(edge.deactivate);
+    await edge.activate();
+    expect(audio.sessions, isEmpty);
+    expect(controller.playback.track, isNull);
+    await _mprisCall(client.player!, 'Play');
+    await _waitUntil(
+      () => controller.playback.stage == TrackPlaybackStage.playing,
+    );
+    expect(controller.playback.track, first);
+    expect(audio.sessions, hasLength(1));
+  });
+
+  test(
+    'UI seeks and Repeat One acknowledge discontinuities but ticks do not',
+    () async {
+      final audio = _FakeAudioEngine();
+      final controller = _controller(audio: audio);
+      addTearDown(controller.dispose);
+      final seen = <int>[];
+      controller.playback.positionDiscontinuity.addListener(
+        () => seen.add(controller.playback.positionMs),
+      );
+      await controller.replaceAndPlay(const [first], 0);
+      final session = audio.sessions.single;
+      session.emitPosition(400);
+      await _waitUntil(() => controller.playback.positionMs == 400);
+      expect(seen, isEmpty);
+      await controller.playback.seekToMs(700);
+      expect(seen, [700]);
+      session.emit(ForegroundAudioState.completed);
+      await _waitUntil(
+        () => controller.playback.stage == TrackPlaybackStage.completed,
+      );
+      await controller.playback.replayCurrent();
+      await _waitUntil(() => seen.length == 2);
+      expect(seen, [700, 0]);
+      expect(audio.sessions, hasLength(1));
+    },
+  );
+
+  for (final replaceSameTrack in [false, true]) {
+    test(
+      'queued MPRIS SetPosition cannot seek a replacement: same identity=$replaceSameTrack',
+      () async {
+        final client = _MprisClient();
+        final audio = _FakeAudioEngine();
+        final controller = _controller(audio: audio);
+        final edge = FuraMprisSystemMediaEdge(
+          controller: controller,
+          clientFactory: () => client,
+        );
+        final gate = Completer<void>();
+        try {
+          await edge.activate();
+          await controller.replaceAndPlay(const [first, second], 0);
+          final player = client.player!;
+          final oldTrack = player.trackId;
+          audio.sessions.first.pauseGate = gate.future;
+          await _mprisCall(player, 'Pause');
+          await _waitUntil(() => audio.sessions.first.pauseCalls == 1);
+          await _mprisCall(player, 'SetPosition', [
+            oldTrack,
+            const DBusInt64(1000000),
+          ]);
+          // Existing app UI changes the same Queue while the first system command
+          // is settling. The seek was valid at receipt, no longer at dispatch.
+          if (replaceSameTrack) {
+            await controller.replaceAndPlay(const [first, second], 0);
+          } else {
+            await controller.advance();
+          }
+          expect(player.trackId, isNot(oldTrack));
+          gate.complete();
+          await Future<void>.delayed(Duration.zero);
+          await Future<void>.delayed(Duration.zero);
+          expect(audio.sessions.last.seekPositions, isEmpty);
+          expect(controller.current, same(replaceSameTrack ? first : second));
+        } finally {
+          if (!gate.isCompleted) gate.complete();
+          await edge.deactivate();
+          controller.dispose();
+        }
+      },
+    );
+  }
+
+  test(
+    'a seek acknowledged after source replacement emits no discontinuity',
+    () async {
+      final audio = _FakeAudioEngine();
+      final controller = _controller(audio: audio);
+      addTearDown(controller.dispose);
+      final seen = <int>[];
+      controller.playback.positionDiscontinuity.addListener(
+        () => seen.add(controller.playback.positionMs),
+      );
+      await controller.replaceAndPlay(const [first, second], 0);
+      final session = audio.sessions.single;
+      final gate = Completer<void>();
+      session.seekGate = gate.future;
+      final pending = controller.playback.seekToMs(700);
+      await _waitUntil(() => session.seekPositions.isNotEmpty);
+      try {
+        await controller.advance();
+      } finally {
+        gate.complete();
+      }
+      await pending;
+      expect(controller.playback.track, second);
+      expect(seen, isEmpty);
+    },
+  );
 
   test(
     'publishes provider-neutral queue metadata and playback state',
@@ -881,11 +1090,12 @@ Future<void> _exercisePendingRoamSystemCommand({required bool stop}) async {
 QueuePlaybackController _controller({
   _FakeAudioEngine? audio,
   _MemoryQueueGateway? queue,
+  MediaResolutionGateway? media,
   RelatedTracksGateway? relatedTracksGateway,
 }) => QueuePlaybackController(
   queue ?? _MemoryQueueGateway(),
   TrackPlaybackController(
-    const _MediaGateway(),
+    media ?? const _MediaGateway(),
     ForegroundPlaybackController(audio ?? _FakeAudioEngine()),
   ),
   relatedTracksGateway: relatedTracksGateway,
@@ -1010,6 +1220,32 @@ class _MemoryQueueGateway implements PlaybackQueueGateway {
   );
 }
 
+class _ControlledMediaGateway implements MediaResolutionGateway {
+  final gates = <Completer<MediaResolutionResult>>[];
+
+  @override
+  MediaResolutionOperation beginResolution({
+    required String providerId,
+    required String opaqueTrackId,
+  }) {
+    final gate = Completer<MediaResolutionResult>();
+    gates.add(gate);
+    return _GatedMediaOperation(gate.future);
+  }
+}
+
+class _GatedMediaOperation implements MediaResolutionOperation {
+  const _GatedMediaOperation(this.result);
+
+  final Future<MediaResolutionResult> result;
+
+  @override
+  bool cancel() => true;
+
+  @override
+  Future<MediaResolutionResult> run() => result;
+}
+
 class _MediaGateway implements MediaResolutionGateway {
   const _MediaGateway();
 
@@ -1041,6 +1277,7 @@ class _ResolutionOperation implements MediaResolutionOperation {
 
 class _FakeAudioEngine implements ForegroundAudioEngine {
   final List<_FakeAudioSession> sessions = [];
+  Future<void>? loadGate;
 
   @override
   Future<void> dispose() async {}
@@ -1050,6 +1287,7 @@ class _FakeAudioEngine implements ForegroundAudioEngine {
     Uri source, {
     ForegroundAudioFormat format = ForegroundAudioFormat.mp3,
   }) async {
+    if (loadGate case final gate?) await gate;
     final session = _FakeAudioSession();
     sessions.add(session);
     return session;
@@ -1063,6 +1301,7 @@ class _FakeAudioSession implements ForegroundAudioSession {
   int playCalls = 0;
   int pauseCalls = 0;
   Future<void>? pauseGate;
+  Future<void>? seekGate;
   final List<int> seekPositions = [];
   final List<double> volumeValues = [];
 
@@ -1092,7 +1331,8 @@ class _FakeAudioSession implements ForegroundAudioSession {
   @override
   Future<void> seekToMs(int positionMs) async {
     seekPositions.add(positionMs);
-    _positions.add(positionMs);
+    if (seekGate case final gate?) await gate;
+    if (!_positions.isClosed) _positions.add(positionMs);
   }
 
   @override

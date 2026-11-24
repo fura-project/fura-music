@@ -50,6 +50,7 @@ class QueuePlaybackController extends ChangeNotifier {
   RelatedTracksLoadOperation? _roamOperation;
   int _roamGeneration = 0;
   int _terminalIntentEpoch = 0;
+  int _currentSelectionRevision = 0;
   CollectionPlaybackSource? _collectionSource;
   CollectionPlaybackPageOperation? _collectionOperation;
   Future<void>? _collectionLoadFuture;
@@ -85,6 +86,10 @@ class QueuePlaybackController extends ChangeNotifier {
   List<PlaylistTrackSummary> get tracks => _snapshot.tracks;
   PlaylistTrackSummary? get current => _snapshot.current;
   int? get currentIndex => _snapshot.currentIndex;
+
+  /// Changes when a new queue occurrence is selected, even at the same index
+  /// with the same provider identity.
+  int get currentSelectionRevision => _currentSelectionRevision;
   bool get hasPrevious => _snapshot.hasPrevious;
   bool get hasNext => _snapshot.hasNext;
   PlaybackOrder get order => _snapshot.order;
@@ -185,15 +190,23 @@ class QueuePlaybackController extends ChangeNotifier {
     _maybeDemandCollection();
   }
 
-  Future<void> advance() async {
+  Future<void> advance({bool preserveInactiveState = false}) async {
     _invalidateRoam();
-    await _apply(_gateway.advance(), playChangedCurrent: true);
+    await _apply(
+      _gateway.advance(),
+      playChangedCurrent: true,
+      preserveInactiveState: preserveInactiveState,
+    );
     _maybeDemandCollection();
   }
 
-  Future<void> rewind() async {
+  Future<void> rewind({bool preserveInactiveState = false}) async {
     _invalidateRoam();
-    await _apply(_gateway.rewind(), playChangedCurrent: true);
+    await _apply(
+      _gateway.rewind(),
+      playChangedCurrent: true,
+      preserveInactiveState: preserveInactiveState,
+    );
     _maybeDemandCollection();
   }
 
@@ -249,6 +262,11 @@ class QueuePlaybackController extends ChangeNotifier {
   Future<void> playCurrent() {
     if (_disposed) return Future.value();
     _invalidateRoam();
+    final current = _snapshot.current;
+    if (current == null) return Future.value();
+    if (!_sameTrack(_playback.track, current)) {
+      return _playback.playTrack(current);
+    }
     if (_playback.canResume) return _playback.resume();
     if (_playback.stage == TrackPlaybackStage.playing) return Future.value();
     return _playback.activate();
@@ -769,7 +787,9 @@ class QueuePlaybackController extends ChangeNotifier {
   Future<void> _apply(
     PlaybackQueueResult result, {
     required bool playChangedCurrent,
+    bool preserveInactiveState = false,
   }) async {
+    final previousStage = _playback.stage;
     if (_disposed || !_accept(result)) return;
     if (!playChangedCurrent || !result.playbackRequested) return;
 
@@ -777,6 +797,19 @@ class QueuePlaybackController extends ChangeNotifier {
     final current = _snapshot.current;
     if (current == null) {
       await _playback.stop();
+    } else if (preserveInactiveState &&
+        const {
+          TrackPlaybackStage.idle,
+          TrackPlaybackStage.stopped,
+          TrackPlaybackStage.paused,
+          TrackPlaybackStage.completed,
+          TrackPlaybackStage.resolutionError,
+          TrackPlaybackStage.engineError,
+        }.contains(previousStage)) {
+      await _playback.selectWithoutStarting(
+        current,
+        paused: previousStage == TrackPlaybackStage.paused,
+      );
     } else {
       await _playback.playTrack(current);
     }
@@ -792,6 +825,10 @@ class QueuePlaybackController extends ChangeNotifier {
     }
     _failure = null;
     final previousCurrent = _snapshot.current;
+    if (result.playbackRequested ||
+        !_sameTrack(previousCurrent, snapshot.current)) {
+      _currentSelectionRevision++;
+    }
     _snapshot = snapshot;
     if (!_sameTrack(previousCurrent, _snapshot.current)) {
       _currentTrack.value = _snapshot.current;

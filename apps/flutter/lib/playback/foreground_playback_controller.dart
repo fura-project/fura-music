@@ -29,6 +29,10 @@ class ForegroundPlaybackController extends ChangeNotifier {
   int _generation = 0;
   int _replayCycle = 0;
   int _seekGeneration = 0;
+  final _positionDiscontinuity = ValueNotifier<int>(0);
+
+  /// Fires after the current session acknowledges a seek or a replay rewind.
+  Listenable get positionDiscontinuity => _positionDiscontinuity;
   int _volumeGeneration = 0;
   int? _pendingSeekGeneration;
   bool _disposed = false;
@@ -146,6 +150,8 @@ class ForegroundPlaybackController extends ChangeNotifier {
       }
       _logReplay(generation, cycle, 'seek', 'success');
       _setPosition(0);
+      if (!_isSessionCurrent(generation, session)) return;
+      _positionDiscontinuity.value++;
       _logReplay(generation, cycle, 'play', 'started');
       await session.play();
       if (_isSessionCurrent(generation, session)) {
@@ -188,7 +194,13 @@ class ForegroundPlaybackController extends ChangeNotifier {
       if (_isSessionCurrent(generation, session) &&
           seekGeneration == _seekGeneration) {
         _pendingSeekGeneration = null;
+        final moved = positionMs != _positionMs;
         _setPosition(positionMs);
+        if (moved &&
+            _isSessionCurrent(generation, session) &&
+            seekGeneration == _seekGeneration) {
+          _positionDiscontinuity.value++;
+        }
       }
     } on ForegroundAudioException catch (error) {
       if (seekGeneration == _seekGeneration) {
@@ -357,6 +369,7 @@ class ForegroundPlaybackController extends ChangeNotifier {
       final session = _detachSession();
       unawaited(_disposeEngine(session));
     }
+    _positionDiscontinuity.dispose();
     super.dispose();
   }
 

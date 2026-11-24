@@ -6,11 +6,11 @@ import 'package:flutterustmusic/playback/playback_queue_gateway.dart';
 import 'package:flutterustmusic/playback/track_playback_controller.dart';
 
 void main() {
-  late DateTime now;
+  late Duration now;
   late ProjectMprisPlayer player;
 
   setUp(() {
-    now = DateTime.utc(2026, 8, 31, 12);
+    now = Duration.zero;
     player = ProjectMprisPlayer(identity: 'flutterustmusic', now: () => now);
     player.updateMediaItem(
       const PlaylistTrackSummary(
@@ -20,7 +20,7 @@ void main() {
         artistNames: ['Artist'],
         durationSeconds: 180,
       ),
-      index: 0,
+      selection: 0,
     );
     player.updatePlaybackState(
       ProjectMprisPlaybackState(
@@ -37,7 +37,7 @@ void main() {
   test(
     'projects a live position and publishes a valid MPRIS track id',
     () async {
-      now = now.add(const Duration(seconds: 3));
+      now = now + const Duration(seconds: 3);
 
       expect(player.position, const Duration(seconds: 13));
       final position = await _property(player, 'Position');
@@ -78,7 +78,10 @@ void main() {
           values: [DBusInt64(5000000)],
         ),
       );
-      expect((await relativeEvent).value, const Duration(seconds: 47));
+      final relative = await relativeEvent;
+      expect(relative.type, ProjectMprisEventType.seekRelative);
+      expect(relative.value, const Duration(seconds: 5));
+      expect(player.position, const Duration(seconds: 10));
 
       final ignored = <ProjectMprisEvent>[];
       final subscription = player.events.listen(ignored.add);
@@ -96,6 +99,94 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(ignored, isEmpty);
       await subscription.cancel();
+    },
+  );
+
+  test(
+    'root advertises real window activation and keeps Quit disabled',
+    () async {
+      final fixture = ProjectMprisPlayer(
+        identity: 'fura music',
+        now: () => now,
+      );
+      addTearDown(fixture.close);
+      const root = 'org.mpris.MediaPlayer2';
+      Future<DBusMethodResponse> call(
+        ProjectMprisPlayer object,
+        String method,
+      ) => object.handleMethodCall(
+        DBusMethodCall(sender: ':test', interface: root, name: method),
+      );
+      expect(
+        (await fixture.getProperty(
+          root,
+          'CanRaise',
+        )).returnValues.single.asVariant().asBoolean(),
+        isFalse,
+      );
+      expect(await call(fixture, 'Raise'), isA<DBusMethodSuccessResponse>());
+      var raises = 0;
+      final withWindow = ProjectMprisPlayer(
+        identity: 'fura music',
+        now: () => now,
+        onRaise: () async {
+          raises++;
+        },
+      );
+      addTearDown(withWindow.close);
+      expect(
+        (await withWindow.getProperty(
+          root,
+          'CanRaise',
+        )).returnValues.single.asVariant().asBoolean(),
+        isTrue,
+      );
+      expect(await call(withWindow, 'Raise'), isA<DBusMethodSuccessResponse>());
+      expect(await call(withWindow, 'Quit'), isA<DBusMethodSuccessResponse>());
+      expect(await call(withWindow, 'Unknown'), isA<DBusMethodErrorResponse>());
+      expect(raises, 1);
+    },
+  );
+
+  test(
+    'publishes public artwork only and clears it with the next selection',
+    () async {
+      Future<DBusValue?> artwork(String? uri, int selection) async {
+        player.updateMediaItem(
+          PlaylistTrackSummary(
+            providerId: 'qq-music',
+            opaqueId: 'selected',
+            title: 'Track',
+            artistNames: const ['Artist'],
+            artworkUri: uri,
+          ),
+          selection: selection,
+        );
+        return (await _property(
+          player,
+          'Metadata',
+        )).asStringVariantDict()['mpris:artUrl'];
+      }
+
+      const cover = 'https://p2.music.126.net/fixture.jpg?param=320y320';
+      expect((await artwork(cover, 1))?.asString(), cover);
+      final first = player.trackId;
+      expect((await artwork(cover, 2))?.asString(), cover);
+      expect(player.trackId, isNot(first));
+      expect(await artwork(null, 3), isNull);
+      expect(
+        await artwork('https://name:secret@example.test/cover.png', 4),
+        isNull,
+      );
+      expect(
+        await artwork('https://example.test/cover.png?token=secret', 5),
+        isNull,
+      );
+      expect(await artwork('file:///private/cover.png', 6), isNull);
+      expect(
+        await artwork('https://example.test/cover.png?param=%FF', 7),
+        isNull,
+      );
     },
   );
 

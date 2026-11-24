@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutterustmusic/album/album_details_gateway.dart';
 import 'package:flutterustmusic/album/album_gateway.dart';
 import 'package:flutterustmusic/app.dart';
@@ -154,6 +155,9 @@ Future<void> main(List<String> arguments) async {
       lyricGateway: lyricGateway,
       audioEngine: audioEngine,
       relatedTracksGateway: const RustRelatedTracksGateway(),
+      onLinuxWindowRaise: () =>
+          const MethodChannel('com.fura.flutterustmusic/window')
+              .invokeMethod<void>('raise'),
     );
     logStartupPhase(
       phase: 'system_edge_init',

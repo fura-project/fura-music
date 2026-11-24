@@ -36,6 +36,7 @@ class TrackPlaybackController extends ChangeNotifier {
   Future<void> _activationTail = Future<void>.value();
   int _generation = 0;
   bool _resolving = false;
+  bool _pausedSelection = false;
   bool _disposed = false;
   int _lastPlaybackPositionMs;
   double _lastPlaybackVolume;
@@ -50,6 +51,7 @@ class TrackPlaybackController extends ChangeNotifier {
   ForegroundAudioFailure? get engineFailure => _engineFailure;
   PlaybackAudioQuality? get resolvedQuality => _resolvedQuality;
   int get positionMs => _playback.positionMs;
+  Listenable get positionDiscontinuity => _playback.positionDiscontinuity;
   double get volume => _playback.volume;
 
   /// Notifies only on non-position playback state changes (track, stage,
@@ -71,7 +73,7 @@ class TrackPlaybackController extends ChangeNotifier {
   bool get canSeek =>
       durationMs != null &&
       (_stage == TrackPlaybackStage.playing ||
-          _stage == TrackPlaybackStage.paused);
+          (_stage == TrackPlaybackStage.paused && _playback.canResume));
   bool get requiresAuthentication => switch (_resolutionFailure) {
     MediaResolutionFailure.authenticationRequired ||
     MediaResolutionFailure.credentialRejected ||
@@ -127,6 +129,7 @@ class TrackPlaybackController extends ChangeNotifier {
     final generation = ++_generation;
     _resolutionOperation?.cancel();
     _resolutionOperation = null;
+    _pausedSelection = false;
     _track = track;
     _resolutionFailure = null;
     _engineFailure = null;
@@ -201,7 +204,10 @@ class TrackPlaybackController extends ChangeNotifier {
 
   Future<void> releaseCompletionFocus() => _playback.releaseCompletionFocus();
 
-  Future<void> resume() => canResume ? _playback.resume() : Future.value();
+  Future<void> resume() {
+    if (!canResume) return Future.value();
+    return _playback.canResume ? _playback.resume() : playTrack(_track!);
+  }
 
   Future<void> seekToMs(int positionMs) {
     final duration = durationMs;
@@ -216,7 +222,19 @@ class TrackPlaybackController extends ChangeNotifier {
 
   Future<void> setVolume(double volume) => _playback.setVolume(volume);
 
-  Future<void> stop() async {
+  /// Changes the selected Track without starting its source.
+  Future<void> selectWithoutStarting(
+    PlaylistTrackSummary track, {
+    required bool paused,
+  }) async {
+    if (_disposed) return;
+    _track = track;
+    await _stop(paused: paused);
+  }
+
+  Future<void> stop() => _stop(paused: false);
+
+  Future<void> _stop({required bool paused}) async {
     ++_generation;
     _resolutionOperation?.cancel();
     _resolutionOperation = null;
@@ -224,9 +242,18 @@ class TrackPlaybackController extends ChangeNotifier {
     _resolutionFailure = null;
     _engineFailure = null;
     _resolvedQuality = null;
-    _setStage(TrackPlaybackStage.stopped);
-    await _playback.stop();
-    if (!_disposed) _syncPositionMs();
+    // stop detaches the old session synchronously. Do not project that
+    // session's final state over an inactive selection.
+    _resolving = true;
+    final stopping = _playback.stop();
+    _resolving = false;
+    _syncPositionMs();
+    _pausedSelection = paused;
+    final nextStage = paused
+        ? TrackPlaybackStage.paused
+        : TrackPlaybackStage.stopped;
+    if (!_setStage(nextStage)) _notifyState();
+    await stopping;
   }
 
   void _onPlaybackChanged() {
@@ -261,6 +288,8 @@ class TrackPlaybackController extends ChangeNotifier {
         ForegroundPlaybackStage.loading => TrackPlaybackStage.loading,
         ForegroundPlaybackStage.playing => TrackPlaybackStage.playing,
         ForegroundPlaybackStage.paused => TrackPlaybackStage.paused,
+        ForegroundPlaybackStage.stopped when _pausedSelection =>
+          TrackPlaybackStage.paused,
         ForegroundPlaybackStage.stopped => TrackPlaybackStage.stopped,
         ForegroundPlaybackStage.completed => TrackPlaybackStage.completed,
         ForegroundPlaybackStage.error => TrackPlaybackStage.engineError,

@@ -169,6 +169,9 @@ class TrackCommentController extends ChangeNotifier {
           visibleCount: result.latestComments.length,
           omittedCount: result.omittedLatestCommentCount,
           total: result.total,
+          // QQ's legacy comments total can outlive the final page. The raw
+          // row count and continuation must still fit within that total.
+          terminalMustReachTotal: track.providerId != 'qq-music',
         ) &&
         (firstPage ||
             (result.hotComments.isEmpty &&

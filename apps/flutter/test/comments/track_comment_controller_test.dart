@@ -6,6 +6,40 @@ import 'package:flutterustmusic/comments/track_comment_gateway.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 
 void main() {
+  test('accepts a QQ terminal page with a higher reported total', () async {
+    final gateway = _ScriptedGateway([
+      _PendingOperation.completed(
+        TrackCommentPageResult(
+          nextOffset: 20,
+          total: 23,
+          hasMore: true,
+          omittedLatestCommentCount: 19,
+          latestComments: [_comment('first')],
+        ),
+      ),
+      _PendingOperation.completed(
+        TrackCommentPageResult(
+          offset: 20,
+          nextOffset: 22,
+          total: 23,
+          omittedLatestCommentCount: 1,
+          latestComments: [_comment('last')],
+        ),
+      ),
+    ]);
+    final controller = TrackCommentController(gateway, _track);
+    addTearDown(controller.dispose);
+    await controller.load();
+    await controller.loadMore();
+    expect(controller.appendFailure, isNull);
+    expect(controller.latestComments.map((comment) => comment.opaqueId), [
+      'comment:first',
+      'comment:last',
+    ]);
+    expect(controller.total, 23);
+    expect(controller.hasMore, isFalse);
+  });
+
   test(
     'loads hot and newest comments then paginates with fixed page offset',
     () async {

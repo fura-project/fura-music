@@ -11,6 +11,15 @@ execution:
 
 # Current State
 
+- **2026-11-24 QQ real-data and Linux desktop compatibility:** The live
+  Liked Songs partial notice came from a display row rejected at SongMid
+  validation with exact membership retained. The separate whole-page
+  deserialization defect and QQ comment terminal-total mismatch reproduced
+  offline and have regressions. Linux direct MPRIS passed live D-Bus with
+  MediaKit and the installed Plasma consumer. GTK activation restored the
+  same XWayland window. Native GNOME card and protected-CDN artwork evidence
+  remains open. [Redacted evidence](docs/research/qq-real-data-linux-mpris-2026-11-24.md).
+
 - **2026-11-24 HD-037 playback stack convergence:** MediaKit is the sole
   production music engine. Android, Windows and macOS use
   `flutter_media_session` 3.2.1. The Linux D-Bus probe confirmed Track-path

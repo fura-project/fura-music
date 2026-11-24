@@ -15,11 +15,14 @@ class FuraMprisSystemMediaEdge implements SystemMediaEdge {
     required this.controller,
     DBusClient Function()? clientFactory,
     this.serviceId = 'com.fura.flutterustmusic.playback',
+    this.onRaise,
   }) : _clientFactory = clientFactory ?? DBusClient.session;
 
   final QueuePlaybackController controller;
   final DBusClient Function() _clientFactory;
   final String serviceId;
+  final Future<void> Function()? onRaise;
+  final _clock = Stopwatch()..start();
   DBusClient? _client;
   ProjectMprisPlayer? _player;
   StreamSubscription<ProjectMprisEvent>? _subscription;
@@ -29,7 +32,7 @@ class FuraMprisSystemMediaEdge implements SystemMediaEdge {
   Future<void>? _activation;
   Future<void>? _deactivation;
   bool _closed = false;
-  String? _itemSignature;
+  int? _publishedSelection;
   ProjectMprisPlaybackState? _lastState;
 
   @override
@@ -50,7 +53,10 @@ class FuraMprisSystemMediaEdge implements SystemMediaEdge {
 
   Future<void> _activate() async {
     final player = _player = ProjectMprisPlayer(
-      identity: 'fura music playback',
+      identity: 'fura music',
+      now: () => _clock.elapsed,
+      sourceGeneration: () => controller.playback.sourceGeneration,
+      onRaise: onRaise,
     );
     try {
       final client = _client = _clientFactory();
@@ -67,11 +73,17 @@ class FuraMprisSystemMediaEdge implements SystemMediaEdge {
       _active = true;
       _subscription = player.events.listen(_scheduleCommand);
       controller.addListener(_synchronize);
+      controller.playback.positionDiscontinuity.addListener(
+        _positionDiscontinuity,
+      );
       _publish(force: true);
       _log('activate', 'success');
     } on Object {
       _active = false;
       controller.removeListener(_synchronize);
+      controller.playback.positionDiscontinuity.removeListener(
+        _positionDiscontinuity,
+      );
       await _subscription?.cancel();
       try {
         await _client?.close();
@@ -104,7 +116,11 @@ class FuraMprisSystemMediaEdge implements SystemMediaEdge {
     final playback = controller.playback;
     switch (event.type) {
       case ProjectMprisEventType.play:
-        if (playback.canResume || playback.canActivate) {
+        if (_canPlayCurrent) await controller.playCurrent();
+      case ProjectMprisEventType.playPause:
+        if (playback.canPause) {
+          await playback.pause();
+        } else if (_canPlayCurrent) {
           await controller.playCurrent();
         }
       case ProjectMprisEventType.pause:
@@ -113,24 +129,32 @@ class FuraMprisSystemMediaEdge implements SystemMediaEdge {
         await controller.stop();
       case ProjectMprisEventType.next:
         if (!playback.requiresAuthentication && controller.hasNext) {
-          await controller.advance();
+          await controller.advance(preserveInactiveState: true);
         }
       case ProjectMprisEventType.previous:
         if (!playback.requiresAuthentication && controller.hasPrevious) {
-          await controller.rewind();
+          await controller.rewind(preserveInactiveState: true);
         }
       case ProjectMprisEventType.seek:
-        if (event.trackId != _player?.trackId) {
+      case ProjectMprisEventType.seekRelative:
+        if (event.trackId != _player?.trackId ||
+            event.sourceGeneration != playback.sourceGeneration) {
           _log('command_seek', 'stale_track');
           return;
         }
-        if (playback.canSeek) {
-          await playback.seekToMs((event.value! as Duration).inMilliseconds);
-          if (_active && playback.canSeek) {
-            await _player!.emitSeeked(
-              Duration(milliseconds: playback.positionMs),
-            );
+        if (!playback.canSeek) return;
+        final requested = event.value! as Duration;
+        if (event.type == ProjectMprisEventType.seekRelative) {
+          final target = _player!.position + requested;
+          if (target > Duration(milliseconds: playback.durationMs!)) {
+            if (controller.hasNext) {
+              await controller.advance(preserveInactiveState: true);
+            }
+            return;
           }
+          await playback.seekToMs(target.inMilliseconds);
+        } else {
+          await playback.seekToMs(requested.inMilliseconds);
         }
       case ProjectMprisEventType.repeat:
         await controller.setRepeatMode(switch (event.value! as String) {
@@ -150,42 +174,63 @@ class FuraMprisSystemMediaEdge implements SystemMediaEdge {
     _log('command_${event.type.name}', 'settled');
   }
 
+  bool get _canPlayCurrent {
+    final current = controller.current;
+    if (current == null) return false;
+    final playback = controller.playback;
+    final source = playback.track;
+    return !playback.requiresAuthentication ||
+        source?.providerId != current.providerId ||
+        source?.opaqueId != current.opaqueId;
+  }
+
   void _synchronize() => _publish();
+
+  void _positionDiscontinuity() {
+    final player = _player;
+    if (!_active || player == null || controller.current == null) return;
+    _publish(force: true);
+    unawaited(
+      player
+          .emitSeeked(Duration(milliseconds: controller.playback.positionMs))
+          .catchError((Object _) => _log('seeked', 'failed')),
+    );
+  }
 
   void _publish({bool force = false}) {
     final player = _player;
     if (!_active || player == null) return;
     final current = controller.current;
-    // Private in-memory equality only: metadata is never diagnostic output.
-    final signature = current == null
-        ? null
-        : '${current.providerId}\u0000${current.opaqueId}\u0000${controller.currentIndex}\u0000${current.title}\u0000${current.artistNames.join('\u0001')}\u0000${current.albumTitle}\u0000${current.durationSeconds}\u0000${current.artworkUri}';
-    if (force || signature != _itemSignature) {
-      _itemSignature = signature;
+    final selection = controller.currentSelectionRevision;
+    final selectionChanged = _publishedSelection != selection;
+    if (selectionChanged) {
+      _publishedSelection = selection;
       if (current == null) {
         player.clearMediaItem();
       } else {
-        player.updateMediaItem(current, index: controller.currentIndex!);
+        player.updateMediaItem(current, selection: selection);
       }
     }
     final playback = controller.playback;
+    final playable = _canPlayCurrent;
     final state = ProjectMprisPlaybackState(
       updatePosition: Duration(
         milliseconds: playback.positionMs.clamp(0, 1 << 62),
       ),
-      updateTime: DateTime.now(),
+      updateTime: _clock.elapsed,
       stage: playback.stage,
       repeatMode: controller.repeatMode,
       order: controller.order,
       volume: playback.volume,
       canGoNext: !playback.requiresAuthentication && controller.hasNext,
       canGoPrevious: !playback.requiresAuthentication && controller.hasPrevious,
-      canPlay: current != null && (playback.canResume || playback.canActivate),
-      canPause: playback.canPause,
+      canPlay: playable,
+      canPause: playable && (playback.canPause || playback.canResume),
       canSeek: playback.canSeek,
     );
     final previous = _lastState;
     if (!force &&
+        !selectionChanged &&
         previous != null &&
         previous.stage == state.stage &&
         previous.repeatMode == state.repeatMode &&
@@ -199,7 +244,7 @@ class FuraMprisSystemMediaEdge implements SystemMediaEdge {
       final projected =
           previous.updatePosition +
           (previous.stage == TrackPlaybackStage.playing
-              ? state.updateTime.difference(previous.updateTime)
+              ? state.updateTime - previous.updateTime
               : Duration.zero);
       if ((state.updatePosition - projected).abs() <
           const Duration(seconds: 2)) {
@@ -218,6 +263,9 @@ class FuraMprisSystemMediaEdge implements SystemMediaEdge {
     _active = false;
     await _activation?.then<void>((_) {}, onError: (Object _) {});
     controller.removeListener(_synchronize);
+    controller.playback.positionDiscontinuity.removeListener(
+      _positionDiscontinuity,
+    );
     await _subscription?.cancel();
     // Revoke queued commands. An already delegated operation belongs to the
     // controller, not this projection; waiting for (e.g.) a media resolution

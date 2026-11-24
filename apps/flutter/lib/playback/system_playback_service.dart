@@ -267,6 +267,7 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
   required LyricGateway lyricGateway,
   required ForegroundAudioEngine audioEngine,
   RelatedTracksGateway? relatedTracksGateway,
+  Future<void> Function()? onLinuxWindowRaise,
   @visibleForTesting
   ProjectAudioServiceInitializer audioServiceInitializer =
       _initializeProjectAudioService,
@@ -290,6 +291,7 @@ Future<AppPlaybackHost> initializeAppPlaybackHost({
     final edge = FuraMprisSystemMediaEdge(
       controller: controller,
       clientFactory: mprisClientFactory,
+      onRaise: onLinuxWindowRaise,
     );
     try {
       await edge.activate();

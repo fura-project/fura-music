@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:dbus/dbus.dart';
@@ -26,7 +25,7 @@ class ProjectMprisPlaybackState {
     this.canSeek = false,
   });
   final Duration updatePosition;
-  final DateTime updateTime;
+  final Duration updateTime;
   final TrackPlaybackStage stage;
   final PlaybackRepeatMode repeatMode;
   final PlaybackOrder order;
@@ -36,34 +35,47 @@ class ProjectMprisPlaybackState {
 
 enum ProjectMprisEventType {
   play,
+  playPause,
   pause,
   stop,
   next,
   previous,
   seek,
+  seekRelative,
   repeat,
   shuffle,
   volume,
 }
 
 class ProjectMprisEvent {
-  const ProjectMprisEvent(this.type, [this.value, this.trackId]);
+  const ProjectMprisEvent(
+    this.type, [
+    this.value,
+    this.trackId,
+    this.sourceGeneration,
+  ]);
 
   final ProjectMprisEventType type;
   final Object? value;
   // Captured at DBus receipt; a queued seek must still target this Track.
   final DBusObjectPath? trackId;
+  final int? sourceGeneration;
 }
 
 /// Project-owned MPRIS object. Public only so its protocol behavior can be
 /// regression-tested without requiring a desktop shell.
 class ProjectMprisPlayer extends DBusObject {
-  ProjectMprisPlayer({required this.identity, DateTime Function()? now})
-    : _now = now ?? DateTime.now,
-      super(DBusObjectPath(projectMprisObjectPath));
+  ProjectMprisPlayer({
+    required this.identity,
+    required this.now,
+    this.sourceGeneration,
+    this.onRaise,
+  }) : super(DBusObjectPath(projectMprisObjectPath));
 
   final String identity;
-  final DateTime Function() _now;
+  final Duration Function() now;
+  final int Function()? sourceGeneration;
+  final Future<void> Function()? onRaise;
   final StreamController<ProjectMprisEvent> _events =
       StreamController<ProjectMprisEvent>.broadcast();
   bool _closed = false;
@@ -76,7 +88,7 @@ class ProjectMprisPlayer extends DBusObject {
   double _volume = 1;
   double _rate = 1;
   Duration _position = Duration.zero;
-  DateTime _positionUpdatedAt = DateTime.fromMillisecondsSinceEpoch(0);
+  Duration _positionUpdatedAt = Duration.zero;
   _ProjectMprisMetadata _metadata = _ProjectMprisMetadata.empty();
   bool _canGoNext = false;
   bool _canGoPrevious = false;
@@ -93,7 +105,7 @@ class ProjectMprisPlayer extends DBusObject {
   Duration get position {
     var value = _position;
     if (_playbackStatus == 'Playing') {
-      final elapsed = _now().difference(_positionUpdatedAt);
+      final elapsed = now() - _positionUpdatedAt;
       if (!elapsed.isNegative) {
         value += Duration(
           microseconds: (elapsed.inMicroseconds * _rate).round(),
@@ -137,10 +149,10 @@ class ProjectMprisPlayer extends DBusObject {
     _setCapability('CanSeek', state.canSeek);
   }
 
-  void updateMediaItem(PlaylistTrackSummary item, {required int index}) {
+  void updateMediaItem(PlaylistTrackSummary item, {required int selection}) {
     if (_closed) return;
     _metadata = _ProjectMprisMetadata(
-      trackId: _trackIdFor('${item.providerId}:${item.opaqueId}:$index'),
+      trackId: DBusObjectPath('/com/fura/flutterustmusic/track/t$selection'),
       title: item.title,
       length: item.durationSeconds == null || item.durationSeconds! <= 0
           ? null
@@ -171,7 +183,7 @@ class ProjectMprisPlayer extends DBusObject {
 
   void stop() {
     _position = Duration.zero;
-    _positionUpdatedAt = _now();
+    _positionUpdatedAt = now();
     _setPlaybackStatus('Stopped');
   }
 
@@ -249,11 +261,14 @@ class ProjectMprisPlayer extends DBusObject {
     );
   }
 
-  void _acceptSeek(Duration value) {
-    _position = value;
-    _positionUpdatedAt = _now();
+  void _requestSeek(ProjectMprisEventType type, Duration value) {
     _events.add(
-      ProjectMprisEvent(ProjectMprisEventType.seek, value, _metadata.trackId),
+      ProjectMprisEvent(
+        type,
+        value,
+        _metadata.trackId,
+        sourceGeneration?.call(),
+      ),
     );
   }
 
@@ -267,6 +282,7 @@ class ProjectMprisPlayer extends DBusObject {
   List<DBusIntrospectInterface> introspect() => [
     DBusIntrospectInterface(
       'org.mpris.MediaPlayer2',
+      methods: [DBusIntrospectMethod('Raise'), DBusIntrospectMethod('Quit')],
       properties: [
         DBusIntrospectProperty(
           'CanQuit',
@@ -390,6 +406,24 @@ class ProjectMprisPlayer extends DBusObject {
   @override
   Future<DBusMethodResponse> handleMethodCall(DBusMethodCall methodCall) async {
     if (_closed) return DBusMethodErrorResponse.failed('MPRIS edge is closed.');
+    if (methodCall.interface == 'org.mpris.MediaPlayer2') {
+      final name = methodCall.name;
+      if (name != 'Raise' && name != 'Quit') {
+        return DBusMethodErrorResponse.unknownMethod();
+      }
+      if (methodCall.values.isNotEmpty) {
+        return DBusMethodErrorResponse.invalidArgs();
+      }
+      final raise = onRaise;
+      if (name == 'Raise' && raise != null) {
+        try {
+          await raise();
+        } on Object {
+          return DBusMethodErrorResponse.failed('Fura window is unavailable.');
+        }
+      }
+      return DBusMethodSuccessResponse([]);
+    }
     if (methodCall.interface != projectMprisPlayerInterface) {
       return DBusMethodErrorResponse.unknownMethod();
     }
@@ -420,13 +454,7 @@ class ProjectMprisPlayer extends DBusObject {
           return DBusMethodErrorResponse.invalidArgs();
         }
         if (_canPlay || _canPause) {
-          _events.add(
-            ProjectMprisEvent(
-              _playbackStatus == 'Playing'
-                  ? ProjectMprisEventType.pause
-                  : ProjectMprisEventType.play,
-            ),
-          );
+          _events.add(const ProjectMprisEvent(ProjectMprisEventType.playPause));
         }
       case 'Stop':
         if (methodCall.values.isNotEmpty) {
@@ -445,16 +473,10 @@ class ProjectMprisPlayer extends DBusObject {
           return DBusMethodErrorResponse.invalidArgs();
         }
         if (_canSeek) {
-          final target =
-              position + Duration(microseconds: methodCall.values[0].asInt64());
-          final length = _metadata.length;
-          if (length != null && target > length) {
-            if (_canGoNext) {
-              _events.add(const ProjectMprisEvent(ProjectMprisEventType.next));
-            }
-          } else {
-            _acceptSeek(target.isNegative ? Duration.zero : target);
-          }
+          _requestSeek(
+            ProjectMprisEventType.seekRelative,
+            Duration(microseconds: methodCall.values[0].asInt64()),
+          );
         }
       case 'SetPosition':
         if (methodCall.signature != DBusSignature('ox')) {
@@ -469,7 +491,7 @@ class ProjectMprisPlayer extends DBusObject {
             requestedTrack == _metadata.trackId &&
             !requested.isNegative &&
             (length == null || requested <= length)) {
-          _acceptSeek(requested);
+          _requestSeek(ProjectMprisEventType.seek, requested);
         }
       default:
         return DBusMethodErrorResponse.unknownMethod();
@@ -508,7 +530,7 @@ class ProjectMprisPlayer extends DBusObject {
 
   Map<String, DBusValue> get _rootProperties => {
     'CanQuit': const DBusBoolean(false),
-    'CanRaise': const DBusBoolean(false),
+    'CanRaise': DBusBoolean(onRaise != null),
     'HasTrackList': const DBusBoolean(false),
     'Identity': DBusString(identity),
     'DesktopEntry': const DBusString('com.fura.flutterustmusic'),
@@ -541,6 +563,11 @@ class ProjectMprisPlayer extends DBusObject {
     DBusValue value,
   ) async {
     if (_closed) return DBusMethodErrorResponse.failed('MPRIS edge is closed.');
+    if (interface == 'org.mpris.MediaPlayer2') {
+      return _rootProperties.containsKey(name)
+          ? DBusMethodErrorResponse.propertyReadOnly()
+          : DBusMethodErrorResponse.unknownProperty();
+    }
     if (interface != projectMprisPlayerInterface) {
       return DBusMethodErrorResponse.unknownProperty();
     }
@@ -632,14 +659,6 @@ class _ProjectMprisMetadata {
   }
 }
 
-DBusObjectPath _trackIdFor(String mediaId) {
-  final encoded = base64Url
-      .encode(utf8.encode(mediaId))
-      .replaceAll('-', '_')
-      .replaceAll('=', '');
-  return DBusObjectPath('/com/fura/flutterustmusic/track/t$encoded');
-}
-
 String _safeBusSuffix(String value) => value
     .split('.')
     .map((part) {
@@ -652,11 +671,24 @@ String _safeBusSuffix(String value) => value
 String projectMprisServiceName(String serviceId) =>
     'org.mpris.MediaPlayer2.${_safeBusSuffix(serviceId)}.instance$pid';
 
+final _artworkResize = RegExp(r'^param=[0-9]{1,4}y[0-9]{1,4}$');
+
 String? _safeArtwork(String? value) {
   final uri = value == null ? null : Uri.tryParse(value);
-  return uri != null &&
-          uri.hasAuthority &&
-          (uri.scheme == 'https' || uri.scheme == 'http')
-      ? uri.toString()
-      : null;
+  if (uri == null ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasFragment ||
+      (uri.scheme != 'https' && uri.scheme != 'http')) {
+    return null;
+  }
+  // Only known public image transforms belong on the session bus. Unknown
+  // query parameters may be signed delivery URLs or carry account context.
+  if (uri.hasQuery &&
+      !uri.query
+          .split('&')
+          .every((part) => part == 'n=1' || _artworkResize.hasMatch(part))) {
+    return null;
+  }
+  return uri.toString();
 }

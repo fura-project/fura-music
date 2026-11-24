@@ -6079,7 +6079,7 @@ mod tests {
             .track_comments(
                 qq_track_id("track:41001:0:fixtureTrackMid1:fixtureFileMid1"),
                 0,
-                20,
+                1,
             )
             .await
             .expect("provider comments");
@@ -6140,7 +6140,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_foreign_comment_identity_and_maps_comment_failures() {
-        let provider = QqMusicProvider::new(QqMusicClient::new(SearchTransport::new(&json!({}))));
+        let provider = QqMusicProvider::new(QqMusicClient::new(MediaTransport::new([])));
         let foreign = TrackId::new(
             ProviderId::new("local").expect("provider"),
             "track:41001:0:fixtureTrackMid1:fixtureFileMid1",
@@ -6150,6 +6150,12 @@ mod tests {
             provider.track_comments(foreign, 0, 20).await,
             Err(CommentsError::InvalidResponse)
         );
+        let mid_only = qq_track_id("track:-:-:recentTrackMid:-");
+        assert_eq!(
+            provider.track_comments(mid_only, 0, 20).await,
+            Err(CommentsError::InvalidResponse)
+        );
+        assert!(provider.client().transport().requests().is_empty());
         assert_eq!(
             super::map_comments_error(&QqMusicTrackCommentsError::<Infallible>::HttpStatus(503)),
             CommentsError::ServiceUnavailable

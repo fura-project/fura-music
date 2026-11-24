@@ -19,9 +19,36 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+// Presents the window that owns the current Flutter engine. The compositor
+// decides whether to grant keyboard focus.
+static void handle_window_method(FlMethodChannel*,
+                                 FlMethodCall* call,
+                                 gpointer user_data) {
+  GtkWindow* window = GTK_WINDOW(user_data);
+  g_autoptr(FlMethodResponse) response = nullptr;
+  if (g_strcmp0(fl_method_call_get_name(call), "raise") != 0) {
+    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
+  } else if (!gtk_widget_get_visible(GTK_WIDGET(window))) {
+    response = FL_METHOD_RESPONSE(
+        fl_method_error_response_new("window_not_ready", nullptr, nullptr));
+  } else {
+    gtk_window_present(window);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  }
+  fl_method_call_respond(call, response, nullptr);
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+  GList* windows = gtk_application_get_windows(GTK_APPLICATION(application));
+  if (windows != nullptr) {
+    GtkWindow* existing = GTK_WINDOW(windows->data);
+    if (gtk_widget_get_visible(GTK_WIDGET(existing))) {
+      gtk_window_present(existing);
+    }
+    return;
+  }
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
@@ -74,6 +101,15 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  FlMethodChannel* window_channel = fl_method_channel_new(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)),
+      "com.fura.flutterustmusic/window", FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(window_channel, handle_window_method,
+                                            window, nullptr);
+  g_object_set_data_full(G_OBJECT(view), "fura-window-channel", window_channel,
+                         g_object_unref);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
