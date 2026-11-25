@@ -3319,6 +3319,42 @@ class AppLocalizationsZh extends AppLocalizations {
   String partialResultsNotice(int count) {
     return '部分内容无法安全显示，已跳过 $count 项，其余结果不受影响。';
   }
+
+  @override
+  String collectionSearchPartialNotice(int count) {
+    return '收藏集合中有 $count 首歌曲暂无法显示，可能影响搜索完整性。';
+  }
+
+  @override
+  String get likedSearchPausedTitle => '搜索已达到单次检查上限';
+
+  @override
+  String likedSearchPausedDetail(int processed, int total) {
+    return '已检查 $processed / $total 首，暂未找到匹配。可继续搜索剩余歌曲。';
+  }
+
+  @override
+  String likedSearchPausedStatus(String results, int processed, int total) {
+    return '已找到 $results · 已检查 $processed / $total 首（已暂停）';
+  }
+
+  @override
+  String likedPlayFiltered(int count) {
+    return '播放 $count 首匹配结果';
+  }
+
+  @override
+  String likedPlayFilteredSoFar(int count) {
+    return '播放已找到的 $count 首';
+  }
+
+  @override
+  String recentSearchPaused(int processed) {
+    return '已检查 $processed 首并暂停，可继续搜索剩余记录。';
+  }
+
+  @override
+  String get recentSearchInterrupted => '搜索暂时中断，已加载的记录仍可搜索。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).

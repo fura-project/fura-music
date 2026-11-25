@@ -9,9 +9,13 @@ const _providerDiagnosticSetting = String.fromEnvironment(
 /// Enable with `--dart-define=FURA_PROVIDER_DIAGNOSTIC=1` (or `true`). The
 /// typed API deliberately has no identity, query, URL, credential or response
 /// fields, so callers cannot accidentally include account or catalog content.
+@visibleForTesting
+bool? debugProviderDiagnosticsEnabledOverride;
+
 bool get providerDiagnosticsEnabled =>
-    _providerDiagnosticSetting == '1' ||
-    _providerDiagnosticSetting.toLowerCase() == 'true';
+    (kDebugMode ? debugProviderDiagnosticsEnabledOverride : null) ??
+    (_providerDiagnosticSetting == '1' ||
+        _providerDiagnosticSetting.toLowerCase() == 'true');
 
 enum ProviderDiagnosticOperation {
   trackMembership,

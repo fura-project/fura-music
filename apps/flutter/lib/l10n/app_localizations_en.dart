@@ -3635,4 +3635,60 @@ class AppLocalizationsEn extends AppLocalizations {
     );
     return '$_temp0';
   }
+
+  @override
+  String collectionSearchPartialNotice(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count tracks in this collection cannot be displayed, which may affect search completeness.',
+      one: '1 track in this collection cannot be displayed, which may affect search completeness.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get likedSearchPausedTitle => 'Search paused at check limit';
+
+  @override
+  String likedSearchPausedDetail(int processed, int total) {
+    return 'Checked $processed of $total tracks with no matches yet. Continue search to check remaining tracks.';
+  }
+
+  @override
+  String likedSearchPausedStatus(String results, int processed, int total) {
+    return 'Found $results · paused after checking $processed / $total tracks';
+  }
+
+  @override
+  String likedPlayFiltered(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Play $count matching tracks',
+      one: 'Play 1 matching track',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String likedPlayFilteredSoFar(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Play $count found so far',
+      one: 'Play 1 found so far',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String recentSearchPaused(int processed) {
+    return 'Paused after checking $processed tracks. Continue to search remaining records.';
+  }
+
+  @override
+  String get recentSearchInterrupted =>
+      'Search interrupted. Loaded records remain searchable.';
 }

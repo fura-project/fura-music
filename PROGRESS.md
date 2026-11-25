@@ -1,15 +1,68 @@
 ---
 execution:
   mode: HUMAN_DIRECTED
-  work_domain: CORE
-  state: DEVICE_REQUIRED
-  acceptance_milestone: HD_037_PRODUCTION_PLAYBACK_CONVERGENCE
-  active_workstream: PRODUCTION_PLAYBACK_STACK_CONVERGENCE
-  current_task: RETIRE_PLAYBACK_EXPERIMENTS_AND_VERIFY_PLATFORM_OWNERSHIP
-  next_action: VALIDATE_ANDROID_DEVICE_AND_APPLE_WINDOWS_NATIVE_RUNTIMES
+  work_domain: MIXED
+  state: HUMAN_REVIEW
+  acceptance_milestone: HD_038_COLLECTION_SEARCH_IDENTITY_RADAR_CONVERGENCE
+  active_workstream: COLLECTION_LOADING_SEARCH_IDENTITY_CONVERGENCE
+  current_task: VERIFY_COMPLETE_COLLECTION_SEARCH_IDENTITY_AND_RADAR_CONVERGENCE
+  next_action: HUMAN_REVIEW_SEARCH_UI_AND_OPTIONAL_LIVE_TRACK_DETAIL_GATES
 ---
 
 # Current State
+
+- **2026-11-25 HD-038 collection search completeness, historical track identity & Radar convergence:**
+  Decoupled collection data reading, search coverage, list rendering virtualization,
+  and playback Queue continuation inside existing owners without introducing a
+  generic `CollectionManager`, second account cache, or external index dependency:
+  1. **Workstream A (Collection Search & Shared Cache Hardening):** Added read-only
+     `CachedPlaylistTrackPagesGateway` over validated contiguous shared pages in
+     `TrackLikePresentationController`, `PagedTracksController.requestSearchCoverage`
+     (synchronous zero-HTTP warm-cache drain + bounded progressive remote scan up to
+     50 pages without the old 2-page / 20-match cutoff), and active-tab/query-replacement
+     lifecycle fixes across `LikedSongsPage`, `RecentPlaysPage`, and `UserLibraryPage`.
+     Fixed 4 shared-cache defects in `TrackLikePresentationController` (refresh/mutation
+     revision fences against late non-cooperative Futures, unified `isValidRawOffsetPage`
+     + provider validation, immediate `_sharedPages` invalidation on every confirmed
+     mutation, and accurate `networkRequests` diagnostic accounting). Optimized
+     `PlaylistTrackSearchIndex` (`collectionGeneration` O(1) append fast path, single-pass
+     normalization, reusable 3-row `Uint8List(65)` Damerau-Levenshtein; 50k incremental
+     append 5,667 ms -> 733 ms, 7.7x faster; 1,117-track warm search 4.9 ms / 0 extra HTTP).
+  2. **Workstream B (Historical Track Identity & Calm Partial-Result Presentation):**
+     Added 6-way `SongMidFailureReason` classification and `QqMusicOmittedTrackCandidate`
+     in `crates/qqmusic-client/src/playlist_detail.rs` while preserving numeric
+     `(track_id, song_type)` membership independently; built exact
+     `music.pf_song_detail_svr/get_song_detail_yqq` (`song_id: u64`) lookup in
+     `crates/qqmusic-client/src/track_detail.rs` + opt-in 2-request anonymous gate
+     `crates/qqmusic-client/tests/live_track_detail.rs` (not executed automatically) and
+     bounded single-flight session-scoped `QqMusicProvider::recover_omitted_tracks`
+     (`MAX_OMITTED_TRACK_RECOVERY_BUDGET = 3`, strict `(id, song_type, safe_mid)` check,
+     non-blocking on production playlist reads). Replaced reddish `tertiaryContainer`
+     styling in `PartialResultsNotice` with calm neutral surface across Material 3 and
+     Magazine Editorial, added collection-scoped search copy (`collectionSearchPartialNotice`),
+     and prevented repeated live-region announcements on query replacement.
+  3. **Workstream C (Radar Fill, Session Sharing & Playback Modes):** Serialized
+     `RadarController` initial prefetch into `_appendPump`, raised Discover Radar initial
+     fill to `initialPrefetchTarget: 30, maxInitialPrefetchPages: 3` (keeping Home preview
+     at 1 page), shared per-refresh pending/resolved pages via ref-counted `_RadarSessionPages`
+     across `RadarController` and detached `CollectionPlaybackSource` with exact cross-page
+     dedup, decoupled `QueuePlaybackController.replaceAndPlayCollection` initial fill from
+     slow first-track media resolution (20/30/50 tracks filled in 33/44/66 ms while 120 ms
+     media resolution remained pending), separated bounded initial Queue fill (allowed in
+     Shuffle / Repeat One / Repeat All) from ongoing `sequential && repeat-off` continuation
+     while preserving `_collectionSource` across mode toggles, and updated Rust
+     `PlaybackQueue::extend` to mix appended tracks into the unplayed shuffle tail without
+     disturbing the played prefix.
+  - **Verification:** `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+    `cargo test --workspace --all-targets` (**833 passed, 0 failed, 37 ignored** across 45 suites),
+    `dart format --output=none --set-exit-if-changed lib test integration_test` (317 files, 0 changed),
+    `dart analyze` (0 issues), full `flutter test` (**1,198/1,198 passed**, including S01–S10,
+    R01–R10, P01–P06, 7A–7D, Section 13 layout/theme/announcement checks, and adversarial concurrency/mutation/reuse regressions), `flutter build linux --release --no-pub`,
+    synthetic Linux runtime `integration_test/linux_playback_reliability_test.dart -d linux`
+    (2/2 passed: libmpv + real Rust Queue + direct MPRIS), `python3 scripts/ci/test_privacy_audits.py`
+    (49 passed, 1 macOS-only skip), and `git diff --check`. Live QQ track-detail / offset-400
+    probes and real-device/UI visual checks remain `HUMAN_REVIEW`.
+    [Convergence research archive](docs/research/collection-loading-search-convergence-2026-11-25.md).
 
 - **2026-11-24 QQ real-data and Linux desktop compatibility:** The live
   Liked Songs partial notice came from a display row rejected at SongMid

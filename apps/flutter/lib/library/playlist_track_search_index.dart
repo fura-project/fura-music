@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 
 class PlaylistTrackSearchResult {
@@ -20,36 +22,65 @@ class PlaylistTrackSearchResult {
 /// the index instead of mixing snapshots.
 class PlaylistTrackSearchIndex {
   final List<_IndexedTrack> _entries = [];
-  final List<String> _fingerprints = [];
+  final List<PlaylistTrackSummary> _sourceTracks = [];
+  final List<String?> _fingerprints = [];
+  final Uint8List _prev2 = Uint8List(65);
+  final Uint8List _prev1 = Uint8List(65);
+  final Uint8List _curr = Uint8List(65);
+  int? _collectionGeneration;
   int _version = 0;
   int _cachedVersion = -1;
   String? _cachedQuery;
   PlaylistTrackSearchResult _cachedResult = const PlaylistTrackSearchResult();
 
-  void update(List<PlaylistTrackSummary> tracks) {
-    var appendOnly = tracks.length >= _entries.length;
-    if (appendOnly) {
-      for (var index = 0; index < _entries.length; index += 1) {
-        if (_fingerprint(tracks[index]) != _fingerprints[index]) {
-          appendOnly = false;
-          break;
+  void update(List<PlaylistTrackSummary> tracks, {int? collectionGeneration}) {
+    final existingLength = _entries.length;
+    var appendOnly = tracks.length >= existingLength;
+    if (appendOnly && existingLength > 0) {
+      if (collectionGeneration != null &&
+          collectionGeneration == _collectionGeneration) {
+        appendOnly =
+            identical(tracks[0], _sourceTracks[0]) &&
+            identical(
+              tracks[existingLength - 1],
+              _sourceTracks[existingLength - 1],
+            );
+      } else {
+        for (var index = 0; index < existingLength; index += 1) {
+          final incoming = tracks[index];
+          final previous = _sourceTracks[index];
+          if (identical(incoming, previous)) continue;
+          final previousFingerprint = _fingerprints[index] ??= _fingerprint(
+            previous,
+          );
+          if (_fingerprint(incoming) != previousFingerprint) {
+            appendOnly = false;
+            break;
+          }
         }
       }
     }
-    if (appendOnly && tracks.length == _entries.length) return;
+    if (appendOnly && tracks.length == existingLength) {
+      _collectionGeneration = collectionGeneration;
+      return;
+    }
     if (!appendOnly) {
       _entries.clear();
+      _sourceTracks.clear();
       _fingerprints.clear();
     }
     for (var index = _entries.length; index < tracks.length; index += 1) {
       final track = tracks[index];
       _entries.add(_IndexedTrack(track, index));
-      _fingerprints.add(_fingerprint(track));
+      _sourceTracks.add(track);
+      _fingerprints.add(null);
     }
     if (_entries.length != tracks.length) {
       _entries.removeRange(tracks.length, _entries.length);
+      _sourceTracks.removeRange(tracks.length, _sourceTracks.length);
       _fingerprints.removeRange(tracks.length, _fingerprints.length);
     }
+    _collectionGeneration = collectionGeneration;
     _version += 1;
   }
 
@@ -61,8 +92,22 @@ class PlaylistTrackSearchIndex {
     }
 
     final queryTokens = query.split(' ');
+    final queryTokenCount = queryTokens.length;
+    final tokenCanFuzzy = List<bool>.generate(
+      queryTokenCount,
+      (index) => _canFuzzyMatch(queryTokens[index]),
+      growable: false,
+    );
+    final tokenMaxDistance = List<int>.generate(
+      queryTokenCount,
+      (index) => _maximumEditDistance(queryTokens[index]),
+      growable: false,
+    );
+    final anyFuzzyEligible = tokenCanFuzzy.any((eligible) => eligible);
+
     final matches = <_ScoredTrack>[];
-    for (final entry in _entries) {
+    for (var i = 0; i < _entries.length; i += 1) {
+      final entry = _entries[i];
       final exactScore = entry.exactScore(query, queryTokens);
       if (exactScore != null) {
         matches.add(
@@ -70,7 +115,13 @@ class PlaylistTrackSearchIndex {
         );
         continue;
       }
-      final fuzzyScore = entry.fuzzyScore(queryTokens);
+      if (!anyFuzzyEligible) continue;
+      final fuzzyScore = _fuzzyScore(
+        entry,
+        queryTokens,
+        tokenCanFuzzy,
+        tokenMaxDistance,
+      );
       if (fuzzyScore != null) {
         matches.add(
           _ScoredTrack(entry.track, entry.position, fuzzyScore, false),
@@ -81,70 +132,50 @@ class PlaylistTrackSearchIndex {
       final byScore = left.score.compareTo(right.score);
       return byScore != 0 ? byScore : left.position.compareTo(right.position);
     });
-    final exactMatchCount = matches.where((match) => match.exact).length;
+    var exactMatchCount = 0;
+    for (var i = 0; i < matches.length; i += 1) {
+      if (matches[i].exact) exactMatchCount += 1;
+    }
     _cachedVersion = _version;
     _cachedQuery = query;
     _cachedResult = PlaylistTrackSearchResult(
-      tracks: List.unmodifiable(matches.map((match) => match.track)),
+      tracks: List.unmodifiable([for (final match in matches) match.track]),
       exactMatchCount: exactMatchCount,
     );
     return _cachedResult;
   }
-}
 
-class _IndexedTrack {
-  _IndexedTrack(this.track, this.position)
-    : fields = List.unmodifiable(
-        [
-          track.title,
-          ?track.subtitle,
-          ...track.artistNames,
-          ?track.albumTitle,
-        ].map(normalizePlaylistSearchText).where((value) => value.isNotEmpty),
-      ),
-      tokens = List.unmodifiable(
-        [track.title, ?track.subtitle, ...track.artistNames, ?track.albumTitle]
-            .map(normalizePlaylistSearchText)
-            .where((value) => value.isNotEmpty)
-            .expand((value) => value.split(' '))
-            .where((value) => value.isNotEmpty)
-            .toSet(),
-      );
-
-  final PlaylistTrackSummary track;
-  final int position;
-  final List<String> fields;
-  final List<String> tokens;
-
-  int? exactScore(String query, List<String> queryTokens) {
-    if (fields.any((field) => field == query)) return 0;
-    if (fields.any((field) => field.startsWith(query))) return 1;
-    if (fields.any((field) => field.contains(query))) return 2;
-    if (queryTokens.length > 1 &&
-        queryTokens.every(
-          (queryToken) => fields.any((field) => field.contains(queryToken)),
-        )) {
-      return 3;
-    }
-    return null;
-  }
-
-  int? fuzzyScore(List<String> queryTokens) {
+  int? _fuzzyScore(
+    _IndexedTrack entry,
+    List<String> queryTokens,
+    List<bool> tokenCanFuzzy,
+    List<int> tokenMaxDistance,
+  ) {
+    final tokens = entry.tokens;
     var distance = 0;
     var usedApproximation = false;
-    for (final queryToken in queryTokens) {
-      if (tokens.any((token) => token.contains(queryToken))) continue;
-      if (!_canFuzzyMatch(queryToken)) return null;
+    for (var q = 0; q < queryTokens.length; q += 1) {
+      final queryToken = queryTokens[q];
+      var contained = false;
+      for (var t = 0; t < tokens.length; t += 1) {
+        if (tokens[t].contains(queryToken)) {
+          contained = true;
+          break;
+        }
+      }
+      if (contained) continue;
+      if (!tokenCanFuzzy[q]) return null;
+      final maximumDistance = tokenMaxDistance[q];
       int? best;
-      for (final token in tokens) {
-        final maximumDistance = _maximumEditDistance(queryToken);
+      for (var t = 0; t < tokens.length; t += 1) {
         final candidate = _boundedEditDistance(
           queryToken,
-          token,
+          tokens[t],
           maximumDistance,
         );
         if (candidate != null && (best == null || candidate < best)) {
           best = candidate;
+          if (best == 1) break;
         }
       }
       if (best == null) return null;
@@ -152,6 +183,176 @@ class _IndexedTrack {
       distance += best;
     }
     return usedApproximation ? 10 + distance : null;
+  }
+
+  int? _boundedEditDistance(String left, String right, int maximum) {
+    final leftLength = left.length;
+    final rightLength = right.length;
+    if ((leftLength - rightLength).abs() > maximum || rightLength > 64) {
+      return null;
+    }
+    if (maximum == 1) {
+      return _editDistanceAtMostOne(left, right);
+    }
+    return _editDistanceWithBuffers(left, right, maximum);
+  }
+
+  int? _editDistanceAtMostOne(String left, String right) {
+    final leftLength = left.length;
+    final rightLength = right.length;
+    if (leftLength == rightLength) {
+      var mismatch = -1;
+      for (var i = 0; i < leftLength; i += 1) {
+        if (left.codeUnitAt(i) != right.codeUnitAt(i)) {
+          mismatch = i;
+          break;
+        }
+      }
+      if (mismatch == -1) return 0;
+      // Single substitution check.
+      var substitution = true;
+      for (var i = mismatch + 1; i < leftLength; i += 1) {
+        if (left.codeUnitAt(i) != right.codeUnitAt(i)) {
+          substitution = false;
+          break;
+        }
+      }
+      if (substitution) return 1;
+      // Adjacent transposition check.
+      if (mismatch + 1 < leftLength &&
+          left.codeUnitAt(mismatch) == right.codeUnitAt(mismatch + 1) &&
+          left.codeUnitAt(mismatch + 1) == right.codeUnitAt(mismatch)) {
+        for (var i = mismatch + 2; i < leftLength; i += 1) {
+          if (left.codeUnitAt(i) != right.codeUnitAt(i)) return null;
+        }
+        return 1;
+      }
+      return null;
+    }
+
+    // Length difference is strictly 1 (insertion or deletion).
+    final shorter = leftLength < rightLength ? left : right;
+    final longer = leftLength < rightLength ? right : left;
+    final shortLength = shorter.length;
+    var mismatch = 0;
+    while (mismatch < shortLength &&
+        shorter.codeUnitAt(mismatch) == longer.codeUnitAt(mismatch)) {
+      mismatch += 1;
+    }
+    for (var i = mismatch; i < shortLength; i += 1) {
+      if (shorter.codeUnitAt(i) != longer.codeUnitAt(i + 1)) return null;
+    }
+    return 1;
+  }
+
+  int? _editDistanceWithBuffers(String left, String right, int maximum) {
+    final leftLength = left.length;
+    final rightLength = right.length;
+    final prev2 = _prev2;
+    final prev1 = _prev1;
+    final curr = _curr;
+    for (var column = 0; column <= rightLength; column += 1) {
+      prev1[column] = column;
+    }
+    var prevRowMin = 0;
+    for (var row = 1; row <= leftLength; row += 1) {
+      final leftChar = left.codeUnitAt(row - 1);
+      final leftPrevChar = row > 1 ? left.codeUnitAt(row - 2) : -1;
+      curr[0] = row;
+      var rowMin = row;
+      for (var column = 1; column <= rightLength; column += 1) {
+        final rightChar = right.codeUnitAt(column - 1);
+        var distance = prev1[column - 1] + (leftChar == rightChar ? 0 : 1);
+        final insertion = curr[column - 1] + 1;
+        final deletion = prev1[column] + 1;
+        if (insertion < distance) distance = insertion;
+        if (deletion < distance) distance = deletion;
+        if (row > 1 &&
+            column > 1 &&
+            leftChar == right.codeUnitAt(column - 2) &&
+            leftPrevChar == rightChar) {
+          final transposition = prev2[column - 2] + 1;
+          if (transposition < distance) distance = transposition;
+        }
+        curr[column] = distance;
+        if (distance < rowMin) rowMin = distance;
+      }
+      if (rowMin > maximum && prevRowMin > maximum) {
+        return null;
+      }
+      prevRowMin = rowMin;
+      for (var column = 0; column <= rightLength; column += 1) {
+        prev2[column] = prev1[column];
+        prev1[column] = curr[column];
+      }
+    }
+    final distance = prev1[rightLength];
+    return distance <= maximum ? distance : null;
+  }
+}
+
+class _IndexedTrack {
+  factory _IndexedTrack(PlaylistTrackSummary track, int position) {
+    final fields = <String>[];
+    final tokenSet = <String>{};
+    void addRaw(String? raw) {
+      if (raw == null || raw.isEmpty) return;
+      final normalized = normalizePlaylistSearchText(raw);
+      if (normalized.isEmpty) return;
+      fields.add(normalized);
+      for (final token in normalized.split(' ')) {
+        if (token.isNotEmpty) tokenSet.add(token);
+      }
+    }
+
+    addRaw(track.title);
+    addRaw(track.subtitle);
+    for (var i = 0; i < track.artistNames.length; i += 1) {
+      addRaw(track.artistNames[i]);
+    }
+    addRaw(track.albumTitle);
+    return _IndexedTrack._(
+      track,
+      position,
+      List.unmodifiable(fields),
+      List.unmodifiable(tokenSet),
+    );
+  }
+
+  const _IndexedTrack._(this.track, this.position, this.fields, this.tokens);
+
+  final PlaylistTrackSummary track;
+  final int position;
+  final List<String> fields;
+  final List<String> tokens;
+
+  int? exactScore(String query, List<String> queryTokens) {
+    var best = 4;
+    for (var i = 0; i < fields.length; i += 1) {
+      final field = fields[i];
+      if (field == query) return 0;
+      if (best > 1 && field.startsWith(query)) {
+        best = 1;
+      } else if (best > 2 && field.contains(query)) {
+        best = 2;
+      }
+    }
+    if (best < 4) return best;
+    if (queryTokens.length > 1) {
+      for (var q = 0; q < queryTokens.length; q += 1) {
+        final queryToken = queryTokens[q];
+        var matched = false;
+        for (var i = 0; i < fields.length; i += 1) {
+          if (fields[i].contains(queryToken)) {
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) return null;
+      }
+      return 3;
+    }
+    return null;
   }
 }
 
@@ -202,44 +403,6 @@ bool _canFuzzyMatch(String token) =>
     );
 
 int _maximumEditDistance(String token) => token.length >= 8 ? 2 : 1;
-
-int? _boundedEditDistance(String left, String right, int maximum) {
-  if ((left.length - right.length).abs() > maximum || right.length > 64) {
-    return null;
-  }
-  final rows = List.generate(
-    left.length + 1,
-    (row) => List<int>.filled(right.length + 1, 0),
-  );
-  for (var row = 0; row <= left.length; row += 1) {
-    rows[row][0] = row;
-  }
-  for (var column = 0; column <= right.length; column += 1) {
-    rows[0][column] = column;
-  }
-  for (var row = 1; row <= left.length; row += 1) {
-    for (var column = 1; column <= right.length; column += 1) {
-      final substitution =
-          rows[row - 1][column - 1] +
-          (left.codeUnitAt(row - 1) == right.codeUnitAt(column - 1) ? 0 : 1);
-      var distance = substitution;
-      final insertion = rows[row][column - 1] + 1;
-      final deletion = rows[row - 1][column] + 1;
-      if (insertion < distance) distance = insertion;
-      if (deletion < distance) distance = deletion;
-      if (row > 1 &&
-          column > 1 &&
-          left.codeUnitAt(row - 1) == right.codeUnitAt(column - 2) &&
-          left.codeUnitAt(row - 2) == right.codeUnitAt(column - 1)) {
-        final transposition = rows[row - 2][column - 2] + 1;
-        if (transposition < distance) distance = transposition;
-      }
-      rows[row][column] = distance;
-    }
-  }
-  final distance = rows[left.length][right.length];
-  return distance <= maximum ? distance : null;
-}
 
 String _fingerprint(PlaylistTrackSummary track) => [
   track.providerId,

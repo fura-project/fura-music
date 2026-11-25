@@ -48,6 +48,7 @@ mod rankings;
 mod recent_plays;
 mod recommendations;
 mod search;
+mod track_detail;
 #[cfg(any(test, feature = "track-like-status-research"))]
 mod track_like_status;
 mod track_likes;
@@ -130,8 +131,8 @@ pub use playlist_containers::{
 };
 pub use playlist_detail::{
     PlaylistDetailTrackField, QqMusicAlbumSummary, QqMusicArtistSummary,
-    QqMusicPlaylistDetailError, QqMusicPlaylistTracksPage, QqMusicTrackMembershipIdentity,
-    QqMusicTrackSummary,
+    QqMusicOmittedTrackCandidate, QqMusicPlaylistDetailError, QqMusicPlaylistTracksPage,
+    QqMusicTrackMembershipIdentity, QqMusicTrackSummary, SongMidFailureReason,
 };
 pub use playlist_search::{
     PlaylistSearchField, QqMusicPlaylistSearchError, QqMusicPlaylistSearchPage,
@@ -155,6 +156,7 @@ pub use recommendations::{
     RecommendedPlaylistField,
 };
 pub use search::{QqMusicSearchError, QqMusicTrackSearchPage, SearchTrackField};
+pub use track_detail::QqMusicTrackDetailError;
 #[cfg(any(test, feature = "track-like-status-research"))]
 pub use track_like_status::{
     MAX_TRACK_LIKE_STATUS_BATCH_SIZE, QqMusicTrackLikeStatus, QqMusicTrackLikeStatusBatch,

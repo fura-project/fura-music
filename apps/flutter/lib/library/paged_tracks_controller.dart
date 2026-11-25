@@ -22,6 +22,8 @@ enum CollectionSearchScanStage { idle, scanning, paused, complete, interrupted }
 class PagedTracksController extends ChangeNotifier {
   PagedTracksController(
     this._beginLoad, {
+    this._readCachedContinuation,
+    this._readCachedSnapshotRevision,
     this.loadAllPageInterval = const Duration(milliseconds: 180),
     this.postTransientPageInterval = const Duration(milliseconds: 500),
     this.transientRetryDelays = const [
@@ -32,9 +34,13 @@ class PagedTracksController extends ChangeNotifier {
   }) : _delay = delay ?? ((duration) => Future<void>.delayed(duration));
 
   static const pageSize = 100;
+  static const defaultSearchPageBudget = 50;
 
   final PlaylistTrackPageLoadOperation Function(int offset, int size)
   _beginLoad;
+  final List<PlaylistTrackPageResult> Function(int fromOffset, int size)?
+  _readCachedContinuation;
+  final int? Function()? _readCachedSnapshotRevision;
   final Duration loadAllPageInterval;
   final Duration postTransientPageInterval;
   final List<Duration> transientRetryDelays;
@@ -42,6 +48,8 @@ class PagedTracksController extends ChangeNotifier {
 
   PlaylistDetailStage _stage = PlaylistDetailStage.loading;
   List<PlaylistTrackSummary> _tracks = const [];
+  final Set<String> _seenTrackKeys = <String>{};
+  int _snapshotGeneration = 0;
   UserLibraryFailure? _failure;
   int _total = 0;
   bool _totalIsExact = true;
@@ -63,11 +71,14 @@ class PagedTracksController extends ChangeNotifier {
   CollectionSearchScanStage _searchScanStage = CollectionSearchScanStage.idle;
   int _prefetchTarget = 0;
   int _prefetchPages = 0;
+  int? _loadedCacheRevision;
+  bool _lastPageWasSynchronous = false;
   Duration _estimatedPageLatency = const Duration(milliseconds: 350);
   bool _disposed = false;
 
   PlaylistDetailStage get stage => _stage;
   List<PlaylistTrackSummary> get tracks => _tracks;
+  int get snapshotGeneration => _snapshotGeneration;
   UserLibraryFailure? get failure => _failure;
   int get total => _total;
   bool get totalIsExact => _totalIsExact;
@@ -160,6 +171,7 @@ class PagedTracksController extends ChangeNotifier {
     _isLoadingAll = false;
     _operation?.cancel();
     final latency = Stopwatch()..start();
+    final cacheRevision = _readCachedSnapshotRevision?.call();
     final operation = _beginLoad(0, pageSize);
     _operation = operation;
     _failure = null;
@@ -176,6 +188,7 @@ class PagedTracksController extends ChangeNotifier {
         operation: operation,
         result: result,
         preserveSnapshot: preserveSnapshot,
+        cacheRevision: cacheRevision,
         elapsed: latency.elapsed,
       );
     });
@@ -185,6 +198,9 @@ class PagedTracksController extends ChangeNotifier {
 
     if (!preserveSnapshot) {
       _tracks = const [];
+      _seenTrackKeys.clear();
+      _loadedCacheRevision = null;
+      _snapshotGeneration += 1;
       _total = 0;
       _totalIsExact = true;
       _hasMore = false;
@@ -201,6 +217,7 @@ class PagedTracksController extends ChangeNotifier {
     required PlaylistTrackPageLoadOperation operation,
     required PlaylistTrackPageResult result,
     required bool preserveSnapshot,
+    required int? cacheRevision,
     required Duration elapsed,
   }) {
     if (identical(_operation, operation)) _operation = null;
@@ -216,6 +233,13 @@ class PagedTracksController extends ChangeNotifier {
     if (validSuccess) {
       _recordPageLatency(elapsed);
       _tracks = List.unmodifiable(result.tracks);
+      _seenTrackKeys
+        ..clear()
+        ..addAll(
+          _tracks.map((track) => '${track.providerId}\u0000${track.opaqueId}'),
+        );
+      _loadedCacheRevision = cacheRevision;
+      _snapshotGeneration += 1;
       _total = result.total;
       _totalIsExact = result.totalIsExact;
       _hasMore = hasMore;
@@ -234,6 +258,8 @@ class PagedTracksController extends ChangeNotifier {
       _refreshFailure = result.failure ?? UserLibraryFailure.invalidResponse;
     } else {
       _tracks = const [];
+      _seenTrackKeys.clear();
+      _snapshotGeneration += 1;
       _total = 0;
       _totalIsExact = true;
       _hasMore = false;
@@ -294,6 +320,78 @@ class PagedTracksController extends ChangeNotifier {
     _prefetchPages = 0;
   }
 
+  /// Supplies bounded collection-search coverage decoupled from list scroll
+  /// position.
+  ///
+  /// Contiguous validated cached pages are absorbed synchronously first with
+  /// zero network requests and zero inter-page reveal delays. Uncached pages
+  /// continue progressively up to [maxNetworkPages] remote pages, joining any
+  /// already in-flight page without repeating it, and never stopping early due
+  /// to a fixed match-count threshold.
+  Future<void> requestSearchCoverage({
+    int maxNetworkPages = defaultSearchPageBudget,
+    bool retryInterrupted = false,
+  }) {
+    if (_disposed || maxNetworkPages <= 0 || _isRefreshing) {
+      return Future.value();
+    }
+    _searchHasEnoughMatches = null;
+    cancelPrefetch();
+    if (_appendFailure != null && !retryInterrupted) {
+      _searchPageBudget = 0;
+      _searchScanStage = CollectionSearchScanStage.interrupted;
+      _notify();
+      return Future.value();
+    }
+    if (_stage != PlaylistDetailStage.content) {
+      _searchPageBudget = 0;
+      _searchScanStage = _stage == PlaylistDetailStage.empty
+          ? CollectionSearchScanStage.complete
+          : CollectionSearchScanStage.idle;
+      _notify();
+      return Future.value();
+    }
+    if (_isCacheRevisionStale) {
+      return _reloadAndSearchCoverage(maxNetworkPages: maxNetworkPages);
+    }
+    if (_appendFailure == null) {
+      _absorbCachedContinuationPages();
+    }
+    if (!_hasMore) {
+      _searchPageBudget = 0;
+      _searchScanStage = CollectionSearchScanStage.complete;
+      _notify();
+      return Future.value();
+    }
+    _searchPageBudget = (maxNetworkPages - (_isLoadingMore ? 1 : 0)).clamp(
+      0,
+      maxNetworkPages,
+    );
+    _searchScanStage = CollectionSearchScanStage.scanning;
+    final future = _ensureAppendPump();
+    _notify();
+    return future;
+  }
+
+  Future<void> _reloadAndSearchCoverage({required int maxNetworkPages}) async {
+    final initialGeneration = _generation;
+    await _load(preserveSnapshot: true);
+    if (_disposed ||
+        _generation != initialGeneration + 1 ||
+        _refreshFailure != null ||
+        _stage != PlaylistDetailStage.content) {
+      return;
+    }
+    await requestSearchCoverage(maxNetworkPages: maxNetworkPages);
+  }
+
+  bool get _isCacheRevisionStale {
+    final readRevision = _readCachedSnapshotRevision;
+    if (readRevision == null || _loadedCacheRevision == null) return false;
+    final current = readRevision();
+    return current != null && current != _loadedCacheRevision;
+  }
+
   /// Supplies one bounded unit of search demand over the already ordered
   /// collection. Loaded pages remain reusable when the query changes. The
   /// caller decides whether enough matches are visible; one request can fetch
@@ -326,8 +424,11 @@ class PagedTracksController extends ChangeNotifier {
     }
     // A browse/manual page that is already in flight contributes to this
     // demand window once its rows reach the shared local index. Do not grant
-    // two additional pages on top of it.
-    _searchPageBudget = (maxPages - (_isLoadingMore ? 1 : 0)).clamp(0, 2);
+    // additional pages on top of it.
+    _searchPageBudget = (maxPages - (_isLoadingMore ? 1 : 0)).clamp(
+      0,
+      maxPages,
+    );
     _searchScanStage = CollectionSearchScanStage.scanning;
     final future = _ensureAppendPump();
     _notify();
@@ -340,11 +441,69 @@ class PagedTracksController extends ChangeNotifier {
     final changed =
         _searchPageBudget != 0 ||
         _searchHasEnoughMatches != null ||
-        _searchScanStage == CollectionSearchScanStage.scanning;
+        _searchScanStage != CollectionSearchScanStage.idle;
     _searchPageBudget = 0;
     _searchHasEnoughMatches = null;
     _searchScanStage = CollectionSearchScanStage.idle;
     if (changed && notify) _notify();
+  }
+
+  int _absorbCachedContinuationPages() {
+    final readCached = _readCachedContinuation;
+    if (readCached == null ||
+        _disposed ||
+        _isRefreshing ||
+        _isCacheRevisionStale ||
+        _stage != PlaylistDetailStage.content ||
+        !_hasMore ||
+        _appendFailure != null) {
+      return 0;
+    }
+    final cachedPages = readCached(_nextOffset, pageSize);
+    if (cachedPages.isEmpty) return 0;
+
+    final additions = <PlaylistTrackSummary>[];
+    var absorbed = 0;
+    var omittedDelta = 0;
+    var cursor = _nextOffset;
+    var total = _total;
+    var totalIsExact = _totalIsExact;
+    var hasMore = _hasMore;
+
+    for (final page in cachedPages) {
+      final pageEnd = page.nextOffset;
+      final pageHasMore = _pageHasMore(page);
+      if (page.failure != null ||
+          page.offset != cursor ||
+          !_validPage(page, pageEnd, pageHasMore)) {
+        break;
+      }
+      for (final track in page.tracks) {
+        if (_seenTrackKeys.add('${track.providerId}\u0000${track.opaqueId}')) {
+          additions.add(track);
+        }
+      }
+      cursor = pageEnd;
+      omittedDelta += page.omittedTrackCount;
+      total = page.total;
+      totalIsExact = page.totalIsExact;
+      hasMore = pageHasMore;
+      absorbed += 1;
+      if (!hasMore) break;
+    }
+    if (absorbed == 0) return 0;
+
+    if (additions.isNotEmpty) {
+      _tracks = List.unmodifiable([..._tracks, ...additions]);
+    }
+    _nextOffset = cursor;
+    _omittedTrackCount += omittedDelta;
+    if (omittedDelta > 0) _partialResultRevision += 1;
+    _total = total;
+    _totalIsExact = totalIsExact;
+    _hasMore = hasMore;
+    _appendFailure = null;
+    return absorbed;
   }
 
   bool get _wantsAppend =>
@@ -354,6 +513,7 @@ class PagedTracksController extends ChangeNotifier {
       (_prefetchPages > 0 && _tracks.length < _prefetchTarget);
 
   Future<void> _loadNextPage() {
+    _lastPageWasSynchronous = false;
     if (!canLoadMore && !canRetryMore) return Future.value();
     final generation = _generation;
     final expectedOffset = _nextOffset;
@@ -374,6 +534,7 @@ class PagedTracksController extends ChangeNotifier {
       );
     });
     if (completedSynchronously) {
+      _lastPageWasSynchronous = true;
       return future;
     }
 
@@ -399,13 +560,15 @@ class PagedTracksController extends ChangeNotifier {
         result.offset == expectedOffset &&
         _validPage(result, pageEnd, hasMore)) {
       _recordPageLatency(elapsed);
-      final seen = _tracks
-          .map((track) => '${track.providerId}\u0000${track.opaqueId}')
-          .toSet();
-      final additions = result.tracks.where(
-        (track) => seen.add('${track.providerId}\u0000${track.opaqueId}'),
-      );
-      _tracks = List.unmodifiable([..._tracks, ...additions]);
+      final additions = <PlaylistTrackSummary>[];
+      for (final track in result.tracks) {
+        if (_seenTrackKeys.add('${track.providerId}\u0000${track.opaqueId}')) {
+          additions.add(track);
+        }
+      }
+      if (additions.isNotEmpty) {
+        _tracks = List.unmodifiable([..._tracks, ...additions]);
+      }
       _nextOffset = pageEnd;
       _omittedTrackCount += result.omittedTrackCount;
       if (result.omittedTrackCount > 0) _partialResultRevision += 1;
@@ -422,6 +585,8 @@ class PagedTracksController extends ChangeNotifier {
           failure ==
               UserLibraryFailure.credentialRejectedStorageCleanupFailed) {
         _tracks = const [];
+        _seenTrackKeys.clear();
+        _snapshotGeneration += 1;
         _total = 0;
         _totalIsExact = true;
         _hasMore = false;
@@ -480,6 +645,20 @@ class PagedTracksController extends ChangeNotifier {
     while (_isCurrent(generation) &&
         _wantsAppend &&
         (canLoadMore || canRetryMore)) {
+      if (_searchScanStage == CollectionSearchScanStage.scanning &&
+          _searchHasEnoughMatches == null &&
+          _appendFailure == null) {
+        final absorbed = _absorbCachedContinuationPages();
+        if (absorbed > 0) {
+          if (!_hasMore) {
+            _searchPageBudget = 0;
+            _searchScanStage = CollectionSearchScanStage.complete;
+            _notify();
+            break;
+          }
+          _notify();
+        }
+      }
       _manualPageRequested = false;
       if (_prefetchPages > 0) --_prefetchPages;
       if (_searchPageBudget > 0) --_searchPageBudget;
@@ -513,7 +692,10 @@ class PagedTracksController extends ChangeNotifier {
         }
       }
       retryIndex = 0;
-      if (_wantsAppend && canLoadMore && nextPageInterval > Duration.zero) {
+      if (_wantsAppend &&
+          canLoadMore &&
+          !_lastPageWasSynchronous &&
+          nextPageInterval > Duration.zero) {
         await _delay(nextPageInterval);
       }
       nextPageInterval = loadAllPageInterval;
@@ -525,7 +707,9 @@ class PagedTracksController extends ChangeNotifier {
       cancelPrefetch();
       _isLoadingAll = false;
       if (_searchScanStage == CollectionSearchScanStage.scanning) {
-        _searchScanStage = _hasMore
+        _searchScanStage = _appendFailure != null
+            ? CollectionSearchScanStage.interrupted
+            : _hasMore
             ? CollectionSearchScanStage.paused
             : CollectionSearchScanStage.complete;
       }

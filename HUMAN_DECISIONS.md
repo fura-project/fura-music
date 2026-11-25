@@ -732,3 +732,86 @@ volume and modes. iOS requires projection without a second AVAudioSession
 owner, then Apple native and device validation before retiring AudioService.
 Pre-cutover experiment evidence remains in the
 [HD-033 bake-off](docs/research/playback-stack-bakeoff.md).
+
+## HD-038 — Complete collection search over shared cached pages, historical track identity & bounded Radar fill
+
+**Status:** Accepted scope, 2026-11-25; UI presentation polish and any live
+QQ Music account/detail gate remain `HUMAN_REVIEW`.
+
+**Decision:** Decouple data read scope, collection search coverage scope,
+virtualized list rendering scope, and playback Queue scope within existing
+owners (`TrackLikePresentationController`, `PagedTracksController`,
+`PlaylistTrackSearchIndex`, `RadarController`, and `QueuePlaybackController`)
+without creating a second account cache or generic `CollectionManager`.
+
+1. **Collection search completeness (superseding only HD-035's 2-page / 20-match local search cutoff for Liked Songs and Recent Plays):**
+   - Ordinary collection browsing remains viewport-paged; widget virtualization
+     and artwork loading stay bounded.
+   - Local search in Liked Songs and Recent Plays is decoupled from scroll
+     position and must not stop merely because 2 pages were fetched or 20
+     matches were reached.
+   - When validated contiguous cached presentation pages already exist for the
+     current Provider, account generation, and collection snapshot revision,
+     search consumes all of them synchronously with zero extra HTTP requests,
+     zero scrolling, and zero per-page reveal delay.
+   - Incomplete collections search already-loaded tracks immediately, join any
+     in-flight shared scan single-flight, and progressively fetch missing
+     contiguous pages at bounded serial rate up to an explicit safety budget
+     (`defaultSearchPageBudget = 50` remote pages per coverage demand) with
+     cancellation, explicit Continue/Retry, truthful state labels (never
+     claiming complete coverage or final zero-match while `hasMore` is true),
+     and filtered-snapshot playback labels that reflect whether coverage is
+     complete or partial.
+   - Query replacement within the same collection snapshot reuses loaded and
+     in-flight pages; clearing search, leaving the view, switching internal
+     tabs, account replacement, or disposal cancels search demand without
+     cancelling shared Heart preload or active Queue playback.
+   - `membershipComplete` remains strictly distinct from
+     `presentationComplete`; only validated contiguous raw-offset pages can
+     contribute to either shared membership or complete search coverage, and
+     refresh/mutation revision fences reject late non-cooperative Futures.
+2. **Historical track identity and calm partial-result presentation:**
+   - Rust classifies exact `SongMid` omission reasons (`Missing`, `Null`,
+     `InvalidType`, `Blank`, `TooLong`, `InvalidCharacters`) while preserving
+     validated numeric `(track_id, song_type)` membership independently.
+   - Exact track-detail lookup by numeric `song_id` via
+     `music.pf_song_detail_svr/get_song_detail_yqq` and bounded single-flight
+     session-scoped recovery (`MAX_OMITTED_TRACK_RECOVERY_BUDGET = 3`) accept a
+     recovered track ONLY when returned `(id, song_type, safe_media_mid)`
+     strictly match; fuzzy title/artist substitution, ID-as-MID forgery, and
+     blocking normal playlist display are prohibited. Production playlist page
+     reads do not invoke unverified live detail recovery automatically without
+     a separate live-gate verification.
+   - `PartialResultsNotice` uses calm neutral informational styling (never
+     error-like terracotta/red `tertiaryContainer`) across Material 3 and
+     Magazine Editorial themes, scopes search copy to the collection rather
+     than implying search-query failure, and avoids repeated live-region
+     re-announcements on query replacement for the same omission revision.
+3. **Radar initial fill, session sharing, and playback-mode boundaries:**
+   - `RadarController` serializes initial prefetch and pagination through a
+     single `_appendPump`, fills Discover Radar to a bounded initial target of
+     `30` unique tracks within at most `3` follow-up pages (`4` pages total,
+     converting `1 + 10 + 10 + 10` into `31`), and keeps Home preview at 1 page.
+   - Pending and resolved Radar pages are shared per refresh session via
+     ref-counted single-flight state between `RadarController` and detached
+     `CollectionPlaybackSource` handoffs, eliminating duplicate Page 2 fetches
+     and surviving page disposal while deduplicating cross-page overlaps by
+     exact `(providerId, opaqueId)`.
+   - `QueuePlaybackController` schedules initial collection Queue fill without
+     waiting for first-track media resolution, separates bounded initial Queue
+     fill (permitted under Shuffle, Repeat One, and Repeat All without altering
+     the user's mode) from ongoing low-watermark continuation (which remains
+     strictly `sequential && repeat-off`), preserves `_collectionSource` across
+     mode toggles while clearing stale terminal claims, and Rust
+     `PlaybackQueue::extend` mixes newly appended tracks into the unplayed
+     shuffle tail without disturbing the played prefix.
+
+**Preserved HD-035 contracts:** Provider-owned continuation, single-request
+ownership, ordinary viewport demand, comments pagination, Queue continuation
+precedence, and Roam terminal-only rules remain fully in force.
+
+**Boundaries:** No generic `CollectionManager`, second account cache, local
+database/FTS/new dependency, KuGou or Direct Track Like Status production
+promotion, playback stack or Linux MPRIS regression, or unauthorized live
+account access. See
+[the convergence research archive](docs/research/collection-loading-search-convergence-2026-11-25.md).

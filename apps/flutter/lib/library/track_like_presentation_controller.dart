@@ -8,6 +8,7 @@ import 'package:flutterustmusic/library/library_mutation_feedback.dart';
 import 'package:flutterustmusic/library/playlist_detail_controller.dart';
 import 'package:flutterustmusic/library/playlist_detail_gateway.dart';
 import 'package:flutterustmusic/library/track_like_gateway.dart';
+import 'package:flutterustmusic/pagination/raw_offset_page.dart';
 import 'package:flutterustmusic/provider_diagnostics.dart';
 
 enum AuthoritativeTrackLikeState {
@@ -59,7 +60,15 @@ class TrackLikePresentationController extends ChangeNotifier {
   bool _refreshReliable = true;
   bool _refreshMembershipComplete = false;
   int _generation = 0;
+  int _pageRevision = 0;
+  int _scanRevision = 0;
+  int _refreshRevision = 0;
   bool _disposed = false;
+
+  /// Monotonically increases whenever cached presentation pages for the bound
+  /// Liked Songs collection are invalidated (refresh, confirmed mutation, or
+  /// playlist/account replacement).
+  int get presentationRevision => _pageRevision;
 
   void bindLikedPlaylist(UserPlaylistSummary? playlist) {
     final valid =
@@ -103,7 +112,11 @@ class TrackLikePresentationController extends ChangeNotifier {
   /// Starts one bounded-page-at-a-time background scan for this account.
   /// Repeated calls share the same future and continue from [_nextOffset].
   Future<void> preload() {
-    if (!enabled || _likedPlaylist == null || _complete || _disposed) {
+    if (!enabled ||
+        _likedPlaylist == null ||
+        _complete ||
+        _membershipComplete ||
+        _disposed) {
       return Future.value();
     }
     final running = _scan;
@@ -117,6 +130,7 @@ class TrackLikePresentationController extends ChangeNotifier {
       return running;
     }
     final generation = _generation;
+    final scanRevision = ++_scanRevision;
     _diagnostic(
       ProviderDiagnosticPhase.preload,
       cache: ProviderDiagnosticCache.miss,
@@ -124,7 +138,7 @@ class TrackLikePresentationController extends ChangeNotifier {
       networkRequests: 0,
     );
     late final Future<void> scan;
-    scan = _scanContinuation(generation).whenComplete(() {
+    scan = _scanContinuation(generation, scanRevision).whenComplete(() {
       if (identical(_scan, scan)) _scan = null;
     });
     _scan = scan;
@@ -150,7 +164,7 @@ class TrackLikePresentationController extends ChangeNotifier {
       _loading = true;
       _notify();
     }
-    if (_complete && !_scanReliable) {
+    if ((_complete || _membershipComplete) && !_scanReliable) {
       await refreshSnapshot();
     } else {
       await preload();
@@ -170,6 +184,7 @@ class TrackLikePresentationController extends ChangeNotifier {
         _confirmedOverrides[track.membershipIdentity] =
             outcome.value == TrackLikeState.liked;
         _needsReconciliation.remove(track.membershipIdentity);
+        _invalidateSharedPresentationPages();
         _diagnostic(
           ProviderDiagnosticPhase.request,
           outcome: ProviderDiagnosticOutcome.confirmed,
@@ -215,6 +230,9 @@ class TrackLikePresentationController extends ChangeNotifier {
       (sourceGateway as TrackMembershipRefreshGateway)
           .requestTrackMembershipRefresh(playlist: _likedPlaylist!);
     }
+    _pageRevision += 1;
+    _scanRevision += 1;
+    final refreshRevision = ++_refreshRevision;
     _operation?.cancel();
     _operation = null;
     _scan = null;
@@ -233,26 +251,42 @@ class TrackLikePresentationController extends ChangeNotifier {
       networkRequests: 0,
     );
     late final Future<void> refresh;
-    refresh = _scanRefresh(generation).whenComplete(() {
+    refresh = _scanRefresh(generation, refreshRevision).whenComplete(() {
       if (identical(_refresh, refresh)) _refresh = null;
     });
     _refresh = refresh;
     return refresh;
   }
 
+  void _invalidateSharedPresentationPages() {
+    // Presentation pages must not revive removed tracks or hide newly added
+    // tracks after a confirmed mutation. Drop cached page futures and cancel
+    // any pre-mutation refresh while keeping membership overrides authoritative.
+    _pageRevision += 1;
+    _scanRevision += 1;
+    if (_refreshing) {
+      _refreshRevision += 1;
+      _refreshing = false;
+      _refresh = null;
+      _refreshIds = null;
+      _refreshMembershipComplete = false;
+    }
+    _operation?.cancel();
+    _operation = null;
+    _scan = null;
+    _loading = false;
+    if (!_complete && !_membershipComplete) {
+      _likedTrackIds.clear();
+      _nextOffset = 0;
+      _scanReliable = true;
+    }
+    _cancelSharedPages();
+  }
+
   void _refreshAdditionalState(
     Future<void> Function()? refreshAdditionalState,
   ) {
     if (refreshAdditionalState == null) return;
-    // Presentation pages may need a fresh row after a confirmed write, but
-    // their cached page futures are not the membership snapshot. Drop only
-    // those page futures; retain membership IDs, completion and continuation.
-    if (!_refreshing) {
-      _operation?.cancel();
-      _operation = null;
-      _scan = null;
-      _cancelSharedPages();
-    }
     unawaited(refreshAdditionalState());
   }
 
@@ -267,10 +301,11 @@ class TrackLikePresentationController extends ChangeNotifier {
     unawaited(Future.wait<void>([membership, refreshAdditionalState()]));
   }
 
-  Future<void> _scanContinuation(int generation) async {
+  Future<void> _scanContinuation(int generation, int scanRevision) async {
     _loading = _requestedTrackIds.isNotEmpty;
     _notify();
     while (_isCurrent(generation) &&
+        _scanRevision == scanRevision &&
         !_complete &&
         !_membershipComplete &&
         !_refreshing) {
@@ -279,15 +314,11 @@ class TrackLikePresentationController extends ChangeNotifier {
       final expectedOffset = _nextOffset;
       late final PlaylistTrackPageLoadOperation operation;
       try {
-        _diagnostic(
-          ProviderDiagnosticPhase.preload,
-          cache: ProviderDiagnosticCache.miss,
-          networkRequests: 1,
-        );
-        operation = sessionGateway.beginLoad(
+        operation = _beginSharedLoad(
           playlist: playlist,
           offset: expectedOffset,
           size: PlaylistDetailController.pageSize,
+          phase: ProviderDiagnosticPhase.preload,
         );
       } on Object {
         break;
@@ -303,7 +334,7 @@ class TrackLikePresentationController extends ChangeNotifier {
         );
         return;
       }
-      if (_refreshing) return;
+      if (_scanRevision != scanRevision || _refreshing) return;
       if (_isSessionFailure(result.failure)) {
         _invalidate(null);
         return;
@@ -311,7 +342,7 @@ class TrackLikePresentationController extends ChangeNotifier {
       if (!_validPage(result, expectedOffset)) break;
       _acceptCurrentPage(result);
     }
-    if (!_isCurrent(generation)) return;
+    if (!_isCurrent(generation) || _scanRevision != scanRevision) return;
     _loading = false;
     _diagnostic(
       ProviderDiagnosticPhase.preload,
@@ -323,22 +354,21 @@ class TrackLikePresentationController extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> _scanRefresh(int generation) async {
-    while (_isCurrent(generation) && _refreshing) {
+  Future<void> _scanRefresh(int generation, int refreshRevision) async {
+    var committed = false;
+    while (_isCurrent(generation) &&
+        _refreshRevision == refreshRevision &&
+        _refreshing) {
       final playlist = _likedPlaylist;
       if (playlist == null) break;
       final expectedOffset = _refreshNextOffset;
       late final PlaylistTrackPageLoadOperation operation;
       try {
-        _diagnostic(
-          ProviderDiagnosticPhase.refresh,
-          cache: ProviderDiagnosticCache.miss,
-          networkRequests: 1,
-        );
-        operation = sessionGateway.beginLoad(
+        operation = _beginSharedLoad(
           playlist: playlist,
           offset: expectedOffset,
           size: PlaylistDetailController.pageSize,
+          phase: ProviderDiagnosticPhase.refresh,
         );
       } on Object {
         break;
@@ -354,7 +384,7 @@ class TrackLikePresentationController extends ChangeNotifier {
         );
         return;
       }
-      if (!_refreshing) return;
+      if (_refreshRevision != refreshRevision || !_refreshing) return;
       if (_isSessionFailure(result.failure)) {
         _invalidate(null);
         return;
@@ -362,26 +392,76 @@ class TrackLikePresentationController extends ChangeNotifier {
       if (!_validPage(result, expectedOffset)) break;
       _acceptRefreshPage(result);
       if (_refreshMembershipComplete || !result.hasMore) {
-        if (_refreshReliable) _commitRefresh();
+        if (_refreshReliable) {
+          _commitRefresh(presentationComplete: !result.hasMore);
+          committed = true;
+        }
         break;
       }
     }
-    if (!_isCurrent(generation)) return;
+    if (!_isCurrent(generation) || _refreshRevision != refreshRevision) return;
     _refreshing = false;
     _refreshIds = null;
     _refreshMembershipComplete = false;
     _diagnostic(
       ProviderDiagnosticPhase.refresh,
-      outcome: ProviderDiagnosticOutcome.success,
+      outcome: committed
+          ? ProviderDiagnosticOutcome.success
+          : ProviderDiagnosticOutcome.paused,
       generation: ProviderDiagnosticGeneration.current,
     );
     _notify();
+  }
+
+  int? _cachedSnapshotRevision({required UserPlaylistSummary playlist}) {
+    if (_disposed || !_samePlaylist(_likedPlaylist, playlist)) return null;
+    return _pageRevision;
+  }
+
+  List<PlaylistTrackPageResult> _readCachedContinuation({
+    required UserPlaylistSummary playlist,
+    required int fromOffset,
+    required int size,
+  }) {
+    if (_disposed ||
+        !_samePlaylist(_likedPlaylist, playlist) ||
+        fromOffset < 0 ||
+        size <= 0) {
+      return const [];
+    }
+    final pages = <PlaylistTrackPageResult>[];
+    var cursor = fromOffset;
+    int? expectedExactTotal;
+    const maxCachedChainPages = 10000;
+    for (var step = 0; step < maxCachedChainPages; step += 1) {
+      final page = _sharedPages[_TrackPageKey(playlist.opaqueId, cursor, size)];
+      final resolved = page?.resolved;
+      if (resolved == null || !_validPage(resolved, cursor)) break;
+      if (resolved.totalIsExact) {
+        if (expectedExactTotal != null &&
+            resolved.total != expectedExactTotal) {
+          break;
+        }
+        expectedExactTotal = resolved.total;
+      }
+      _diagnostic(
+        ProviderDiagnosticPhase.resolve,
+        cache: ProviderDiagnosticCache.hit,
+        singleFlightJoin: false,
+        networkRequests: 0,
+      );
+      pages.add(resolved);
+      if (!resolved.hasMore || resolved.nextOffset <= cursor) break;
+      cursor = resolved.nextOffset;
+    }
+    return List.unmodifiable(pages);
   }
 
   PlaylistTrackPageLoadOperation _beginSharedLoad({
     required UserPlaylistSummary playlist,
     required int offset,
     required int size,
+    ProviderDiagnosticPhase phase = ProviderDiagnosticPhase.request,
   }) {
     if (!_samePlaylist(_likedPlaylist, playlist)) {
       return _sourceGateway.beginLoad(
@@ -393,28 +473,35 @@ class TrackLikePresentationController extends ChangeNotifier {
     final key = _TrackPageKey(playlist.opaqueId, offset, size);
     var page = _sharedPages[key];
     if (page == null) {
+      _diagnostic(
+        phase,
+        cache: ProviderDiagnosticCache.miss,
+        singleFlightJoin: false,
+        networkRequests: 1,
+      );
       final source = _sourceGateway.beginLoad(
         playlist: playlist,
         offset: offset,
         size: size,
       );
       final generation = _generation;
+      final pageRevision = _pageRevision;
       late final _SharedTrackPage created;
       final future = source.run().then((result) {
-        if (_isCurrent(generation)) {
+        if (_isCurrent(generation) && pageRevision == _pageRevision) {
           if (_isSessionFailure(result.failure)) {
             _invalidate(null);
-          } else if (result.failure == null && result.offset == offset) {
-            if (identical(_sharedPages[key], created)) {
-              created.resolved = result;
-            }
-            if (_refreshing) {
-              _acceptRefreshPage(result);
-            } else {
-              _acceptCurrentPage(result);
-            }
           } else if (identical(_sharedPages[key], created)) {
-            _sharedPages.remove(key);
+            if (_validPage(result, offset)) {
+              created.resolved = result;
+              if (_refreshing) {
+                _acceptRefreshPage(result);
+              } else {
+                _acceptCurrentPage(result);
+              }
+            } else {
+              _sharedPages.remove(key);
+            }
           }
         }
         return result;
@@ -422,12 +509,26 @@ class TrackLikePresentationController extends ChangeNotifier {
       created = _SharedTrackPage(source, future);
       page = created;
       _sharedPages[key] = page;
+    } else if (page.resolved != null) {
+      _diagnostic(
+        phase,
+        cache: ProviderDiagnosticCache.hit,
+        singleFlightJoin: false,
+        networkRequests: 0,
+      );
+    } else {
+      _diagnostic(
+        phase,
+        cache: ProviderDiagnosticCache.miss,
+        singleFlightJoin: true,
+        networkRequests: 0,
+      );
     }
     return _JoinedTrackPageLoadOperation(page);
   }
 
   void _acceptCurrentPage(PlaylistTrackPageResult result) {
-    if (result.failure != null || result.offset != _nextOffset) return;
+    if (!_validPage(result, _nextOffset)) return;
     _likedTrackIds.addAll(result.membershipTrackOpaqueIds);
     for (final track in result.tracks) {
       if (track.providerId == providerId) {
@@ -449,8 +550,7 @@ class TrackLikePresentationController extends ChangeNotifier {
     final ids = _refreshIds;
     if (!_refreshing ||
         ids == null ||
-        result.failure != null ||
-        result.offset != _refreshNextOffset) {
+        !_validPage(result, _refreshNextOffset)) {
       return;
     }
     ids.addAll(result.membershipTrackOpaqueIds);
@@ -470,25 +570,38 @@ class TrackLikePresentationController extends ChangeNotifier {
     _notify();
   }
 
-  void _commitRefresh() {
+  void _commitRefresh({required bool presentationComplete}) {
     final ids = _refreshIds;
     if (ids == null) return;
     _likedTrackIds
       ..clear()
       ..addAll(ids);
     _nextOffset = _refreshNextOffset;
-    _complete = true;
+    _complete = presentationComplete;
     _membershipComplete = true;
     _scanReliable = true;
     _confirmedOverrides.clear();
     _needsReconciliation.clear();
   }
 
-  bool _validPage(PlaylistTrackPageResult result, int expectedOffset) =>
-      result.failure == null &&
-      result.offset == expectedOffset &&
-      result.nextOffset >= expectedOffset &&
-      (!result.hasMore || result.nextOffset > expectedOffset);
+  bool _validPage(PlaylistTrackPageResult result, int expectedOffset) {
+    if (result.failure != null ||
+        result.offset != expectedOffset ||
+        result.total < 0) {
+      return false;
+    }
+    if (!result.tracks.every((track) => track.providerId == providerId)) {
+      return false;
+    }
+    return isValidRawOffsetPage(
+      offset: result.offset,
+      continuationOffset: result.nextOffset,
+      hasMore: result.hasMore,
+      visibleCount: result.tracks.length,
+      omittedCount: result.omittedTrackCount,
+      total: result.totalIsExact ? result.total : null,
+    );
+  }
 
   bool _isSessionFailure(UserLibraryFailure? failure) =>
       failure == UserLibraryFailure.authenticationRequired ||
@@ -498,6 +611,9 @@ class TrackLikePresentationController extends ChangeNotifier {
 
   void _invalidate(UserPlaylistSummary? playlist) {
     _generation += 1;
+    _pageRevision += 1;
+    _scanRevision += 1;
+    _refreshRevision += 1;
     _operation?.cancel();
     _operation = null;
     _scan = null;
@@ -515,6 +631,7 @@ class TrackLikePresentationController extends ChangeNotifier {
     _scanReliable = true;
     _refreshing = false;
     _refreshIds = null;
+    _refreshMembershipComplete = false;
     _notify();
   }
 
@@ -567,7 +684,8 @@ class TrackLikePresentationController extends ChangeNotifier {
   }
 }
 
-class _TrackMembershipGateway implements PlaylistDetailGateway {
+class _TrackMembershipGateway
+    implements PlaylistDetailGateway, CachedPlaylistTrackPagesGateway {
   const _TrackMembershipGateway(this.owner);
 
   final TrackLikePresentationController owner;
@@ -578,6 +696,21 @@ class _TrackMembershipGateway implements PlaylistDetailGateway {
     required int offset,
     required int size,
   }) => owner._beginSharedLoad(playlist: playlist, offset: offset, size: size);
+
+  @override
+  int? cachedSnapshotRevision({required UserPlaylistSummary playlist}) =>
+      owner._cachedSnapshotRevision(playlist: playlist);
+
+  @override
+  List<PlaylistTrackPageResult> readCachedContinuation({
+    required UserPlaylistSummary playlist,
+    required int fromOffset,
+    required int size,
+  }) => owner._readCachedContinuation(
+    playlist: playlist,
+    fromOffset: fromOffset,
+    size: size,
+  );
 }
 
 @immutable

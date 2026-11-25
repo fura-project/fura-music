@@ -440,7 +440,7 @@ void main() {
       expect(membershipGateway.requestCount, 2);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-      reconciliation.complete(const PlaylistTrackPageResult());
+      reconciliation.complete(const PlaylistTrackPageResult(nextOffset: 0));
       await tester.pumpAndSettle();
 
       final lightColors = MusicMaterialTheme.light().colorScheme;

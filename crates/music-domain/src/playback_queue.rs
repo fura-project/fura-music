@@ -283,12 +283,13 @@ impl PlaybackQueue {
         if tracks.is_empty() {
             return Err(InvalidPlaybackQueue::EmptyExtension);
         }
+        let old_len = self.tracks.len();
         let became_current = self.current_index.is_none();
         self.tracks.extend(tracks);
         if became_current {
             self.current_index = Some(0);
         }
-        self.rebuild_shuffle_cycle();
+        self.extend_shuffle_cycle(old_len);
         Ok(became_current)
     }
 
@@ -436,12 +437,39 @@ impl PlaybackQueue {
         self.current_index = self.shuffle_order.first().copied();
     }
 
+    fn extend_shuffle_cycle(&mut self, old_len: usize) {
+        if self.order != PlaybackOrder::Shuffle {
+            self.shuffle_order.clear();
+            self.shuffle_cursor = None;
+            return;
+        }
+        let Some(cursor) = self.shuffle_cursor else {
+            self.rebuild_shuffle_cycle();
+            return;
+        };
+        if self.shuffle_order.len() != old_len || cursor >= self.shuffle_order.len() {
+            self.rebuild_shuffle_cycle();
+            return;
+        }
+        self.shuffle_order.extend(old_len..self.tracks.len());
+        self.shuffle_slice_from(cursor + 1);
+    }
+
     fn shuffle_positions(&mut self) {
-        for upper in (2..=self.shuffle_order.len()).rev() {
+        self.shuffle_slice_from(0);
+    }
+
+    fn shuffle_slice_from(&mut self, start: usize) {
+        let len = self.shuffle_order.len();
+        if start + 1 >= len {
+            return;
+        }
+        let tail_len = len - start;
+        for upper in (2..=tail_len).rev() {
             let upper_u64 = u64::try_from(upper).expect("queue length fits u64");
             let swap = usize::try_from(self.next_shuffle_u64() % upper_u64)
                 .expect("shuffle remainder fits usize");
-            self.shuffle_order.swap(upper - 1, swap);
+            self.shuffle_order.swap(start + upper - 1, start + swap);
         }
     }
 
@@ -892,6 +920,37 @@ mod tests {
             super::PlaybackCompletionAction::PlayCurrent
         );
         assert_eq!(queue.current_index(), Some(0));
+    }
+
+    #[test]
+    fn shuffle_extend_preserves_played_history_and_shuffles_new_entries_into_tail() {
+        let mut queue = PlaybackQueue::with_shuffle_seed(23);
+        queue
+            .replace(vec![track("one"), track("two"), track("three")], Some(0))
+            .expect("queue");
+        assert!(queue.set_order(PlaybackOrder::Shuffle));
+        assert!(queue.advance());
+        let first_played = 0_usize;
+        let current_after_advance = queue.current_index().expect("current");
+        assert_ne!(current_after_advance, first_played);
+        assert!(queue.has_previous());
+
+        queue
+            .extend(vec![track("four"), track("five"), track("six")])
+            .expect("extend");
+
+        assert_eq!(queue.current_index(), Some(current_after_advance));
+        assert!(queue.has_previous());
+        assert!(queue.rewind());
+        assert_eq!(queue.current_index(), Some(first_played));
+        assert!(queue.advance());
+        assert_eq!(queue.current_index(), Some(current_after_advance));
+
+        let mut visited = BTreeSet::from([first_played, current_after_advance]);
+        while queue.advance() {
+            assert!(visited.insert(queue.current_index().expect("visited")));
+        }
+        assert_eq!(visited, BTreeSet::from([0, 1, 2, 3, 4, 5]));
     }
 
     fn track(value: &str) -> TrackSummary {

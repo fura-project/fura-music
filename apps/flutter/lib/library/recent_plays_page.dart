@@ -14,7 +14,6 @@ import 'package:flutterustmusic/library/recent_plays_gateway.dart';
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
-import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 class RecentPlaysPage extends StatefulWidget {
@@ -91,6 +90,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     }
     if (!widget.active) {
       _controller?.cancelPrefetch();
+      _controller?.cancelSearchScan();
       _controller?.cancelLoadAll();
     } else if (!oldWidget.active) {
       _continueSearch();
@@ -151,13 +151,17 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
   void _updateSearch() {
     final query = normalizePlaylistSearchText(_search.text);
     if (_query == query) return;
-    _controller?.cancelSearchScan();
+    final previousQuery = _query;
     setState(() => _query = query);
     if (query.isEmpty) {
+      _controller?.cancelSearchScan();
       _controller?.cancelLoadAll();
     } else {
       _controller?.cancelPrefetch();
-      _continueSearch();
+      if (previousQuery.isEmpty ||
+          _controller?.searchScanStage == CollectionSearchScanStage.idle) {
+        _continueSearch();
+      }
     }
   }
 
@@ -182,25 +186,15 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
           widget.active &&
           _query.isNotEmpty &&
           identical(controller, _controller)) {
-        unawaited(_requestSearchWindow());
+        unawaited(_requestSearchCoverage());
       }
     });
   }
 
-  Future<void> _requestSearchWindow({bool retryInterrupted = false}) {
+  Future<void> _requestSearchCoverage({bool retryInterrupted = false}) {
     final controller = _controller;
     if (controller == null || _query.isEmpty) return Future.value();
-    return controller.requestSearchWindow(
-      hasEnoughMatches: () {
-        final tracks = controller.tracks;
-        if (!identical(tracks, _indexedTracks)) {
-          _index.update(tracks);
-          _indexedTracks = tracks;
-        }
-        return _index.search(_query).tracks.length >= 20;
-      },
-      retryInterrupted: retryInterrupted,
-    );
+    return controller.requestSearchCoverage(retryInterrupted: retryInterrupted);
   }
 
   @override
@@ -222,7 +216,10 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
         final controller = _controller;
         final loaded = controller?.tracks ?? const <PlaylistTrackSummary>[];
         if (!identical(loaded, _indexedTracks)) {
-          _index.update(loaded);
+          _index.update(
+            loaded,
+            collectionGeneration: controller?.snapshotGeneration,
+          );
           _indexedTracks = loaded;
         }
         final result = _query.isEmpty
@@ -332,20 +329,10 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                       ),
                       child: controller == null
                           ? scrollView
-                          : BoundedViewportPageDemand(
-                              enabled:
-                                  widget.active &&
-                                  _query.isNotEmpty &&
-                                  controller.hasMore &&
-                                  controller.appendFailure == null,
-                              generation: _query,
-                              onDemand: _requestSearchWindow,
-                              onRetreat: controller.cancelSearchScan,
-                              child: PlaylistScrollPrefetch(
-                                controller: controller,
-                                enabled: widget.active && _query.isEmpty,
-                                child: scrollView,
-                              ),
+                          : PlaylistScrollPrefetch(
+                              controller: controller,
+                              enabled: widget.active && _query.isEmpty,
+                              child: scrollView,
                             ),
                     ),
                   ),
@@ -398,6 +385,8 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
     final play = tracks.isEmpty ? null : () => _playRecent(tracks, 0);
     final playLabel = _query.isEmpty
         ? l10n.likedPlayAll
+        : (controller?.hasMore ?? false)
+        ? l10n.likedPlayFilteredSoFar(tracks.length)
         : l10n.recentPlayFiltered(tracks.length);
     final refresh = controller == null || controller.isLoading
         ? null
@@ -812,12 +801,22 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                   padding: const EdgeInsets.symmetric(vertical: 20),
                   child: Column(
                     children: [
-                      if (tracks.isEmpty)
+                      if (_query.isNotEmpty && tracks.isEmpty)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: Text(
-                            controller.isScanningSearch
+                            controller.isScanningSearch ||
+                                    (controller.hasMore &&
+                                        controller.appendFailure == null &&
+                                        controller.searchScanStage ==
+                                            CollectionSearchScanStage.idle)
                                 ? context.l10n.recentSearchingAll
+                                : controller.appendFailure != null
+                                ? context.l10n.recentSearchInterrupted
+                                : controller.hasMore
+                                ? context.l10n.recentSearchPaused(
+                                    controller.processedCount,
+                                  )
                                 : context.l10n.recentNoMatch,
                           ),
                         ),
@@ -841,7 +840,7 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                               ? () => _query.isEmpty
                                     ? controller.retryMore()
                                     : unawaited(
-                                        _requestSearchWindow(
+                                        _requestSearchCoverage(
                                           retryInterrupted: true,
                                         ),
                                       )
@@ -852,8 +851,12 @@ class _RecentPlaysPageState extends State<RecentPlaysPage> {
                         FilledButton.tonal(
                           onPressed: _query.isEmpty
                               ? controller.loadMore
-                              : _requestSearchWindow,
-                          child: Text(context.l10n.commonLoadMore),
+                              : _requestSearchCoverage,
+                          child: Text(
+                            _query.isEmpty
+                                ? context.l10n.commonLoadMore
+                                : context.l10n.likedContinueSearch,
+                          ),
                         ),
                     ],
                   ),

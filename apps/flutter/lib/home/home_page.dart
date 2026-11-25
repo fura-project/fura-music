@@ -2013,18 +2013,21 @@ class _DailyRecommendationContent extends StatelessWidget {
     if (radarController.stage == RadarStage.content &&
         radarController.tracks.isNotEmpty) {
       final tracks = radarController.tracks;
-      final source = radarController.collectionPlaybackSource(
-        providerId: tracks.first.providerId,
-        sourceId: 'home-radar',
-      );
       return _TrackRecommendationCard(
         track: tracks.first,
         label: context.l10n.homeRadar,
         itemKey: const ValueKey('home-radar-recommendation'),
         placeholderKind: MusicArtworkKind.radar,
         compact: compact,
-        onPlay: () =>
-            unawaited(queueController.replaceAndPlayCollection(source, 0)),
+        onPlay: () => unawaited(
+          queueController.replaceAndPlayCollection(
+            radarController.collectionPlaybackSource(
+              providerId: tracks.first.providerId,
+              sourceId: 'home-radar',
+            ),
+            0,
+          ),
+        ),
       );
     }
     return _RecommendationSlotState(

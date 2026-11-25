@@ -1,6 +1,6 @@
 //! QQ Music provider mapping layer.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -53,15 +53,16 @@ use qqmusic_client::{
     QqMusicLyrics, QqMusicLyricsError, QqMusicMediaError, QqMusicMediaSource,
     QqMusicMusicVideoQuality, QqMusicNewAlbumArea, QqMusicNewAlbumsError, QqMusicNewSongCategory,
     QqMusicNewSongsError, QqMusicOfficialPlaylist, QqMusicOfficialPlaylistsError,
-    QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError, QqMusicPersonalizedPlaylist,
-    QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError, QqMusicPlaylistDetailError,
-    QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary, QqMusicPlaylistTrackError,
-    QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary, QqMusicRankingsError,
-    QqMusicRecentPlaysError, QqMusicRecentPlaysPage, QqMusicRecentPlaysSnapshot,
-    QqMusicRecentTrackSummary, QqMusicRecommendedPlaylist, QqMusicRecommendedPlaylistsError,
-    QqMusicRelatedTracksError, QqMusicSearchError, QqMusicTimedLyricLine, QqMusicTrackComment,
-    QqMusicTrackCommentsError, QqMusicTrackLikeState, QqMusicTrackMusicVideo,
-    QqMusicTrackMusicVideoError, QqMusicTrackSummary, QqQrError, QrImageMediaType, QrLoginChannel,
+    QqMusicOmittedTrackCandidate, QqMusicOwnedPlaylist, QqMusicOwnedPlaylistsError,
+    QqMusicPersonalizedPlaylist, QqMusicPersonalizedPlaylistsError, QqMusicPersonalizedTracksError,
+    QqMusicPlaylistDetailError, QqMusicPlaylistSearchError, QqMusicPlaylistSearchSummary,
+    QqMusicPlaylistTrackError, QqMusicPlaylistTrackState, QqMusicRadarError, QqMusicRankingSummary,
+    QqMusicRankingsError, QqMusicRecentPlaysError, QqMusicRecentPlaysPage,
+    QqMusicRecentPlaysSnapshot, QqMusicRecentTrackSummary, QqMusicRecommendedPlaylist,
+    QqMusicRecommendedPlaylistsError, QqMusicRelatedTracksError, QqMusicSearchError,
+    QqMusicTimedLyricLine, QqMusicTrackComment, QqMusicTrackCommentsError, QqMusicTrackDetailError,
+    QqMusicTrackLikeState, QqMusicTrackMusicVideo, QqMusicTrackMusicVideoError,
+    QqMusicTrackSummary, QqQrError, QrImageMediaType, QrLoginChannel,
     WechatCredentialExchangeError, WechatQrError, WechatQrLoginCancellation,
     WechatQrLoginCoordinator, WechatQrLoginError, WechatQrLoginProgress, WechatQrLoginSession,
     export_encrypted_credential_bundle, import_encrypted_credential_bundle,
@@ -71,6 +72,8 @@ use qqmusic_client::{
 const FAVORITE_PLAYLIST_PAGE_SIZE: u32 = 100;
 const MAX_FAVORITE_PLAYLIST_PAGES: usize = 10;
 const MEDIA_ROUTE_COMPATIBILITY_CODE: i64 = 104_003;
+const MAX_OMITTED_TRACK_RECOVERY_BUDGET: usize = 3;
+const MAX_OMITTED_TRACK_RECOVERY_CACHE_ENTRIES: usize = 256;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QqMusicCredentialRestoreState {
@@ -203,6 +206,74 @@ struct RecentPlaysCache {
 struct CdnDispatchCacheEntry {
     dispatch: QqMusicCdnDispatch,
     valid_until: tokio::time::Instant,
+}
+
+type OmittedTrackRecoveryKey = (u64, u32);
+
+#[derive(Clone)]
+enum OmittedTrackRecoverySignal {
+    Pending,
+    Unrecoverable,
+    Recovered(Box<TrackSummary>),
+}
+
+type OmittedTrackRecoveryWaiter = tokio::sync::watch::Receiver<OmittedTrackRecoverySignal>;
+
+enum OmittedTrackLookupAction {
+    Cached(Option<Box<TrackSummary>>),
+    Wait(OmittedTrackRecoveryWaiter),
+    Fetch(tokio::sync::watch::Sender<OmittedTrackRecoverySignal>),
+    BudgetExhausted,
+}
+
+#[derive(Default)]
+struct OmittedTrackRecoveryState {
+    generation: u64,
+    resolved: HashMap<OmittedTrackRecoveryKey, Option<TrackSummary>>,
+    in_flight: HashMap<OmittedTrackRecoveryKey, OmittedTrackRecoveryWaiter>,
+}
+
+impl std::fmt::Debug for OmittedTrackRecoveryState {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("OmittedTrackRecoveryState")
+            .field("generation", &self.generation)
+            .field("resolved_count", &self.resolved.len())
+            .field("in_flight_count", &self.in_flight.len())
+            .finish()
+    }
+}
+
+impl OmittedTrackRecoveryState {
+    fn reset_if_generation_changed(&mut self, generation: u64) {
+        if self.generation != generation {
+            self.generation = generation;
+            self.resolved.clear();
+            self.in_flight.clear();
+        }
+    }
+}
+
+struct InFlightOmittedRecoveryGuard<'a> {
+    state: &'a Mutex<OmittedTrackRecoveryState>,
+    generation: u64,
+    key: OmittedTrackRecoveryKey,
+    completed: bool,
+}
+
+impl Drop for InFlightOmittedRecoveryGuard<'_> {
+    fn drop(&mut self) {
+        if self.completed {
+            return;
+        }
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if state.generation == self.generation {
+            state.in_flight.remove(&self.key);
+        }
+    }
 }
 
 const QQ_REFRESH_SAFETY_WINDOW_SECONDS: u64 = 5 * 60;
@@ -381,6 +452,7 @@ pub struct QqMusicProvider<T> {
     consumed_credential_transfer_sessions: Mutex<HashSet<String>>,
     cdn_dispatch_cache: tokio::sync::Mutex<Option<CdnDispatchCacheEntry>>,
     media_cache: tokio::sync::Mutex<provider_api::MediaResolutionCache>,
+    omitted_track_recovery: Mutex<OmittedTrackRecoveryState>,
     refresh_activation: QqRefreshActivation,
     next_refresh_reservation: AtomicU32,
     refresh: Mutex<QqRefreshCoordinatorState>,
@@ -429,6 +501,7 @@ impl<T> QqMusicProvider<T> {
             consumed_credential_transfer_sessions: Mutex::new(HashSet::new()),
             cdn_dispatch_cache: tokio::sync::Mutex::new(None),
             media_cache: tokio::sync::Mutex::new(provider_api::MediaResolutionCache::default()),
+            omitted_track_recovery: Mutex::new(OmittedTrackRecoveryState::default()),
             refresh_activation: QqRefreshActivation {
                 wechat: wechat_enabled,
                 qq_type_two: qq_type_two_enabled,
@@ -436,6 +509,172 @@ impl<T> QqMusicProvider<T> {
             next_refresh_reservation: AtomicU32::new(1),
             refresh: Mutex::new(QqRefreshCoordinatorState::Idle),
         }
+    }
+
+    /// Bounded, single-flight, session-generation-scoped exact detail recovery
+    /// for playlist rows that failed `SongMid` validation while carrying valid
+    /// numeric `(track_id, song_type)`.
+    ///
+    /// Recovery never performs fuzzy title/artist substitution, never invents
+    /// MIDs, caps per-call remote lookups at
+    /// `MAX_OMITTED_TRACK_RECOVERY_BUDGET`, stops immediately on rate limits,
+    /// and discards stale results if the provider session generation changes.
+    pub async fn recover_omitted_tracks(
+        &self,
+        candidates: &[QqMusicOmittedTrackCandidate],
+        max_requests: usize,
+    ) -> Vec<(usize, TrackSummary)>
+    where
+        T: HttpTransport,
+    {
+        let budget = max_requests.min(MAX_OMITTED_TRACK_RECOVERY_BUDGET);
+        if candidates.is_empty() || budget == 0 {
+            return Vec::new();
+        }
+        let generation = credential_guard(&self.credential).generation();
+        let mut recovered = Vec::new();
+        let mut requests_spent = 0_usize;
+
+        for candidate in candidates {
+            if credential_guard(&self.credential).generation() != generation {
+                break;
+            }
+            let key = (candidate.track_id(), candidate.song_type());
+            let action =
+                self.plan_omitted_track_lookup(generation, key, &mut requests_spent, budget);
+            match action {
+                OmittedTrackLookupAction::Cached(Some(track)) => {
+                    recovered.push((candidate.raw_index(), *track));
+                }
+                OmittedTrackLookupAction::Cached(None)
+                | OmittedTrackLookupAction::BudgetExhausted => {}
+                OmittedTrackLookupAction::Wait(receiver) => {
+                    if let Some(track) = Self::await_omitted_track_recovery(receiver).await
+                        && credential_guard(&self.credential).generation() == generation
+                    {
+                        recovered.push((candidate.raw_index(), track));
+                    }
+                }
+                OmittedTrackLookupAction::Fetch(sender) => {
+                    let (track, rate_limited) = self
+                        .fetch_omitted_track_recovery(generation, *candidate, sender)
+                        .await;
+                    if credential_guard(&self.credential).generation() == generation
+                        && let Some(track) = track
+                    {
+                        recovered.push((candidate.raw_index(), track));
+                    }
+                    if rate_limited {
+                        break;
+                    }
+                }
+            }
+        }
+        recovered
+    }
+
+    fn plan_omitted_track_lookup(
+        &self,
+        generation: u64,
+        key: OmittedTrackRecoveryKey,
+        requests_spent: &mut usize,
+        budget: usize,
+    ) -> OmittedTrackLookupAction {
+        let mut state = self
+            .omitted_track_recovery
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        state.reset_if_generation_changed(generation);
+        if let Some(cached) = state.resolved.get(&key) {
+            return OmittedTrackLookupAction::Cached(cached.clone().map(Box::new));
+        }
+        if let Some(waiter) = state.in_flight.get(&key) {
+            if waiter.has_changed().is_ok() {
+                return OmittedTrackLookupAction::Wait(waiter.clone());
+            }
+            state.in_flight.remove(&key);
+        }
+        if *requests_spent >= budget {
+            return OmittedTrackLookupAction::BudgetExhausted;
+        }
+        *requests_spent += 1;
+        let (sender, receiver) = tokio::sync::watch::channel(OmittedTrackRecoverySignal::Pending);
+        state.in_flight.insert(key, receiver);
+        OmittedTrackLookupAction::Fetch(sender)
+    }
+
+    async fn await_omitted_track_recovery(
+        mut receiver: OmittedTrackRecoveryWaiter,
+    ) -> Option<TrackSummary> {
+        let current = receiver.borrow().clone();
+        let signal = match current {
+            OmittedTrackRecoverySignal::Pending => {
+                if receiver.changed().await.is_ok() {
+                    receiver.borrow().clone()
+                } else {
+                    OmittedTrackRecoverySignal::Unrecoverable
+                }
+            }
+            done => done,
+        };
+        match signal {
+            OmittedTrackRecoverySignal::Recovered(track) => Some(*track),
+            OmittedTrackRecoverySignal::Pending | OmittedTrackRecoverySignal::Unrecoverable => None,
+        }
+    }
+
+    async fn fetch_omitted_track_recovery(
+        &self,
+        generation: u64,
+        candidate: QqMusicOmittedTrackCandidate,
+        sender: tokio::sync::watch::Sender<OmittedTrackRecoverySignal>,
+    ) -> (Option<TrackSummary>, bool)
+    where
+        T: HttpTransport,
+    {
+        let key = (candidate.track_id(), candidate.song_type());
+        let mut guard = InFlightOmittedRecoveryGuard {
+            state: &self.omitted_track_recovery,
+            generation,
+            key,
+            completed: false,
+        };
+        let outcome = self
+            .client()
+            .recover_omitted_track_by_identity(candidate.track_id(), candidate.song_type())
+            .await;
+        let rate_limited = matches!(outcome, Err(QqMusicTrackDetailError::RateLimited { .. }));
+        let cacheable_result = match outcome {
+            Ok(Some(track)) => Some(map_track_summary(&track).ok()),
+            Ok(None)
+            | Err(
+                QqMusicTrackDetailError::IdentityMismatch
+                | QqMusicTrackDetailError::InvalidTrack { .. },
+            ) => Some(None),
+            Err(_) => None,
+        };
+        let resolved_track = cacheable_result.clone().flatten();
+        {
+            let mut state = self
+                .omitted_track_recovery
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if state.generation == generation {
+                state.in_flight.remove(&key);
+                if let Some(entry) = cacheable_result
+                    && state.resolved.len() < MAX_OMITTED_TRACK_RECOVERY_CACHE_ENTRIES
+                {
+                    state.resolved.insert(key, entry);
+                }
+            }
+            guard.completed = true;
+        }
+        let signal = match resolved_track.clone() {
+            Some(track) => OmittedTrackRecoverySignal::Recovered(Box::new(track)),
+            None => OmittedTrackRecoverySignal::Unrecoverable,
+        };
+        let _ = sender.send(signal);
+        (resolved_track, rate_limited)
     }
 
     #[must_use]
@@ -11367,5 +11606,216 @@ mod tests {
         let decoded = Credential::decode_from_secure_storage(&encoded)
             .expect("provider emits a valid credential document");
         assert_eq!(decoded.music_id(), "123456");
+    }
+
+    struct OmittedRecoveryTestTransport {
+        calls: std::sync::atomic::AtomicUsize,
+        gate: Arc<tokio::sync::Notify>,
+        started: Arc<tokio::sync::Notify>,
+        responses: Mutex<std::collections::VecDeque<HttpResponse>>,
+    }
+
+    impl HttpTransport for OmittedRecoveryTestTransport {
+        type Error = std::convert::Infallible;
+
+        async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+            let count = self.calls.fetch_add(1, Ordering::SeqCst);
+            if count == 0 {
+                self.started.notify_one();
+                self.gate.notified().await;
+            }
+            Ok(self
+                .responses
+                .lock()
+                .expect("responses lock")
+                .pop_front()
+                .expect("fixture response"))
+        }
+    }
+
+    fn omitted_detail_ok_response(id: u64, song_type: u32, mid: &str, title: &str) -> HttpResponse {
+        HttpResponse::new(
+            200,
+            serde_json::to_vec(&serde_json::json!({
+                "code": 0,
+                "songinfo": {
+                    "code": 0,
+                    "data": {
+                        "track_info": {
+                            "id": id,
+                            "mid": mid,
+                            "type": song_type,
+                            "title": title,
+                            "interval": 200,
+                            "singer": [{"id": 10, "mid": "001SingerMid", "name": "Artist"}]
+                        }
+                    }
+                }
+            }))
+            .expect("json"),
+        )
+    }
+
+    #[tokio::test]
+    async fn omitted_track_recovery_is_exact_single_flight_budgeted_and_generation_scoped() {
+        use std::sync::atomic::AtomicUsize;
+
+        use qqmusic_client::{QqMusicOmittedTrackCandidate, SongMidFailureReason};
+        use serde_json::json;
+
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let started = Arc::new(tokio::sync::Notify::new());
+        let transport = OmittedRecoveryTestTransport {
+            calls: AtomicUsize::new(0),
+            gate: Arc::clone(&gate),
+            started: Arc::clone(&started),
+            responses: Mutex::new(std::collections::VecDeque::from([
+                omitted_detail_ok_response(501, 0, "003ExactMid501", "Recovered 501"),
+                omitted_detail_ok_response(502, 13, "003WrongType502", "Wrong Type"),
+                HttpResponse::new(
+                    200,
+                    serde_json::to_vec(&json!({
+                        "code": 0,
+                        "songinfo": {"code": 0, "data": {"track_info": {}}}
+                    }))
+                    .expect("json"),
+                ),
+            ])),
+        };
+        let provider = Arc::new(QqMusicProvider::new(QqMusicClient::new(transport)));
+        let candidate_501 =
+            QqMusicOmittedTrackCandidate::new(4, 501, 0, SongMidFailureReason::Missing);
+
+        let p1 = Arc::clone(&provider);
+        let p2 = Arc::clone(&provider);
+        let first =
+            tokio::spawn(async move { p1.recover_omitted_tracks(&[candidate_501], 3).await });
+        started.notified().await;
+        let second =
+            tokio::spawn(async move { p2.recover_omitted_tracks(&[candidate_501], 3).await });
+        tokio::task::yield_now().await;
+        gate.notify_one();
+
+        let (r1, r2) = tokio::join!(first, second);
+        let r1 = r1.expect("first join");
+        let r2 = r2.expect("second join");
+        assert_eq!(r1.len(), 1);
+        assert_eq!(r2.len(), 1);
+        assert_eq!(r1[0].0, 4);
+        assert_eq!(r1[0].1.title(), "Recovered 501");
+        assert_eq!(r2[0].1.id(), r1[0].1.id());
+        assert_eq!(
+            provider.client().transport().calls.load(Ordering::SeqCst),
+            1
+        );
+
+        let batch = provider
+            .recover_omitted_tracks(
+                &[
+                    candidate_501,
+                    QqMusicOmittedTrackCandidate::new(5, 502, 0, SongMidFailureReason::Blank),
+                    QqMusicOmittedTrackCandidate::new(6, 503, 0, SongMidFailureReason::Null),
+                    QqMusicOmittedTrackCandidate::new(
+                        7,
+                        504,
+                        0,
+                        SongMidFailureReason::InvalidCharacters,
+                    ),
+                ],
+                2,
+            )
+            .await;
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].0, 4);
+        assert_eq!(
+            provider.client().transport().calls.load(Ordering::SeqCst),
+            3
+        );
+
+        provider.sign_out();
+        let next_generation = super::credential_guard(&provider.credential).generation();
+        let mut state = provider
+            .omitted_track_recovery
+            .lock()
+            .expect("recovery lock");
+        state.reset_if_generation_changed(next_generation);
+        assert!(state.resolved.is_empty());
+    }
+
+    #[tokio::test]
+    async fn omitted_track_recovery_cleans_up_in_flight_entry_when_cancelled() {
+        use std::sync::atomic::AtomicUsize;
+
+        use qqmusic_client::{QqMusicOmittedTrackCandidate, SongMidFailureReason};
+
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let started = Arc::new(tokio::sync::Notify::new());
+        let transport = OmittedRecoveryTestTransport {
+            calls: AtomicUsize::new(0),
+            gate: Arc::clone(&gate),
+            started: Arc::clone(&started),
+            responses: Mutex::new(std::collections::VecDeque::from([
+                omitted_detail_ok_response(601, 0, "003ExactMid601", "Recovered After Cancel"),
+            ])),
+        };
+        let provider = Arc::new(QqMusicProvider::new(QqMusicClient::new(transport)));
+        let candidate = QqMusicOmittedTrackCandidate::new(2, 601, 0, SongMidFailureReason::Missing);
+
+        // Start recovery and drop/cancel the future while suspended on transport.
+        let p1 = Arc::clone(&provider);
+        let handle = tokio::spawn(async move { p1.recover_omitted_tracks(&[candidate], 3).await });
+        started.notified().await;
+        handle.abort();
+        let _ = handle.await;
+
+        // A later recovery call in the SAME session generation must not be poisoned by the
+        // cancelled in_flight entry; it must re-attempt and succeed.
+        let recovered = provider.recover_omitted_tracks(&[candidate], 3).await;
+        assert_eq!(recovered.len(), 1);
+        assert_eq!(recovered[0].0, 2);
+        assert_eq!(recovered[0].1.title(), "Recovered After Cancel");
+    }
+
+    #[tokio::test]
+    async fn capability_identity_boundaries_stay_distinct_across_comments_lyrics_likes_and_media() {
+        struct PanicTransport;
+        impl HttpTransport for PanicTransport {
+            type Error = std::convert::Infallible;
+            async fn execute(&self, _request: HttpRequest) -> Result<HttpResponse, Self::Error> {
+                panic!("identity preflight must reject before transport");
+            }
+        }
+        let provider = QqMusicProvider::new(QqMusicClient::new(PanicTransport));
+        *super::credential_guard(&provider.credential) =
+            super::QqMusicCredentialState::authenticated(
+                Credential::new("123456", "private-key", LoginType::WECHAT)
+                    .expect("fixture credential"),
+            );
+        let mid_only = TrackId::new(super::qq_music_provider_id(), "track:-:-:003ValidMidOnly:-")
+            .expect("mid-only track id");
+        let missing_mid = TrackId::new(super::qq_music_provider_id(), "track:12345:0:-:-")
+            .expect("missing-mid track id");
+
+        assert!(matches!(
+            provider.track_comments(mid_only.clone(), 0, 20).await,
+            Err(CommentsError::InvalidResponse)
+        ));
+        assert!(matches!(
+            provider.lyrics(mid_only.clone()).await,
+            Err(LyricsError::InvalidResponse)
+        ));
+        assert!(matches!(
+            provider.set_track_liked(mid_only.clone(), true).await,
+            Err(LibraryMutationError::InvalidRequest)
+        ));
+        assert!(super::parse_media_track(&mid_only).is_ok());
+
+        assert!(super::parse_track_identity(&missing_mid).is_err());
+        assert!(super::parse_media_track(&missing_mid).is_err());
+        assert!(super::parse_lyrics_track(&missing_mid).is_err());
+        assert!(matches!(
+            provider.track_comments(missing_mid, 0, 20).await,
+            Err(CommentsError::InvalidResponse)
+        ));
     }
 }

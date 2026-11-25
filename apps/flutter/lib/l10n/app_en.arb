@@ -1244,5 +1244,40 @@
   "@partialResultsNotice": {
     "description": "Inline warning shown once when malformed rows are omitted from an otherwise successful collection response.",
     "placeholders": {"count": {"type": "int"}}
+  },
+  "collectionSearchPartialNotice": "{count, plural, =1{1 track in this collection cannot be displayed, which may affect search completeness.} other{{count} tracks in this collection cannot be displayed, which may affect search completeness.}}",
+  "@collectionSearchPartialNotice": {
+    "description": "Collection-scoped informational notice during local collection search when some collection tracks were omitted.",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "likedSearchPausedTitle": "Search paused at check limit",
+  "likedSearchPausedDetail": "Checked {processed} of {total} tracks with no matches yet. Continue search to check remaining tracks.",
+  "@likedSearchPausedDetail": {
+    "description": "Empty-match detail when collection search paused at the bounded page safety budget.",
+    "placeholders": {"processed": {"type": "int"}, "total": {"type": "int"}}
+  },
+  "likedSearchPausedStatus": "Found {results} · paused after checking {processed} / {total} tracks",
+  "@likedSearchPausedStatus": {
+    "description": "Footer status when collection search paused at the bounded page safety budget with partial matches.",
+    "placeholders": {"results": {"type": "String"}, "processed": {"type": "int"}, "total": {"type": "int"}}
+  },
+  "likedPlayFiltered": "{count, plural, =1{Play 1 matching track} other{Play {count} matching tracks}}",
+  "@likedPlayFiltered": {
+    "description": "Play action label for a complete filtered search result snapshot in Liked Songs.",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "likedPlayFilteredSoFar": "{count, plural, =1{Play 1 found so far} other{Play {count} found so far}}",
+  "@likedPlayFilteredSoFar": {
+    "description": "Play action label for an in-progress or incomplete filtered search snapshot.",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "recentSearchPaused": "Paused after checking {processed} tracks. Continue to search remaining records.",
+  "@recentSearchPaused": {
+    "description": "Empty-match message in Recent Plays when search paused at the bounded page safety budget.",
+    "placeholders": {"processed": {"type": "int"}}
+  },
+  "recentSearchInterrupted": "Search interrupted. Loaded records remain searchable.",
+  "@recentSearchInterrupted": {
+    "description": "Empty-match message in Recent Plays when loading more records for search failed."
   }
 }

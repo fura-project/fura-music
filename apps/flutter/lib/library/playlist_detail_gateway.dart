@@ -79,6 +79,22 @@ abstract interface class TrackMembershipRefreshGateway {
   void requestTrackMembershipRefresh({required UserPlaylistSummary playlist});
 }
 
+/// Optional read-only view of validated consecutive cached pages along the real
+/// Provider continuation chain from [fromOffset].
+///
+/// Implementations must not expose mutable internal cache maps, must only return
+/// pages from the active account/snapshot revision, and must stop at the first
+/// missing, pending, or invalid continuation boundary.
+abstract interface class CachedPlaylistTrackPagesGateway {
+  int? cachedSnapshotRevision({required UserPlaylistSummary playlist});
+
+  List<PlaylistTrackPageResult> readCachedContinuation({
+    required UserPlaylistSummary playlist,
+    required int fromOffset,
+    required int size,
+  });
+}
+
 abstract interface class PlaylistTrackPageLoadOperation {
   Future<PlaylistTrackPageResult> run();
   bool cancel();

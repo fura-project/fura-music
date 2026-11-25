@@ -2033,7 +2033,7 @@ void main() {
       ],
     );
     final officialDetailGateway = _WidgetDetailGateway([
-      const PlaylistTrackPageResult(total: 42),
+      const PlaylistTrackPageResult(nextOffset: 42, total: 42),
       officialDetailResult,
     ]);
 
@@ -4805,7 +4805,12 @@ void main() {
     final radar = _ScriptedWidgetRadarGateway([
       RadarTrackPageResult(page: 1, tracks: tracks('home', 1)),
       RadarTrackPageResult(page: 1, hasMore: true, tracks: tracks('first', 20)),
-      RadarTrackPageResult(page: 2, tracks: tracks('second', 10)),
+      RadarTrackPageResult(
+        page: 2,
+        hasMore: true,
+        tracks: tracks('second', 10),
+      ),
+      RadarTrackPageResult(page: 3, tracks: tracks('third', 10)),
     ]);
     await tester.pumpWidget(
       MusicApp(
@@ -4830,15 +4835,15 @@ void main() {
       control: 'discover-type-selector',
       item: 'discover-type-radar',
     );
-    expect(radar.pages, [1, 1]);
+    expect(radar.pages, [1, 1, 2]);
 
     await tester.drag(
       find.byKey(const PageStorageKey<String>('radar-tracks')),
-      const Offset(0, -480),
+      const Offset(0, -1400),
     );
     await tester.pumpAndSettle();
 
-    expect(radar.pages, [1, 1, 2]);
+    expect(radar.pages, [1, 1, 2, 3]);
     expect(tester.takeException(), isNull);
   });
 
@@ -4863,7 +4868,8 @@ void main() {
       RadarTrackPageResult(page: 1, hasMore: true, tracks: tracks('first', 1)),
       RadarTrackPageResult(page: 2, hasMore: true, tracks: tracks('second', 1)),
       RadarTrackPageResult(page: 3, hasMore: true, tracks: tracks('third', 1)),
-      RadarTrackPageResult(page: 4, tracks: tracks('fourth', 1)),
+      RadarTrackPageResult(page: 4, hasMore: true, tracks: tracks('fourth', 1)),
+      RadarTrackPageResult(page: 5, tracks: tracks('fifth', 1)),
     ]);
     await tester.pumpWidget(
       MusicApp(
@@ -4889,12 +4895,12 @@ void main() {
       item: 'discover-type-radar',
     );
 
-    expect(radar.pages, [1, 1, 2, 3]);
+    expect(radar.pages, [1, 1, 2, 3, 4]);
     final loadMore = find.byKey(const ValueKey('radar-load-more'));
     await tester.tap(loadMore);
     await tester.pumpAndSettle();
-    expect(radar.pages, [1, 1, 2, 3, 4]);
-    expect(find.text('Manual Radar fourth track 0'), findsOneWidget);
+    expect(radar.pages, [1, 1, 2, 3, 4, 5]);
+    expect(find.text('Manual Radar fifth track 0'), findsOneWidget);
     expect(find.byKey(const ValueKey('radar-load-more')), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -12874,6 +12880,8 @@ PlaylistTrackPageResult _withPlaylistContinuation(
         totalIsExact: result.totalIsExact,
         hasMore: result.hasMore,
         omittedTrackCount: result.omittedTrackCount,
+        membershipIsExact: result.membershipIsExact,
+        membershipTrackOpaqueIds: result.membershipTrackOpaqueIds,
         tracks: result.tracks,
         failure: result.failure,
       );

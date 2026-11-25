@@ -5846,6 +5846,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, =1{Some items could not be displayed. 1 unsafe item was skipped; the remaining results are shown.} other{Some items could not be displayed. {count} unsafe items were skipped; the remaining results are shown.}}'**
   String partialResultsNotice(int count);
+
+  /// Collection-scoped informational notice during local collection search when some collection tracks were omitted.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 track in this collection cannot be displayed, which may affect search completeness.} other{{count} tracks in this collection cannot be displayed, which may affect search completeness.}}'**
+  String collectionSearchPartialNotice(int count);
+
+  /// No description provided for @likedSearchPausedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Search paused at check limit'**
+  String get likedSearchPausedTitle;
+
+  /// Empty-match detail when collection search paused at the bounded page safety budget.
+  ///
+  /// In en, this message translates to:
+  /// **'Checked {processed} of {total} tracks with no matches yet. Continue search to check remaining tracks.'**
+  String likedSearchPausedDetail(int processed, int total);
+
+  /// Footer status when collection search paused at the bounded page safety budget with partial matches.
+  ///
+  /// In en, this message translates to:
+  /// **'Found {results} · paused after checking {processed} / {total} tracks'**
+  String likedSearchPausedStatus(String results, int processed, int total);
+
+  /// Play action label for a complete filtered search result snapshot in Liked Songs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Play 1 matching track} other{Play {count} matching tracks}}'**
+  String likedPlayFiltered(int count);
+
+  /// Play action label for an in-progress or incomplete filtered search snapshot.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Play 1 found so far} other{Play {count} found so far}}'**
+  String likedPlayFilteredSoFar(int count);
+
+  /// Empty-match message in Recent Plays when search paused at the bounded page safety budget.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused after checking {processed} tracks. Continue to search remaining records.'**
+  String recentSearchPaused(int processed);
+
+  /// Empty-match message in Recent Plays when loading more records for search failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Search interrupted. Loaded records remain searchable.'**
+  String get recentSearchInterrupted;
 }
 
 class _AppLocalizationsDelegate

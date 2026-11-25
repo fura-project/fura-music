@@ -966,5 +966,17 @@
   "@partialResultsNotice": {
     "description": "集合响应中存在损坏行时，对每个新结果只公告一次的行内提示。",
     "placeholders": {"count": {"type": "int"}}
-  }
+  },
+  "collectionSearchPartialNotice": "收藏集合中有 {count} 首歌曲暂无法显示，可能影响搜索完整性。",
+  "@collectionSearchPartialNotice": {
+    "description": "集合内搜索时显示的集合级缺失说明，提示存在无法显示的记录。",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "likedSearchPausedTitle": "搜索已达到单次检查上限",
+  "likedSearchPausedDetail": "已检查 {processed} / {total} 首，暂未找到匹配。可继续搜索剩余歌曲。",
+  "likedSearchPausedStatus": "已找到 {results} · 已检查 {processed} / {total} 首（已暂停）",
+  "likedPlayFiltered": "播放 {count} 首匹配结果",
+  "likedPlayFilteredSoFar": "播放已找到的 {count} 首",
+  "recentSearchPaused": "已检查 {processed} 首并暂停，可继续搜索剩余记录。",
+  "recentSearchInterrupted": "搜索暂时中断，已加载的记录仍可搜索。"
 }

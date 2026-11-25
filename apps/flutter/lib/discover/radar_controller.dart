@@ -13,7 +13,8 @@ class RadarController extends ChangeNotifier {
     this.initialPrefetchTarget = 0,
     this.maxInitialPrefetchPages = 1,
   }) : assert(initialPrefetchTarget >= 0),
-       assert(maxInitialPrefetchPages >= 0);
+       assert(maxInitialPrefetchPages >= 0),
+       _session = _RadarSessionPages(_gateway);
 
   final RadarGateway _gateway;
   final int initialPrefetchTarget;
@@ -21,6 +22,7 @@ class RadarController extends ChangeNotifier {
 
   RadarStage _stage = RadarStage.loading;
   List<PlaylistTrackSummary> _tracks = const [];
+  final Set<String> _seenTrackKeys = <String>{};
   RadarFailure? _failure;
   RadarFailure? _appendFailure;
   int _nextPage = 1;
@@ -29,11 +31,13 @@ class RadarController extends ChangeNotifier {
   int _partialResultRevision = 0;
   bool _isLoadingMore = false;
   bool _manualPageRequested = false;
+  int _initialPrefetchPagesRemaining = 0;
   int _prefetchTarget = 0;
   int _prefetchPages = 0;
   Duration _estimatedPageLatency = const Duration(milliseconds: 350);
   Completer<void>? _appendPump;
   RadarTrackPageLoadOperation? _operation;
+  _RadarSessionPages _session;
   int _generation = 0;
   bool _disposed = false;
 
@@ -54,15 +58,25 @@ class RadarController extends ChangeNotifier {
       !_isLoadingMore &&
       _isRetryable(_appendFailure);
 
+  /// Detaches a logical Radar playback source bound to this refresh session.
+  ///
+  /// The returned source shares pending and resolved pages with this session so
+  /// rapid playback handoff does not duplicate in-flight pages, yet survives
+  /// controller disposal and never mixes pages across separate Radar refreshes.
   CollectionPlaybackSource collectionPlaybackSource({
     required String providerId,
     String sourceId = 'radar',
   }) {
-    final gateway = _gateway;
+    final session = _session;
+    final initialTracks = _tracks;
+    final firstSeenPage = <String, int>{
+      for (final track in initialTracks)
+        '${track.providerId}\u0000${track.opaqueId}': 0,
+    };
     return CollectionPlaybackSource(
       sourceId: '$sourceId:$providerId',
       providerId: providerId,
-      initialTracks: _tracks,
+      initialTracks: initialTracks,
       nextCursor: _nextPage,
       hasMore: _hasMore,
       policy: const CollectionPlaybackPolicy(
@@ -70,21 +84,28 @@ class RadarController extends ChangeNotifier {
         maxInitialPages: 5,
       ),
       loader: (page) {
-        final operation = gateway.beginLoad(page: page);
+        final operation = session.loadPage(page);
         return CallbackCollectionPlaybackPageOperation(() async {
           final result = await operation.run();
-          final valid =
-              result.failure == null &&
-              result.page == page &&
-              result.omittedTrackCount >= 0 &&
-              (!result.hasMore ||
-                  result.tracks.isNotEmpty ||
-                  result.omittedTrackCount > 0);
+          final valid = _validRadarPage(result, expectedPage: page);
+          final additions = <PlaylistTrackSummary>[];
+          if (valid) {
+            final pageSeen = <String>{};
+            for (final track in result.tracks) {
+              final key = '${track.providerId}\u0000${track.opaqueId}';
+              final priorPage = firstSeenPage[key];
+              if (priorPage != null && priorPage < page) continue;
+              if (pageSeen.add(key)) {
+                firstSeenPage[key] = page;
+                additions.add(track);
+              }
+            }
+          }
           return CollectionPlaybackPage(
             requestCursor: page,
             nextCursor: valid ? page + 1 : page,
             hasMore: valid && result.hasMore,
-            tracks: valid ? result.tracks : const [],
+            tracks: valid ? List.unmodifiable(additions) : const [],
             omittedTrackCount: valid ? result.omittedTrackCount : 0,
             failure: valid ? null : _mapRadarCollectionFailure(result.failure),
           );
@@ -98,10 +119,14 @@ class RadarController extends ChangeNotifier {
   Future<void> _loadFirstPage() async {
     final generation = ++_generation;
     _operation?.cancel();
+    _operation = null;
+    _session = _RadarSessionPages(_gateway);
     _appendPump = null;
     _manualPageRequested = false;
+    _initialPrefetchPagesRemaining = 0;
     cancelPrefetch();
     _tracks = const [];
+    _seenTrackKeys.clear();
     _failure = null;
     _appendFailure = null;
     _nextPage = 1;
@@ -113,7 +138,7 @@ class RadarController extends ChangeNotifier {
 
     late final RadarTrackPageLoadOperation operation;
     try {
-      operation = _gateway.beginLoad(page: 1);
+      operation = _session.loadPage(1);
     } on Object {
       if (_isCurrent(generation)) {
         _failure = RadarFailure.coreUnavailable;
@@ -125,13 +150,30 @@ class RadarController extends ChangeNotifier {
     _operation = operation;
 
     final latency = Stopwatch()..start();
-    final result = await operation.run();
+    late final RadarTrackPageResult result;
+    try {
+      result = await operation.run();
+    } on Object {
+      if (identical(_operation, operation)) _operation = null;
+      if (_isCurrent(generation)) {
+        _failure = RadarFailure.coreUnavailable;
+        _stage = RadarStage.error;
+        _notify();
+      }
+      return;
+    }
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return;
 
-    if (_validPage(result, expectedPage: 1)) {
+    if (_validRadarPage(result, expectedPage: 1)) {
       _recordPageLatency(latency.elapsed);
-      _tracks = List.unmodifiable(result.tracks);
+      final additions = <PlaylistTrackSummary>[];
+      for (final track in result.tracks) {
+        if (_seenTrackKeys.add('${track.providerId}\u0000${track.opaqueId}')) {
+          additions.add(track);
+        }
+      }
+      _tracks = List.unmodifiable(additions);
       _nextPage = 2;
       _hasMore = result.hasMore;
       _omittedTrackCount = result.omittedTrackCount;
@@ -145,22 +187,13 @@ class RadarController extends ChangeNotifier {
     }
     _notify();
 
-    if (_stage == RadarStage.content &&
-        _tracks.length < initialPrefetchTarget &&
-        _hasMore) {
-      await _prefetchInitialPages(generation);
-    }
-  }
-
-  Future<void> _prefetchInitialPages(int generation) async {
-    var loadedPages = 0;
-    while (_isCurrent(generation) &&
+    if (_isCurrent(generation) &&
         _stage == RadarStage.content &&
         _tracks.length < initialPrefetchTarget &&
-        _hasMore &&
-        loadedPages < maxInitialPrefetchPages) {
-      loadedPages += 1;
-      if (!await _loadNextPage(generation)) return;
+        maxInitialPrefetchPages > 0 &&
+        _hasMore) {
+      _initialPrefetchPagesRemaining = maxInitialPrefetchPages;
+      await _ensureAppendPump();
     }
   }
 
@@ -200,29 +233,44 @@ class RadarController extends ChangeNotifier {
     _prefetchPages = 0;
   }
 
+  bool get _wantsInitialPrefetch =>
+      _initialPrefetchPagesRemaining > 0 &&
+      _tracks.length < initialPrefetchTarget;
+
   bool get _wantsAppend =>
       _manualPageRequested ||
+      _wantsInitialPrefetch ||
       (_prefetchPages > 0 && _tracks.length < _prefetchTarget);
 
   Future<void> _ensureAppendPump() {
     if (_appendPump case final pump?) return pump.future;
     final pump = Completer<void>();
     _appendPump = pump;
-    unawaited(_runAppendPump(pump));
+    unawaited(_runAppendPump(pump, _generation));
     return pump.future;
   }
 
-  Future<void> _runAppendPump(Completer<void> pump) async {
+  Future<void> _runAppendPump(Completer<void> pump, int generation) async {
     try {
-      while (!_disposed && _wantsAppend) {
+      while (_isCurrent(generation) && _wantsAppend) {
         final manual = _manualPageRequested;
+        final initialPrefetch = !manual && _wantsInitialPrefetch;
         _manualPageRequested = false;
         if (!canLoadMore && !canRetryMore) break;
-        if (!await _loadNextPage(_generation)) break;
-        if (!manual && _prefetchPages > 0) --_prefetchPages;
+        if (initialPrefetch) --_initialPrefetchPagesRemaining;
+        if (!await _loadNextPage(generation)) {
+          if (initialPrefetch) _initialPrefetchPagesRemaining = 0;
+          break;
+        }
+        if (!manual && !initialPrefetch && _prefetchPages > 0) --_prefetchPages;
       }
     } finally {
-      if (identical(_appendPump, pump)) _appendPump = null;
+      if (_isCurrent(generation) && identical(_appendPump, pump)) {
+        _appendPump = null;
+        if (_tracks.length >= initialPrefetchTarget || !_hasMore) {
+          _initialPrefetchPagesRemaining = 0;
+        }
+      }
       if (!pump.isCompleted) pump.complete();
     }
   }
@@ -231,7 +279,7 @@ class RadarController extends ChangeNotifier {
     final expectedPage = _nextPage;
     late final RadarTrackPageLoadOperation operation;
     try {
-      operation = _gateway.beginLoad(page: expectedPage);
+      operation = _session.loadPage(expectedPage);
     } on Object {
       if (_isCurrent(generation)) {
         _appendFailure = RadarFailure.coreUnavailable;
@@ -245,20 +293,33 @@ class RadarController extends ChangeNotifier {
     _notify();
 
     final latency = Stopwatch()..start();
-    final result = await operation.run();
+    late final RadarTrackPageResult result;
+    try {
+      result = await operation.run();
+    } on Object {
+      if (identical(_operation, operation)) _operation = null;
+      if (_isCurrent(generation)) {
+        _isLoadingMore = false;
+        _appendFailure = RadarFailure.coreUnavailable;
+        _notify();
+      }
+      return false;
+    }
     if (identical(_operation, operation)) _operation = null;
     if (!_isCurrent(generation)) return false;
     _isLoadingMore = false;
 
-    if (_validPage(result, expectedPage: expectedPage)) {
+    if (_validRadarPage(result, expectedPage: expectedPage)) {
       _recordPageLatency(latency.elapsed);
-      final seen = _tracks
-          .map((track) => '${track.providerId}\u0000${track.opaqueId}')
-          .toSet();
-      final additions = result.tracks.where(
-        (track) => seen.add('${track.providerId}\u0000${track.opaqueId}'),
-      );
-      _tracks = List.unmodifiable([..._tracks, ...additions]);
+      final additions = <PlaylistTrackSummary>[];
+      for (final track in result.tracks) {
+        if (_seenTrackKeys.add('${track.providerId}\u0000${track.opaqueId}')) {
+          additions.add(track);
+        }
+      }
+      if (additions.isNotEmpty) {
+        _tracks = List.unmodifiable([..._tracks, ...additions]);
+      }
       _nextPage = expectedPage + 1;
       _hasMore = result.hasMore;
       _omittedTrackCount += result.omittedTrackCount;
@@ -285,14 +346,6 @@ class RadarController extends ChangeNotifier {
     );
   }
 
-  bool _validPage(RadarTrackPageResult result, {required int expectedPage}) =>
-      result.failure == null &&
-      result.page == expectedPage &&
-      result.omittedTrackCount >= 0 &&
-      (!result.hasMore ||
-          result.tracks.isNotEmpty ||
-          result.omittedTrackCount > 0);
-
   bool _isRetryable(RadarFailure? failure) =>
       failure == RadarFailure.coreUnavailable ||
       failure == RadarFailure.network ||
@@ -311,10 +364,141 @@ class RadarController extends ChangeNotifier {
     _disposed = true;
     ++_generation;
     _manualPageRequested = false;
+    _initialPrefetchPagesRemaining = 0;
     cancelPrefetch();
     _operation?.cancel();
     _operation = null;
     super.dispose();
+  }
+}
+
+bool _validRadarPage(
+  RadarTrackPageResult result, {
+  required int expectedPage,
+}) =>
+    result.failure == null &&
+    result.page == expectedPage &&
+    result.omittedTrackCount >= 0 &&
+    (!result.hasMore ||
+        result.tracks.isNotEmpty ||
+        result.omittedTrackCount > 0);
+
+/// Per-refresh-session shared Radar page table for single-flight handoff
+/// between [RadarController] and a detached [CollectionPlaybackSource].
+class _RadarSessionPages {
+  _RadarSessionPages(this._gateway);
+
+  static const int _maxCachedResolvedPages = 64;
+
+  final RadarGateway _gateway;
+  final Map<int, _SharedRadarPage> _pages = <int, _SharedRadarPage>{};
+
+  RadarTrackPageLoadOperation loadPage(int page) {
+    var entry = _pages[page];
+    if (entry == null) {
+      final source = _gateway.beginLoad(page: page);
+      late final _SharedRadarPage created;
+      final future = source.run().then(
+        (result) {
+          if (identical(_pages[page], created)) {
+            if (_validRadarPage(result, expectedPage: page)) {
+              created.resolved = result;
+              _evictOverflowResolvedPages(keepPage: page);
+            } else {
+              _pages.remove(page);
+            }
+          }
+          return result;
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          if (identical(_pages[page], created)) {
+            _pages.remove(page);
+          }
+          Error.throwWithStackTrace(error, stackTrace);
+        },
+      );
+      created = _SharedRadarPage(this, page, source, future);
+      entry = created;
+      _pages[page] = entry;
+    }
+    entry.activeJoiners += 1;
+    return _JoinedRadarPageOperation(entry);
+  }
+
+  void _evictOverflowResolvedPages({required int keepPage}) {
+    var resolvedCount = 0;
+    for (final entry in _pages.values) {
+      if (entry.resolved != null) resolvedCount += 1;
+    }
+    while (resolvedCount > _maxCachedResolvedPages) {
+      int? victimPage;
+      for (final candidate in _pages.entries) {
+        if (candidate.key == keepPage || candidate.value.resolved == null) {
+          continue;
+        }
+        if (victimPage == null || candidate.key < victimPage) {
+          victimPage = candidate.key;
+        }
+      }
+      if (victimPage == null) break;
+      _pages.remove(victimPage);
+      resolvedCount -= 1;
+    }
+  }
+
+  void _releaseJoiner(_SharedRadarPage entry) {
+    if (entry.activeJoiners <= 0) return;
+    entry.activeJoiners -= 1;
+    if (entry.activeJoiners == 0 && entry.resolved == null) {
+      if (identical(_pages[entry.page], entry)) {
+        _pages.remove(entry.page);
+      }
+      entry.source.cancel();
+    }
+  }
+}
+
+class _SharedRadarPage {
+  _SharedRadarPage(this.session, this.page, this.source, this.future);
+
+  final _RadarSessionPages session;
+  final int page;
+  final RadarTrackPageLoadOperation source;
+  final Future<RadarTrackPageResult> future;
+  RadarTrackPageResult? resolved;
+  int activeJoiners = 0;
+}
+
+class _JoinedRadarPageOperation implements RadarTrackPageLoadOperation {
+  _JoinedRadarPageOperation(this._entry);
+
+  final _SharedRadarPage _entry;
+  bool _active = true;
+
+  @override
+  bool cancel() {
+    if (!_active) return false;
+    _active = false;
+    _entry.session._releaseJoiner(_entry);
+    return true;
+  }
+
+  @override
+  Future<RadarTrackPageResult> run() {
+    if (!_active) {
+      return SynchronousFuture(
+        const RadarTrackPageResult(failure: RadarFailure.cancelled),
+      );
+    }
+    final resolved = _entry.resolved;
+    if (resolved != null) {
+      return SynchronousFuture(resolved);
+    }
+    return _entry.future.then(
+      (result) => _active
+          ? result
+          : const RadarTrackPageResult(failure: RadarFailure.cancelled),
+    );
   }
 }
 

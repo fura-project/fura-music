@@ -219,8 +219,8 @@ class _RecommendedPlaylistsPageState extends State<RecommendedPlaylistsPage>
     _rankingController = RankingGroupController(widget.rankingGateway);
     _radarController = RadarController(
       widget.radarGateway,
-      initialPrefetchTarget: 10,
-      maxInitialPrefetchPages: 2,
+      initialPrefetchTarget: 30,
+      maxInitialPrefetchPages: 3,
     );
     _tabController = TabController(
       length: _types.length,

@@ -61,6 +61,7 @@ class QueuePlaybackController extends ChangeNotifier {
   bool _collectionHasMore = false;
   int? _collectionLastDemandIndex;
   int _collectionInitialPagesLoaded = 0;
+  bool _collectionOperationIsInitialFill = false;
   int? _collectionTerminalToken;
   String? _collectionTerminalTrackKey;
   int? _collectionTerminalQueueLength;
@@ -173,6 +174,9 @@ class QueuePlaybackController extends ChangeNotifier {
     _collectionFailure = null;
     _completionHandled = false;
     _notifyStateAndAll();
+    // Schedule bounded initial fill before awaiting media resolution/audio open
+    // so slow first-track playback startup does not stall initial queue growth.
+    _maybeDemandCollection();
     final current = _snapshot.current;
     if (current != null) await _playback.playTrack(current);
     _maybeDemandCollection();
@@ -210,10 +214,12 @@ class QueuePlaybackController extends ChangeNotifier {
     _maybeDemandCollection();
   }
 
-  Future<void> setOrder(PlaybackOrder order) {
-    if (order != _snapshot.order) _invalidateCollection();
+  Future<void> setOrder(PlaybackOrder order) async {
+    final changed = order != _snapshot.order;
+    if (changed) _clearCollectionTerminalClaim();
     _invalidateRoam();
-    return _apply(_gateway.setOrder(order), playChangedCurrent: false);
+    await _apply(_gateway.setOrder(order), playChangedCurrent: false);
+    if (changed) _reconcileCollectionAfterModeChange();
   }
 
   Future<void> toggleShuffle() => setOrder(
@@ -222,13 +228,12 @@ class QueuePlaybackController extends ChangeNotifier {
         : PlaybackOrder.shuffle,
   );
 
-  Future<void> setRepeatMode(PlaybackRepeatMode repeatMode) {
-    if (repeatMode != _snapshot.repeatMode) _invalidateCollection();
+  Future<void> setRepeatMode(PlaybackRepeatMode repeatMode) async {
+    final changed = repeatMode != _snapshot.repeatMode;
+    if (changed) _clearCollectionTerminalClaim();
     _invalidateRoam();
-    return _apply(
-      _gateway.setRepeatMode(repeatMode),
-      playChangedCurrent: false,
-    );
+    await _apply(_gateway.setRepeatMode(repeatMode), playChangedCurrent: false);
+    if (changed) _reconcileCollectionAfterModeChange();
   }
 
   Future<void> cycleRepeatMode() => setRepeatMode(switch (repeatMode) {
@@ -296,7 +301,9 @@ class QueuePlaybackController extends ChangeNotifier {
     if (_disposed ||
         _collectionSource == null ||
         !_collectionHasMore ||
-        _collectionOperation != null) {
+        _collectionOperation != null ||
+        (!_collectionNeedsInitialFill &&
+            !_collectionAllowsOngoingContinuation)) {
       return;
     }
     _collectionLastDemandIndex = null;
@@ -432,6 +439,37 @@ class QueuePlaybackController extends ChangeNotifier {
         _collectionInitialPagesLoaded < source.policy.maxInitialPages;
   }
 
+  bool get _collectionAllowsOngoingContinuation =>
+      _snapshot.order == PlaybackOrder.sequential &&
+      _snapshot.repeatMode == PlaybackRepeatMode.off;
+
+  void _reconcileCollectionAfterModeChange() {
+    if (_disposed || _collectionSource == null || !_collectionHasMore) return;
+    if (!_collectionAllowsOngoingContinuation &&
+        (_collectionOperation != null || _collectionLoadFuture != null) &&
+        !_collectionOperationIsInitialFill &&
+        !_collectionNeedsInitialFill) {
+      // Cancel an ongoing tail-continuation request when switching away from
+      // sequential repeat-off, while keeping the collection source intact so
+      // returning to sequential repeat-off can resume from the same cursor.
+      ++_collectionGeneration;
+      _collectionOperation?.cancel();
+      _collectionOperation = null;
+      _collectionLoadFuture = null;
+      _collectionOperationIsInitialFill = false;
+      _collectionStage = CollectionPlaybackStage.ready;
+      _collectionLastDemandIndex = null;
+      _notifyStateAndAll();
+      return;
+    }
+    if (_collectionAllowsOngoingContinuation) {
+      _collectionLastDemandIndex = null;
+      _maybeDemandCollection();
+    } else if (_collectionNeedsInitialFill) {
+      _maybeDemandCollection();
+    }
+  }
+
   void _maybeDemandCollection({
     bool force = false,
     bool viewportDemand = false,
@@ -441,15 +479,16 @@ class QueuePlaybackController extends ChangeNotifier {
         _collectionSource == null ||
         !_collectionHasMore ||
         _collectionOperation != null ||
-        _collectionLoadFuture != null ||
-        _snapshot.order != PlaybackOrder.sequential ||
-        _snapshot.repeatMode != PlaybackRepeatMode.off) {
+        _collectionLoadFuture != null) {
+      return;
+    }
+    final startupFill = _collectionNeedsInitialFill;
+    if (!startupFill && !_collectionAllowsOngoingContinuation) {
       return;
     }
     final currentIndex = _snapshot.currentIndex;
     if (currentIndex == null) return;
     final remaining = _snapshot.tracks.length - currentIndex - 1;
-    final startupFill = _collectionNeedsInitialFill;
     if (!force && !viewportDemand && !startupFill) {
       if (remaining > _collectionLookaheadTracks) return;
       if (_collectionLastDemandIndex == currentIndex) return;
@@ -475,7 +514,11 @@ class QueuePlaybackController extends ChangeNotifier {
     final batchGateway = _gateway is PlaybackQueueBatchGateway
         ? _gateway as PlaybackQueueBatchGateway
         : null;
-    if (source == null || batchGateway == null || !_collectionHasMore) {
+    if (source == null ||
+        batchGateway == null ||
+        !_collectionHasMore ||
+        (!_collectionNeedsInitialFill &&
+            !_collectionAllowsOngoingContinuation)) {
       _collectionLoadFuture = null;
       return;
     }
@@ -493,6 +536,7 @@ class QueuePlaybackController extends ChangeNotifier {
       return;
     }
     _collectionOperation = operation;
+    _collectionOperationIsInitialFill = _collectionNeedsInitialFill;
     _collectionStage = CollectionPlaybackStage.loading;
     _collectionFailure = null;
     _notifyStateAndAll();
@@ -503,6 +547,7 @@ class QueuePlaybackController extends ChangeNotifier {
     } on Object {
       if (identical(_collectionOperation, operation)) {
         _collectionOperation = null;
+        _collectionOperationIsInitialFill = false;
       }
       _failCollectionLoad(
         generation,
@@ -512,6 +557,7 @@ class QueuePlaybackController extends ChangeNotifier {
     }
     if (identical(_collectionOperation, operation)) {
       _collectionOperation = null;
+      _collectionOperationIsInitialFill = false;
     }
     if (!_collectionIsCurrent(
       generation,
@@ -631,6 +677,7 @@ class QueuePlaybackController extends ChangeNotifier {
   void _failCollectionLoad(int generation, CollectionPlaybackFailure failure) {
     if (_disposed || generation != _collectionGeneration) return;
     _collectionOperation = null;
+    _collectionOperationIsInitialFill = false;
     _collectionLoadFuture = null;
     _collectionFailure = failure;
     _collectionStage = CollectionPlaybackStage.failed;
@@ -648,6 +695,7 @@ class QueuePlaybackController extends ChangeNotifier {
     ++_collectionGeneration;
     _collectionOperation?.cancel();
     _collectionOperation = null;
+    _collectionOperationIsInitialFill = false;
     _collectionLoadFuture = null;
     _collectionSource = null;
     _collectionFailure = null;

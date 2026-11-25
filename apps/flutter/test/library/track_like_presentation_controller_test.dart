@@ -319,7 +319,7 @@ void main() {
     final resolution = controller.resolve(other);
 
     controller.bindLikedPlaylist(null);
-    pending.complete(const PlaylistTrackPageResult());
+    pending.complete(const PlaylistTrackPageResult(nextOffset: 0));
 
     expect(await resolution, AuthoritativeTrackLikeState.unavailable);
     expect(operation.cancelled, isTrue);
@@ -342,7 +342,7 @@ void main() {
           total: 1,
           membershipTrackOpaqueIds: ['liked-track'],
         ),
-        const PlaylistTrackPageResult(),
+        const PlaylistTrackPageResult(nextOffset: 0),
       ]);
       final controller = _controller(gateway)..bindLikedPlaylist(likedPlaylist);
       await controller.preload();
@@ -380,7 +380,7 @@ void main() {
     'confirmed mutation applies a local delta without full invalidation',
     () async {
       final gateway = _FakePlaylistGateway.fromResults([
-        const PlaylistTrackPageResult(),
+        const PlaylistTrackPageResult(nextOffset: 0),
       ]);
       final mutationGateway = _TrackMutationGateway(
         const TrackLikeMutationResult(confirmedState: TrackLikeState.liked),

@@ -1922,7 +1922,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     });
   }
 
-  Widget _libraryDestinationBody({Widget? likedCollapsedHeaderActions}) {
+  Widget _libraryDestinationBody({
+    Widget? likedCollapsedHeaderActions,
+    required bool likedActive,
+  }) {
     if (!widget.authenticated) {
       return _signedOutLibraryBody();
     }
@@ -2009,6 +2012,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
               if (_navigation.visitedLibrarySection(LibrarySection.likedSongs))
                 _likedSongsBody(
                   collapsedHeaderActions: likedCollapsedHeaderActions,
+                  active: likedActive,
                 )
               else
                 const SizedBox.shrink(),
@@ -2019,7 +2023,10 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
     );
   }
 
-  Widget _likedSongsBody({Widget? collapsedHeaderActions}) {
+  Widget _likedSongsBody({
+    Widget? collapsedHeaderActions,
+    required bool active,
+  }) {
     final playlist = _controller.likedSongsPlaylist;
     return switch (_controller.stage) {
       UserLibraryStage.loading => const _LibraryLoading(),
@@ -2053,6 +2060,7 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
         mutationCoordinator: _libraryMutations,
         canMutateTrackLikes: widget.capabilities.trackLike,
         canMutateAlbumFavorites: widget.capabilities.albumFavorite,
+        active: active,
       ),
     };
   }
@@ -2299,6 +2307,11 @@ class _UserLibraryPageState extends State<UserLibraryPage> {
                 settingsSelected: false,
               ),
             ),
+            likedActive:
+                destination == AuthenticatedPrimaryDestination.library &&
+                _librarySection == LibrarySection.likedSongs &&
+                embeddedShellRoute == null &&
+                !_hasOverlayPage,
           ),
           if (widget.authenticated &&
               widget.capabilities.recentHistory &&

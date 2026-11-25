@@ -25,6 +25,16 @@ pub enum PlaylistDetailTrackField {
     ArtistName,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SongMidFailureReason {
+    Missing,
+    Null,
+    InvalidType,
+    Blank,
+    TooLong,
+    InvalidCharacters,
+}
+
 pub enum QqMusicPlaylistDetailError<E> {
     InvalidPlaylistId,
     MissingEncryptedUin,
@@ -407,7 +417,65 @@ pub struct QqMusicPlaylistTracksPage {
     omitted_track_count: u32,
     membership_is_exact: bool,
     membership_identities: Vec<QqMusicTrackMembershipIdentity>,
+    omitted_song_mid_candidates: Vec<QqMusicOmittedTrackCandidate>,
     tracks: Vec<QqMusicTrackSummary>,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub struct QqMusicOmittedTrackCandidate {
+    raw_index: usize,
+    track_id: u64,
+    song_type: u32,
+    reason: SongMidFailureReason,
+}
+
+impl QqMusicOmittedTrackCandidate {
+    #[must_use]
+    pub const fn new(
+        raw_index: usize,
+        track_id: u64,
+        song_type: u32,
+        reason: SongMidFailureReason,
+    ) -> Self {
+        Self {
+            raw_index,
+            track_id,
+            song_type,
+            reason,
+        }
+    }
+
+    #[must_use]
+    pub const fn raw_index(&self) -> usize {
+        self.raw_index
+    }
+
+    #[must_use]
+    pub const fn track_id(&self) -> u64 {
+        self.track_id
+    }
+
+    #[must_use]
+    pub const fn song_type(&self) -> u32 {
+        self.song_type
+    }
+
+    #[must_use]
+    pub const fn reason(&self) -> SongMidFailureReason {
+        self.reason
+    }
+}
+
+impl fmt::Debug for QqMusicOmittedTrackCandidate {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("QqMusicOmittedTrackCandidate")
+            .field("raw_index", &self.raw_index)
+            .field("track_id", &"[REDACTED]")
+            .field("song_type", &self.song_type)
+            .field("reason", &self.reason)
+            .finish()
+    }
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -478,6 +546,11 @@ impl QqMusicPlaylistTracksPage {
     pub fn membership_identities(&self) -> &[QqMusicTrackMembershipIdentity] {
         &self.membership_identities
     }
+
+    #[must_use]
+    pub fn omitted_song_mid_candidates(&self) -> &[QqMusicOmittedTrackCandidate] {
+        &self.omitted_song_mid_candidates
+    }
 }
 
 impl fmt::Debug for QqMusicPlaylistTracksPage {
@@ -493,6 +566,10 @@ impl fmt::Debug for QqMusicPlaylistTracksPage {
             .field(
                 "membership_identity_count",
                 &self.membership_identities.len(),
+            )
+            .field(
+                "omitted_song_mid_candidate_count",
+                &self.omitted_song_mid_candidates.len(),
             )
             .field("track_count", &self.tracks.len())
             .finish()
@@ -905,8 +982,13 @@ fn map_response<E>(
     if next_offset == offset && (has_more || offset < total) {
         return Err(QqMusicPlaylistDetailError::InvalidPagination);
     }
-    let (tracks, membership_identities, membership_is_exact, omitted_track_count) =
-        map_track_rows(raw_tracks)?;
+    let (
+        tracks,
+        membership_identities,
+        omitted_song_mid_candidates,
+        membership_is_exact,
+        omitted_track_count,
+    ) = map_track_rows(raw_tracks)?;
 
     Ok(QqMusicPlaylistTracksPage {
         offset,
@@ -916,6 +998,7 @@ fn map_response<E>(
         omitted_track_count,
         membership_is_exact,
         membership_identities,
+        omitted_song_mid_candidates,
         tracks,
     })
 }
@@ -923,6 +1006,7 @@ fn map_response<E>(
 type MappedTrackRows = (
     Vec<QqMusicTrackSummary>,
     Vec<QqMusicTrackMembershipIdentity>,
+    Vec<QqMusicOmittedTrackCandidate>,
     bool,
     u32,
 );
@@ -932,6 +1016,7 @@ fn map_track_rows<E>(
 ) -> Result<MappedTrackRows, QqMusicPlaylistDetailError<E>> {
     let mut tracks = Vec::with_capacity(raw_tracks.len());
     let mut membership_identities = Vec::with_capacity(raw_tracks.len());
+    let mut omitted_song_mid_candidates = Vec::new();
     let mut membership_is_exact = true;
     let mut omitted_track_count = 0_u32;
     for (index, row) in raw_tracks.into_iter().enumerate() {
@@ -950,17 +1035,43 @@ fn map_track_rows<E>(
                 .ok()
                 .and_then(|raw| map_membership_identity(raw.id, raw.song_type)),
         };
-        if let Some(identity) = identity {
-            membership_identities.push(identity);
+        if let Some(identity) = identity.as_ref() {
+            membership_identities.push(identity.clone());
         } else {
             membership_is_exact = false;
         }
         let Ok(track) = track else {
+            if let Some(identity) = identity
+                && let Some(reason) = classify_raw_song_mid_field(json)
+            {
+                omitted_song_mid_candidates.push(QqMusicOmittedTrackCandidate::new(
+                    index,
+                    identity.track_id(),
+                    identity.song_type(),
+                    reason,
+                ));
+            }
             omitted_track_count += 1;
             continue;
         };
         match map_track(track, index) {
             Ok(track) => tracks.push(track),
+            Err(QqMusicPlaylistDetailError::InvalidTrack {
+                field: PlaylistDetailTrackField::SongMid,
+                ..
+            }) => {
+                if let Some(identity) = identity
+                    && let Some(reason) = classify_raw_song_mid_field(json)
+                {
+                    omitted_song_mid_candidates.push(QqMusicOmittedTrackCandidate::new(
+                        index,
+                        identity.track_id(),
+                        identity.song_type(),
+                        reason,
+                    ));
+                }
+                omitted_track_count += 1;
+            }
             Err(
                 QqMusicPlaylistDetailError::InvalidTrack { .. }
                 | QqMusicPlaylistDetailError::InvalidArtist { .. },
@@ -971,9 +1082,39 @@ fn map_track_rows<E>(
     Ok((
         tracks,
         membership_identities,
+        omitted_song_mid_candidates,
         membership_is_exact,
         omitted_track_count,
     ))
+}
+
+pub(crate) fn classify_raw_song_mid_field(raw_json: &str) -> Option<SongMidFailureReason> {
+    let Ok(serde_json::Value::Object(object)) = serde_json::from_str::<serde_json::Value>(raw_json)
+    else {
+        return None;
+    };
+    classify_song_mid_value(object.get("mid"))
+}
+
+pub(crate) fn classify_song_mid_value(
+    value: Option<&serde_json::Value>,
+) -> Option<SongMidFailureReason> {
+    match value {
+        None => Some(SongMidFailureReason::Missing),
+        Some(serde_json::Value::Null) => Some(SongMidFailureReason::Null),
+        Some(serde_json::Value::String(text)) => {
+            if text.trim().is_empty() {
+                Some(SongMidFailureReason::Blank)
+            } else if text.len() > 64 {
+                Some(SongMidFailureReason::TooLong)
+            } else if !text.bytes().all(|byte| byte.is_ascii_alphanumeric()) {
+                Some(SongMidFailureReason::InvalidCharacters)
+            } else {
+                None
+            }
+        }
+        Some(_) => Some(SongMidFailureReason::InvalidType),
+    }
 }
 
 #[derive(Deserialize)]
@@ -1542,5 +1683,74 @@ mod tests {
         assert!(page.has_more());
         assert!(page.tracks().is_empty());
         assert!(!format!("{page:?}").contains("must-not-leak"));
+    }
+
+    #[tokio::test]
+    async fn classifies_missing_null_type_blank_overlong_and_unsafe_song_mids_with_membership() {
+        let overlong = "a".repeat(65);
+        let client = QqMusicClient::new(FakeTransport::new([json!({
+            "code": 0,
+            "music.srfDissInfo.DissInfo": {
+                "code": 0,
+                "data": {
+                    "code": 0,
+                    "songlist": [
+                        {"id": 101, "type": 0, "title": "Missing Mid", "singer": [{"name": "A"}]},
+                        {"id": 102, "mid": null, "type": 0, "title": "Null Mid", "singer": [{"name": "A"}]},
+                        {"id": 103, "mid": 12345, "type": 1, "title": "Numeric Mid", "singer": [{"name": "A"}]},
+                        {"id": 104, "mid": "   ", "type": 0, "title": "Blank Mid", "singer": [{"name": "A"}]},
+                        {"id": 105, "mid": overlong, "type": 0, "title": "Long Mid", "singer": [{"name": "A"}]},
+                        {"id": 106, "mid": "bad/mid-char", "type": 2, "title": "Unsafe Mid", "singer": [{"name": "A"}]},
+                        {"id": 107, "mid": "003ValidMid107", "type": 0, "title": "Valid Row", "singer": [{"name": "A"}]}
+                    ],
+                    "total_song_num": 7,
+                    "hasmore": false
+                }
+            }
+        })]));
+
+        let page = client
+            .liked_songs_page(&credential(), 0, 100)
+            .await
+            .expect("mixed SongMid page");
+
+        assert_eq!(page.offset(), 0);
+        assert_eq!(page.next_offset(), 7);
+        assert_eq!(page.tracks().len(), 1);
+        assert_eq!(page.tracks()[0].track_id(), 107);
+        assert_eq!(page.omitted_track_count(), 6);
+        assert!(page.membership_is_exact());
+        assert_eq!(
+            page.membership_identities()
+                .iter()
+                .map(|id| (id.track_id(), id.song_type()))
+                .collect::<Vec<_>>(),
+            vec![
+                (101, 0),
+                (102, 0),
+                (103, 1),
+                (104, 0),
+                (105, 0),
+                (106, 2),
+                (107, 0),
+            ]
+        );
+        assert_eq!(
+            page.omitted_song_mid_candidates()
+                .iter()
+                .map(|c| (c.raw_index(), c.track_id(), c.song_type(), c.reason()))
+                .collect::<Vec<_>>(),
+            vec![
+                (0, 101, 0, super::SongMidFailureReason::Missing),
+                (1, 102, 0, super::SongMidFailureReason::Null),
+                (2, 103, 1, super::SongMidFailureReason::InvalidType),
+                (3, 104, 0, super::SongMidFailureReason::Blank),
+                (4, 105, 0, super::SongMidFailureReason::TooLong),
+                (5, 106, 2, super::SongMidFailureReason::InvalidCharacters),
+            ]
+        );
+        let debug = format!("{:?}", page.omitted_song_mid_candidates());
+        assert!(!debug.contains("101"));
+        assert!(!debug.contains("bad/mid"));
     }
 }

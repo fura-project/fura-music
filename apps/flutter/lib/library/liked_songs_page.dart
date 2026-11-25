@@ -25,7 +25,6 @@ import 'package:flutterustmusic/library/track_like_presentation_controller.dart'
 import 'package:flutterustmusic/l10n/app_localizations.dart';
 import 'package:flutterustmusic/l10n/app_localizations_context.dart';
 import 'package:flutterustmusic/playback/queue_playback_controller.dart';
-import 'package:flutterustmusic/pagination/bounded_viewport_page_demand.dart';
 import 'package:flutterustmusic/theme/material_theme.dart';
 
 class LikedSongsPage extends StatefulWidget {
@@ -51,6 +50,7 @@ class LikedSongsPage extends StatefulWidget {
     this.mutationCoordinator,
     this.canMutateTrackLikes = false,
     this.canMutateAlbumFavorites = false,
+    this.active = true,
     super.key,
   });
 
@@ -75,6 +75,7 @@ class LikedSongsPage extends StatefulWidget {
   final LibraryMutationCoordinator? mutationCoordinator;
   final bool canMutateTrackLikes;
   final bool canMutateAlbumFavorites;
+  final bool active;
 
   @override
   State<LikedSongsPage> createState() => _LikedSongsPageState();
@@ -83,7 +84,7 @@ class LikedSongsPage extends StatefulWidget {
 class _LikedSongsPageState extends State<LikedSongsPage>
     with SingleTickerProviderStateMixin {
   PlaylistDetailController? _controller;
-  late final Listenable _pageListenable;
+  late Listenable _pageListenable;
   late final TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
@@ -94,6 +95,10 @@ class _LikedSongsPageState extends State<LikedSongsPage>
   bool? _pendingHeaderCollapsed;
   bool _headerUpdateScheduled = false;
   bool _searchLoadScheduled = false;
+  int _lastAnnouncedPartialRevision = 0;
+  int _observedPresentationRevision = 0;
+  bool _suppressTrackLikeRefresh = false;
+  bool _pendingPresentationRefresh = false;
   final PlaylistTrackSearchIndex _trackSearchIndex = PlaylistTrackSearchIndex();
   List<PlaylistTrackSummary>? _indexedTrackSource;
 
@@ -104,6 +109,14 @@ class _LikedSongsPageState extends State<LikedSongsPage>
       length: _LikedCollectionSection.values.length,
       vsync: this,
     )..addListener(_handleTabChanged);
+    _observedPresentationRevision =
+        widget.trackLikeController.presentationRevision;
+    widget.trackLikeController.addListener(_onTrackLikesChanged);
+    _attachPlaylistController();
+    _searchController.addListener(_updateQuery);
+  }
+
+  void _attachPlaylistController() {
     final playlist = widget.playlist;
     _controller = playlist == null
         ? null
@@ -112,7 +125,11 @@ class _LikedSongsPageState extends State<LikedSongsPage>
       ?_controller,
       ?widget.mutationCoordinator,
     ]);
-    _searchController.addListener(_updateQuery);
+    _indexedTrackSource = null;
+    _lastAnnouncedPartialRevision = 0;
+    _pendingPresentationRefresh = false;
+    _observedPresentationRevision =
+        widget.trackLikeController.presentationRevision;
     final controller = _controller;
     if (controller != null) {
       controller.addListener(_scheduleSearchLoad);
@@ -120,8 +137,72 @@ class _LikedSongsPageState extends State<LikedSongsPage>
     }
   }
 
+  void _onTrackLikesChanged() {
+    final revision = widget.trackLikeController.presentationRevision;
+    if (revision == _observedPresentationRevision) return;
+    _observedPresentationRevision = revision;
+    if (_suppressTrackLikeRefresh ||
+        !identical(widget.gateway, widget.trackLikeController.sessionGateway)) {
+      return;
+    }
+    final controller = _controller;
+    if (controller == null) return;
+    if (widget.active) {
+      _pendingPresentationRefresh = false;
+      unawaited(controller.refresh());
+    } else {
+      _pendingPresentationRefresh = true;
+      controller.cancelPrefetch();
+      controller.cancelSearchScan();
+    }
+  }
+
+  @override
+  void didUpdateWidget(LikedSongsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.trackLikeController != widget.trackLikeController) {
+      oldWidget.trackLikeController.removeListener(_onTrackLikesChanged);
+      _observedPresentationRevision =
+          widget.trackLikeController.presentationRevision;
+      widget.trackLikeController.addListener(_onTrackLikesChanged);
+    }
+    final sourceChanged =
+        oldWidget.playlist?.providerId != widget.playlist?.providerId ||
+        oldWidget.playlist?.opaqueId != widget.playlist?.opaqueId ||
+        oldWidget.gateway != widget.gateway;
+    if (sourceChanged) {
+      _controller
+        ?..removeListener(_scheduleSearchLoad)
+        ..dispose();
+      _controller = null;
+      _attachPlaylistController();
+      if (widget.active && _query.isNotEmpty) {
+        _scheduleSearchLoad();
+      }
+      return;
+    }
+    if (oldWidget.mutationCoordinator != widget.mutationCoordinator) {
+      _pageListenable = Listenable.merge([
+        ?_controller,
+        ?widget.mutationCoordinator,
+      ]);
+    }
+    if (!widget.active && oldWidget.active) {
+      _controller?.cancelPrefetch();
+      _controller?.cancelSearchScan();
+    } else if (widget.active && !oldWidget.active) {
+      if (_pendingPresentationRefresh) {
+        _pendingPresentationRefresh = false;
+        unawaited(_controller?.refresh());
+      } else if (_query.isNotEmpty) {
+        _scheduleSearchLoad();
+      }
+    }
+  }
+
   @override
   void dispose() {
+    widget.trackLikeController.removeListener(_onTrackLikesChanged);
     _tabController
       ..removeListener(_handleTabChanged)
       ..dispose();
@@ -137,11 +218,13 @@ class _LikedSongsPageState extends State<LikedSongsPage>
   void _updateQuery() {
     final query = normalizePlaylistSearchText(_searchController.text);
     if (query == _query) return;
-    _controller?.cancelSearchScan();
+    final previousQuery = _query;
     setState(() => _query = query);
     if (query.isEmpty) {
+      _controller?.cancelSearchScan();
       _controller?.cancelLoadAll();
-    } else {
+    } else if (previousQuery.isEmpty ||
+        _controller?.searchScanStage == CollectionSearchScanStage.idle) {
       _scheduleSearchLoad();
     }
   }
@@ -149,6 +232,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
   void _scheduleSearchLoad() {
     final controller = _controller;
     if (!mounted ||
+        !widget.active ||
         _query.isEmpty ||
         _section != _LikedCollectionSection.songs ||
         controller == null ||
@@ -164,34 +248,30 @@ class _LikedSongsPageState extends State<LikedSongsPage>
     scheduleMicrotask(() {
       _searchLoadScheduled = false;
       if (!mounted ||
+          !widget.active ||
           _query.isEmpty ||
-          _section != _LikedCollectionSection.songs) {
+          _section != _LikedCollectionSection.songs ||
+          !identical(controller, _controller)) {
         return;
       }
-      unawaited(_requestSearchWindow());
+      unawaited(_requestSearchCoverage());
     });
   }
 
-  Future<void> _requestSearchWindow({bool retryInterrupted = false}) {
+  Future<void> _requestSearchCoverage({bool retryInterrupted = false}) {
     final controller = _controller;
     if (controller == null || _query.isEmpty) return Future.value();
-    return controller.requestSearchWindow(
-      hasEnoughMatches: () {
-        final tracks = controller.tracks;
-        if (!identical(tracks, _indexedTrackSource)) {
-          _trackSearchIndex.update(tracks);
-          _indexedTrackSource = tracks;
-        }
-        return _trackSearchIndex.search(_query).tracks.length >= 20;
-      },
-      retryInterrupted: retryInterrupted,
-    );
+    return controller.requestSearchCoverage(retryInterrupted: retryInterrupted);
   }
 
   PlaylistTrackSearchResult get _trackSearchResult {
-    final tracks = _controller?.tracks ?? const <PlaylistTrackSummary>[];
+    final controller = _controller;
+    final tracks = controller?.tracks ?? const <PlaylistTrackSummary>[];
     if (!identical(tracks, _indexedTrackSource)) {
-      _trackSearchIndex.update(tracks);
+      _trackSearchIndex.update(
+        tracks,
+        collectionGeneration: controller?.snapshotGeneration,
+      );
       _indexedTrackSource = tracks;
     }
     if (_query.isEmpty) {
@@ -220,6 +300,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
     final section = _LikedCollectionSection.values[_tabController.index];
     if (_section == section) return;
     _controller?.cancelPrefetch();
+    _controller?.cancelSearchScan();
     _searchController.clear();
     setState(() {
       _section = section;
@@ -291,6 +372,11 @@ class _LikedSongsPageState extends State<LikedSongsPage>
           final searchResult = _trackSearchResult;
           final tracks = searchResult.tracks;
           final controller = _controller;
+          final playLabel = _query.isEmpty
+              ? l10n.likedPlayAll
+              : (controller?.hasMore ?? false)
+              ? l10n.likedPlayFilteredSoFar(tracks.length)
+              : l10n.likedPlayFiltered(tracks.length);
           return Column(
             key: const ValueKey('liked-songs-page'),
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -305,6 +391,7 @@ class _LikedSongsPageState extends State<LikedSongsPage>
                       },
                 desktop: desktop,
                 canPlay: tracks.isNotEmpty,
+                playLabel: playLabel,
                 isRefreshing: controller?.isRefreshing ?? false,
                 searchController: _searchController,
                 onPlayAll: tracks.isEmpty ? null : () => _playAll(tracks),
@@ -440,51 +527,13 @@ class _LikedSongsPageState extends State<LikedSongsPage>
         title: l10n.likedLoadingTitle,
         detail: l10n.likedLoadingDetail(widget.providerDisplayName),
       ),
-      PlaylistDetailStage.content when tracks.isEmpty => _searchEmpty(
-        controller,
-      ),
-      PlaylistDetailStage.content => BoundedViewportPageDemand(
-        enabled:
-            _query.isNotEmpty &&
-            controller.hasMore &&
-            controller.appendFailure == null,
-        generation: _query,
-        onDemand: _requestSearchWindow,
-        onRetreat: controller.cancelSearchScan,
-        child: PlaylistScrollPrefetch(
-          controller: controller,
-          enabled: _query.isEmpty && _section == _LikedCollectionSection.songs,
-          child: ValueListenableBuilder<PlaylistTrackSummary?>(
-            valueListenable:
-                widget.queuePlaybackController.currentTrackListenable,
-            builder: (context, current, _) => _LikedTrackCollection(
-              tracks: tracks,
-              processedCount: controller.processedCount,
-              availableTrackCount: controller.tracks.length,
-              omittedTrackCount: controller.omittedTrackCount,
-              partialResultRevision: controller.partialResultRevision,
-              total: controller.total,
-              hasMore: controller.hasMore,
-              isLoadingMore: controller.isLoadingMore,
-              isLoadingAll: controller.isScanningSearch,
-              searching: _query.isNotEmpty,
-              approximateMatchCount: approximateMatchCount,
-              appendFailure: controller.appendFailure,
-              desktop: desktop,
-              current: current,
-              onLoadMore: controller.loadMore,
-              onRetryMore: _query.isEmpty
-                  ? controller.retryMore
-                  : () =>
-                        unawaited(_requestSearchWindow(retryInterrupted: true)),
-              onTrackSelected: (index) => _playTracks(tracks, index),
-              onTrackQueued: _addToQueue,
-              onOpenAlbum: widget.onOpenAlbum,
-              onOpenArtist: widget.onOpenArtist,
-              onUnlike: widget.canMutateTrackLikes ? _unlikeTrack : null,
-            ),
-          ),
-        ),
+      PlaylistDetailStage.content when _query.isNotEmpty && tracks.isEmpty =>
+        _searchEmpty(controller),
+      PlaylistDetailStage.content => _trackCollection(
+        controller: controller,
+        tracks: tracks,
+        desktop: desktop,
+        approximateMatchCount: approximateMatchCount,
       ),
       PlaylistDetailStage.empty => _LikedSongsMessage(
         key: const ValueKey('liked-songs-empty'),
@@ -512,10 +561,76 @@ class _LikedSongsPageState extends State<LikedSongsPage>
     };
   }
 
+  Widget _trackCollection({
+    required PlaylistDetailController controller,
+    required List<PlaylistTrackSummary> tracks,
+    required bool desktop,
+    required int approximateMatchCount,
+  }) {
+    final partialRevision = controller.partialResultRevision;
+    final announcePartial =
+        controller.omittedTrackCount > 0 &&
+        partialRevision > _lastAnnouncedPartialRevision;
+    final displayTotal = controller.totalIsExact
+        ? controller.total
+        : controller.processedCount;
+    return PlaylistScrollPrefetch(
+      controller: controller,
+      enabled:
+          widget.active &&
+          _query.isEmpty &&
+          _section == _LikedCollectionSection.songs,
+      child: ValueListenableBuilder<PlaylistTrackSummary?>(
+        valueListenable: widget.queuePlaybackController.currentTrackListenable,
+        builder: (context, current, _) => _LikedTrackCollection(
+          tracks: tracks,
+          processedCount: controller.processedCount,
+          availableTrackCount: controller.tracks.length,
+          omittedTrackCount: controller.omittedTrackCount,
+          partialResultRevision: partialRevision,
+          announcePartialNotice: announcePartial,
+          onPartialNoticeAnnounced: () {
+            if (mounted && partialRevision > _lastAnnouncedPartialRevision) {
+              _lastAnnouncedPartialRevision = partialRevision;
+            }
+          },
+          total: displayTotal,
+          hasMore: controller.hasMore,
+          isLoadingMore: controller.isLoadingMore,
+          isLoadingAll: controller.isScanningSearch,
+          searchScanStage: controller.searchScanStage,
+          searching: _query.isNotEmpty,
+          approximateMatchCount: approximateMatchCount,
+          appendFailure: controller.appendFailure,
+          desktop: desktop,
+          current: current,
+          onLoadMore: controller.loadMore,
+          onContinueSearch: () => unawaited(_requestSearchCoverage()),
+          onRetryMore: _query.isEmpty
+              ? controller.retryMore
+              : () => unawaited(_requestSearchCoverage(retryInterrupted: true)),
+          onTrackSelected: (index) => _playTracks(tracks, index),
+          onTrackQueued: _addToQueue,
+          onOpenAlbum: widget.onOpenAlbum,
+          onOpenArtist: widget.onOpenArtist,
+          onUnlike: widget.canMutateTrackLikes ? _unlikeTrack : null,
+        ),
+      ),
+    );
+  }
+
   Widget _searchEmpty(PlaylistDetailController controller) {
     final l10n = context.l10n;
-    final stillSearching = controller.isScanningSearch;
     final failure = controller.appendFailure;
+    final stillSearching =
+        controller.isScanningSearch ||
+        (failure == null &&
+            controller.hasMore &&
+            controller.searchScanStage == CollectionSearchScanStage.idle);
+    final paused = !stillSearching && failure == null && controller.hasMore;
+    final displayTotal = controller.totalIsExact
+        ? controller.total
+        : controller.processedCount;
     final omittedSuffix = controller.omittedTrackCount == 0
         ? ''
         : l10n.likedOmittedSearchSuffix(controller.omittedTrackCount);
@@ -524,28 +639,34 @@ class _LikedSongsPageState extends State<LikedSongsPage>
       loading: stillSearching,
       icon: stillSearching
           ? Icons.manage_search_rounded
+          : paused
+          ? Icons.pause_circle_outline_rounded
           : Icons.search_off_rounded,
       title: stillSearching
           ? l10n.likedSearchingAllTitle
-          : failure == null
-          ? l10n.likedNoTrackMatchTitle
-          : l10n.likedSearchInterruptedTitle,
+          : failure != null
+          ? l10n.likedSearchInterruptedTitle
+          : paused
+          ? l10n.likedSearchPausedTitle
+          : l10n.likedNoTrackMatchTitle,
       detail: stillSearching
-          ? l10n.likedSearchProgress(
+          ? l10n.likedSearchProgress(controller.processedCount, displayTotal)
+          : failure != null
+          ? l10n.likedSearchInterruptedDetail(
               controller.processedCount,
-              controller.total,
+              displayTotal,
             )
-          : failure == null
-          ? l10n.likedSearchFinishedNoMatch(omittedSuffix, controller.total)
-          : l10n.likedSearchInterruptedDetail(
+          : paused
+          ? l10n.likedSearchPausedDetail(
               controller.processedCount,
-              controller.total,
-            ),
+              displayTotal,
+            )
+          : l10n.likedSearchFinishedNoMatch(omittedSuffix, displayTotal),
       action: failure == null && !controller.hasMore
           ? null
           : FilledButton.tonal(
               onPressed: () => unawaited(
-                _requestSearchWindow(retryInterrupted: failure != null),
+                _requestSearchCoverage(retryInterrupted: failure != null),
               ),
               child: Text(l10n.likedContinueSearch),
             ),
@@ -589,18 +710,33 @@ class _LikedSongsPageState extends State<LikedSongsPage>
   Future<void> _unlikeTrack(PlaylistTrackSummary track) async {
     final controller = _controller;
     if (controller == null) return;
-    await performTrackLikeAction(
-      context: context,
-      track: track,
-      liked: false,
-      refreshAdditionalState: controller.refresh,
-    );
+    _suppressTrackLikeRefresh = true;
+    try {
+      await performTrackLikeAction(
+        context: context,
+        track: track,
+        liked: false,
+        refreshAdditionalState: controller.refresh,
+      );
+    } finally {
+      _suppressTrackLikeRefresh = false;
+      _observedPresentationRevision =
+          widget.trackLikeController.presentationRevision;
+    }
   }
 
   Future<void> _refreshLikedSongs() async {
     final controller = _controller;
     if (controller == null) return;
-    final membership = widget.trackLikeController.refreshSnapshot();
+    _suppressTrackLikeRefresh = true;
+    late final Future<void> membership;
+    try {
+      membership = widget.trackLikeController.refreshSnapshot();
+      _observedPresentationRevision =
+          widget.trackLikeController.presentationRevision;
+    } finally {
+      _suppressTrackLikeRefresh = false;
+    }
     await Future.wait<void>([membership, controller.refresh()]);
   }
 }
@@ -610,6 +746,7 @@ class _LikedSongsHeader extends StatelessWidget {
     required this.total,
     required this.desktop,
     required this.canPlay,
+    required this.playLabel,
     required this.isRefreshing,
     required this.searchController,
     required this.onPlayAll,
@@ -624,6 +761,7 @@ class _LikedSongsHeader extends StatelessWidget {
   final int? total;
   final bool desktop;
   final bool canPlay;
+  final String playLabel;
   final bool isRefreshing;
   final TextEditingController searchController;
   final VoidCallback? onPlayAll;
@@ -692,7 +830,7 @@ class _LikedSongsHeader extends StatelessWidget {
             Row(
               children: [
                 if (selectedSection == _LikedCollectionSection.songs) ...[
-                  _PlayAllButton(onPressed: onPlayAll),
+                  _PlayAllButton(label: playLabel, onPressed: onPlayAll),
                   const SizedBox(width: 10),
                   _RefreshButton(
                     refreshing: isRefreshing,
@@ -707,7 +845,12 @@ class _LikedSongsHeader extends StatelessWidget {
             if (selectedSection == _LikedCollectionSection.songs) ...[
               Row(
                 children: [
-                  Expanded(child: _PlayAllButton(onPressed: onPlayAll)),
+                  Expanded(
+                    child: _PlayAllButton(
+                      label: playLabel,
+                      onPressed: onPlayAll,
+                    ),
+                  ),
                   const SizedBox(width: 10),
                   _RefreshButton(
                     refreshing: isRefreshing,
@@ -739,7 +882,11 @@ class _LikedSongsHeader extends StatelessWidget {
               Expanded(child: _tabs()),
               if (selectedSection == _LikedCollectionSection.songs) ...[
                 const SizedBox(width: 8),
-                _PlayAllButton(onPressed: onPlayAll, compact: true),
+                _PlayAllButton(
+                  label: playLabel,
+                  onPressed: onPlayAll,
+                  compact: true,
+                ),
                 const SizedBox(width: 8),
                 _RefreshButton(
                   refreshing: isRefreshing,
@@ -778,7 +925,11 @@ class _LikedSongsHeader extends StatelessWidget {
               children: [
                 Expanded(child: _tabs()),
                 if (selectedSection == _LikedCollectionSection.songs) ...[
-                  _PlayAllButton(onPressed: onPlayAll, compact: true),
+                  _PlayAllButton(
+                    label: playLabel,
+                    onPressed: onPlayAll,
+                    compact: true,
+                  ),
                   const SizedBox(width: 8),
                   _RefreshButton(
                     refreshing: isRefreshing,
@@ -1238,8 +1389,13 @@ class _RetainedLikedSectionState extends State<_RetainedLikedSection>
 }
 
 class _PlayAllButton extends StatelessWidget {
-  const _PlayAllButton({required this.onPressed, this.compact = false});
+  const _PlayAllButton({
+    required this.label,
+    required this.onPressed,
+    this.compact = false,
+  });
 
+  final String label;
   final VoidCallback? onPressed;
   final bool compact;
 
@@ -1247,7 +1403,7 @@ class _PlayAllButton extends StatelessWidget {
   Widget build(BuildContext context) => compact
       ? IconButton.filled(
           key: const ValueKey('liked-songs-play-all'),
-          tooltip: context.l10n.likedPlayAll,
+          tooltip: label,
           onPressed: onPressed,
           icon: const Icon(Icons.play_arrow_rounded),
         )
@@ -1255,7 +1411,7 @@ class _PlayAllButton extends StatelessWidget {
           key: const ValueKey('liked-songs-play-all'),
           onPressed: onPressed,
           icon: const Icon(Icons.play_arrow_rounded),
-          label: Text(context.l10n.likedPlayAll),
+          label: Text(label),
         );
 }
 
@@ -1376,16 +1532,20 @@ class _LikedTrackCollection extends StatefulWidget {
     required this.availableTrackCount,
     required this.omittedTrackCount,
     required this.partialResultRevision,
+    required this.announcePartialNotice,
+    required this.onPartialNoticeAnnounced,
     required this.total,
     required this.hasMore,
     required this.isLoadingMore,
     required this.isLoadingAll,
+    required this.searchScanStage,
     required this.searching,
     required this.approximateMatchCount,
     required this.appendFailure,
     required this.desktop,
     required this.current,
     required this.onLoadMore,
+    required this.onContinueSearch,
     required this.onRetryMore,
     required this.onTrackSelected,
     required this.onTrackQueued,
@@ -1399,16 +1559,20 @@ class _LikedTrackCollection extends StatefulWidget {
   final int availableTrackCount;
   final int omittedTrackCount;
   final int partialResultRevision;
+  final bool announcePartialNotice;
+  final VoidCallback onPartialNoticeAnnounced;
   final int total;
   final bool hasMore;
   final bool isLoadingMore;
   final bool isLoadingAll;
+  final CollectionSearchScanStage searchScanStage;
   final bool searching;
   final int approximateMatchCount;
   final UserLibraryFailure? appendFailure;
   final bool desktop;
   final PlaylistTrackSummary? current;
   final VoidCallback onLoadMore;
+  final VoidCallback onContinueSearch;
   final VoidCallback onRetryMore;
   final ValueChanged<int> onTrackSelected;
   final ValueChanged<PlaylistTrackSummary> onTrackQueued;
@@ -1509,15 +1673,19 @@ class _LikedTrackCollectionState extends State<_LikedTrackCollection> {
                       availableTrackCount: widget.availableTrackCount,
                       omittedTrackCount: widget.omittedTrackCount,
                       partialResultRevision: widget.partialResultRevision,
+                      announcePartialNotice: widget.announcePartialNotice,
+                      onPartialNoticeAnnounced: widget.onPartialNoticeAnnounced,
                       total: widget.total,
                       hasMore: widget.hasMore,
                       loading: widget.isLoadingMore,
                       loadingAll: widget.isLoadingAll,
+                      searchScanStage: widget.searchScanStage,
                       searching: widget.searching,
                       matchCount: widget.tracks.length,
                       approximateMatchCount: widget.approximateMatchCount,
                       failure: widget.appendFailure,
                       onLoadMore: widget.onLoadMore,
+                      onContinueSearch: widget.onContinueSearch,
                       onRetry: widget.onRetryMore,
                     );
                   }
@@ -1782,15 +1950,19 @@ class _LikedTrackFooter extends StatelessWidget {
     required this.availableTrackCount,
     required this.omittedTrackCount,
     required this.partialResultRevision,
+    required this.announcePartialNotice,
+    required this.onPartialNoticeAnnounced,
     required this.total,
     required this.hasMore,
     required this.loading,
     required this.loadingAll,
+    required this.searchScanStage,
     required this.searching,
     required this.matchCount,
     required this.approximateMatchCount,
     required this.failure,
     required this.onLoadMore,
+    required this.onContinueSearch,
     required this.onRetry,
   });
 
@@ -1798,15 +1970,19 @@ class _LikedTrackFooter extends StatelessWidget {
   final int availableTrackCount;
   final int omittedTrackCount;
   final int partialResultRevision;
+  final bool announcePartialNotice;
+  final VoidCallback onPartialNoticeAnnounced;
   final int total;
   final bool hasMore;
   final bool loading;
   final bool loadingAll;
+  final CollectionSearchScanStage searchScanStage;
   final bool searching;
   final int matchCount;
   final int approximateMatchCount;
   final UserLibraryFailure? failure;
   final VoidCallback onLoadMore;
+  final VoidCallback onContinueSearch;
   final VoidCallback onRetry;
 
   @override
@@ -1824,6 +2000,11 @@ class _LikedTrackFooter extends StatelessWidget {
           PartialResultsNotice(
             omittedCount: omittedTrackCount,
             resultRevision: partialResultRevision,
+            message: searching
+                ? context.l10n.collectionSearchPartialNotice(omittedTrackCount)
+                : null,
+            announce: announcePartialNotice,
+            onAnnounced: onPartialNoticeAnnounced,
           ),
         ],
         const SizedBox(height: 10),
@@ -1836,6 +2017,12 @@ class _LikedTrackFooter extends StatelessWidget {
           FilledButton.tonal(
             onPressed: onRetry,
             child: Text(context.l10n.likedRetryLoad),
+          )
+        else if (hasMore && searching)
+          FilledButton.tonal(
+            key: const ValueKey('liked-songs-continue-search'),
+            onPressed: onContinueSearch,
+            child: Text(context.l10n.likedContinueSearch),
           )
         else if (hasMore)
           FilledButton.tonal(
@@ -1861,6 +2048,9 @@ class _LikedTrackFooter extends StatelessWidget {
         : approximateOnly
         ? l10n.likedApproximateResults(matchCount)
         : l10n.likedMixedResults(approximateMatchCount, matchCount);
+    if (searchScanStage == CollectionSearchScanStage.paused && hasMore) {
+      return l10n.likedSearchPausedStatus(resultSummary, processedCount, total);
+    }
     if (loadingAll || hasMore) {
       return l10n.likedSearchingStatus(processedCount, resultSummary, total);
     }

@@ -17,6 +17,19 @@ class PlaylistDetailController extends PagedTracksController {
   }) : super(
          (offset, size) =>
              gateway.beginLoad(playlist: playlist, offset: offset, size: size),
+         readCachedContinuation: gateway is CachedPlaylistTrackPagesGateway
+             ? (fromOffset, size) =>
+                   (gateway as CachedPlaylistTrackPagesGateway)
+                       .readCachedContinuation(
+                         playlist: playlist,
+                         fromOffset: fromOffset,
+                         size: size,
+                       )
+             : null,
+         readCachedSnapshotRevision: gateway is CachedPlaylistTrackPagesGateway
+             ? () => (gateway as CachedPlaylistTrackPagesGateway)
+                   .cachedSnapshotRevision(playlist: playlist)
+             : null,
        );
 
   static const pageSize = PagedTracksController.pageSize;
